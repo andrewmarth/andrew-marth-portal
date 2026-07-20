@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting | Andrew Marth Real Estate</title>
+    
+    <!-- 1. HTML Meta Refresh Redirect -->
+    <meta http-equiv="refresh" content="0; url=https://andrewmarth.com">
+    
+    <!-- 2. JavaScript Fallback Redirect -->
+    <script>
+        // Using replace() prevents the portal index from being stuck in the back-button history
+        window.location.replace("https://andrewmarth.com");
+    </script>
+
+    <style>
+        /* Basic brand styling just in case the page flashes for a split second */
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #e9e2d8;
+            color: #4f2d2c;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        p {
+            font-size: 1.2rem;
+        }
+        a {
+            color: #99724b;
+            font-weight: bold;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        a:hover {
+            color: #9a5d40;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- 3. Manual Fallback Link -->
+    <p>Redirecting to <a href="https://andrewmarth.com">andrewmarth.com</a>...</p>
+
+</body>
+</html>
