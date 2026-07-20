@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Properties | Andrew Marth Real Estate</title>
+    
+    <style>
+        /* --- General Reset --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Lock the body and html to exact screen dimensions to prevent double-scrolling */
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+            background-color: #e9e2d8; /* Brand background color while the map loads */
+        }
+
+        /* Force the map iframe to stretch exactly to all four corners of the viewport */
+        #atlist-embed {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Full Page Map Embed -->
+    <iframe 
+        src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
+        allow="geolocation 'self' https://my.atlist.com" 
+        loading="lazy" 
+        frameborder="0" 
+        scrolling="no" 
+        allowfullscreen 
+        id="atlist-embed">
+    </iframe>
+
+</body>
+</html>
