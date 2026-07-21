@@ -166,13 +166,13 @@
         /* --- Google Sheet Card --- */
         .sheet-card {
             background-color: #ffffff;
-            height: 1200px; /* Base Desktop Height */
+            height: 13677px; /* Exact height of the Google Sheet */
             overflow: hidden; /* Hard clips anything outside the box to guarantee no scrollbars */
         }
         
         #iframe-wrapper {
-            width: 694px; /* The exact hardcoded width of your Google Sheet */
-            height: 1200px;
+            width: 694px; /* Exact width of the Google Sheet */
+            height: 13677px; /* Exact height of the Google Sheet */
             margin: 0 auto; /* Centers it on desktop */
             transform-origin: top center; 
         }
@@ -382,6 +382,7 @@
                 // Get the exact width of the card inside its borders
                 const cardWidth = card.clientWidth; 
                 const sheetWidth = 694; 
+                const sheetHeight = 13677; // The exact height of your Google Sheet
                 
                 if (cardWidth < sheetWidth) {
                     // Calculate exact fraction needed to fit mobile screen
@@ -389,14 +390,15 @@
                     wrapper.style.transform = `scale(${scale})`;
                     wrapper.style.transformOrigin = 'top left'; // Anchors it perfectly to the left edge
                     wrapper.style.margin = '0'; 
-                    // Shrinks the outer container height to match the scaled iframe!
-                    card.style.height = `${1200 * scale}px`;
+                    
+                    // Shrinks the outer container height perfectly proportional to the width scale
+                    card.style.height = `${sheetHeight * scale}px`;
                 } else {
                     // Standard desktop behavior
                     wrapper.style.transform = 'scale(1)';
                     wrapper.style.transformOrigin = 'top center';
                     wrapper.style.margin = '0 auto'; 
-                    card.style.height = '1200px';
+                    card.style.height = `${sheetHeight}px`;
                 }
             }
         }
