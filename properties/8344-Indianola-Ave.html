@@ -130,14 +130,21 @@
         }
         
         .proforma-header {
-            /* 50% more bottom padding (increased from 30px to 45px) */
+            /* 50% more bottom padding */
             padding: 50px 40px 45px 40px;
             text-align: center;
         }
         .proforma-header h2 {
-            font-size: 1.3rem; /* Matched the property-location address size */
+            font-size: 2.5rem; /* Matched the property-title address size */
             color: #4e513e;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+        .proforma-header p {
+            font-size: 1.1rem;
+            color: #4f2d2c;
             margin-bottom: 25px;
+            opacity: 0.9;
         }
 
         .buttons-container {
@@ -340,6 +347,9 @@
                 /* Applied the 45px bottom padding on mobile as well */
                 padding: 40px 20px 45px 20px;
             }
+            .proforma-header h2 {
+                font-size: 2rem; /* Matched the mobile property-title address size */
+            }
             .buttons-container {
                 flex-direction: column;
                 gap: 15px;
@@ -382,6 +392,7 @@
             <!-- Header and Buttons -->
             <div class="proforma-header">
                 <h2>Proforma</h2>
+                <p>All the details you need</p>
                 <div class="buttons-container">
                     <a href="https://drive.google.com/drive/folders/1ianClscpwvvSxjKbMdMvv-2yB4MRcMK4?usp=drive_link" target="_blank" rel="noopener noreferrer" class="btn-primary">View Pictures</a>
                     <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
