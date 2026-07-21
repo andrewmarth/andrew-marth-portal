@@ -121,9 +121,25 @@
             line-height: 1.5;
         }
 
-        /* --- Buttons Card --- */
-        .buttons-card {
-            padding: 40px;
+        /* --- Unified Proforma & Google Sheet Card --- */
+        .sheet-card {
+            background-color: #ffffff;
+            /* Height is now automatic to accommodate the header, buttons, and sheet */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .proforma-header {
+            padding: 50px 40px 30px 40px;
+            text-align: center;
+        }
+        .proforma-header h2 {
+            font-size: 2.2rem;
+            color: #4e513e;
+            margin-bottom: 25px;
+        }
+
+        .buttons-container {
             display: flex;
             justify-content: center;
             gap: 20px;
@@ -163,11 +179,11 @@
             transform: translateX(5px); 
         }
 
-        /* --- Google Sheet Card --- */
-        .sheet-card {
-            background-color: #ffffff;
-            height: 13750px; /* Buffered Height */
-            overflow: hidden; /* Hard clips anything outside the box */
+        /* The container specifically for the iframe */
+        .iframe-container {
+            width: 100%;
+            height: 13750px; /* Base Desktop Height */
+            overflow: hidden; /* Hard clips anything outside the box to guarantee no scrollbars */
         }
         
         #iframe-wrapper {
@@ -292,8 +308,13 @@
             .price-value {
                 font-size: 2.8rem;
             }
-            .buttons-card {
-                padding: 30px 20px;
+            .proforma-header {
+                padding: 40px 20px 30px 20px;
+            }
+            .proforma-header h2 {
+                font-size: 2rem;
+            }
+            .buttons-container {
                 flex-direction: column;
                 gap: 15px;
             }
@@ -330,21 +351,27 @@
             <p class="price-disclaimer">There is often some wiggle room on price, but usually not a significant amount. If you have a price in mind, please contact Andrew Marth.</p>
         </div>
 
-        <!-- Buttons Card -->
-        <div class="card buttons-card">
-            <a href="https://drive.google.com/drive/folders/1ianClscpwvvSxjKbMdMvv-2yB4MRcMK4?usp=drive_link" target="_blank" rel="noopener noreferrer" class="btn-primary">View Pictures</a>
-            <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
-        </div>
-
-        <!-- Google Sheet Embed Card (Dynamically Proportional via Javascript) -->
-        <div class="card sheet-card" id="sheet-card">
-            <div id="iframe-wrapper">
-                <iframe 
-                    src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
-                    class="sheet-iframe" 
-                    title="Property Details"
-                    scrolling="no">
-                </iframe>
+        <!-- Unified Proforma & Google Sheet Card -->
+        <div class="card sheet-card">
+            <!-- Header and Buttons -->
+            <div class="proforma-header">
+                <h2>Proforma</h2>
+                <div class="buttons-container">
+                    <a href="https://drive.google.com/drive/folders/1ianClscpwvvSxjKbMdMvv-2yB4MRcMK4?usp=drive_link" target="_blank" rel="noopener noreferrer" class="btn-primary">View Pictures</a>
+                    <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
+                </div>
+            </div>
+            
+            <!-- Dynamically Proportional Iframe Container -->
+            <div class="iframe-container" id="iframe-container">
+                <div id="iframe-wrapper">
+                    <iframe 
+                        src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
+                        class="sheet-iframe" 
+                        title="Property Details"
+                        scrolling="no">
+                    </iframe>
+                </div>
             </div>
         </div>
 
@@ -377,32 +404,33 @@
     <!-- Dynamic iframe scaling script to guarantee no scrollbars on any device -->
     <script>
         function scaleSheet() {
-            const card = document.getElementById('sheet-card');
+            // Target the internal container rather than the whole card
+            const container = document.getElementById('iframe-container');
             const wrapper = document.getElementById('iframe-wrapper');
             
-            if (card && wrapper) {
-                // Get the exact width of the card inside its borders
-                const cardWidth = card.clientWidth; 
+            if (container && wrapper) {
+                // Get the exact width available inside the card
+                const containerWidth = container.clientWidth; 
                 
                 // Buffered dimensions to prevent Google from spawning internal scrollbars
                 const sheetWidth = 720; 
                 const sheetHeight = 13750; 
                 
-                if (cardWidth < sheetWidth) {
+                if (containerWidth < sheetWidth) {
                     // Subtracting 1px prevents sub-pixel rounding errors from overflowing
-                    const scale = (cardWidth - 1) / sheetWidth;
+                    const scale = (containerWidth - 1) / sheetWidth;
                     wrapper.style.transform = `scale(${scale})`;
                     wrapper.style.transformOrigin = 'top left'; // Anchors it perfectly to the left edge
                     wrapper.style.margin = '0'; 
                     
-                    // Shrinks the outer container height perfectly proportional to the width scale
-                    card.style.height = `${sheetHeight * scale}px`;
+                    // Shrinks ONLY the iframe container height, preserving the header above it
+                    container.style.height = `${sheetHeight * scale}px`;
                 } else {
                     // Standard desktop behavior
                     wrapper.style.transform = 'scale(1)';
                     wrapper.style.transformOrigin = 'top center';
                     wrapper.style.margin = '0 auto'; 
-                    card.style.height = `${sheetHeight}px`;
+                    container.style.height = `${sheetHeight}px`;
                 }
             }
         }
