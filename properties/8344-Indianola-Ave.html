@@ -61,11 +61,11 @@
         /* --- Page Layout & Spacing --- */
         .content-wrapper {
             max-width: 800px;
-            margin: -40px auto 60px auto; /* Pulls content slightly up over the hero */
+            margin: -40px auto 60px auto; 
             padding: 0 20px;
             display: flex;
             flex-direction: column;
-            gap: 40px; /* Consistent spacing between all cards */
+            gap: 40px; 
             position: relative;
             z-index: 10;
         }
@@ -146,7 +146,7 @@
             transition: all 0.3s ease; 
             text-decoration: none;
             box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2); 
-            flex: 1 1 auto; /* Allows buttons to grow evenly */
+            flex: 1 1 auto; 
             max-width: 320px;
         }
         .btn-primary:hover { 
@@ -165,10 +165,14 @@
 
         /* --- Google Sheet Card --- */
         .sheet-card {
-            /* Massive fixed height swallows the sheet content to eliminate inner scrollbars */
-            height: 1200px; 
+            height: 900px; /* Fixed container height */
+            position: relative; /* Acts as the anchor for the absolute iframe */
+            background-color: #ffffff;
         }
         .sheet-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             border: none;
@@ -184,7 +188,6 @@
             align-items: center;
         }
         
-        /* The container for the animated background and image */
         .gear-container {
             position: relative;
             width: 100%;
@@ -196,7 +199,6 @@
             margin-bottom: 25px;
         }
         
-        /* The rotating image housing */
         .gear-spinner {
             position: absolute;
             width: 100%;
@@ -206,7 +208,6 @@
             filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1)); 
         }
         
-        /* The downloaded cookie shape */
         .cookie-shape {
             width: 100%;
             height: 100%;
@@ -214,7 +215,6 @@
             object-fit: contain;
         }
 
-        /* The inner profile photo */
         .gear-container img.profile-pic {
             width: 74%; 
             height: 74%;
@@ -226,7 +226,6 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
         }
 
-        /* The infinite spin animation */
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -295,14 +294,23 @@
                 width: 100%;
                 max-width: 100%;
             }
-            .sheet-card {
-                height: 1400px; /* Added even more height on mobile so the rows have room to stack/wrap */
-            }
-            /* Responsive formatting to prevent horizontal bleed for shadow cards */
+            
+            /* Keep all cards uniformly inset with their border radii */
             .card {
                 width: calc(100% - 6px);
                 margin-left: auto;
                 margin-right: auto;
+            }
+            
+            /* Scaling CSS Math for Mobile */
+            .sheet-card {
+                height: 500px; /* Set the physical height of the container box on mobile */
+            }
+            .sheet-iframe {
+                width: 250%; /* 100% / 0.4 = 250% */
+                height: 250%; /* Matches internal scale height so it fills the box */
+                transform: scale(0.4); /* Zooms the iframe out to exactly 40% */
+                transform-origin: top left; /* Forces it into the top left corner */
             }
         }
     </style>
@@ -332,8 +340,7 @@
             <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
         </div>
 
-        <!-- Google Sheet Embed Card -->
-        <!-- Note: We use the /htmlembed link with UI-hiding parameters to keep it perfectly clean -->
+        <!-- Google Sheet Embed Card (Scaled Down on Mobile) -->
         <div class="card sheet-card">
             <iframe 
                 src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
