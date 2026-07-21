@@ -165,18 +165,18 @@
 
         /* --- Google Sheet Card --- */
         .sheet-card {
-            height: 900px; /* Fixed container height */
-            position: relative; /* Acts as the anchor for the absolute iframe */
+            height: 1200px; /* Base Desktop Height */
             background-color: #ffffff;
+            display: flex;
+            justify-content: center; /* Perfect center alignment inside the 800px card */
         }
         .sheet-iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            width: 694px; /* The exact hardcoded width of your Google Sheet */
+            height: 1200px;
             border: none;
             display: block;
+            flex-shrink: 0; /* Prevents flexbox from naturally squishing it */
+            transform-origin: top center; /* Ensures it scales perfectly from the top middle */
         }
 
         /* --- Profile Section --- */
@@ -302,15 +302,15 @@
                 margin-right: auto;
             }
             
-            /* Scaling CSS Math for Mobile */
+            /* DYNAMIC SCALING MATH FOR MOBILE GOOGLE SHEET */
+            /* Card width on mobile is viewport (100vw) minus wrapper padding (40px) minus shadow offset (6px) = 46px */
             .sheet-card {
-                height: 500px; /* Set the physical height of the container box on mobile */
+                /* Dynamically shrinks the container height to perfectly match the scaled iframe */
+                height: calc(1200px * ((100vw - 46px) / 694)); 
             }
             .sheet-iframe {
-                width: 250%; /* 100% / 0.4 = 250% */
-                height: 250%; /* Matches internal scale height so it fills the box */
-                transform: scale(0.4); /* Zooms the iframe out to exactly 40% */
-                transform-origin: top left; /* Forces it into the top left corner */
+                /* Dynamically shrinks the 694px width to perfectly fit inside the mobile card */
+                transform: scale(calc((100vw - 46px) / 694)); 
             }
         }
     </style>
@@ -340,7 +340,7 @@
             <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
         </div>
 
-        <!-- Google Sheet Embed Card (Scaled Down on Mobile) -->
+        <!-- Google Sheet Embed Card (Dynamically Proportional on Mobile) -->
         <div class="card sheet-card">
             <iframe 
                 src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
