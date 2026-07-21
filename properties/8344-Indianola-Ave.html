@@ -125,18 +125,16 @@
         /* --- Unified Proforma & Google Sheet Card --- */
         .sheet-card {
             background-color: #ffffff;
-            /* Height is now automatic to accommodate the header, buttons, and sheet */
             display: flex;
             flex-direction: column;
         }
         
         .proforma-header {
-            /* 50% more bottom padding */
             padding: 50px 40px 45px 40px;
             text-align: center;
         }
         .proforma-header h2 {
-            font-size: 2.5rem; /* Matched the property-title address size */
+            font-size: 2.5rem; 
             color: #4e513e;
             margin-bottom: 5px;
             line-height: 1.2;
@@ -218,12 +216,12 @@
         /* The container specifically for the iframe */
         .iframe-container {
             width: 100%;
-            height: 13750px; /* Base Desktop Height */
-            overflow: hidden; /* Hard clips anything outside the box to guarantee no scrollbars */
+            height: 13750px; 
+            overflow: hidden; 
         }
         
         #iframe-wrapper {
-            width: 720px; /* Buffered Width (adds invisible padding) */
+            width: 720px; 
             height: 13750px; 
             margin: 0 auto; 
             transform-origin: top center; 
@@ -245,6 +243,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin-bottom: 60px; /* Space before the backend button/footer */
         }
         
         .gear-container {
@@ -311,13 +310,53 @@
             text-decoration: underline;
         }
 
+        /* --- Backend Section --- */
+        .backend-wrapper {
+            max-width: 800px;
+            margin: 0 auto 20px auto; 
+            padding: 0 20px;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            animation: slideInUp 0.4s ease forwards;
+        }
+        
+        .backend-trigger-container {
+            text-align: center;
+            margin-bottom: -30px; /* Pulls it tight against the footer */
+            position: relative;
+            z-index: 10;
+        }
+
+        .btn-backend {
+            background: transparent;
+            border: none;
+            color: #4f2d2c;
+            opacity: 0.25; /* Very faint */
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+            padding: 10px 20px;
+            transition: opacity 0.3s ease;
+        }
+        
+        .btn-backend:hover {
+            opacity: 0.8;
+        }
+
+        @keyframes slideInUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
         /* --- Footer --- */
         footer {
             text-align: center;
             padding: 60px 30px;
             background-color: #4e513e; 
             color: #e9e2d8; 
-            margin-top: 80px;
+            margin-top: 50px;
         }
         .footer-disclosure {
             max-width: 1000px;
@@ -335,7 +374,7 @@
             .content-wrapper {
                 margin-top: -30px;
             }
-            .details-card {
+            .details-card, .backend-wrapper .card {
                 padding: 40px 20px;
             }
             .property-title {
@@ -345,11 +384,10 @@
                 font-size: 2.8rem;
             }
             .proforma-header {
-                /* Applied the 45px bottom padding on mobile as well */
                 padding: 40px 20px 45px 20px;
             }
             .proforma-header h2 {
-                font-size: 2rem; /* Matched the mobile property-title address size */
+                font-size: 2rem; 
             }
             .buttons-container {
                 flex-direction: column;
@@ -359,8 +397,6 @@
                 width: 100%;
                 max-width: 100%;
             }
-            
-            /* Keep all cards uniformly inset with their border radii */
             .card {
                 width: calc(100% - 6px);
                 margin-left: auto;
@@ -440,6 +476,19 @@
         </div>
     </section>
 
+    <!-- Hidden Backend Card -->
+    <div class="backend-wrapper" id="backend-card-wrapper">
+        <div class="card details-card">
+            <h2 class="property-title">Back End</h2>
+            <p class="price-disclaimer">Hidden backend data and metrics will go here.</p>
+        </div>
+    </div>
+
+    <!-- Backend Access Button -->
+    <div class="backend-trigger-container">
+        <button type="button" class="btn-backend" id="backend-btn">Backend</button>
+    </div>
+
     <!-- Footer -->
     <footer>
         <p class="footer-disclosure">
@@ -447,32 +496,45 @@
         </p>
     </footer>
 
-    <!-- Dynamic iframe scaling script to guarantee no scrollbars on any device -->
+    <!-- Scripts -->
     <script>
+        // 1. Backend Code Logic
+        document.getElementById('backend-btn').addEventListener('click', function() {
+            const code = prompt("Enter Access Code:");
+            if (code === "6874") {
+                // Hide the button
+                this.style.display = 'none';
+                
+                // Show the hidden card wrapper
+                const backendWrapper = document.getElementById('backend-card-wrapper');
+                backendWrapper.style.display = 'flex';
+                
+                // Smoothly scroll the user down so they see it
+                backendWrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else if (code !== null) {
+                alert("Incorrect code.");
+            }
+        });
+
+        // 2. Dynamic iframe scaling script to guarantee no scrollbars on any device
         function scaleSheet() {
-            // Target the internal container rather than the whole card
             const container = document.getElementById('iframe-container');
             const wrapper = document.getElementById('iframe-wrapper');
             
             if (container && wrapper) {
-                // Get the exact width available inside the card
                 const containerWidth = container.clientWidth; 
                 
-                // Buffered dimensions to prevent Google from spawning internal scrollbars
                 const sheetWidth = 720; 
                 const sheetHeight = 13750; 
                 
                 if (containerWidth < sheetWidth) {
-                    // Subtracting 1px prevents sub-pixel rounding errors from overflowing
                     const scale = (containerWidth - 1) / sheetWidth;
                     wrapper.style.transform = `scale(${scale})`;
-                    wrapper.style.transformOrigin = 'top left'; // Anchors it perfectly to the left edge
+                    wrapper.style.transformOrigin = 'top left'; 
                     wrapper.style.margin = '0'; 
                     
-                    // Shrinks ONLY the iframe container height, preserving the header above it
                     container.style.height = `${sheetHeight * scale}px`;
                 } else {
-                    // Standard desktop behavior
                     wrapper.style.transform = 'scale(1)';
                     wrapper.style.transformOrigin = 'top center';
                     wrapper.style.margin = '0 auto'; 
@@ -481,7 +543,6 @@
             }
         }
 
-        // Run the math when the page loads, and re-calculate if the phone is rotated
         window.addEventListener('DOMContentLoaded', scaleSheet);
         window.addEventListener('resize', scaleSheet);
     </script>
