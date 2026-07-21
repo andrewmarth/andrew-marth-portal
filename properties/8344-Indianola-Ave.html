@@ -130,11 +130,12 @@
         }
         
         .proforma-header {
-            padding: 50px 40px 30px 40px;
+            /* 50% more bottom padding (increased from 30px to 45px) */
+            padding: 50px 40px 45px 40px;
             text-align: center;
         }
         .proforma-header h2 {
-            font-size: 2.2rem;
+            font-size: 1.3rem; /* Matched the property-location address size */
             color: #4e513e;
             margin-bottom: 25px;
         }
@@ -177,6 +178,33 @@
         }
         .btn-primary:hover::after {
             transform: translateX(5px); 
+        }
+
+        /* Scrolling Marquee Banner */
+        .marquee-banner {
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 12px 0;
+            display: flex;
+        }
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee-scroll 80s linear infinite; 
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: bold;
+            font-size: 1.1rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        .marquee-content span {
+            display: inline-block;
+        }
+        @keyframes marquee-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
         }
 
         /* The container specifically for the iframe */
@@ -309,10 +337,8 @@
                 font-size: 2.8rem;
             }
             .proforma-header {
-                padding: 40px 20px 30px 20px;
-            }
-            .proforma-header h2 {
-                font-size: 2rem;
+                /* Applied the 45px bottom padding on mobile as well */
+                padding: 40px 20px 45px 20px;
             }
             .buttons-container {
                 flex-direction: column;
@@ -362,6 +388,14 @@
                 </div>
             </div>
             
+            <!-- Scrolling Marquee Border -->
+            <div class="marquee-banner">
+                <div class="marquee-content">
+                    <span>✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;</span><!--
+                    --><span>✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;</span>
+                </div>
+            </div>
+
             <!-- Dynamically Proportional Iframe Container -->
             <div class="iframe-container" id="iframe-container">
                 <div id="iframe-wrapper">
