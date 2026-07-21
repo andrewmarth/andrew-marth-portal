@@ -45,19 +45,19 @@
             background-position: center;
             padding: 100px 20px 80px 20px; 
             display: flex;
-            flex-direction: column; /* Stacks the logo and title vertically */
+            flex-direction: column; 
             align-items: center;
             justify-content: center;
             text-align: center;
-            gap: 15px; /* Adds perfect spacing between the logo and title */
+            gap: 15px; 
         }
         
         .header-logo {
             width: 100%;
-            max-width: 250px;
+            max-width: 380px; /* Increased for desktop presence */
             height: auto;
             object-fit: contain;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); /* Gives the logo a slight lift matching the text */
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
         }
 
         .hero-title {
@@ -379,6 +379,9 @@
 
         /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
+            .header-logo {
+                max-width: 250px; /* Keeps the logo perfect on mobile */
+            }
             .hero-title {
                 font-size: 2.5rem;
             }
