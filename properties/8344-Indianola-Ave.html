@@ -54,7 +54,7 @@
         
         .header-logo {
             width: 100%;
-            max-width: 380px; /* Increased for desktop presence */
+            max-width: 380px; 
             height: auto;
             object-fit: contain;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
@@ -72,7 +72,7 @@
         /* --- Page Layout & Spacing --- */
         .content-wrapper {
             max-width: 800px;
-            margin: -40px auto 60px auto; 
+            margin: -40px auto 40px auto; 
             padding: 0 20px;
             display: flex;
             flex-direction: column;
@@ -247,14 +247,64 @@
             overflow: hidden !important;
         }
 
-        /* --- Profile Section --- */
-        .profile-section {
-            padding: 40px 20px 0 20px;
+        /* --- Additional Information Card (Zero Down Style) --- */
+        .info-card-content {
+            padding: 50px 40px 30px 40px;
+        }
+        .info-card-title {
+            font-size: 2.5rem;
+            color: #4e513e;
+            margin-bottom: 35px;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .detail-item {
+            margin-bottom: 35px; 
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+        }
+        .detail-item:last-child {
+            margin-bottom: 15px;
+        }
+        .detail-item h3 {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 999px; 
+            margin-bottom: 12px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+        .detail-item p {
+            color: #4f2d2c;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin: 0;
+            width: 100%;
+            padding-left: 5px; 
+            text-align: left;
+        }
+
+        /* --- Card Divider --- */
+        .card-divider {
+            border: none;
+            border-top: 2px solid rgba(14, 42, 59, 0.1);
+            margin: 0 40px;
+        }
+
+        /* --- Profile Section (Moved inside the card) --- */
+        .profile-section-inside {
+            padding: 40px 20px 50px 20px;
             text-align: center;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 60px; /* Space before the backend button/footer */
         }
         
         .gear-container {
@@ -333,6 +383,7 @@
         
         .backend-trigger-container {
             text-align: center;
+            margin-top: 20px;
             margin-bottom: -30px; /* Pulls it tight against the footer */
             position: relative;
             z-index: 10;
@@ -380,7 +431,7 @@
         /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
             .header-logo {
-                max-width: 250px; /* Keeps the logo perfect on mobile */
+                max-width: 250px; 
             }
             .hero-title {
                 font-size: 2.5rem;
@@ -400,8 +451,22 @@
             .proforma-header {
                 padding: 40px 20px 45px 20px;
             }
-            .proforma-header h2 {
+            .proforma-header h2, .info-card-title {
                 font-size: 2rem; 
+            }
+            .info-card-content {
+                padding: 40px 20px 20px 20px;
+            }
+            .detail-item h3 {
+                font-size: 1.1rem;
+                padding: 6px 15px;
+                margin-bottom: 15px;
+            }
+            .detail-item {
+                margin-bottom: 30px;
+            }
+            .card-divider {
+                margin: 0 20px;
             }
             .buttons-container {
                 flex-direction: column;
@@ -472,24 +537,59 @@
             </div>
         </div>
 
-    </div>
-
-    <!-- Profile Section -->
-    <section class="profile-section">
-        <div class="gear-container">
-            <div class="gear-spinner">
-                <img src="https://andrewmarth.com/images/9_sided_cookie.svg" alt="Decorative Shape" class="cookie-shape" onerror="this.onerror=null; this.src='https://andrewmarth.com/images/9_sided_cookie.png';">
+        <!-- Additional Information & Profile Card -->
+        <div class="card">
+            <div class="info-card-content">
+                <h2 class="info-card-title">Additional Information</h2>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Cash Or Hard Money Only</h3>
+                    <p>These deals are offered as investment properties and are often in very poor repair. As a result, the seller only accepts offers using all cash or a hard money loan. If you need a referral to a hard money lender, please let me know.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Sold As Is</h3>
+                    <p>These properties are in obvious need of repair or renovation so the seller only accepts offers with no repair requests and usually require the inspection contingency to be waived at time of offer.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Earnest Money Required</h3>
+                    <p>The sellers usually require the earnest money deposit to be sent in to actually secure the property. They are often first come, first serve. The first buyer to deposit the earnest money is the buyer to secure the contract.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Shorter Escrow Period</h3>
+                    <p>The sellers usually have limited time to close, so time is of the essence with these properties. Once under contract, there is usually a much shorter escrow period compared to a traditional sale. It is important that much of the due diligence be done up front before getting the property under contract.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Confidential Information</h3>
+                    <p>This property is intended to be shared only with you. It is prohibited to share this page with anyone else.</p>
+                </div>
             </div>
-            <img src="https://andrewmarth.com/images/az_pfp_graded.png" alt="Andrew Marth" class="profile-pic">
+            
+            <!-- Clean Divider Line -->
+            <hr class="card-divider">
+            
+            <!-- Profile Info Moved Inside the Card -->
+            <div class="profile-section-inside">
+                <div class="gear-container">
+                    <div class="gear-spinner">
+                        <img src="https://andrewmarth.com/images/9_sided_cookie.svg" alt="Decorative Shape" class="cookie-shape" onerror="this.onerror=null; this.src='https://andrewmarth.com/images/9_sided_cookie.png';">
+                    </div>
+                    <img src="https://andrewmarth.com/images/az_pfp_graded.png" alt="Andrew Marth" class="profile-pic">
+                </div>
+                
+                <div class="contact-info">
+                    <h3>Andrew Marth</h3>
+                    <p>Real Estate Agent</p>
+                    <p><a href="tel:4806521330">480.652.1330</a></p>
+                    <p><a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a></p>
+                </div>
+            </div>
         </div>
-        
-        <div class="contact-info">
-            <h3>Andrew Marth</h3>
-            <p>Real Estate Agent</p>
-            <p><a href="tel:4806521330">480.652.1330</a></p>
-            <p><a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a></p>
-        </div>
-    </section>
+
+    </div>
 
     <!-- Hidden Backend Card -->
     <div class="backend-wrapper" id="backend-card-wrapper">
