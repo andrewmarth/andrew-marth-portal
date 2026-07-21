@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8344 E Indianola Ave | Andrew Marth Real Estate</title>
+    
+    <!-- Google Fonts Import -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- General Reset & Styling --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Prevents ALL horizontal scrolling across all mobile browsers */
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body {
+            font-family: 'Familjen Grotesk', sans-serif; 
+            line-height: 1.6;
+            color: #4f2d2c; 
+            background-color: #e9e2d8; 
+        }
+        
+        /* Updated Header Font */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Bricolage Grotesque', sans-serif;
+        }
+
+        /* --- Header / Hero Section --- */
+        header {
+            background: linear-gradient(rgba(78, 81, 62, 0.75), rgba(78, 81, 62, 0.75)), url('https://andrewmarth.com/images/background.jpeg');
+            background-size: cover;
+            background-position: center;
+            padding: 100px 20px 80px 20px; 
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 15px; 
+        }
+        
+        .header-logo {
+            width: 100%;
+            max-width: 380px; 
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
+        }
+
+        .hero-title {
+            color: #e9e2d8;
+            font-size: 3.5rem;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+            padding: 0 20px 20px 20px;
+        }
+
+        /* --- Page Layout & Spacing --- */
+        .content-wrapper {
+            max-width: 800px;
+            margin: -40px auto 40px auto; 
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px; 
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- Universal Card Styling --- */
+        .card {
+            background-color: #ffffff;
+            border-radius: 20px;
+            border: 2px solid #0E2A3B;
+            box-shadow: 6px 6px 0px #0E2A3B;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        /* --- Main Details Card --- */
+        .details-card {
+            padding: 50px 40px;
+            text-align: center;
+        }
+        .property-title {
+            font-size: 2.5rem;
+            color: #4e513e;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+        .property-location {
+            font-size: 1.3rem;
+            color: #4f2d2c;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        .price-label {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #99724b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .price-value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            color: #4e513e;
+            margin-bottom: 25px;
+            line-height: 1;
+        }
+        .price-disclaimer {
+            font-size: 0.95rem;
+            color: #4f2d2c;
+            font-style: italic;
+            opacity: 0.8;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        /* --- Unified Proforma & Google Sheet Card --- */
+        .sheet-card {
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .proforma-header {
+            padding: 50px 40px 45px 40px;
+            text-align: center;
+        }
+        .proforma-header h2 {
+            font-size: 2.5rem; 
+            color: #4e513e;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+        .proforma-header p {
+            font-size: 1.1rem;
+            color: #4f2d2c;
+            margin-bottom: 25px;
+            opacity: 0.9;
+        }
+
+        .buttons-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-primary { 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: #99724b; 
+            color: #ffffff; 
+            border: 2px solid #0E2A3B; 
+            padding: 15px 35px; 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            border-radius: 999px; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+            text-decoration: none;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2); 
+            flex: 1 1 auto; 
+            max-width: 320px;
+        }
+        .btn-primary:hover { 
+            background-color: #9a5d40; 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1); 
+        }
+        .btn-primary::after {
+            content: '\2192'; 
+            font-size: 1.2em;
+            transition: transform 0.3s ease;
+        }
+        .btn-primary:hover::after {
+            transform: translateX(5px); 
+        }
+
+        /* Scrolling Marquee Banner */
+        .marquee-banner {
+            background-color: #9a5d40; 
+            color: #e9e2d8; 
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 12px 0;
+            display: flex;
+        }
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee-scroll 80s linear infinite; 
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: bold;
+            font-size: 1.1rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        .marquee-content span {
+            display: inline-block;
+        }
+        @keyframes marquee-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* The container specifically for the iframe */
+        .iframe-container {
+            width: 100%;
+            height: 13750px; 
+            overflow: hidden; 
+        }
+        
+        #iframe-wrapper {
+            width: 720px; 
+            height: 13750px; 
+            margin: 0 auto; 
+            transform-origin: top center; 
+            overflow: hidden;
+        }
+
+        .sheet-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            overflow: hidden !important;
+        }
+
+        /* --- Additional Information Card (Zero Down Style) --- */
+        .info-card-content {
+            padding: 50px 40px 30px 40px;
+        }
+        .info-card-title {
+            font-size: 2.5rem;
+            color: #4e513e;
+            margin-bottom: 35px;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .detail-item {
+            margin-bottom: 35px; 
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+        }
+        .detail-item:last-child {
+            margin-bottom: 15px;
+        }
+        .detail-item h3 {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 999px; 
+            margin-bottom: 12px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+        .detail-item p {
+            color: #4f2d2c;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin: 0;
+            width: 100%;
+            padding-left: 5px; 
+            text-align: left;
+        }
+
+        /* --- Card Divider --- */
+        .card-divider {
+            border: none;
+            border-top: 2px solid rgba(14, 42, 59, 0.1);
+            margin: 0 40px;
+        }
+
+        /* --- Profile Section (Moved inside the card) --- */
+        .profile-section-inside {
+            padding: 40px 20px 50px 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .gear-container {
+            position: relative;
+            width: 100%;
+            max-width: 250px; 
+            aspect-ratio: 1 / 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .gear-spinner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            animation: spin 24s linear infinite; 
+            z-index: 0;
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1)); 
+        }
+        
+        .cookie-shape {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        .gear-container img.profile-pic {
+            width: 74%; 
+            height: 74%;
+            border-radius: 50%;
+            object-fit: cover;
+            position: relative;
+            z-index: 1;
+            border: 4px solid #e9e2d8; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .contact-info {
+            color: #4f2d2c;
+            font-size: 1.2rem;
+            line-height: 1.8;
+        }
+        .contact-info h3 {
+            font-size: 1.8rem;
+            color: #4e513e;
+            margin-bottom: 5px;
+        }
+        .contact-info a {
+            color: #99724b;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        .contact-info a:hover {
+            color: #9a5d40;
+            text-decoration: underline;
+        }
+
+        /* --- Backend Section --- */
+        .backend-wrapper {
+            max-width: 800px;
+            margin: 0 auto 20px auto; 
+            padding: 0 20px;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            animation: slideInUp 0.4s ease forwards;
+        }
+        
+        .backend-trigger-container {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: -30px; /* Pulls it tight against the footer */
+            position: relative;
+            z-index: 10;
+        }
+
+        .btn-backend {
+            background: transparent;
+            border: none;
+            color: #4f2d2c;
+            opacity: 0.25; /* Very faint */
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+            padding: 10px 20px;
+            transition: opacity 0.3s ease;
+        }
+        
+        .btn-backend:hover {
+            opacity: 0.8;
+        }
+
+        @keyframes slideInUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 60px 30px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            margin-top: 50px;
+        }
+        .footer-disclosure {
+            max-width: 1000px;
+            margin: 0 auto; 
+            font-size: 0.85rem;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .header-logo {
+                max-width: 250px; 
+            }
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            .content-wrapper {
+                margin-top: -30px;
+            }
+            .details-card, .backend-wrapper .card {
+                padding: 40px 20px;
+            }
+            .property-title {
+                font-size: 2rem;
+            }
+            .price-value {
+                font-size: 2.8rem;
+            }
+            .proforma-header {
+                padding: 40px 20px 45px 20px;
+            }
+            .proforma-header h2, .info-card-title {
+                font-size: 2rem; 
+            }
+            .info-card-content {
+                padding: 40px 20px 20px 20px;
+            }
+            .detail-item h3 {
+                font-size: 1.1rem;
+                padding: 6px 15px;
+                margin-bottom: 15px;
+            }
+            .detail-item {
+                margin-bottom: 30px;
+            }
+            .card-divider {
+                margin: 0 20px;
+            }
+            .buttons-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .btn-primary {
+                width: 100%;
+                max-width: 100%;
+            }
+            .card {
+                width: calc(100% - 6px);
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.png" alt="Andrew Marth Real Estate" class="header-logo">
+        <h1 class="hero-title">Off-Market Exclusive</h1>
+    </header>
+
+    <div class="content-wrapper">
+        
+        <!-- Main Details Card -->
+        <div class="card details-card">
+            <h2 class="property-title">8068 E Krail St</h2>
+            <p class="property-location">Scottsdale, AZ 85250</p>
+            
+            <p class="price-label">Asking Price</p>
+            <div class="price-value">$635,000</div>
+            
+            <p class="price-disclaimer">There is often some wiggle room on price, but usually not a significant amount. If you have a price in mind, please contact Andrew Marth.</p>
+        </div>
+
+        <!-- Unified Proforma & Google Sheet Card -->
+        <div class="card sheet-card">
+            <!-- Header and Buttons -->
+            <div class="proforma-header">
+                <h2>Proforma</h2>
+                <p>All the details you need</p>
+                <div class="buttons-container">
+                    <a href="https://drive.google.com/drive/folders/15K0DOMkp1frVpr84h1SmvcSQie6watmm?usp=drive_link" target="_blank" rel="noopener noreferrer" class="btn-primary">View Pictures</a>
+                    <a href="https://www.zillow.com/homes/8068-E-Krail-St-Scottsdale-AZ-85250/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
+                </div>
+            </div>
+            
+            <!-- Scrolling Marquee Border -->
+            <div class="marquee-banner">
+                <div class="marquee-content">
+                    <span>✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;</span><!--
+                    --><span>✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For More Info&nbsp;&nbsp;✦&nbsp;&nbsp;Let Me Know Your Rehab Budget&nbsp;&nbsp;✦&nbsp;&nbsp;Ask For Pictures&nbsp;&nbsp;</span>
+                </div>
+            </div>
+
+            <!-- Dynamically Proportional Iframe Container -->
+            <div class="iframe-container" id="iframe-container">
+                <div id="iframe-wrapper">
+                    <iframe 
+                        src="https://docs.google.com/spreadsheets/d/1c8jdTAgqSjsf2xr1ymkukPNzglSxe0rpqhukDNbo-VI/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
+                        class="sheet-iframe" 
+                        title="Property Details"
+                        scrolling="no">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information & Profile Card -->
+        <div class="card">
+            <div class="info-card-content">
+                <h2 class="info-card-title">Additional Information</h2>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Cash Or Hard Money Only</h3>
+                    <p>These deals are offered as investment properties and are often in very poor repair. As a result, the seller only accepts offers using all cash or a hard money loan. If you need a referral to a hard money lender, please let me know.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Sold As Is</h3>
+                    <p>These properties are in obvious need of repair or renovation so the seller only accepts offers with no repair requests and usually require the inspection contingency to be waived at time of offer.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Earnest Money Required</h3>
+                    <p>The sellers usually require the earnest money deposit to be sent in to actually secure the property. They are often first come, first serve. The first buyer to deposit the earnest money is the buyer to secure the contract.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Shorter Escrow Period</h3>
+                    <p>The sellers usually have limited time to close, so time is of the essence with these properties. Once under contract, there is usually a much shorter escrow period compared to a traditional sale. It is important that much of the due diligence be done up front before getting the property under contract.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Confidential Information</h3>
+                    <p>This property is intended to be shared only with you. It is prohibited to share this page with anyone else.</p>
+                </div>
+            </div>
+            
+            <!-- Clean Divider Line -->
+            <hr class="card-divider">
+            
+            <!-- Profile Info Moved Inside the Card -->
+            <div class="profile-section-inside">
+                <div class="gear-container">
+                    <div class="gear-spinner">
+                        <img src="https://andrewmarth.com/images/9_sided_cookie.svg" alt="Decorative Shape" class="cookie-shape" onerror="this.onerror=null; this.src='https://andrewmarth.com/images/9_sided_cookie.png';">
+                    </div>
+                    <img src="https://andrewmarth.com/images/az_pfp_graded.png" alt="Andrew Marth" class="profile-pic">
+                </div>
+                
+                <div class="contact-info">
+                    <h3>Andrew Marth</h3>
+                    <p>Real Estate Agent</p>
+                    <p><a href="tel:4806521330">480.652.1330</a></p>
+                    <p><a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a></p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden Backend Card -->
+    <div class="backend-wrapper" id="backend-card-wrapper">
+        <div class="card details-card">
+            <h2 class="property-title" style="margin-bottom: 5px;">Back End</h2>
+            <p style="font-size: 1.1rem; color: #4f2d2c; margin-bottom: 25px; opacity: 0.9;">Sent from Hoffer Group - Kyle Allen</p>
+            <div class="buttons-container">
+                <a href="https://docs.google.com/spreadsheets/d/1c8jdTAgqSjsf2xr1ymkukPNzglSxe0rpqhukDNbo-VI/edit" target="_blank" rel="noopener noreferrer" class="btn-primary">Proforma Link</a>
+                <a href="https://andrewmarth.github.io/properties/19f87046df863312_EMAIL.html" target="_blank" rel="noopener noreferrer" class="btn-primary">Original Email</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backend Access Button -->
+    <div class="backend-trigger-container">
+        <button type="button" class="btn-backend" id="backend-btn">Backend</button>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only. Information is compiled from sources deemed reliable but is subject to errors, omissions, changes in price, condition, sale, or withdrawal without notice. This is not intended to solicit property already listed. Photos may be virtually staged or digitally enhanced and may not reflect actual property conditions.
+        </p>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // 1. Backend Code Logic
+        document.getElementById('backend-btn').addEventListener('click', function() {
+            const code = prompt("Enter Access Code:");
+            if (code === "6874") {
+                // Hide the button
+                this.style.display = 'none';
+                
+                // Show the hidden card wrapper
+                const backendWrapper = document.getElementById('backend-card-wrapper');
+                backendWrapper.style.display = 'flex';
+                
+                // Smoothly scroll the user down so they see it
+                backendWrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else if (code !== null) {
+                alert("Incorrect code.");
+            }
+        });
+
+        // 2. Dynamic iframe scaling script to guarantee no scrollbars on any device
+        function scaleSheet() {
+            const container = document.getElementById('iframe-container');
+            const wrapper = document.getElementById('iframe-wrapper');
+            
+            if (container && wrapper) {
+                const containerWidth = container.clientWidth; 
+                
+                const sheetWidth = 720; 
+                const sheetHeight = 13750; 
+                
+                if (containerWidth < sheetWidth) {
+                    const scale = (containerWidth - 1) / sheetWidth;
+                    wrapper.style.transform = `scale(${scale})`;
+                    wrapper.style.transformOrigin = 'top left'; 
+                    wrapper.style.margin = '0'; 
+                    
+                    container.style.height = `${sheetHeight * scale}px`;
+                } else {
+                    wrapper.style.transform = 'scale(1)';
+                    wrapper.style.transformOrigin = 'top center';
+                    wrapper.style.margin = '0 auto'; 
+                    container.style.height = `${sheetHeight}px`;
+                }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', scaleSheet);
+        window.addEventListener('resize', scaleSheet);
+    </script>
+
+</body>
+</html>
