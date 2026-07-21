@@ -165,8 +165,8 @@
 
         /* --- Google Sheet Card --- */
         .sheet-card {
-            /* No padding here so the sheet goes edge-to-edge */
-            height: 600px; /* Gives the sheet plenty of vertical room */
+            /* Massive fixed height swallows the sheet content to eliminate inner scrollbars */
+            height: 1200px; 
         }
         .sheet-iframe {
             width: 100%;
@@ -296,7 +296,7 @@
                 max-width: 100%;
             }
             .sheet-card {
-                height: 500px;
+                height: 1400px; /* Added even more height on mobile so the rows have room to stack/wrap */
             }
             /* Responsive formatting to prevent horizontal bleed for shadow cards */
             .card {
