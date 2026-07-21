@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Investment Properties | Andrew Marth Real Estate</title>
     
+    <!-- Google Fonts Import (Matches your brand style) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+    
     <style>
         /* --- General Reset --- */
         * {
@@ -19,9 +24,54 @@
             height: 100%;
             overflow: hidden; 
             background-color: #e9e2d8; /* Brand background color while the map loads */
+            font-family: 'Familjen Grotesk', sans-serif;
         }
 
-        /* Force the map iframe to stretch exactly to all four corners of the viewport */
+        h1 {
+            font-family: 'Bricolage Grotesque', sans-serif;
+        }
+
+        /* --- Floating Header Card --- */
+        .floating-card {
+            position: absolute;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%); /* Perfectly centers the absolute element */
+            z-index: 100; /* Forces it above the map iframe */
+            
+            /* Brand Styling */
+            background-color: #ffffff;
+            border-radius: 15px;
+            border: 2px solid #0E2A3B;
+            box-shadow: 4px 4px 0px #0E2A3B; /* Slightly smaller shadow to save screen real estate */
+            
+            /* Internal Layout */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 30px;
+            width: 90%;
+            max-width: 400px; /* Prevents it from getting too wide on desktop */
+        }
+
+        .floating-card img {
+            width: 100%;
+            max-width: 200px;
+            height: auto;
+            object-fit: contain;
+            margin-bottom: 5px; /* Keeps the text snug against the logo */
+        }
+
+        .floating-card h1 {
+            color: #4e513e; /* Theme Green */
+            font-size: 1.5rem;
+            line-height: 1.2;
+            text-align: center;
+            margin: 0;
+        }
+
+        /* --- Force Map to Background --- */
         #atlist-embed {
             position: absolute;
             top: 0;
@@ -29,10 +79,34 @@
             width: 100vw;
             height: 100vh;
             border: none;
+            z-index: 1; /* Sits below the floating card */
+        }
+
+        /* --- Mobile Optimization (Extreme Thinness) --- */
+        @media (max-width: 768px) {
+            .floating-card {
+                top: 15px;
+                padding: 10px 20px; /* Reduced padding drastically to save vertical space */
+                width: calc(100% - 30px); /* Gives it a 15px gap on the left and right */
+                border-radius: 12px;
+            }
+            .floating-card img {
+                max-width: 140px; /* Shrunk logo for mobile */
+                margin-bottom: 2px;
+            }
+            .floating-card h1 {
+                font-size: 1.15rem; /* Shrunk text for mobile */
+            }
         }
     </style>
 </head>
 <body>
+
+    <!-- Floating Branding Card -->
+    <div class="floating-card">
+        <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
+        <h1>Investment Properties</h1>
+    </div>
 
     <!-- Full Page Map Embed -->
     <iframe 
