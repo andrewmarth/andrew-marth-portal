@@ -166,15 +166,16 @@
         /* --- Google Sheet Card --- */
         .sheet-card {
             background-color: #ffffff;
-            height: 13677px; /* Exact height of the Google Sheet */
-            overflow: hidden; /* Hard clips anything outside the box to guarantee no scrollbars */
+            height: 13750px; /* Buffered Height */
+            overflow: hidden; /* Hard clips anything outside the box */
         }
         
         #iframe-wrapper {
-            width: 694px; /* Exact width of the Google Sheet */
-            height: 13677px; /* Exact height of the Google Sheet */
-            margin: 0 auto; /* Centers it on desktop */
+            width: 720px; /* Buffered Width (adds invisible padding) */
+            height: 13750px; 
+            margin: 0 auto; 
             transform-origin: top center; 
+            overflow: hidden;
         }
 
         .sheet-iframe {
@@ -182,6 +183,7 @@
             height: 100%;
             border: none;
             display: block;
+            overflow: hidden !important;
         }
 
         /* --- Profile Section --- */
@@ -381,12 +383,14 @@
             if (card && wrapper) {
                 // Get the exact width of the card inside its borders
                 const cardWidth = card.clientWidth; 
-                const sheetWidth = 694; 
-                const sheetHeight = 13677; // The exact height of your Google Sheet
+                
+                // Buffered dimensions to prevent Google from spawning internal scrollbars
+                const sheetWidth = 720; 
+                const sheetHeight = 13750; 
                 
                 if (cardWidth < sheetWidth) {
-                    // Calculate exact fraction needed to fit mobile screen
-                    const scale = cardWidth / sheetWidth;
+                    // Subtracting 1px prevents sub-pixel rounding errors from overflowing
+                    const scale = (cardWidth - 1) / sheetWidth;
                     wrapper.style.transform = `scale(${scale})`;
                     wrapper.style.transformOrigin = 'top left'; // Anchors it perfectly to the left edge
                     wrapper.style.margin = '0'; 
