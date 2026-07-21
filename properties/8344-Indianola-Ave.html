@@ -165,18 +165,23 @@
 
         /* --- Google Sheet Card --- */
         .sheet-card {
-            height: 1200px; /* Base Desktop Height */
             background-color: #ffffff;
-            display: flex;
-            justify-content: center; /* Perfect center alignment inside the 800px card */
+            height: 1200px; /* Base Desktop Height */
+            overflow: hidden; /* Hard clips anything outside the box to guarantee no scrollbars */
         }
-        .sheet-iframe {
+        
+        #iframe-wrapper {
             width: 694px; /* The exact hardcoded width of your Google Sheet */
             height: 1200px;
+            margin: 0 auto; /* Centers it on desktop */
+            transform-origin: top center; 
+        }
+
+        .sheet-iframe {
+            width: 100%;
+            height: 100%;
             border: none;
             display: block;
-            flex-shrink: 0; /* Prevents flexbox from naturally squishing it */
-            transform-origin: top center; /* Ensures it scales perfectly from the top middle */
         }
 
         /* --- Profile Section --- */
@@ -301,17 +306,6 @@
                 margin-left: auto;
                 margin-right: auto;
             }
-            
-            /* DYNAMIC SCALING MATH FOR MOBILE GOOGLE SHEET */
-            /* Card width on mobile is viewport (100vw) minus wrapper padding (40px) minus shadow offset (6px) = 46px */
-            .sheet-card {
-                /* Dynamically shrinks the container height to perfectly match the scaled iframe */
-                height: calc(1200px * ((100vw - 46px) / 694)); 
-            }
-            .sheet-iframe {
-                /* Dynamically shrinks the 694px width to perfectly fit inside the mobile card */
-                transform: scale(calc((100vw - 46px) / 694)); 
-            }
         }
     </style>
 </head>
@@ -340,13 +334,16 @@
             <a href="https://www.zillow.com/homes/6274-S-17th-Pl-Phoenix-AZ-85042/" target="_blank" rel="noopener noreferrer" class="btn-primary">View Zillow Page</a>
         </div>
 
-        <!-- Google Sheet Embed Card (Dynamically Proportional on Mobile) -->
-        <div class="card sheet-card">
-            <iframe 
-                src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
-                class="sheet-iframe" 
-                title="Property Details">
-            </iframe>
+        <!-- Google Sheet Embed Card (Dynamically Proportional via Javascript) -->
+        <div class="card sheet-card" id="sheet-card">
+            <div id="iframe-wrapper">
+                <iframe 
+                    src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=668099647&widget=false&headers=false&chrome=false" 
+                    class="sheet-iframe" 
+                    title="Property Details"
+                    scrolling="no">
+                </iframe>
+            </div>
         </div>
 
     </div>
@@ -374,6 +371,40 @@
             Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only. Information is compiled from sources deemed reliable but is subject to errors, omissions, changes in price, condition, sale, or withdrawal without notice. This is not intended to solicit property already listed. Photos may be virtually staged or digitally enhanced and may not reflect actual property conditions.
         </p>
     </footer>
+
+    <!-- Dynamic iframe scaling script to guarantee no scrollbars on any device -->
+    <script>
+        function scaleSheet() {
+            const card = document.getElementById('sheet-card');
+            const wrapper = document.getElementById('iframe-wrapper');
+            
+            if (card && wrapper) {
+                // Get the exact width of the card inside its borders
+                const cardWidth = card.clientWidth; 
+                const sheetWidth = 694; 
+                
+                if (cardWidth < sheetWidth) {
+                    // Calculate exact fraction needed to fit mobile screen
+                    const scale = cardWidth / sheetWidth;
+                    wrapper.style.transform = `scale(${scale})`;
+                    wrapper.style.transformOrigin = 'top left'; // Anchors it perfectly to the left edge
+                    wrapper.style.margin = '0'; 
+                    // Shrinks the outer container height to match the scaled iframe!
+                    card.style.height = `${1200 * scale}px`;
+                } else {
+                    // Standard desktop behavior
+                    wrapper.style.transform = 'scale(1)';
+                    wrapper.style.transformOrigin = 'top center';
+                    wrapper.style.margin = '0 auto'; 
+                    card.style.height = '1200px';
+                }
+            }
+        }
+
+        // Run the math when the page loads, and re-calculate if the phone is rotated
+        window.addEventListener('DOMContentLoaded', scaleSheet);
+        window.addEventListener('resize', scaleSheet);
+    </script>
 
 </body>
 </html>
