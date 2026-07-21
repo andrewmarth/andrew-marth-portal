@@ -27,7 +27,7 @@
             font-family: 'Familjen Grotesk', sans-serif;
         }
 
-        h1 {
+        h1, h2 {
             font-family: 'Bricolage Grotesque', sans-serif;
         }
 
@@ -36,23 +36,21 @@
             position: absolute;
             top: 25px;
             left: 50%;
-            transform: translateX(-50%); /* Perfectly centers the absolute element */
-            z-index: 100; /* Forces it above the map iframe */
+            transform: translateX(-50%); 
+            z-index: 100; /* Sits above the map */
             
-            /* Brand Styling */
             background-color: #ffffff;
             border-radius: 15px;
             border: 2px solid #0E2A3B;
-            box-shadow: 4px 4px 0px #0E2A3B; /* Slightly smaller shadow to save screen real estate */
+            box-shadow: 4px 4px 0px #0E2A3B; 
             
-            /* Internal Layout */
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 15px 30px;
             width: 90%;
-            max-width: 400px; /* Prevents it from getting too wide on desktop */
+            max-width: 400px; 
         }
 
         .floating-card img {
@@ -60,11 +58,11 @@
             max-width: 200px;
             height: auto;
             object-fit: contain;
-            margin-bottom: 5px; /* Keeps the text snug against the logo */
+            margin-bottom: 5px; 
         }
 
         .floating-card h1 {
-            color: #4e513e; /* Theme Green */
+            color: #4e513e; 
             font-size: 1.5rem;
             line-height: 1.2;
             text-align: center;
@@ -79,34 +77,133 @@
             width: 100vw;
             height: 100vh;
             border: none;
-            z-index: 1; /* Sits below the floating card */
+            z-index: 1; /* Lowest level */
         }
 
-        /* --- Mobile Optimization (Extreme Thinness) --- */
+        /* --- Fullscreen Entry Overlay --- */
+        .entry-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(233, 226, 216, 0.4); /* Slight tint of your brand background */
+            backdrop-filter: blur(12px); /* The heavy blur effect */
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 500; /* Sits above EVERYTHING, including the logo card */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        /* --- Entry Modal Card --- */
+        .entry-card {
+            background-color: #ffffff;
+            border-radius: 20px;
+            border: 2px solid #0E2A3B;
+            box-shadow: 6px 6px 0px #0E2A3B;
+            padding: 50px 40px;
+            text-align: center;
+            width: 100%;
+            max-width: 550px;
+            position: relative;
+            transform: translateY(0);
+            transition: transform 0.5s ease;
+        }
+
+        .entry-card h2 {
+            font-size: 2.2rem;
+            color: #4e513e;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+
+        .entry-card .subtext {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #99724b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 25px;
+        }
+
+        .entry-card .body-text {
+            font-size: 1.1rem;
+            color: #4f2d2c;
+            margin-bottom: 35px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        /* --- Button Styling (Matched to your other pages) --- */
+        .btn-primary { 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: #99724b; 
+            color: #ffffff; 
+            border: 2px solid #0E2A3B; 
+            padding: 15px 35px; 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            border-radius: 999px; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+            text-decoration: none;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2); 
+            width: 100%;
+            max-width: 320px;
+        }
+        .btn-primary:hover { 
+            background-color: #9a5d40; 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1); 
+        }
+        .btn-primary::after {
+            content: '\2192'; 
+            font-size: 1.2em;
+            transition: transform 0.3s ease;
+        }
+        .btn-primary:hover::after {
+            transform: translateX(5px); 
+        }
+
+        /* --- Mobile Optimization --- */
         @media (max-width: 768px) {
             .floating-card {
                 top: 15px;
-                padding: 10px 20px; /* Reduced padding drastically to save vertical space */
-                width: calc(100% - 30px); /* Gives it a 15px gap on the left and right */
+                padding: 10px 20px; 
+                width: calc(100% - 30px); 
                 border-radius: 12px;
             }
             .floating-card img {
-                max-width: 140px; /* Shrunk logo for mobile */
+                max-width: 140px; 
                 margin-bottom: 2px;
             }
             .floating-card h1 {
-                font-size: 1.15rem; /* Shrunk text for mobile */
+                font-size: 1.15rem; 
+            }
+            
+            .entry-card {
+                padding: 40px 20px;
+                width: calc(100% - 10px);
+            }
+            .entry-card h2 {
+                font-size: 1.8rem;
+            }
+            .entry-card .body-text {
+                font-size: 1.05rem;
+            }
+            .btn-primary {
+                max-width: 100%;
             }
         }
     </style>
 </head>
 <body>
-
-    <!-- Floating Branding Card -->
-    <div class="floating-card">
-        <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
-        <h1>Investment Properties</h1>
-    </div>
 
     <!-- Full Page Map Embed -->
     <iframe 
@@ -118,6 +215,40 @@
         allowfullscreen 
         id="atlist-embed">
     </iframe>
+
+    <!-- Floating Branding Card -->
+    <div class="floating-card">
+        <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
+        <h1>Investment Properties</h1>
+    </div>
+
+    <!-- Fullscreen Entry Overlay (Sits on top of everything) -->
+    <div class="entry-overlay" id="entry-overlay">
+        <div class="entry-card" id="entry-card">
+            <h2>Investment Property Portal</h2>
+            <p class="subtext">Please Read</p>
+            <p class="body-text">The properties and information inside are confidential and intended to only be shared with you. Sharing the content inside is strictly forbidden. By entering, you accept these terms.</p>
+            <button class="btn-primary" id="explore-btn">Explore</button>
+        </div>
+    </div>
+
+    <!-- JavaScript to handle the Explore button -->
+    <script>
+        document.getElementById('explore-btn').addEventListener('click', function() {
+            const overlay = document.getElementById('entry-overlay');
+            const card = document.getElementById('entry-card');
+            
+            // Slide the card down slightly as it fades out for a premium feel
+            card.style.transform = 'translateY(20px)';
+            overlay.style.opacity = '0';
+            overlay.style.visibility = 'hidden';
+            
+            // Remove it completely from the DOM after the transition so it doesn't block map clicks
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 500);
+        });
+    </script>
 
 </body>
 </html>
