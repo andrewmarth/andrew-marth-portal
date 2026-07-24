@@ -224,7 +224,7 @@
             100% { transform: translateX(-50%); }
         }
 
-        /* The container specifically for the iframe */
+        /* The containers for the iframes */
         .iframe-container {
             width: 100%;
             height: 13750px; 
@@ -234,6 +234,20 @@
         #iframe-wrapper {
             width: 720px; 
             height: 13750px; 
+            margin: 0 auto; 
+            transform-origin: top center; 
+            overflow: hidden;
+        }
+
+        #backend-iframe-container {
+            width: 100%;
+            height: 600px; /* Base Desktop Height (560px native + 40px safety buffer) */
+            overflow: hidden; 
+        }
+        
+        #backend-iframe-wrapper {
+            width: 726px; /* Buffered Width (700px native + 26px safety buffer) */
+            height: 600px; 
             margin: 0 auto; 
             transform-origin: top center; 
             overflow: hidden;
@@ -593,12 +607,27 @@
 
     <!-- Hidden Backend Card -->
     <div class="backend-wrapper" id="backend-card-wrapper">
-        <div class="card details-card">
+        <div class="card details-card" style="padding-bottom: 0;">
             <h2 class="property-title" style="margin-bottom: 5px;">Back End</h2>
             <p style="font-size: 1.1rem; color: #4f2d2c; margin-bottom: 25px; opacity: 0.9;">Sent from Gentry Real Estate - Spencer</p>
-            <div class="buttons-container">
+            <div class="buttons-container" style="padding-bottom: 40px;">
                 <a href="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/edit" target="_blank" rel="noopener noreferrer" class="btn-primary">Proforma Link</a>
                 <a href="https://andrewmarth.com/contact" target="_blank" rel="noopener noreferrer" class="btn-primary">Original Email</a>
+            </div>
+            
+            <!-- Clean Divider Line -->
+            <hr class="card-divider" style="margin: 0;">
+            
+            <!-- Dynamically Proportional Backend Iframe Container -->
+            <div id="backend-iframe-container">
+                <div id="backend-iframe-wrapper">
+                    <iframe 
+                        src="https://docs.google.com/spreadsheets/d/1ZyORdeFjDSK_fFRA4CjJa6sYyH5oN6QZdJ-dkP8HItM/htmlembed?gid=1284437312&widget=false&headers=false&chrome=false" 
+                        class="sheet-iframe" 
+                        title="Backend Data"
+                        scrolling="no">
+                    </iframe>
+                </div>
             </div>
         </div>
     </div>
@@ -617,7 +646,66 @@
 
     <!-- Scripts -->
     <script>
-        // 1. Backend Code Logic
+        // 1. Dynamic iframe scaling script to guarantee no scrollbars on any device
+        function scaleSheet() {
+            // First Sheet (Proforma)
+            const container1 = document.getElementById('iframe-container');
+            const wrapper1 = document.getElementById('iframe-wrapper');
+            
+            if (container1 && wrapper1) {
+                const containerWidth1 = container1.clientWidth; 
+                
+                // Buffered dimensions to prevent Google from spawning internal scrollbars
+                const sheetWidth1 = 720; 
+                const sheetHeight1 = 13750; 
+                
+                // Only scale if the card is visible (width > 0)
+                if (containerWidth1 > 0) {
+                    if (containerWidth1 < sheetWidth1) {
+                        const scale1 = (containerWidth1 - 1) / sheetWidth1;
+                        wrapper1.style.transform = `scale(${scale1})`;
+                        wrapper1.style.transformOrigin = 'top left'; 
+                        wrapper1.style.margin = '0'; 
+                        container1.style.height = `${sheetHeight1 * scale1}px`;
+                    } else {
+                        wrapper1.style.transform = 'scale(1)';
+                        wrapper1.style.transformOrigin = 'top center';
+                        wrapper1.style.margin = '0 auto'; 
+                        container1.style.height = `${sheetHeight1}px`;
+                    }
+                }
+            }
+
+            // Second Sheet (Backend)
+            const container2 = document.getElementById('backend-iframe-container');
+            const wrapper2 = document.getElementById('backend-iframe-wrapper');
+            
+            if (container2 && wrapper2) {
+                const containerWidth2 = container2.clientWidth; 
+                
+                // Buffered dimensions (700x560 + safety margins)
+                const sheetWidth2 = 726; 
+                const sheetHeight2 = 600; 
+                
+                // Only scale if the backend card is currently unlocked and visible (width > 0)
+                if (containerWidth2 > 0) {
+                    if (containerWidth2 < sheetWidth2) {
+                        const scale2 = (containerWidth2 - 1) / sheetWidth2;
+                        wrapper2.style.transform = `scale(${scale2})`;
+                        wrapper2.style.transformOrigin = 'top left'; 
+                        wrapper2.style.margin = '0'; 
+                        container2.style.height = `${sheetHeight2 * scale2}px`;
+                    } else {
+                        wrapper2.style.transform = 'scale(1)';
+                        wrapper2.style.transformOrigin = 'top center';
+                        wrapper2.style.margin = '0 auto'; 
+                        container2.style.height = `${sheetHeight2}px`;
+                    }
+                }
+            }
+        }
+
+        // 2. Backend Code Logic
         document.getElementById('backend-btn').addEventListener('click', function() {
             const code = prompt("Enter Access Code:");
             if (code === "6874") {
@@ -628,6 +716,9 @@
                 const backendWrapper = document.getElementById('backend-card-wrapper');
                 backendWrapper.style.display = 'flex';
                 
+                // Instantly recalculate dimensions now that the card is physically rendered!
+                scaleSheet();
+                
                 // Smoothly scroll the user down so they see it
                 backendWrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
             } else if (code !== null) {
@@ -635,33 +726,7 @@
             }
         });
 
-        // 2. Dynamic iframe scaling script to guarantee no scrollbars on any device
-        function scaleSheet() {
-            const container = document.getElementById('iframe-container');
-            const wrapper = document.getElementById('iframe-wrapper');
-            
-            if (container && wrapper) {
-                const containerWidth = container.clientWidth; 
-                
-                const sheetWidth = 720; 
-                const sheetHeight = 13750; 
-                
-                if (containerWidth < sheetWidth) {
-                    const scale = (containerWidth - 1) / sheetWidth;
-                    wrapper.style.transform = `scale(${scale})`;
-                    wrapper.style.transformOrigin = 'top left'; 
-                    wrapper.style.margin = '0'; 
-                    
-                    container.style.height = `${sheetHeight * scale}px`;
-                } else {
-                    wrapper.style.transform = 'scale(1)';
-                    wrapper.style.transformOrigin = 'top center';
-                    wrapper.style.margin = '0 auto'; 
-                    container.style.height = `${sheetHeight}px`;
-                }
-            }
-        }
-
+        // Run the math when the page loads, and re-calculate if the phone is rotated
         window.addEventListener('DOMContentLoaded', scaleSheet);
         window.addEventListener('resize', scaleSheet);
     </script>
