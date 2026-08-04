@@ -142,7 +142,7 @@
             100% { transform: translateX(-50%); }
         }
 
-        /* The container specifically for the iframe */
+        /* --- Container for Live Overview Iframe --- */
         .iframe-container {
             width: 100%;
             height: 12780px; /* Buffered Height */
@@ -152,6 +152,21 @@
         #iframe-wrapper {
             width: 935px; /* Buffered Width */
             height: 12780px; 
+            margin: 0 auto; 
+            transform-origin: top center; 
+            overflow: hidden;
+        }
+
+        /* --- Container for Rehab Phase 1 Iframe --- */
+        #iframe-container-2 {
+            width: 100%;
+            height: 7285px; /* Buffered Height (7210px + 75px safety buffer) */
+            overflow: hidden; 
+        }
+        
+        #iframe-wrapper-2 {
+            width: 935px; /* Buffered Width */
+            height: 7285px; 
             margin: 0 auto; 
             transform-origin: top center; 
             overflow: hidden;
@@ -289,7 +304,7 @@
 
     <div class="content-wrapper">
         
-        <!-- Google Sheet Embed Card -->
+        <!-- Live Overview Google Sheet Card -->
         <div class="card sheet-card">
             <!-- Header -->
             <div class="proforma-header">
@@ -312,6 +327,27 @@
                         src="https://docs.google.com/spreadsheets/d/1eKU3k2DPPZLU0PNYavM4JAiz9R-QMfFW8rh1aiiLooE/htmlembed?gid=1006963712&widget=false&headers=false&chrome=false" 
                         class="sheet-iframe" 
                         title="Ongoing Property Management Details"
+                        scrolling="no">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rehab Phase 1 Google Sheet Card -->
+        <div class="card sheet-card">
+            <!-- Header -->
+            <div class="proforma-header">
+                <h2>Rehab Phase 1</h2>
+                <p>Project details and tracking</p>
+            </div>
+            
+            <!-- Dynamically Proportional Iframe Container -->
+            <div id="iframe-container-2">
+                <div id="iframe-wrapper-2">
+                    <iframe 
+                        src="https://docs.google.com/spreadsheets/d/1eKU3k2DPPZLU0PNYavM4JAiz9R-QMfFW8rh1aiiLooE/htmlembed?gid=1809578923&widget=false&headers=false&chrome=false" 
+                        class="sheet-iframe" 
+                        title="Rehab Phase 1 Details"
                         scrolling="no">
                     </iframe>
                 </div>
@@ -347,28 +383,52 @@
     <!-- Dynamic iframe scaling script to guarantee no scrollbars on any device -->
     <script>
         function scaleSheet() {
-            const container = document.getElementById('iframe-container');
-            const wrapper = document.getElementById('iframe-wrapper');
+            // First Sheet (Live Overview)
+            const container1 = document.getElementById('iframe-container');
+            const wrapper1 = document.getElementById('iframe-wrapper');
             
-            if (container && wrapper) {
-                const containerWidth = container.clientWidth; 
+            if (container1 && wrapper1) {
+                const containerWidth1 = container1.clientWidth; 
+                const sheetWidth1 = 935; 
+                const sheetHeight1 = 12780; 
                 
-                // Buffered dimensions (Native: 909w x 12705h)
-                const sheetWidth = 935; 
-                const sheetHeight = 12780; 
-                
-                if (containerWidth > 0) {
-                    if (containerWidth < sheetWidth) {
-                        const scale = (containerWidth - 1) / sheetWidth;
-                        wrapper.style.transform = `scale(${scale})`;
-                        wrapper.style.transformOrigin = 'top left'; 
-                        wrapper.style.margin = '0'; 
-                        container.style.height = `${sheetHeight * scale}px`;
+                if (containerWidth1 > 0) {
+                    if (containerWidth1 < sheetWidth1) {
+                        const scale1 = (containerWidth1 - 1) / sheetWidth1;
+                        wrapper1.style.transform = `scale(${scale1})`;
+                        wrapper1.style.transformOrigin = 'top left'; 
+                        wrapper1.style.margin = '0'; 
+                        container1.style.height = `${sheetHeight1 * scale1}px`;
                     } else {
-                        wrapper.style.transform = 'scale(1)';
-                        wrapper.style.transformOrigin = 'top center';
-                        wrapper.style.margin = '0 auto'; 
-                        container.style.height = `${sheetHeight}px`;
+                        wrapper1.style.transform = 'scale(1)';
+                        wrapper1.style.transformOrigin = 'top center';
+                        wrapper1.style.margin = '0 auto'; 
+                        container1.style.height = `${sheetHeight1}px`;
+                    }
+                }
+            }
+
+            // Second Sheet (Rehab Phase 1)
+            const container2 = document.getElementById('iframe-container-2');
+            const wrapper2 = document.getElementById('iframe-wrapper-2');
+            
+            if (container2 && wrapper2) {
+                const containerWidth2 = container2.clientWidth; 
+                const sheetWidth2 = 935; 
+                const sheetHeight2 = 7285; 
+                
+                if (containerWidth2 > 0) {
+                    if (containerWidth2 < sheetWidth2) {
+                        const scale2 = (containerWidth2 - 1) / sheetWidth2;
+                        wrapper2.style.transform = `scale(${scale2})`;
+                        wrapper2.style.transformOrigin = 'top left'; 
+                        wrapper2.style.margin = '0'; 
+                        container2.style.height = `${sheetHeight2 * scale2}px`;
+                    } else {
+                        wrapper2.style.transform = 'scale(1)';
+                        wrapper2.style.transformOrigin = 'top center';
+                        wrapper2.style.margin = '0 auto'; 
+                        container2.style.height = `${sheetHeight2}px`;
                     }
                 }
             }
