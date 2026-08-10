@@ -250,9 +250,9 @@
 </head>
 <body>
 
-    <!-- Full Page Map Embed -->
+    <!-- Empty Map Embed (Loaded securely via JavaScript upon validation) -->
     <iframe 
-        src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
+        data-src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
         allow="geolocation 'self' https://my.atlist.com" 
         loading="lazy" 
         frameborder="0" 
@@ -301,6 +301,7 @@
         const exploreBtn = document.getElementById('explore-btn');
         const codeInput = document.getElementById('access-code');
         const errorMessage = document.getElementById('error-message');
+        const mapIframe = document.getElementById('atlist-embed');
 
         // Function to check the code
         function validateCode() {
@@ -310,6 +311,9 @@
                 // SUCCESS: Proceed into the portal
                 codeInput.classList.remove('error');
                 errorMessage.style.display = 'none';
+
+                // SECURE LOAD: Inject the map link into the iframe only now
+                mapIframe.src = mapIframe.getAttribute('data-src');
 
                 const overlay = document.getElementById('entry-overlay');
                 const card = document.getElementById('entry-card');
