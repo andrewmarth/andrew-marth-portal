@@ -132,12 +132,57 @@
         .entry-card .body-text {
             font-size: 1.1rem;
             color: #4f2d2c;
-            margin-bottom: 35px;
+            margin-bottom: 30px;
             line-height: 1.6;
             opacity: 0.9;
         }
 
-        /* --- Button Styling (Matched to your other pages) --- */
+        /* --- Input Field Styling --- */
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .code-input {
+            width: 100%;
+            max-width: 320px;
+            font-size: 1.1rem;
+            color: #4f2d2c;
+            border: 2px solid transparent;
+            background-color: #f7f4f0;
+            padding: 15px 25px;
+            border-radius: 999px;
+            text-align: center;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            transition: all 0.3s ease;
+            font-family: inherit;
+            outline: none;
+            margin-bottom: 10px;
+        }
+
+        .code-input:focus {
+            background-color: #ffffff;
+            border-color: #99724b;
+            box-shadow: 0 8px 20px rgba(153, 114, 75, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .code-input.error {
+            border-color: #d9534f;
+            background-color: #fdf2f2;
+        }
+
+        .error-message {
+            color: #d9534f;
+            font-size: 0.95rem;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+            margin-bottom: 5px;
+        }
+
+        /* --- Button Styling --- */
         .btn-primary { 
             display: inline-flex;
             align-items: center;
@@ -197,7 +242,7 @@
             .entry-card .body-text {
                 font-size: 1.05rem;
             }
-            .btn-primary {
+            .btn-primary, .code-input {
                 max-width: 100%;
             }
         }
@@ -228,25 +273,82 @@
             <h2>Investment Property Portal</h2>
             <p class="subtext">Please Read</p>
             <p class="body-text">The properties and information inside are confidential and intended to only be shared with you. Sharing the content inside is strictly forbidden. By entering, you accept these terms.</p>
+            
+            <div class="input-container">
+                <input type="text" id="access-code" class="code-input" placeholder="Enter Access Code" autocomplete="off">
+                <p id="error-message" class="error-message">Invalid Access Code</p>
+            </div>
+
             <button class="btn-primary" id="explore-btn">Explore</button>
         </div>
     </div>
 
-    <!-- JavaScript to handle the Explore button -->
+    <!-- JavaScript to handle Google Sheet fetching and validation -->
     <script>
-        document.getElementById('explore-btn').addEventListener('click', function() {
-            const overlay = document.getElementById('entry-overlay');
-            const card = document.getElementById('entry-card');
-            
-            // Slide the card down slightly as it fades out for a premium feel
-            card.style.transform = 'translateY(20px)';
-            overlay.style.opacity = '0';
-            overlay.style.visibility = 'hidden';
-            
-            // Remove it completely from the DOM after the transition so it doesn't block map clicks
-            setTimeout(() => {
-                overlay.style.display = 'none';
-            }, 500);
+        // Use Google's standard CSV export endpoint to bypass API Keys
+        const sheetUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:csv&gid=1766991810';
+        let validCodes = [];
+
+        // Fetch the codes as soon as the page loads
+        fetch(sheetUrl)
+            .then(response => response.text())
+            .then(csv => {
+                // Split the CSV by row, remove any accidental quotes or spaces
+                validCodes = csv.split('\n').map(code => code.replace(/"/g, '').trim()).filter(code => code !== '');
+            })
+            .catch(error => console.error('Error loading codes:', error));
+
+        const exploreBtn = document.getElementById('explore-btn');
+        const codeInput = document.getElementById('access-code');
+        const errorMessage = document.getElementById('error-message');
+
+        // Function to check the code
+        function validateCode() {
+            const enteredCode = codeInput.value.trim();
+
+            if (validCodes.includes(enteredCode)) {
+                // SUCCESS: Proceed into the portal
+                codeInput.classList.remove('error');
+                errorMessage.style.display = 'none';
+
+                const overlay = document.getElementById('entry-overlay');
+                const card = document.getElementById('entry-card');
+                
+                // Slide the card down slightly as it fades out for a premium feel
+                card.style.transform = 'translateY(20px)';
+                overlay.style.opacity = '0';
+                overlay.style.visibility = 'hidden';
+                
+                // Remove it completely from the DOM after the transition so it doesn't block map clicks
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 500);
+
+            } else {
+                // FAIL: Show error state
+                codeInput.classList.add('error');
+                errorMessage.style.display = 'block';
+                // Add a small shake effect
+                codeInput.style.transform = 'translateX(-5px)';
+                setTimeout(() => codeInput.style.transform = 'translateX(5px)', 100);
+                setTimeout(() => codeInput.style.transform = 'translateX(0)', 200);
+            }
+        }
+
+        // Trigger on button click
+        exploreBtn.addEventListener('click', validateCode);
+
+        // Also trigger if the user presses "Enter" on their keyboard while typing
+        codeInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                validateCode();
+            }
+        });
+        
+        // Clear error state as soon as they start typing again
+        codeInput.addEventListener('input', function() {
+            codeInput.classList.remove('error');
+            errorMessage.style.display = 'none';
         });
     </script>
 
