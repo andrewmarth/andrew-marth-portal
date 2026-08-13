@@ -91,8 +91,9 @@
             flex-grow: 1; /* Pushes footer to the bottom of the screen */
             padding: 60px 20px;
             display: flex;
-            justify-content: center;
-            align-items: flex-start;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px; /* Space between cards */
         }
 
         .main-card {
@@ -221,7 +222,7 @@
             border: none;
         }
         .btn:hover .btn-icon {
-            transform: translateX(4px); 
+            transform: scale(1.1); 
         }
 
         /* --- Embed Modal Overlay --- */
@@ -254,15 +255,15 @@
             border: 2px solid #0E2A3B;
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
-            max-width: 1200px; /* Big enough for Zapier forms */
+            max-width: 1200px;
             height: 100%;
-            max-height: 90vh; /* Keeps it inside the screen */
+            max-height: 90vh; 
             display: flex;
             flex-direction: column;
             position: relative;
             transform: scale(0.95);
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            overflow: hidden; /* Clips the background video nicely to the rounded corners */
+            overflow: hidden; 
         }
 
         .embed-modal-overlay.active .embed-modal-card {
@@ -276,14 +277,14 @@
             width: 100%; height: 100%;
             object-fit: cover;
             z-index: 0;
-            pointer-events: none; /* Allows clicks to pass through to the embed */
+            pointer-events: none; 
         }
 
         /* Modal Header for the dynamic title */
         .embed-modal-header {
             position: relative;
             z-index: 2;
-            padding: 20px 70px 20px 30px; /* Right padding ensures title doesn't hit close button */
+            padding: 20px 70px 20px 30px; 
             background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -296,7 +297,7 @@
             margin: 0;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis; /* Keeps long titles clean */
+            text-overflow: ellipsis; 
         }
 
         .close-modal-btn {
@@ -334,11 +335,10 @@
             width: 100%;
             height: 100%;
             -webkit-overflow-scrolling: touch;
-            position: relative; /* Placed above the video background */
+            position: relative; 
             z-index: 1; 
         }
 
-        /* Forces Zapier Embeds to fill the modal properly */
         zapier-interfaces-page-embed {
             height: 100% !important; 
             min-height: 600px;
@@ -425,16 +425,43 @@
 
     <!-- Main Card Container -->
     <main>
+        <!-- 1. Compass Card -->
         <div class="main-card">
-            <!-- Card Title -->
+            <div class="card-header">
+                <h2>Compass</h2>
+            </div>
+            <div class="card-body" id="compass-container">
+                <div class="loading-text">Loading Compass links...</div>
+            </div>
+        </div>
+
+        <!-- 2. Amyrth Card -->
+        <div class="main-card">
+            <div class="card-header">
+                <h2>Amyrth</h2>
+            </div>
+            <div class="card-body" id="amyrth-container">
+                <div class="loading-text">Loading Amyrth links...</div>
+            </div>
+        </div>
+
+        <!-- 3. Personal Card -->
+        <div class="main-card">
+            <div class="card-header">
+                <h2>Personal</h2>
+            </div>
+            <div class="card-body" id="personal-container">
+                <div class="loading-text">Loading Personal links...</div>
+            </div>
+        </div>
+
+        <!-- 4. Control Board Card (Embeds) -->
+        <div class="main-card">
             <div class="card-header">
                 <h2>Control Board</h2>
             </div>
-
-            <!-- Dynamic Links Area -->
-            <div class="card-body" id="links-container">
-                <!-- Loading Indicator -->
-                <div class="loading-text">Loading secure links...</div>
+            <div class="card-body" id="control-board-container">
+                <div class="loading-text">Loading Control Board...</div>
             </div>
         </div>
     </main>
@@ -456,19 +483,16 @@
     <!-- Full Screen Embed Modal -->
     <div class="embed-modal-overlay" id="embed-modal">
         <div class="embed-modal-card">
-            <!-- The Magic Background Video inside the card -->
             <video class="modal-bg-video" autoplay loop muted playsinline>
                 <source src="https://andrewmarth.com/images/form_background.mp4" type="video/mp4">
             </video>
             
-            <!-- Dynamic Modal Title -->
             <div class="embed-modal-header">
                 <h2 id="embed-modal-title">Tool Title</h2>
             </div>
 
             <button class="close-modal-btn" onclick="closeEmbedModal()">&times;</button>
             
-            <!-- This is where the injected embed code lives -->
             <div class="embed-modal-content" id="embed-modal-content"></div>
         </div>
     </div>
@@ -478,22 +502,17 @@
         const embedMemory = {};
 
         // Opens the Modal, sets the title, and safely executes embed scripts
-        function openEmbedModal(index) {
-            const data = embedMemory[index];
+        function openEmbedModal(memoryKey) {
+            const data = embedMemory[memoryKey];
             const overlay = document.getElementById('embed-modal');
             const titleEl = document.getElementById('embed-modal-title');
             const content = document.getElementById('embed-modal-content');
             
-            // Prevent background scrolling
             document.body.style.overflow = 'hidden';
             
-            // Inject Title & HTML
             titleEl.textContent = data.title;
             content.innerHTML = data.code;
             
-            // SECURITY/FUNCTIONALITY FIX: 
-            // Browsers won't execute <script> tags injected via innerHTML. 
-            // We must manually find them, recreate them, and append them so tools like Zapier load.
             const scripts = content.querySelectorAll('script');
             scripts.forEach(oldScript => {
                 const newScript = document.createElement('script');
@@ -502,7 +521,6 @@
                 oldScript.parentNode.replaceChild(newScript, oldScript);
             });
 
-            // Show Modal
             overlay.classList.add('active');
         }
 
@@ -512,22 +530,21 @@
             const titleEl = document.getElementById('embed-modal-title');
             const content = document.getElementById('embed-modal-content');
             
-            // Hide Modal and restore scroll
             overlay.classList.remove('active');
             document.body.style.overflow = '';
             
-            // Destroy embed content after animation so audio/video/iframes stop playing
             setTimeout(() => {
                 content.innerHTML = '';
                 titleEl.textContent = '';
             }, 300);
         }
 
-        // Google Sheet Fetch Logic
-        async function loadGoogleSheetLinks() {
+        // Reusable Google Sheet Fetch Logic
+        // isEmbedModal: true = opens in popup, false = opens in new tab
+        async function loadGoogleSheetData(gid, containerId, isEmbedModal) {
             const sheetId = '1HEsow_T7N-0kAy6Ax9jo5cE4KM7X08l2C-Cu9qwEfPw';
-            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
-            const container = document.getElementById('links-container');
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
+            const container = document.getElementById(containerId);
             
             try {
                 const response = await fetch(url);
@@ -544,52 +561,67 @@
                     
                     const title = row.c[0] ? row.c[0].v : '';
                     const desc = row.c[1] && row.c[1].v ? row.c[1].v : '';
-                    const embedCode = row.c[2] && row.c[2].v ? row.c[2].v : '';
+                    const linkOrCode = row.c[2] && row.c[2].v ? row.c[2].v : '';
                     
                     if (index === 0 && title.toLowerCase() === 'title') return;
 
-                    // Store both title and embed code to pull dynamically on click
-                    embedMemory[index] = {
-                        title: title,
-                        code: embedCode
-                    };
-
-                    // Create Row Element dynamically
+                    // Create Row Element
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'link-item';
-                    
-                    // Injected the ✦ bullet point into the template
                     itemDiv.innerHTML = `
                         <div class="link-info">
                             <h3>✦&nbsp;&nbsp;${title}</h3>
                             ${desc ? `<p>${desc}</p>` : ''}
                         </div>
                     `;
+
+                    // Generate appropriate button type
+                    if (isEmbedModal) {
+                        // Store code in memory
+                        const memoryKey = `${containerId}-${index}`;
+                        embedMemory[memoryKey] = { title: title, code: linkOrCode };
+
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'btn';
+                        btn.innerHTML = `
+                            Launch
+                            <img src="https://andrewmarth.com/images/fullscreen.png" alt="Launch" class="btn-icon">
+                        `;
+                        btn.onclick = () => openEmbedModal(memoryKey);
+                        itemDiv.appendChild(btn);
+
+                    } else {
+                        // Generate normal link
+                        const btn = document.createElement('a');
+                        btn.className = 'btn';
+                        btn.href = linkOrCode;
+                        btn.target = '_blank';
+                        btn.rel = 'noopener noreferrer';
+                        btn.innerHTML = `
+                            Launch
+                            <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
+                        `;
+                        itemDiv.appendChild(btn);
+                    }
                     
-                    // Create Button dynamically so we can attach an onClick listener cleanly
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn';
-                    btn.innerHTML = `
-                        Launch
-                        <img src="https://andrewmarth.com/images/arrow_forward.png" alt="Launch" class="btn-icon">
-                    `;
-                    
-                    // Trigger modal logic on click
-                    btn.onclick = () => openEmbedModal(index);
-                    
-                    itemDiv.appendChild(btn);
                     container.appendChild(itemDiv);
                 });
                 
             } catch (error) {
-                console.error('Error fetching sheet data:', error);
-                container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load links. Please try refreshing the page.</div>';
+                console.error(`Error fetching sheet data for ${containerId}:`, error);
+                container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load data. Please refresh.</div>';
             }
         }
 
-        // Execute when DOM is ready
-        document.addEventListener('DOMContentLoaded', loadGoogleSheetLinks);
+        // Load all 4 Google Sheets dynamically when the DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // (GID, Container ID, Opens in Modal?)
+            loadGoogleSheetData('430261487', 'compass-container', false);
+            loadGoogleSheetData('1313004679', 'amyrth-container', false);
+            loadGoogleSheetData('1113112382', 'personal-container', false);
+            loadGoogleSheetData('0', 'control-board-container', true);
+        });
     </script>
 </body>
 </html>
