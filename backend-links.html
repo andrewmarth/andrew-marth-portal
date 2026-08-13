@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internal Links | Andrew Marth Real Estate</title>
+    <title>Backend Links | Andrew Marth Real Estate</title>
     
     <!-- Google Fonts Import -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,49 +18,119 @@
             padding: 0;
         }
         
+        /* Prevents ALL horizontal scrolling across all mobile browsers */
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
         body {
             font-family: 'Familjen Grotesk', sans-serif; 
             line-height: 1.6;
             color: #4f2d2c; 
             background-color: #e9e2d8; 
-            padding: 60px 20px;
             display: flex;
             flex-direction: column;
-            align-items: center;
             min-height: 100vh;
         }
         
+        /* Updated Header Font */
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Bricolage Grotesque', sans-serif;
         }
+        
+        /* --- Navigation Bar (Fixed & Glassmorphism) --- */
+        .navbar {
+            background: rgba(233, 226, 216, 0.85); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px); 
+            position: fixed;
+            top: 0; left: 0; width: 100%;
+            z-index: 1000; 
+            padding: 15px 30px;
+            display: flex; align-items: center;
+            border-bottom: 1px solid rgba(153, 114, 75, 0.3); 
+            min-height: 80px;
+        }
+        .mobile-center-logo { display: none; }
+        .hamburger { display: none; font-size: 2rem; background: none; border: none; color: #4e513e; cursor: pointer; }
+        .nav-menu { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .nav-logo img { height: 50px; width: auto; display: block; border-radius: 4px; }
+        .nav-logo a { text-decoration: none; display: block; }
+        .nav-links { display: flex; gap: 30px; align-items: center; }
+        .nav-links a { text-decoration: none; color: #4f2d2c; font-weight: bold; font-size: 1.1rem; transition: color 0.3s; }
+        .nav-links a:hover { color: #9a5d40; }
+        .close-menu { display: none; }
 
-        /* --- Main Card Styling --- */
+        /* --- Header / Hero Section (Video Background) --- */
+        header {
+            position: relative;
+            padding: 160px 20px 100px 20px; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            min-height: 45vh;
+            text-align: center;
+        }
+        
+        .hero-video-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+        
+        .hero-color-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(78, 81, 62, 0.75); 
+            z-index: 1;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header h1 {
+            color: #e9e2d8;
+            font-size: 4.5rem; 
+            margin-bottom: 0px; 
+            line-height: 1.1; 
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+        }
+
+        /* --- Main Links Section --- */
+        main {
+            flex-grow: 1; /* Pushes footer to the bottom of the screen */
+            padding: 60px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
         .main-card {
             background-color: #ffffff;
             border-radius: 20px;
             border: 2px solid #0E2A3B;
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
-            max-width: 700px;
+            max-width: 800px;
             overflow: hidden;
-            margin-bottom: 40px;
-        }
-
-        .card-header {
-            padding: 40px 20px 20px 20px;
-            text-align: center;
-            border-bottom: 2px solid #f0e9e1;
-        }
-
-        .card-header img {
-            max-width: 220px;
-            height: auto;
-            display: block;
-            margin: 0 auto;
         }
 
         .card-body {
-            padding: 20px 40px 40px 40px;
+            padding: 20px 40px;
         }
 
         /* --- Dynamic List Items --- */
@@ -75,7 +145,6 @@
         
         .link-item:last-child {
             border-bottom: none;
-            padding-bottom: 0;
         }
 
         .link-info {
@@ -89,7 +158,7 @@
         }
 
         .link-info p {
-            font-size: 1rem;
+            font-size: 1.05rem;
             color: #4f2d2c;
             opacity: 0.85;
             margin: 0;
@@ -117,11 +186,11 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px; 
+            gap: 10px; 
             background-color: #99724b; 
             color: #e9e2d8; 
             text-decoration: none;
-            padding: 12px 25px;
+            padding: 12px 28px;
             border-radius: 999px; 
             font-weight: bold;
             font-size: 1.05rem;
@@ -144,38 +213,41 @@
             border: none;
         }
         .btn:hover .btn-icon {
-            transform: translateX(3px); 
+            transform: translateX(4px); 
         }
 
-        /* --- Standalone Footer --- */
-        .page-footer {
+        /* --- Footer --- */
+        footer {
             text-align: center;
-            max-width: 600px;
+            padding: 40px 20px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            width: 100%;
         }
-        .page-footer p {
-            margin-bottom: 15px;
-            color: #4f2d2c;
-            font-size: 1.05rem;
-        }
-        .page-footer a {
-            color: #99724b;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .page-footer a:hover {
-            text-decoration: underline;
-        }
-        .disclosure {
-            font-size: 0.8rem;
-            opacity: 0.7;
-            text-align: justify;
-            text-align-last: center;
-        }
+        .footer-contact { margin-bottom: 20px; }
+        .footer-contact p { margin-bottom: 8px; font-size: 1.1rem; color: #e9e2d8; }
+        .footer-contact a { color: #c09050; text-decoration: none; font-weight: bold; }
+        .footer-contact a:hover { text-decoration: underline; }
+        .footer-disclosure { max-width: 900px; margin: 0 auto; font-size: 0.8rem; color: #e9e2d8; opacity: 0.75; line-height: 1.5; text-align: justify; text-align-last: center; }
 
         /* --- Mobile Responsiveness --- */
-        @media (max-width: 600px) {
-            body { padding: 30px 15px; }
-            .card-body { padding: 20px 25px 30px 25px; }
+        @media (max-width: 768px) {
+            .navbar { justify-content: flex-end; }
+            .mobile-center-logo { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+            .mobile-center-logo img { height: 40px; width: auto; border-radius: 4px; display: block; }
+            .hamburger { display: block; }
+            .nav-menu { position: fixed; top: 0; right: -100%; width: 280px; height: 100vh; background: rgba(233, 226, 216, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); flex-direction: column; justify-content: flex-start; align-items: flex-start; padding: 60px 30px 30px 30px; box-shadow: -5px 0 15px rgba(0,0,0,0.1); transition: right 0.3s ease; z-index: 1001; }
+            .nav-menu.active { right: 0; }
+            .nav-logo { margin-bottom: 40px; width: 100%; display: flex; justify-content: center; }
+            .nav-logo img { height: 60px; }
+            .nav-links { flex-direction: column; width: 100%; align-items: flex-start; gap: 20px; }
+            .nav-links a { display: block; width: 100%; padding-bottom: 10px; border-bottom: 1px solid rgba(192, 144, 80, 0.4); font-size: 1.3rem; }
+            .close-menu { display: block; position: absolute; top: 15px; right: 25px; font-size: 2.5rem; background: none; border: none; color: #4f2d2c; cursor: pointer; line-height: 1; }
+            
+            header h1 { font-size: 3rem; }
+            
+            main { padding: 40px 15px; }
+            .card-body { padding: 10px 20px 20px 20px; }
             
             .link-item {
                 flex-direction: column;
@@ -191,35 +263,64 @@
 </head>
 <body>
 
-    <!-- Main Card Container -->
-    <div class="main-card">
-        <div class="card-header">
-            <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Logo">
-        </div>
-        
-        <div class="card-body" id="links-container">
-            <!-- Loading Indicator -->
-            <div class="loading-text">Loading secure links...</div>
-        </div>
-    </div>
+    <!-- Header Placeholder -->
+    <div id="header-placeholder"></div>
 
-    <!-- Footer -->
-    <div class="page-footer">
-        <p>
-            <strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; 
-            <strong>Email:</strong> <a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a><br>
-            <strong>AZ License:</strong> SA711359000
-        </p>
-        <p class="disclosure">
-            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only. Information is compiled from sources deemed reliable but is subject to errors, omissions, changes in price, condition, sale, or withdrawal without notice.
-        </p>
-    </div>
+    <header>
+        <video class="hero-video-bg" autoplay loop muted playsinline>
+            <source src="https://andrewmarth.com/images/banner.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="hero-content">
+            <h1>Backend Links</h1>
+        </div>
+    </header>
+
+    <!-- Main Card Container -->
+    <main>
+        <div class="main-card">
+            <div class="card-body" id="links-container">
+                <!-- Loading Indicator -->
+                <div class="loading-text">Loading secure links...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Placeholder -->
+    <div id="footer-placeholder"></div>
 
     <script>
-        // Fetches data directly from your Google Sheet without needing an API key!
+        // Universal Component Loader for Navbar & Footer
+        async function loadComponent(id, file) {
+            try {
+                const response = await fetch(file);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const html = await response.text();
+                document.getElementById(id).innerHTML = html;
+                
+                if (id === 'header-placeholder') {
+                    initNavigation();
+                }
+            } catch (error) {
+                console.error(`Error loading component ${file}:`, error);
+            }
+        }
+
+        // Mobile Nav Logic
+        function initNavigation() {
+            const hamburgerBtn = document.getElementById('hamburger-btn');
+            const closeBtn = document.getElementById('close-btn');
+            const navMenu = document.getElementById('nav-menu');
+
+            if(hamburgerBtn && closeBtn && navMenu) {
+                hamburgerBtn.addEventListener('click', () => navMenu.classList.add('active'));
+                closeBtn.addEventListener('click', () => navMenu.classList.remove('active'));
+            }
+        }
+
+        // Google Sheet Fetch Logic
         async function loadGoogleSheetLinks() {
             const sheetId = '1HEsow_T7N-0kAy6Ax9jo5cE4KM7X08l2C-Cu9qwEfPw';
-            // Google Visualization API returns Sheet data as JSON
             const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
             const container = document.getElementById('links-container');
             
@@ -227,26 +328,20 @@
                 const response = await fetch(url);
                 const text = await response.text();
                 
-                // The API wraps the JSON in a function call, so we slice it out
                 const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
                 const data = JSON.parse(jsonString);
                 
-                // Clear the "Loading..." text
                 container.innerHTML = '';
                 
-                // Loop through the rows in the Google Sheet
                 data.table.rows.forEach((row, index) => {
-                    // Safety check to ensure the row actually has data
                     if (!row || !row.c || !row.c[0] || !row.c[0].v) return;
                     
                     const title = row.c[0] ? row.c[0].v : '';
                     const desc = row.c[1] && row.c[1].v ? row.c[1].v : '';
                     const link = row.c[2] && row.c[2].v ? row.c[2].v : '#';
                     
-                    // Skips the first row if you accidentally used it for header titles (e.g. "Title", "Description")
                     if (index === 0 && title.toLowerCase() === 'title') return;
 
-                    // Create the HTML structure for the new row
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'link-item';
                     
@@ -270,8 +365,12 @@
             }
         }
 
-        // Run the fetch function as soon as the page loads
-        document.addEventListener('DOMContentLoaded', loadGoogleSheetLinks);
+        // Execute when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            loadComponent('header-placeholder', 'header.html');
+            loadComponent('footer-placeholder', 'footer.html');
+            loadGoogleSheetLinks();
+        });
     </script>
 </body>
 </html>
