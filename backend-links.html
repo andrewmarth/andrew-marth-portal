@@ -193,9 +193,8 @@
             width: 100%;
             position: relative;
             overflow: hidden;
-            border-radius: 12px;
-            background: #f7f4f0;
-            border: 2px solid rgba(14, 42, 59, 0.1);
+            background: #ffffff;
+            /* Border removed to ensure a flush, seamless embed */
         }
         
         .wholesaler-sheet {
@@ -492,8 +491,8 @@
             <div class="card-body">
                 <!-- Wrapper for mathematical scaling -->
                 <div id="wholesaler-wrapper" class="wholesaler-wrapper">
-                    <!-- Clean HTML Embed URL of the Sheet -->
-                    <iframe id="wholesaler-sheet" class="wholesaler-sheet" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
+                    <!-- Clean HTML Embed URL of the Sheet with explicit frameborder="0" added -->
+                    <iframe id="wholesaler-sheet" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
                 </div>
             </div>
         </div>
