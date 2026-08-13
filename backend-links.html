@@ -105,8 +105,23 @@
             overflow: hidden;
         }
 
+        /* Card Header / Title */
+        .card-header {
+            padding: 40px 40px 20px 40px;
+            text-align: center;
+            border-bottom: 2px solid #f0e9e1;
+            background-color: #ffffff;
+        }
+        
+        .card-header h2 {
+            font-size: 2.2rem;
+            color: #4e513e;
+            margin: 0;
+            letter-spacing: 1px;
+        }
+
         .card-body {
-            padding: 20px 40px;
+            padding: 20px 40px 40px 40px;
         }
 
         /* --- Dynamic List Items --- */
@@ -121,6 +136,7 @@
         
         .link-item:last-child {
             border-bottom: none;
+            padding-bottom: 0;
         }
 
         .link-info {
@@ -232,7 +248,10 @@
             header h1 { font-size: 3rem; }
             
             main { padding: 40px 15px; }
-            .card-body { padding: 10px 20px 20px 20px; }
+            
+            .card-header { padding: 30px 20px 15px 20px; }
+            .card-header h2 { font-size: 1.8rem; }
+            .card-body { padding: 10px 20px 30px 20px; }
             
             .link-item {
                 flex-direction: column;
@@ -261,6 +280,12 @@
     <!-- Main Card Container -->
     <main>
         <div class="main-card">
+            <!-- Card Title -->
+            <div class="card-header">
+                <h2>Control Board</h2>
+            </div>
+
+            <!-- Dynamic Links Area -->
             <div class="card-body" id="links-container">
                 <!-- Loading Indicator -->
                 <div class="loading-text">Loading secure links...</div>
