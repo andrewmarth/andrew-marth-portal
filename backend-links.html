@@ -248,11 +248,21 @@
             position: relative;
             transform: scale(0.95);
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            overflow: hidden;
+            overflow: hidden; /* Clips the background video nicely to the rounded corners */
         }
 
         .embed-modal-overlay.active .embed-modal-card {
             transform: scale(1);
+        }
+
+        /* Video Background inside the Modal */
+        .modal-bg-video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            pointer-events: none; /* Allows clicks to pass through to the embed */
         }
 
         .close-modal-btn {
@@ -290,6 +300,8 @@
             width: 100%;
             height: 100%;
             -webkit-overflow-scrolling: touch;
+            position: relative; /* Placed above the video background */
+            z-index: 1; 
         }
 
         /* Forces Zapier Embeds to fill the modal properly */
@@ -405,7 +417,13 @@
     <!-- Full Screen Embed Modal -->
     <div class="embed-modal-overlay" id="embed-modal">
         <div class="embed-modal-card">
+            <!-- The Magic Background Video inside the card -->
+            <video class="modal-bg-video" autoplay loop muted playsinline>
+                <source src="https://andrewmarth.com/images/form_background.mp4" type="video/mp4">
+            </video>
+            
             <button class="close-modal-btn" onclick="closeEmbedModal()">&times;</button>
+            
             <!-- This is where the injected embed code lives -->
             <div class="embed-modal-content" id="embed-modal-content"></div>
         </div>
