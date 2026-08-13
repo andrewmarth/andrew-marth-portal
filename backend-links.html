@@ -188,6 +188,25 @@
             100% { opacity: 0.6; }
         }
 
+        /* --- Custom Scaled iframe Wrapper for the Wholesalers Sheet --- */
+        .wholesaler-wrapper {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #f7f4f0;
+            border: 2px solid rgba(14, 42, 59, 0.1);
+        }
+        
+        .wholesaler-sheet {
+            width: 685px;
+            height: 1795px;
+            border: none;
+            transform-origin: top left;
+            display: block;
+            overflow: hidden;
+        }
+
         /* --- Button Styling --- */
         .btn {
             display: inline-flex;
@@ -464,6 +483,20 @@
                 <div class="loading-text">Loading Control Board...</div>
             </div>
         </div>
+        
+        <!-- 5. Wholesalers Embedded Sheet Card -->
+        <div class="main-card">
+            <div class="card-header">
+                <h2>Wholesalers</h2>
+            </div>
+            <div class="card-body">
+                <!-- Wrapper for mathematical scaling -->
+                <div id="wholesaler-wrapper" class="wholesaler-wrapper">
+                    <!-- Clean HTML Embed URL of the Sheet -->
+                    <iframe id="wholesaler-sheet" class="wholesaler-sheet" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Hardcoded Green Footer -->
@@ -577,7 +610,6 @@
 
                     // Generate appropriate button type
                     if (isEmbedModal) {
-                        // Store code in memory
                         const memoryKey = `${containerId}-${index}`;
                         embedMemory[memoryKey] = { title: title, code: linkOrCode };
 
@@ -592,7 +624,6 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // Generate normal link
                         const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.href = linkOrCode;
@@ -613,15 +644,40 @@
                 container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load data. Please refresh.</div>';
             }
         }
+        
+        // Custom Scale Engine to mathematically size the Wholesaler Google Sheet without scrollbars
+        function scaleWholesalerSheet() {
+            const wrapper = document.getElementById('wholesaler-wrapper');
+            const iframe = document.getElementById('wholesaler-sheet');
+            if (!wrapper || !iframe) return;
+            
+            const wrapperWidth = wrapper.clientWidth;
+            
+            // The exact native dimensions of your Google Sheet
+            const nativeWidth = 685;
+            const nativeHeight = 1795;
+            
+            // Calculate the perfect scale factor based on the current wrapper width
+            const scale = wrapperWidth / nativeWidth;
+            
+            // Apply scale to iframe and adjust the wrapper height to match the new scaled height perfectly
+            iframe.style.transform = `scale(${scale})`;
+            wrapper.style.height = `${nativeHeight * scale}px`;
+        }
 
-        // Load all 4 Google Sheets dynamically when the DOM is ready
+        // Load all data and trigger scaling when the DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
-            // (GID, Container ID, Opens in Modal?)
             loadGoogleSheetData('430261487', 'compass-container', false);
             loadGoogleSheetData('1313004679', 'amyrth-container', false);
             loadGoogleSheetData('1113112382', 'personal-container', false);
             loadGoogleSheetData('0', 'control-board-container', true);
+            
+            // Trigger the initial scale for the sheet
+            scaleWholesalerSheet();
         });
+        
+        // Ensure the sheet scales up and down seamlessly when the user resizes the window or rotates their phone
+        window.addEventListener('resize', scaleWholesalerSheet);
     </script>
 </body>
 </html>
