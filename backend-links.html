@@ -21,7 +21,8 @@
         html, body {
             width: 100%;
             max-width: 100%;
-            overflow-x: hidden;
+            /* overflow-x: clip prevents horizontal scrolling WITHOUT breaking position: sticky */
+            overflow-x: clip;
             position: relative;
         }
         
@@ -103,15 +104,27 @@
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
             max-width: 800px;
-            overflow: hidden;
+            position: relative; /* Essential for sticky header */
         }
 
-        /* Card Header / Title */
+        /* --- STICKY Card Header --- */
         .card-header {
-            padding: 40px 40px 20px 40px;
+            padding: 25px 40px 20px 40px;
             text-align: center;
             border-bottom: 2px solid #f0e9e1;
-            background-color: #ffffff;
+            
+            /* Sticky positioning */
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            
+            /* Glassmorphism effect when scrolling */
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top-left-radius: 18px; /* Matches the parent radius perfectly */
+            border-top-right-radius: 18px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03); /* Subtle separation line */
         }
         
         .card-header h2 {
@@ -122,7 +135,7 @@
         }
 
         .card-body {
-            padding: 20px 40px 40px 40px;
+            padding: 10px 40px 40px 40px; /* Reduced top padding since header has its own */
         }
 
         /* --- Dynamic List Items --- */
@@ -194,7 +207,7 @@
             position: relative;
             overflow: hidden;
             background: #ffffff;
-            /* Border removed to ensure a flush, seamless embed */
+            margin-top: 15px;
         }
         
         .wholesaler-sheet {
@@ -404,7 +417,7 @@
             
             main { padding: 40px 15px; }
             
-            .card-header { padding: 30px 20px 15px 20px; }
+            .card-header { padding: 25px 20px 15px 20px; }
             .card-header h2 { font-size: 1.8rem; }
             .card-body { padding: 10px 20px 30px 20px; }
             
