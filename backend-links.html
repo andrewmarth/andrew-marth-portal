@@ -118,24 +118,45 @@
             top: 0;
             z-index: 10;
             
-            /* Glassmorphism effect when scrolling */
+            /* Default Glassmorphism effect */
             background-color: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border-top-left-radius: 18px; /* Matches the parent radius perfectly */
+            border-top-left-radius: 18px; 
             border-top-right-radius: 18px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.03); /* Subtle separation line */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
         }
         
+        /* Overrides for headers with a background image */
+        .card-header.has-bg {
+            background-color: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            overflow: hidden; /* Keeps the blurred pseudo-element from bleeding out of the rounded corners */
+        }
+
+        /* The blurred background layer */
+        .card-header.has-bg::before {
+            content: '';
+            position: absolute;
+            /* Expanded slightly past the edges to hide the hard edges of the blur filter */
+            top: -10px; left: -10px; right: -10px; bottom: -10px;
+            background-image: var(--bg-image);
+            background-size: cover;
+            background-position: center;
+            filter: blur(4px); /* The exact blur amount requested */
+            z-index: -1; /* Puts the image behind the text */
+        }
+
         .card-header h2 {
             font-size: 2.2rem;
-            color: #4e513e;
+            color: #4e513e; /* Text color maintained exactly */
             margin: 0;
             letter-spacing: 1px;
         }
 
         .card-body {
-            padding: 10px 40px 40px 40px; /* Reduced top padding since header has its own */
+            padding: 10px 40px 40px 40px; 
         }
 
         /* --- Dynamic List Items --- */
@@ -458,7 +479,7 @@
     <main>
         <!-- 1. Compass Card -->
         <div class="main-card">
-            <div class="card-header">
+            <div class="card-header has-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_compass.jpg');">
                 <h2>Compass</h2>
             </div>
             <div class="card-body" id="compass-container">
@@ -468,7 +489,7 @@
 
         <!-- 2. Amyrth Card -->
         <div class="main-card">
-            <div class="card-header">
+            <div class="card-header has-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_amyrth.jpg');">
                 <h2>Amyrth</h2>
             </div>
             <div class="card-body" id="amyrth-container">
@@ -478,7 +499,7 @@
 
         <!-- 3. Personal Card -->
         <div class="main-card">
-            <div class="card-header">
+            <div class="card-header has-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_personal.jpg');">
                 <h2>Personal</h2>
             </div>
             <div class="card-body" id="personal-container">
@@ -486,7 +507,7 @@
             </div>
         </div>
 
-        <!-- 4. Control Board Card (Embeds) -->
+        <!-- 4. Control Board Card (Embeds) - No background requested -->
         <div class="main-card">
             <div class="card-header">
                 <h2>Control Board</h2>
@@ -498,7 +519,7 @@
         
         <!-- 5. Wholesalers Embedded Sheet Card -->
         <div class="main-card">
-            <div class="card-header">
+            <div class="card-header has-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_wholesaler.jpg');">
                 <h2>Wholesalers</h2>
             </div>
             <div class="card-body">
