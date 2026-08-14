@@ -21,6 +21,7 @@
         html, body {
             width: 100%;
             max-width: 100%;
+            /* overflow-x: clip prevents horizontal scrolling WITHOUT breaking position: sticky */
             overflow-x: clip; 
             position: relative;
         }
@@ -101,7 +102,7 @@
             width: 100%;
             max-width: 800px;
             position: relative;
-            /* Wrapper only! Borders and shadows are now perfectly split between header and body */
+            /* Wrapper only! Borders and shadows are uniquely assigned below */
         }
 
         /* --- STICKY Card Header --- */
@@ -113,29 +114,50 @@
             padding: 25px 40px 20px 40px;
             text-align: center;
             
-            /* The header owns the top borders and corners */
-            border-top: 2px solid #0E2A3B;
-            border-left: 2px solid #0E2A3B;
-            border-right: 2px solid #0E2A3B;
-            border-bottom: 2px solid #f0e9e1; 
+            /* Transparent borders keep exact layout dimensions */
+            border-top: 2px solid transparent;
+            border-left: 2px solid transparent;
+            border-right: 2px solid transparent;
+            border-bottom: 2px solid transparent; 
             border-radius: 20px 20px 0 0;
-            
-            /* Casts shadow ONLY to the right so it smoothly meets the body shadow */
-            box-shadow: 6px 0px 0px #0E2A3B; 
-            
-            /* Default Glassmorphism effect */
+        }
+
+        /* Layer 1: Glassmorphism (Default Background) */
+        .card-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
             background-color: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
+            border-radius: 18px 18px 0 0;
+            z-index: 2;
         }
 
-        /* True Invisible Corner Masks using perfect radial gradients */
+        /* Layer 2: Borders and Drop Shadow */
+        .card-header::after {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            border-top: 2px solid #0E2A3B;
+            border-left: 2px solid #0E2A3B;
+            border-right: 2px solid #0E2A3B;
+            border-bottom: 2px solid #f0e9e1;
+            border-radius: 20px 20px 0 0;
+            /* Shadow ONLY casts right to seamlessly stitch with the body shadow below */
+            box-shadow: 6px 0px 0px #0E2A3B; 
+            pointer-events: none;
+            /* CRUCIAL: Sits above the masks so it paints over them perfectly */
+            z-index: 5; 
+        }
+
+        /* Layer 0: Invisible Corner Masks (Hidden behind borders/shadows) */
         .corner-mask {
             position: absolute;
             top: -2px; 
             width: 20px; 
             height: 20px;
-            z-index: 5; /* Puts mask above the background, but gradient makes it invisible over the border */
+            z-index: 1; /* Lowest inner layer! Sits under the drop-shadow but over sliding text */
             pointer-events: none;
         }
         .corner-mask-left { 
@@ -147,20 +169,19 @@
             background: radial-gradient(circle at bottom left, transparent 20px, #e9e2d8 20.5px);
         }
 
+        /* Text Layer */
         .card-header h2 {
             font-size: 2.2rem;
             color: #4e513e;
             margin: 0;
             letter-spacing: 1px;
             position: relative;
-            z-index: 2; 
+            z-index: 10; 
         }
         
         /* Overrides for headers with a background image */
-        .card-header.has-bg {
-            background-color: transparent;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
+        .card-header.has-bg::before {
+            display: none; /* Turn off default glassmorphism */
         }
         
         .card-header.has-bg h2 {
@@ -174,7 +195,7 @@
             top: 0; left: 0; right: 0; bottom: 0;
             border-radius: 18px 18px 0 0; /* Matches exact inner curve of 20px border */
             overflow: hidden;
-            z-index: -1;
+            z-index: 2; /* Replaces the layer where glassmorphism was */
         }
 
         /* The blurred background layer */
@@ -186,7 +207,7 @@
             background-size: cover;
             background-position: center;
             filter: blur(4px); 
-            z-index: -2; 
+            z-index: 1; 
         }
         
         /* The signature Brand Green color overlay */
@@ -195,7 +216,7 @@
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background-color: rgba(78, 81, 62, 0.75); 
-            z-index: -1; 
+            z-index: 2; 
         }
 
         /* --- Scrolling Card Body --- */
@@ -208,7 +229,7 @@
             border-bottom: 2px solid #0E2A3B;
             border-radius: 0 0 20px 20px;
             
-            /* Casts shadow right AND down to finish the card perfectly */
+            /* Casts shadow right AND down to finish the card seamlessly */
             box-shadow: 6px 6px 0px #0E2A3B;
             
             padding: 10px 40px 40px 40px; 
