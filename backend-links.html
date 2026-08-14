@@ -94,54 +94,53 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 40px; /* Space between cards */
+            gap: 50px; /* Space between cards */
         }
 
-        /* Card Container - No top border so the header can own it */
+        /* --- New Seamless Card Structure --- */
         .main-card {
-            background-color: #ffffff;
-            border-radius: 0 0 20px 20px;
-            border-bottom: 2px solid #0E2A3B;
-            border-left: 2px solid #0E2A3B;
-            border-right: 2px solid #0E2A3B;
-            box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
             max-width: 800px;
             position: relative;
+            /* Wrapper only. Borders and shadows belong to header and body now! */
         }
 
         /* --- STICKY Card Header --- */
         .card-header {
+            position: sticky;
+            top: 20px; /* Floats perfectly below the top edge of the browser */
+            z-index: 10;
+            
             padding: 25px 40px 20px 40px;
             text-align: center;
-            
-            /* Sticky positioning */
-            position: sticky;
-            top: 0;
-            z-index: 10;
             
             /* The header owns the top borders and corners */
             border-top: 2px solid #0E2A3B;
             border-left: 2px solid #0E2A3B;
             border-right: 2px solid #0E2A3B;
-            border-bottom: 2px solid #f0e9e1;
+            border-bottom: 2px solid #f0e9e1; /* Soft divider line */
             border-radius: 20px 20px 0 0;
-            margin: 0 -2px 0 -2px; /* Pulls it flush with the main-card borders */
+            
+            /* Casts shadow only to the right to seamlessly connect with body */
+            box-shadow: 6px 0px 0px #0E2A3B; 
             
             /* Default Glassmorphism effect */
             background-color: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            
-            /* 
-              MAGIC MASK: 
-              1. Adds the drop shadow so the header floats over the content 
-              2. Projects an invisible cream mask outwards to hide content sliding behind the rounded corners 
-            */
-            box-shadow: 
-                6px 6px 0px #0E2A3B, 
-                0 -30px 0 30px #e9e2d8; 
         }
+
+        /* Physical corner masks that hide the scrolling content's sharp edges */
+        .corner-mask {
+            position: absolute;
+            top: -2px; /* Pulls up over the border */
+            width: 20px;
+            height: 20px;
+            background-color: #e9e2d8; /* Exact match to page background */
+            z-index: -5; /* Placed behind the header content */
+        }
+        .corner-mask-left { left: -2px; }
+        .corner-mask-right { right: -2px; }
 
         .card-header h2 {
             font-size: 2.2rem;
@@ -195,8 +194,22 @@
             z-index: -1; 
         }
 
+        /* --- Scrolling Card Body --- */
         .card-body {
+            background-color: #ffffff;
+            /* The body owns the bottom borders and corners */
+            border-left: 2px solid #0E2A3B;
+            border-right: 2px solid #0E2A3B;
+            border-bottom: 2px solid #0E2A3B;
+            border-radius: 0 0 20px 20px;
+            
+            /* Casts shadow right and down to finish the card */
+            box-shadow: 6px 6px 0px #0E2A3B;
+            
             padding: 10px 40px 40px 40px; 
+            position: relative;
+            z-index: 1; /* Sits beneath the z-index:10 header! */
+            overflow: hidden; /* Secures bottom content from bleeding out of bottom corners */
         }
 
         /* --- Dynamic List Items --- */
@@ -218,7 +231,7 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: flex-start; /* Aligns the pill to the left */
         }
 
         /* Pill Badge Styling for the Titles */
@@ -347,9 +360,9 @@
             border: 2px solid #0E2A3B;
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
-            max-width: 1200px; /* Big enough for Zapier forms */
+            max-width: 1200px;
             height: 100%;
-            max-height: 90vh; /* Keeps it inside the screen */
+            max-height: 90vh; 
             display: flex;
             flex-direction: column;
             position: relative;
@@ -520,6 +533,8 @@
         <!-- 1. Compass Card -->
         <div class="main-card">
             <div class="card-header has-bg">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
                 <div class="header-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_compass.jpg');"></div>
                 <h2>Compass</h2>
             </div>
@@ -531,6 +546,8 @@
         <!-- 2. Amyrth Card -->
         <div class="main-card">
             <div class="card-header has-bg">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
                 <div class="header-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_amyrth.jpg');"></div>
                 <h2>Amyrth</h2>
             </div>
@@ -542,6 +559,8 @@
         <!-- 3. Personal Card -->
         <div class="main-card">
             <div class="card-header has-bg">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
                 <div class="header-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_personal.jpg');"></div>
                 <h2>Personal</h2>
             </div>
@@ -553,6 +572,8 @@
         <!-- 4. Control Board Card (Embeds) - No background requested -->
         <div class="main-card">
             <div class="card-header">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
                 <h2>Control Board</h2>
             </div>
             <div class="card-body" id="control-board-container">
@@ -563,6 +584,8 @@
         <!-- 5. Wholesalers Embedded Sheet Card -->
         <div class="main-card">
             <div class="card-header has-bg">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
                 <div class="header-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_wholesaler.jpg');"></div>
                 <h2>Wholesalers</h2>
             </div>
