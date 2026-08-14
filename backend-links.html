@@ -21,8 +21,7 @@
         html, body {
             width: 100%;
             max-width: 100%;
-            /* overflow-x: clip prevents horizontal scrolling WITHOUT breaking position: sticky */
-            overflow-x: clip;
+            overflow-x: clip; 
             position: relative;
         }
         
@@ -33,7 +32,7 @@
             background-color: #e9e2d8; 
             display: flex;
             flex-direction: column;
-            min-height: 100vh; /* Ensures footer stays at bottom */
+            min-height: 100vh; 
         }
         
         /* Updated Header Font */
@@ -94,10 +93,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 50px; /* Space between cards */
+            gap: 50px; 
         }
 
-        /* --- New Seamless Card Structure --- */
+        /* --- Seamless Card Structure --- */
         .main-card {
             width: 100%;
             max-width: 800px;
@@ -108,7 +107,7 @@
         /* --- STICKY Card Header --- */
         .card-header {
             position: sticky;
-            top: 0; /* Locks flush to top of the screen */
+            top: 0; /* Locks perfectly flush to the top of the screen */
             z-index: 10;
             
             padding: 25px 40px 20px 40px;
@@ -118,10 +117,10 @@
             border-top: 2px solid #0E2A3B;
             border-left: 2px solid #0E2A3B;
             border-right: 2px solid #0E2A3B;
-            border-bottom: 2px solid #f0e9e1; /* Soft divider line */
+            border-bottom: 2px solid #f0e9e1; 
             border-radius: 20px 20px 0 0;
             
-            /* Casts shadow ONLY to the right so it never overlaps the body */
+            /* Casts shadow ONLY to the right so it smoothly meets the body shadow */
             box-shadow: 6px 0px 0px #0E2A3B; 
             
             /* Default Glassmorphism effect */
@@ -130,24 +129,22 @@
             -webkit-backdrop-filter: blur(12px);
         }
 
-        /* True Invisible Corner Masks using radial gradients */
+        /* True Invisible Corner Masks using perfect radial gradients */
         .corner-mask {
             position: absolute;
-            top: 0; 
-            width: 20px;
+            top: -2px; 
+            width: 20px; 
             height: 20px;
-            z-index: -3; /* Sits BEHIND the header's dark border, but IN FRONT of the scrolling body */
+            z-index: 5; /* Puts mask above the background, but gradient makes it invisible over the border */
             pointer-events: none;
         }
         .corner-mask-left { 
-            left: 0; 
-            /* Paints cream only outside the rounded corner curve */
-            background: radial-gradient(circle at bottom right, transparent 19px, #e9e2d8 19.5px);
+            left: -2px; 
+            background: radial-gradient(circle at bottom right, transparent 20px, #e9e2d8 20.5px);
         }
         .corner-mask-right { 
-            right: 0; 
-            /* Paints cream only outside the rounded corner curve */
-            background: radial-gradient(circle at bottom left, transparent 19px, #e9e2d8 19.5px);
+            right: -2px; 
+            background: radial-gradient(circle at bottom left, transparent 20px, #e9e2d8 20.5px);
         }
 
         .card-header h2 {
@@ -156,7 +153,7 @@
             margin: 0;
             letter-spacing: 1px;
             position: relative;
-            z-index: 2; /* Keeps text above the backgrounds */
+            z-index: 2; 
         }
         
         /* Overrides for headers with a background image */
@@ -167,7 +164,7 @@
         }
         
         .card-header.has-bg h2 {
-            color: #e9e2d8; /* Cream text */
+            color: #e9e2d8; 
             text-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
 
@@ -175,7 +172,7 @@
         .header-bg {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 18px 18px 0 0; /* Matches inner curve of 20px border */
+            border-radius: 18px 18px 0 0; /* Matches exact inner curve of 20px border */
             overflow: hidden;
             z-index: -1;
         }
@@ -184,7 +181,6 @@
         .header-bg::before {
             content: '';
             position: absolute;
-            /* Expanded past the edges to hide the hard edges of the blur filter */
             top: -10px; left: -10px; right: -10px; bottom: -10px;
             background-image: var(--bg-image);
             background-size: cover;
@@ -206,18 +202,19 @@
         .card-body {
             background-color: #ffffff;
             
-            /* The body owns the bottom borders and corners (no top border) */
+            /* The body owns the bottom borders and corners */
             border-left: 2px solid #0E2A3B;
             border-right: 2px solid #0E2A3B;
             border-bottom: 2px solid #0E2A3B;
             border-radius: 0 0 20px 20px;
             
-            /* Casts shadow right AND down to finish the card seamlessly */
+            /* Casts shadow right AND down to finish the card perfectly */
             box-shadow: 6px 6px 0px #0E2A3B;
             
             padding: 10px 40px 40px 40px; 
             position: relative;
-            z-index: 1; /* Sits beneath the z-index:10 header! */
+            z-index: 1; /* Slips flawlessly underneath the sticky header! */
+            overflow: hidden; 
         }
 
         /* --- Dynamic List Items --- */
@@ -239,7 +236,7 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: flex-start; 
         }
 
         /* Pill Badge Styling for the Titles */
@@ -534,7 +531,6 @@
         </div>
     </header>
 
-    <!-- Main Card Container -->
     <main>
         <!-- 1. Compass Card -->
         <div class="main-card">
@@ -635,7 +631,6 @@
     </div>
 
     <script>
-        // Store both title and embedded codes in memory
         const embedMemory = {};
 
         function openEmbedModal(memoryKey) {
