@@ -89,7 +89,7 @@
 
         /* --- Main Links Section --- */
         main {
-            flex-grow: 1; /* Pushes footer to the bottom of the screen */
+            flex-grow: 1; 
             padding: 60px 20px;
             display: flex;
             flex-direction: column;
@@ -102,13 +102,13 @@
             width: 100%;
             max-width: 800px;
             position: relative;
-            /* Wrapper only. Borders and shadows belong to header and body now! */
+            /* Wrapper only! Borders and shadows are now perfectly split between header and body */
         }
 
         /* --- STICKY Card Header --- */
         .card-header {
             position: sticky;
-            top: 20px; /* Floats perfectly below the top edge of the browser */
+            top: 0; /* Locks flush to top of the screen */
             z-index: 10;
             
             padding: 25px 40px 20px 40px;
@@ -121,7 +121,7 @@
             border-bottom: 2px solid #f0e9e1; /* Soft divider line */
             border-radius: 20px 20px 0 0;
             
-            /* Casts shadow only to the right to seamlessly connect with body */
+            /* Casts shadow ONLY to the right so it never overlaps the body */
             box-shadow: 6px 0px 0px #0E2A3B; 
             
             /* Default Glassmorphism effect */
@@ -130,17 +130,25 @@
             -webkit-backdrop-filter: blur(12px);
         }
 
-        /* Physical corner masks that hide the scrolling content's sharp edges */
+        /* True Invisible Corner Masks using radial gradients */
         .corner-mask {
             position: absolute;
-            top: -2px; /* Pulls up over the border */
+            top: 0; 
             width: 20px;
             height: 20px;
-            background-color: #e9e2d8; /* Exact match to page background */
-            z-index: -5; /* Placed behind the header content */
+            z-index: -3; /* Sits BEHIND the header's dark border, but IN FRONT of the scrolling body */
+            pointer-events: none;
         }
-        .corner-mask-left { left: -2px; }
-        .corner-mask-right { right: -2px; }
+        .corner-mask-left { 
+            left: 0; 
+            /* Paints cream only outside the rounded corner curve */
+            background: radial-gradient(circle at bottom right, transparent 19px, #e9e2d8 19.5px);
+        }
+        .corner-mask-right { 
+            right: 0; 
+            /* Paints cream only outside the rounded corner curve */
+            background: radial-gradient(circle at bottom left, transparent 19px, #e9e2d8 19.5px);
+        }
 
         .card-header h2 {
             font-size: 2.2rem;
@@ -197,19 +205,19 @@
         /* --- Scrolling Card Body --- */
         .card-body {
             background-color: #ffffff;
-            /* The body owns the bottom borders and corners */
+            
+            /* The body owns the bottom borders and corners (no top border) */
             border-left: 2px solid #0E2A3B;
             border-right: 2px solid #0E2A3B;
             border-bottom: 2px solid #0E2A3B;
             border-radius: 0 0 20px 20px;
             
-            /* Casts shadow right and down to finish the card */
+            /* Casts shadow right AND down to finish the card seamlessly */
             box-shadow: 6px 6px 0px #0E2A3B;
             
             padding: 10px 40px 40px 40px; 
             position: relative;
             z-index: 1; /* Sits beneath the z-index:10 header! */
-            overflow: hidden; /* Secures bottom content from bleeding out of bottom corners */
         }
 
         /* --- Dynamic List Items --- */
@@ -231,7 +239,7 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            align-items: flex-start; /* Aligns the pill to the left */
+            align-items: flex-start;
         }
 
         /* Pill Badge Styling for the Titles */
@@ -360,7 +368,7 @@
             border: 2px solid #0E2A3B;
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
-            max-width: 1200px;
+            max-width: 1200px; 
             height: 100%;
             max-height: 90vh; 
             display: flex;
@@ -505,11 +513,9 @@
                 width: 100%;
             }
             
-            /* Responsive Badge overrides */
             .link-info h3 { font-size: 1.1rem; padding: 6px 15px; margin-bottom: 10px; }
             
             .embed-modal-overlay { padding: 10px; }
-            
             .embed-modal-header { padding: 15px 55px 15px 20px; }
             .embed-modal-header h2 { font-size: 1.4rem; }
             .close-modal-btn { top: 10px; right: 10px; width: 36px; height: 36px; font-size: 1.5rem; }
@@ -590,9 +596,7 @@
                 <h2>Wholesalers</h2>
             </div>
             <div class="card-body">
-                <!-- Wrapper for mathematical scaling -->
                 <div id="wholesaler-wrapper" class="wholesaler-wrapper">
-                    <!-- Clean HTML Embed URL of the Sheet with explicit frameborder="0" added -->
                     <iframe id="wholesaler-sheet" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
                 </div>
             </div>
@@ -634,7 +638,6 @@
         // Store both title and embedded codes in memory
         const embedMemory = {};
 
-        // Opens the Modal, sets the title, and safely executes embed scripts
         function openEmbedModal(memoryKey) {
             const data = embedMemory[memoryKey];
             const overlay = document.getElementById('embed-modal');
@@ -642,7 +645,6 @@
             const content = document.getElementById('embed-modal-content');
             
             document.body.style.overflow = 'hidden';
-            
             titleEl.textContent = data.title;
             content.innerHTML = data.code;
             
@@ -657,7 +659,6 @@
             overlay.classList.add('active');
         }
 
-        // Closes the Modal and destroys the inner code
         function closeEmbedModal() {
             const overlay = document.getElementById('embed-modal');
             const titleEl = document.getElementById('embed-modal-title');
@@ -672,8 +673,6 @@
             }, 300);
         }
 
-        // Reusable Google Sheet Fetch Logic
-        // isEmbedModal: true = opens in popup, false = opens in new tab
         async function loadGoogleSheetData(gid, containerId, isEmbedModal) {
             const sheetId = '1HEsow_T7N-0kAy6Ax9jo5cE4KM7X08l2C-Cu9qwEfPw';
             const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
@@ -689,7 +688,6 @@
                 container.innerHTML = '';
                 
                 data.table.rows.forEach((row, index) => {
-                    // Check if row has data
                     if (!row || !row.c || !row.c[0] || !row.c[0].v) return;
                     
                     const title = row.c[0] ? row.c[0].v : '';
@@ -698,7 +696,6 @@
                     
                     if (index === 0 && title.toLowerCase() === 'title') return;
 
-                    // Create Row Element
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'link-item';
                     itemDiv.innerHTML = `
@@ -708,7 +705,6 @@
                         </div>
                     `;
 
-                    // Generate appropriate button type
                     if (isEmbedModal) {
                         const memoryKey = `${containerId}-${index}`;
                         embedMemory[memoryKey] = { title: title, code: linkOrCode };
@@ -745,38 +741,29 @@
             }
         }
         
-        // Custom Scale Engine to mathematically size the Wholesaler Google Sheet without scrollbars
         function scaleWholesalerSheet() {
             const wrapper = document.getElementById('wholesaler-wrapper');
             const iframe = document.getElementById('wholesaler-sheet');
             if (!wrapper || !iframe) return;
             
             const wrapperWidth = wrapper.clientWidth;
-            
-            // The exact native dimensions of your Google Sheet
             const nativeWidth = 685;
             const nativeHeight = 1795;
-            
-            // Calculate the perfect scale factor based on the current wrapper width
             const scale = wrapperWidth / nativeWidth;
             
-            // Apply scale to iframe and adjust the wrapper height to match the new scaled height perfectly
             iframe.style.transform = `scale(${scale})`;
             wrapper.style.height = `${nativeHeight * scale}px`;
         }
 
-        // Load all data and trigger scaling when the DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             loadGoogleSheetData('430261487', 'compass-container', false);
             loadGoogleSheetData('1313004679', 'amyrth-container', false);
             loadGoogleSheetData('1113112382', 'personal-container', false);
             loadGoogleSheetData('0', 'control-board-container', true);
             
-            // Trigger the initial scale for the sheet
             scaleWholesalerSheet();
         });
         
-        // Ensure the sheet scales up and down seamlessly when the user resizes the window or rotates their phone
         window.addEventListener('resize', scaleWholesalerSheet);
     </script>
 </body>
