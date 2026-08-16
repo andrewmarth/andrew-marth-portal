@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client List | Andrew Marth Real Estate</title>
+    
+    <!-- Google Fonts Import -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- General Reset & Styling --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: clip; 
+            position: relative;
+        }
+        
+        body {
+            font-family: 'Familjen Grotesk', sans-serif; 
+            line-height: 1.6;
+            color: #4f2d2c; 
+            background-color: #e9e2d8; 
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; 
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Bricolage Grotesque', sans-serif;
+        }
+
+        /* --- Header / Hero Section --- */
+        header {
+            position: relative;
+            padding: 100px 20px; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            min-height: 40vh;
+            text-align: center;
+        }
+        
+        .hero-video-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+        
+        .hero-color-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(78, 81, 62, 0.75); 
+            z-index: 1;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header h1 {
+            color: #e9e2d8;
+            font-size: 4.5rem; 
+            margin-bottom: 0px; 
+            line-height: 1.1; 
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3); 
+        }
+
+        /* --- Main Links Section --- */
+        main {
+            flex-grow: 1; 
+            padding: 60px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 50px; 
+        }
+
+        .main-card {
+            width: 100%;
+            max-width: 800px;
+            position: relative;
+        }
+
+        /* --- STICKY Card Header --- */
+        .card-header {
+            position: sticky;
+            top: 0; 
+            z-index: 10;
+            padding: 25px 40px 20px 40px;
+            text-align: center;
+            border-top: 2px solid transparent;
+            border-left: 2px solid transparent;
+            border-right: 2px solid transparent;
+            border-bottom: 2px solid transparent; 
+            border-radius: 20px 20px 0 0;
+        }
+
+        .card-header::after {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            border-top: 2px solid #0E2A3B;
+            border-left: 2px solid #0E2A3B;
+            border-right: 2px solid #0E2A3B;
+            border-bottom: 2px solid #f0e9e1;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 6px 0px 0px #0E2A3B; 
+            pointer-events: none;
+            z-index: 5; 
+        }
+
+        .corner-mask {
+            position: absolute;
+            top: -2px; 
+            width: 20px; 
+            height: 20px;
+            z-index: 1; 
+            pointer-events: none;
+        }
+        .corner-mask-left { 
+            left: -2px; 
+            background: radial-gradient(circle at bottom right, transparent 20px, #e9e2d8 20.5px);
+        }
+        .corner-mask-right { 
+            right: -2px; 
+            background: radial-gradient(circle at bottom left, transparent 20px, #e9e2d8 20.5px);
+        }
+
+        .card-header h2 {
+            font-size: 2.2rem;
+            color: #e9e2d8;
+            margin: 0;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 10; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .header-bg {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 18px 18px 0 0; 
+            overflow: hidden;
+            z-index: 2; 
+        }
+
+        .header-bg::before {
+            content: '';
+            position: absolute;
+            top: -10px; left: -10px; right: -10px; bottom: -10px;
+            background-image: var(--bg-image);
+            background-size: cover;
+            background-position: center;
+            filter: blur(4px); 
+            z-index: 1; 
+        }
+        
+        .header-bg::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(78, 81, 62, 0.75); 
+            z-index: 2; 
+        }
+
+        /* --- Scrolling Card Body --- */
+        .card-body {
+            background-color: #ffffff;
+            border-left: 2px solid #0E2A3B;
+            border-right: 2px solid #0E2A3B;
+            border-bottom: 2px solid #0E2A3B;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 6px 6px 0px #0E2A3B;
+            padding: 10px 40px 40px 40px; 
+            position: relative;
+            z-index: 1; 
+            overflow: hidden; 
+        }
+
+        /* --- Dynamic List Items --- */
+        .link-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 30px 0;
+            border-bottom: 1px solid #e0d5c9;
+            gap: 20px;
+        }
+        
+        .link-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .link-info {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+        }
+
+        .link-info h3 {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 999px; 
+            margin-bottom: 12px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+
+        .link-info p {
+            font-size: 1.05rem;
+            color: #4f2d2c;
+            opacity: 0.85;
+            margin: 0;
+            line-height: 1.4;
+            padding-left: 5px;
+        }
+
+        .loading-text {
+            text-align: center;
+            padding: 40px;
+            color: #99724b;
+            font-weight: bold;
+            font-size: 1.2rem;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* --- Button Styling --- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px; 
+            background-color: #99724b; 
+            color: #e9e2d8; 
+            text-decoration: none;
+            padding: 12px 28px;
+            border-radius: 999px; 
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 1.05rem;
+            border: 2px solid #0E2A3B;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #9a5d40; 
+            transform: translateY(-3px); 
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1); 
+        }
+        .btn .btn-icon {
+            width: 16px; 
+            height: 16px;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+            border: none;
+        }
+        .btn:hover .btn-icon { transform: scale(1.1); }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            width: 100%;
+        }
+        .footer-contact { margin-bottom: 20px; }
+        .footer-contact p { margin-bottom: 8px; font-size: 1.1rem; color: #e9e2d8; }
+        .footer-contact a { color: #c09050; text-decoration: none; font-weight: bold; }
+        .footer-contact a:hover { text-decoration: underline; }
+        .footer-disclosure { max-width: 900px; margin: 0 auto; font-size: 0.8rem; color: #e9e2d8; opacity: 0.75; line-height: 1.5; text-align: justify; text-align-last: center; }
+
+        @media (max-width: 768px) {
+            header h1 { font-size: 3rem; }
+            main { padding: 40px 15px; }
+            .card-header { padding: 25px 20px 15px 20px; }
+            .card-header h2 { font-size: 1.8rem; }
+            .card-body { padding: 10px 20px 30px 20px; }
+            .link-item { flex-direction: column; align-items: flex-start; text-align: left; gap: 15px; }
+            .btn { width: 100%; }
+            .link-info h3 { font-size: 1.1rem; padding: 6px 15px; margin-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <video class="hero-video-bg" autoplay loop muted playsinline>
+            <source src="https://andrewmarth.com/images/banner.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="hero-content">
+            <h1>Client List</h1>
+        </div>
+    </header>
+
+    <main>
+        <!-- Active Clients Card -->
+        <div class="main-card">
+            <div class="card-header has-bg">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
+                <div class="header-bg" style="--bg-image: url('https://andrewmarth.com/images/card_header_personal.jpg');"></div>
+                <h2>Active Clients</h2>
+            </div>
+            <div class="card-body" id="client-list-container">
+                <div class="loading-text">Loading Client List...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Hardcoded Green Footer -->
+    <footer>
+        <div class="footer-contact">
+            <p>
+                <strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; 
+                <strong>Email:</strong> <a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a>
+            </p>
+            <p><strong>AZ License:</strong> SA711359000</p>
+        </div>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only. Information is compiled from sources deemed reliable but is subject to errors, omissions, changes in price, condition, sale, or withdrawal without notice.
+        </p>
+    </footer>
+
+    <script>
+        async function loadGoogleSheetData(gid, containerId) {
+            // New Sheet ID
+            const sheetId = '1N7J3Dj4o-Ix4Fao7MgMhWJ6wmMUSFMf9hoqAmBnZyJg';
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
+            const container = document.getElementById(containerId);
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonString);
+                
+                container.innerHTML = '';
+                
+                data.table.rows.forEach((row, index) => {
+                    if (!row || !row.c || !row.c[0] || !row.c[0].v) return;
+                    
+                    const title = row.c[0] ? row.c[0].v : '';
+                    const desc = row.c[1] && row.c[1].v ? row.c[1].v : '';
+                    const linkOrCode = row.c[2] && row.c[2].v ? row.c[2].v : '';
+                    
+                    if (index === 0 && title.toLowerCase() === 'title') return;
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'link-item';
+                    itemDiv.innerHTML = `
+                        <div class="link-info">
+                            <h3>✦&nbsp;&nbsp;${title}</h3>
+                            ${desc ? `<p>${desc}</p>` : ''}
+                        </div>
+                    `;
+
+                    // Simple, clean external link
+                    const btn = document.createElement('a');
+                    btn.className = 'btn';
+                    btn.href = linkOrCode;
+                    btn.target = '_blank';
+                    btn.rel = 'noopener noreferrer external';
+                    btn.innerHTML = `
+                        Launch
+                        <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
+                    `;
+                    
+                    itemDiv.appendChild(btn);
+                    container.appendChild(itemDiv);
+                });
+                
+            } catch (error) {
+                console.error(`Error fetching sheet data for ${containerId}:`, error);
+                container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load data. Please refresh.</div>';
+            }
+        }
+
+        // Initialize the fetch when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGoogleSheetData('0', 'client-list-container');
+        });
+    </script>
+</body>
+</html>
