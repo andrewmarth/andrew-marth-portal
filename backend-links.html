@@ -11,7 +11,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Control Board">
-    <!-- Updated icon link here -->
     <link rel="apple-touch-icon" href="https://andrewmarth.com/images/links.png">
     
     <!-- Google Fonts Import -->
@@ -30,7 +29,6 @@
         html, body {
             width: 100%;
             max-width: 100%;
-            /* overflow-x: clip prevents horizontal scrolling WITHOUT breaking position: sticky */
             overflow-x: clip; 
             position: relative;
         }
@@ -43,16 +41,14 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh; 
-            /* WebKit tap highlight removal for app-like feel */
             -webkit-tap-highlight-color: transparent; 
         }
         
-        /* Updated Header Font */
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Bricolage Grotesque', sans-serif;
         }
 
-        /* --- Header / Hero Section (Video Background) --- */
+        /* --- Header / Hero Section --- */
         header {
             position: relative;
             padding: 100px 20px; 
@@ -108,24 +104,19 @@
             gap: 50px; 
         }
 
-        /* --- Seamless Card Structure --- */
         .main-card {
             width: 100%;
             max-width: 800px;
             position: relative;
-            /* Wrapper only! Borders and shadows are uniquely assigned below */
         }
 
         /* --- STICKY Card Header --- */
         .card-header {
             position: sticky;
-            top: 0; /* Locks perfectly flush to the top of the screen */
+            top: 0; 
             z-index: 10;
-            
             padding: 25px 40px 20px 40px;
             text-align: center;
-            
-            /* Transparent borders keep exact layout dimensions */
             border-top: 2px solid transparent;
             border-left: 2px solid transparent;
             border-right: 2px solid transparent;
@@ -133,7 +124,6 @@
             border-radius: 20px 20px 0 0;
         }
 
-        /* Layer 1: Glassmorphism (Default Background) */
         .card-header::before {
             content: '';
             position: absolute;
@@ -145,7 +135,6 @@
             z-index: 2;
         }
 
-        /* Layer 2: Borders and Drop Shadow */
         .card-header::after {
             content: '';
             position: absolute;
@@ -155,20 +144,17 @@
             border-right: 2px solid #0E2A3B;
             border-bottom: 2px solid #f0e9e1;
             border-radius: 20px 20px 0 0;
-            /* Shadow ONLY casts right to seamlessly stitch with the body shadow below */
             box-shadow: 6px 0px 0px #0E2A3B; 
             pointer-events: none;
-            /* CRUCIAL: Sits above the masks so it paints over them perfectly */
             z-index: 5; 
         }
 
-        /* Layer 0: Invisible Corner Masks (Hidden behind borders/shadows) */
         .corner-mask {
             position: absolute;
             top: -2px; 
             width: 20px; 
             height: 20px;
-            z-index: 1; /* Lowest inner layer! Sits under the drop-shadow but over sliding text */
+            z-index: 1; 
             pointer-events: none;
         }
         .corner-mask-left { 
@@ -180,7 +166,6 @@
             background: radial-gradient(circle at bottom left, transparent 20px, #e9e2d8 20.5px);
         }
 
-        /* Text Layer */
         .card-header h2 {
             font-size: 2.2rem;
             color: #4e513e;
@@ -190,26 +175,21 @@
             z-index: 10; 
         }
         
-        /* Overrides for headers with a background image */
-        .card-header.has-bg::before {
-            display: none; /* Turn off default glassmorphism */
-        }
+        .card-header.has-bg::before { display: none; }
         
         .card-header.has-bg h2 {
             color: #e9e2d8; 
             text-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
 
-        /* Inner container that holds and clips the blurred image and green overlay */
         .header-bg {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 18px 18px 0 0; /* Matches exact inner curve of 20px border */
+            border-radius: 18px 18px 0 0; 
             overflow: hidden;
-            z-index: 2; /* Replaces the layer where glassmorphism was */
+            z-index: 2; 
         }
 
-        /* The blurred background layer */
         .header-bg::before {
             content: '';
             position: absolute;
@@ -221,7 +201,6 @@
             z-index: 1; 
         }
         
-        /* The signature Brand Green color overlay */
         .header-bg::after {
             content: '';
             position: absolute;
@@ -233,19 +212,14 @@
         /* --- Scrolling Card Body --- */
         .card-body {
             background-color: #ffffff;
-            
-            /* The body owns the bottom borders and corners */
             border-left: 2px solid #0E2A3B;
             border-right: 2px solid #0E2A3B;
             border-bottom: 2px solid #0E2A3B;
             border-radius: 0 0 20px 20px;
-            
-            /* Casts shadow right AND down to finish the card seamlessly */
             box-shadow: 6px 6px 0px #0E2A3B;
-            
             padding: 10px 40px 40px 40px; 
             position: relative;
-            z-index: 1; /* Slips flawlessly underneath the sticky header! */
+            z-index: 1; 
             overflow: hidden; 
         }
 
@@ -271,7 +245,6 @@
             align-items: flex-start; 
         }
 
-        /* Pill Badge Styling for the Titles */
         .link-info h3 {
             display: inline-flex;
             align-items: center;
@@ -296,7 +269,6 @@
             padding-left: 5px;
         }
 
-        /* Loading State */
         .loading-text {
             text-align: center;
             padding: 40px;
@@ -312,7 +284,7 @@
             100% { opacity: 0.6; }
         }
 
-        /* --- Custom Scaled iframe Wrapper for the Wholesalers Sheet --- */
+        /* --- Wholesalers Sheet --- */
         .wholesaler-wrapper {
             width: 100%;
             position: relative;
@@ -363,9 +335,7 @@
             transition: transform 0.3s ease;
             border: none;
         }
-        .btn:hover .btn-icon {
-            transform: scale(1.1); 
-        }
+        .btn:hover .btn-icon { transform: scale(1.1); }
 
         /* --- Embed Modal Overlay --- */
         .embed-modal-overlay {
@@ -390,7 +360,6 @@
             visibility: visible;
         }
 
-        /* Dynamic Pop-Out Card */
         .embed-modal-card {
             background-color: #ffffff;
             border-radius: 20px;
@@ -408,11 +377,8 @@
             overflow: hidden; 
         }
 
-        .embed-modal-overlay.active .embed-modal-card {
-            transform: scale(1);
-        }
+        .embed-modal-overlay.active .embed-modal-card { transform: scale(1); }
 
-        /* Video Background inside the Modal */
         .modal-bg-video {
             position: absolute;
             top: 0; left: 0;
@@ -422,7 +388,6 @@
             pointer-events: none; 
         }
 
-        /* Modal Header for the dynamic title */
         .embed-modal-header {
             position: relative;
             z-index: 2;
@@ -469,7 +434,6 @@
             transform: scale(1.1);
         }
 
-        /* The container for the actual embed code */
         .embed-modal-content {
             flex-grow: 1;
             padding: 20px; 
@@ -487,7 +451,7 @@
             display: block;
         }
 
-        /* --- Footer (Hardcoded) --- */
+        /* --- Footer --- */
         footer {
             text-align: center;
             padding: 40px 20px;
@@ -495,55 +459,21 @@
             color: #e9e2d8; 
             width: 100%;
         }
-        .footer-contact {
-            margin-bottom: 20px;
-        }
-        .footer-contact p {
-            margin-bottom: 8px;
-            font-size: 1.1rem;
-            color: #e9e2d8;
-        }
-        .footer-contact a {
-            color: #c09050; 
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .footer-contact a:hover {
-            text-decoration: underline;
-        }
-        .footer-disclosure {
-            max-width: 900px;
-            margin: 0 auto;
-            font-size: 0.8rem;
-            color: #e9e2d8;
-            opacity: 0.75;
-            line-height: 1.5;
-            text-align: justify;
-            text-align-last: center;
-        }
+        .footer-contact { margin-bottom: 20px; }
+        .footer-contact p { margin-bottom: 8px; font-size: 1.1rem; color: #e9e2d8; }
+        .footer-contact a { color: #c09050; text-decoration: none; font-weight: bold; }
+        .footer-contact a:hover { text-decoration: underline; }
+        .footer-disclosure { max-width: 900px; margin: 0 auto; font-size: 0.8rem; color: #e9e2d8; opacity: 0.75; line-height: 1.5; text-align: justify; text-align-last: center; }
 
-        /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
             header h1 { font-size: 3rem; }
-            
             main { padding: 40px 15px; }
-            
             .card-header { padding: 25px 20px 15px 20px; }
             .card-header h2 { font-size: 1.8rem; }
             .card-body { padding: 10px 20px 30px 20px; }
-            
-            .link-item {
-                flex-direction: column;
-                align-items: flex-start;
-                text-align: left;
-                gap: 15px;
-            }
-            .btn {
-                width: 100%;
-            }
-            
+            .link-item { flex-direction: column; align-items: flex-start; text-align: left; gap: 15px; }
+            .btn { width: 100%; }
             .link-info h3 { font-size: 1.1rem; padding: 6px 15px; margin-bottom: 10px; }
-            
             .embed-modal-overlay { padding: 10px; }
             .embed-modal-header { padding: 15px 55px 15px 20px; }
             .embed-modal-header h2 { font-size: 1.4rem; }
@@ -603,7 +533,7 @@
             </div>
         </div>
 
-        <!-- 4. Control Board Card (Embeds) - No background requested -->
+        <!-- 4. Control Board Card (Embeds) -->
         <div class="main-card">
             <div class="card-header">
                 <div class="corner-mask corner-mask-left"></div>
@@ -747,15 +677,18 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        const btn = document.createElement('a');
+                        // --- UPDATED LOGIC: Replaced HTML <a> tags with JavaScript Buttons --- //
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
                         btn.className = 'btn';
-                        btn.href = linkOrCode;
-                        btn.target = '_blank';
-                        btn.rel = 'noopener noreferrer';
                         btn.innerHTML = `
                             Launch
                             <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
                         `;
+                        // Forces the phone's OS to handle the link, pushing it to Chrome/Safari outside the PWA container
+                        btn.onclick = () => {
+                            window.open(linkOrCode, '_blank', 'noopener,noreferrer');
+                        };
                         itemDiv.appendChild(btn);
                     }
                     
