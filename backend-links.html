@@ -677,7 +677,7 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED LOGIC: Escape the WebAPK using the googlechrome:// deep link --- //
+                        // --- UPDATED LOGIC: Android intent with BROWSABLE category --- //
                         const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.innerHTML = `
@@ -688,9 +688,12 @@
                         const isAndroid = /Android/i.test(navigator.userAgent);
                         if (isAndroid) {
                             try {
-                                // WebAPKs share the 'com.android.chrome' package. 
-                                // To completely escape the PWA, we must use Chrome's specific deep-link protocol.
-                                btn.href = `intent://navigate?url=${encodeURIComponent(linkOrCode)}#Intent;scheme=googlechrome;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
+                                const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
+                                const scheme = linkOrCode.startsWith('https') ? 'https' : 'http';
+                                
+                                // Adding category=android.intent.category.BROWSABLE forces the intent to be handled by a browser,
+                                // and launchFlags=0x10000000 opens it in a completely separate task from the PWA!
+                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;launchFlags=0x10000000;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
                             } catch (e) {
                                 btn.href = linkOrCode;
                             }
