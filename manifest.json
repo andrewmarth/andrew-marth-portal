@@ -1,0 +1,20 @@
+{
+  "name": "Control Board",
+  "short_name": "AM Portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e9e2d8",
+  "theme_color": "#e9e2d8",
+  "icons": [
+    {
+      "src": "https://andrewmarth.com/images/links.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://andrewmarth.com/images/links.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
