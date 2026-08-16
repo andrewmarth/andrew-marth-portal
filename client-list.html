@@ -115,6 +115,17 @@
             border-radius: 20px 20px 0 0;
         }
 
+        .card-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 18px 18px 0 0;
+            z-index: 2;
+        }
+
         .card-header::after {
             content: '';
             position: absolute;
@@ -148,11 +159,19 @@
 
         .card-header h2 {
             font-size: 2.2rem;
-            color: #e9e2d8;
+            color: #4e513e;
             margin: 0;
             letter-spacing: 1px;
             position: relative;
             z-index: 10; 
+        }
+
+        .card-header.has-bg::before {
+            display: none;
+        }
+
+        .card-header.has-bg h2 {
+            color: #e9e2d8;
             text-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
 
@@ -332,7 +351,7 @@
     </header>
 
     <main>
-        <!-- Active Clients Card -->
+        <!-- 1. Active Clients Card (Dynamic) -->
         <div class="main-card">
             <div class="card-header has-bg">
                 <div class="corner-mask corner-mask-left"></div>
@@ -342,6 +361,27 @@
             </div>
             <div class="card-body" id="client-list-container">
                 <div class="loading-text">Loading Client List...</div>
+            </div>
+        </div>
+
+        <!-- 2. Edit List Card (Static) -->
+        <div class="main-card">
+            <div class="card-header">
+                <div class="corner-mask corner-mask-left"></div>
+                <div class="corner-mask corner-mask-right"></div>
+                <h2>Edit List</h2>
+            </div>
+            <div class="card-body">
+                <div class="link-item">
+                    <div class="link-info">
+                        <h3>✦&nbsp;&nbsp;Google Sheet Database</h3>
+                        <p>Open the backend sheet to add, remove, or modify client records.</p>
+                    </div>
+                    <a class="btn" href="https://docs.google.com/spreadsheets/d/1N7J3Dj4o-Ix4Fao7MgMhWJ6wmMUSFMf9hoqAmBnZyJg/edit?gid=1386178183#gid=1386178183" target="_blank" rel="noopener noreferrer external">
+                        Launch
+                        <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
+                    </a>
+                </div>
             </div>
         </div>
     </main>
@@ -362,7 +402,6 @@
 
     <script>
         async function loadGoogleSheetData(gid, containerId) {
-            // New Sheet ID
             const sheetId = '1N7J3Dj4o-Ix4Fao7MgMhWJ6wmMUSFMf9hoqAmBnZyJg';
             const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
             const container = document.getElementById(containerId);
