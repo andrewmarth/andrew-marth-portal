@@ -677,33 +677,24 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED LOGIC: Android intent with BROWSABLE category --- //
                         const btn = document.createElement('a');
                         btn.className = 'btn';
+                        btn.href = linkOrCode;
+                        
+                        // --- INTERNAL VS EXTERNAL LINK LOGIC ---
+                        if (linkOrCode.includes('portal.andrewmarth.com')) {
+                            // Internal link: Stay in the same window so the OS "Back" swipe works normally
+                            btn.target = '_self';
+                        } else {
+                            // External link: Open in Custom Tab
+                            btn.target = '_blank';
+                            btn.rel = 'noopener noreferrer external';
+                        }
+                        
                         btn.innerHTML = `
                             Launch
                             <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
                         `;
-                        
-                        const isAndroid = /Android/i.test(navigator.userAgent);
-                        if (isAndroid) {
-                            try {
-                                const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
-                                const scheme = linkOrCode.startsWith('https') ? 'https' : 'http';
-                                
-                                // Adding category=android.intent.category.BROWSABLE forces the intent to be handled by a browser,
-                                // and launchFlags=0x10000000 opens it in a completely separate task from the PWA!
-                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;launchFlags=0x10000000;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
-                            } catch (e) {
-                                btn.href = linkOrCode;
-                            }
-                        } else {
-                            btn.href = linkOrCode;
-                        }
-                        
-                        btn.target = '_blank';
-                        btn.rel = 'noopener noreferrer external';
-                        
                         itemDiv.appendChild(btn);
                     }
                     
