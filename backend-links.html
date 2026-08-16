@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Backend Links | Andrew Marth Real Estate</title>
     
+    <!-- PWA / App Install Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#e9e2d8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Control Board">
+    <!-- Updated icon link here -->
+    <link rel="apple-touch-icon" href="https://andrewmarth.com/images/links.png">
+    
     <!-- Google Fonts Import -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,6 +43,8 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh; 
+            /* WebKit tap highlight removal for app-like feel */
+            -webkit-tap-highlight-color: transparent; 
         }
         
         /* Updated Header Font */
@@ -778,6 +789,15 @@
             loadGoogleSheetData('0', 'control-board-container', true);
             
             scaleWholesalerSheet();
+            
+            // Service Worker Registration for PWA / Add to Home Screen functionality
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(() => {
+                    console.log('Service Worker Registered');
+                }).catch((err) => {
+                    console.log('Service Worker failed: ', err);
+                });
+            }
         });
         
         window.addEventListener('resize', scaleWholesalerSheet);
