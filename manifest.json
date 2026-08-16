@@ -1,7 +1,7 @@
 {
   "name": "Backend Links",
   "short_name": "Links",
-  "start_url": "https://portal.andrewmarth.com/backend-links",
+  "start_url": "/backend-links",
   "display": "standalone",
   "background_color": "#e9e2d8",
   "theme_color": "#e9e2d8",
