@@ -677,38 +677,33 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED: OS System Intent Breakout --- //
-                        const btn = document.createElement('button');
-                        btn.type = 'button';
+                        // --- UPDATED LOGIC: Native HTML Anchor with New Task Intent --- //
+                        const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.innerHTML = `
                             Launch
                             <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
                         `;
                         
-                        btn.onclick = () => {
-                            const isAndroid = /Android/i.test(navigator.userAgent);
-                            if (isAndroid) {
-                                try {
-                                    const urlObj = new URL(linkOrCode);
-                                    const scheme = urlObj.protocol.replace(':', ''); 
-                                    // Strip the protocol off the beginning so the Android Intent can re-read it
-                                    const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
-                                    
-                                    // This magic string forces the Android OS to open the URL externally 
-                                    // using the full com.android.chrome package instead of the PWA container [1]
-                                    const intentUrl = `intent://${cleanUrl}#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
-                                    
-                                    window.location.href = intentUrl;
-                                } catch (e) {
-                                    // Fallback if parsing somehow fails
-                                    window.open(linkOrCode, '_blank', 'noopener,noreferrer');
-                                }
-                            } else {
-                                // iOS and Desktop still behave correctly with window.open
-                                window.open(linkOrCode, '_blank', 'noopener,noreferrer');
+                        const isAndroid = /Android/i.test(navigator.userAgent);
+                        if (isAndroid) {
+                            try {
+                                const urlObj = new URL(linkOrCode);
+                                const scheme = urlObj.protocol.replace(':', ''); 
+                                const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
+                                
+                                // launchFlags=0x10000000 forces the OS to open the app in a completely new task, breaking out of the PWA
+                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};action=android.intent.action.VIEW;launchFlags=0x10000000;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
+                            } catch (e) {
+                                btn.href = linkOrCode;
                             }
-                        };
+                        } else {
+                            btn.href = linkOrCode;
+                        }
+                        
+                        btn.target = '_blank';
+                        btn.rel = 'noopener noreferrer';
+                        
                         itemDiv.appendChild(btn);
                     }
                     
