@@ -677,7 +677,7 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED LOGIC: Native HTML Anchor with New Task Intent --- //
+                        // --- UPDATED LOGIC: Native HTML Anchor with New Task Intent AND Chrome Package --- //
                         const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.innerHTML = `
@@ -692,8 +692,8 @@
                                 const scheme = urlObj.protocol.replace(':', ''); 
                                 const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
                                 
-                                // launchFlags=0x10000000 forces the OS to open the app in a completely new task, breaking out of the PWA
-                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};action=android.intent.action.VIEW;launchFlags=0x10000000;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
+                                // Added package=com.android.chrome back in! This explicitly forces the OS to hand the URL to the main Chrome browser
+                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};package=com.android.chrome;action=android.intent.action.VIEW;launchFlags=0x10000000;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
                             } catch (e) {
                                 btn.href = linkOrCode;
                             }
