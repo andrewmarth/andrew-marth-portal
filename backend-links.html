@@ -677,7 +677,7 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED LOGIC: Pure OS Intent --- //
+                        // --- UPDATED LOGIC: Escape the WebAPK using the googlechrome:// deep link --- //
                         const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.innerHTML = `
@@ -688,12 +688,9 @@
                         const isAndroid = /Android/i.test(navigator.userAgent);
                         if (isAndroid) {
                             try {
-                                const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
-                                const scheme = linkOrCode.startsWith('https') ? 'https' : 'http';
-                                
-                                // By removing the package completely, the Android OS natively decides how to route it.
-                                // If it's a Google Doc, it will open the Docs app. If it's a web link, it will prompt or open the main browser!
-                                btn.href = `intent://${cleanUrl}#Intent;scheme=${scheme};action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
+                                // WebAPKs share the 'com.android.chrome' package. 
+                                // To completely escape the PWA, we must use Chrome's specific deep-link protocol.
+                                btn.href = `intent://navigate?url=${encodeURIComponent(linkOrCode)}#Intent;scheme=googlechrome;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
                             } catch (e) {
                                 btn.href = linkOrCode;
                             }
@@ -702,7 +699,7 @@
                         }
                         
                         btn.target = '_blank';
-                        btn.rel = 'noopener noreferrer';
+                        btn.rel = 'noopener noreferrer external';
                         
                         itemDiv.appendChild(btn);
                     }
