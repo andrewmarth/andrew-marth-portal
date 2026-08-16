@@ -677,7 +677,7 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // --- UPDATED LOGIC: Replaced HTML <a> tags with JavaScript Buttons --- //
+                        // --- UPDATED: OS System Intent Breakout --- //
                         const btn = document.createElement('button');
                         btn.type = 'button';
                         btn.className = 'btn';
@@ -685,9 +685,29 @@
                             Launch
                             <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch" class="btn-icon">
                         `;
-                        // Forces the phone's OS to handle the link, pushing it to Chrome/Safari outside the PWA container
+                        
                         btn.onclick = () => {
-                            window.open(linkOrCode, '_blank', 'noopener,noreferrer');
+                            const isAndroid = /Android/i.test(navigator.userAgent);
+                            if (isAndroid) {
+                                try {
+                                    const urlObj = new URL(linkOrCode);
+                                    const scheme = urlObj.protocol.replace(':', ''); 
+                                    // Strip the protocol off the beginning so the Android Intent can re-read it
+                                    const cleanUrl = linkOrCode.replace(/^https?:\/\//, '');
+                                    
+                                    // This magic string forces the Android OS to open the URL externally 
+                                    // using the full com.android.chrome package instead of the PWA container [1]
+                                    const intentUrl = `intent://${cleanUrl}#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(linkOrCode)};end`;
+                                    
+                                    window.location.href = intentUrl;
+                                } catch (e) {
+                                    // Fallback if parsing somehow fails
+                                    window.open(linkOrCode, '_blank', 'noopener,noreferrer');
+                                }
+                            } else {
+                                // iOS and Desktop still behave correctly with window.open
+                                window.open(linkOrCode, '_blank', 'noopener,noreferrer');
+                            }
                         };
                         itemDiv.appendChild(btn);
                     }
@@ -723,7 +743,6 @@
             
             scaleWholesalerSheet();
             
-            // Service Worker Registration for PWA / Add to Home Screen functionality
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').then(() => {
                     console.log('Service Worker Registered');
