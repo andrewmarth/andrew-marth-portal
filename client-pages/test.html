@@ -456,7 +456,7 @@
 
     <header>
         <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.png" alt="Andrew Marth Real Estate" class="header-logo">
-        <h1 class="hero-title">Buyer Breakdown</h1>
+        <h1 class="hero-title" id="hero-title-text">Buyer Breakdown</h1>
     </header>
 
     <div class="content-wrapper">
@@ -601,7 +601,34 @@
             }
         }
 
-        // 2. Hidden iFrame PDF Download logic to bypass mobile App intents
+        // 2. Fetch Buyer Name from Cell A1 of the Config Sheet
+        async function loadBuyerName() {
+            const sheetId = '1dAkP5-P1KY7jJ4ofHgQGEy8aAAdnD_OoyTHH3OCbEtY';
+            const gid = '790636293';
+            // Limit range to A1 to safely and quickly fetch just the single cell
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}&range=A1:A1`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonString);
+                
+                if (data && data.table && data.table.rows && data.table.rows[0] && data.table.rows[0].c && data.table.rows[0].c[0] && data.table.rows[0].c[0].v) {
+                    const buyerName = data.table.rows[0].c[0].v;
+                    const titleEl = document.getElementById('hero-title-text');
+                    if (titleEl && buyerName) {
+                        titleEl.textContent = `${buyerName} Buyer Breakdown`;
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching buyer name:", error);
+                // On failure, it just silently leaves the default "Buyer Breakdown" text intact
+            }
+        }
+
+        // 3. Hidden iFrame PDF Download logic to bypass mobile App intents
         document.getElementById('pdf-download-btn').addEventListener('click', function(e) {
             e.preventDefault(); // Stop normal link behavior
             const exportUrl = "https://docs.google.com/spreadsheets/d/1dAkP5-P1KY7jJ4ofHgQGEy8aAAdnD_OoyTHH3OCbEtY/export?format=pdf&gid=1674002527";
@@ -620,7 +647,7 @@
             }, 5000);
         });
 
-        // 3. Backend Code Logic
+        // 4. Backend Code Logic
         document.getElementById('backend-btn').addEventListener('click', function() {
             const code = prompt("Enter Access Code:");
             if (code === "6874") {
@@ -638,8 +665,11 @@
             }
         });
 
-        // Run the math when the page loads, and re-calculate if the phone is rotated
-        window.addEventListener('DOMContentLoaded', scaleSheet);
+        // Run the math and API fetches when the page loads, and re-calculate if the phone is rotated
+        window.addEventListener('DOMContentLoaded', () => {
+            scaleSheet();
+            loadBuyerName();
+        });
         window.addEventListener('resize', scaleSheet);
     </script>
 
