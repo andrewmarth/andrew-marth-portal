@@ -187,13 +187,13 @@
         /* The containers for the iframe */
         .iframe-container {
             width: 100%;
-            height: 8200px; /* Updated Height */
+            height: 8250px; /* Buffered Height */
             overflow: hidden; 
         }
         
         #iframe-wrapper {
-            width: 704px; /* Updated Width */
-            height: 8200px; /* Updated Height */
+            width: 716px; /* Buffered Width */
+            height: 8250px; /* Buffered Height */
             margin: 0 auto; 
             transform-origin: top center; 
             overflow: hidden;
@@ -477,9 +477,9 @@
             if (container1 && wrapper1) {
                 const containerWidth1 = container1.clientWidth; 
                 
-                // Updated Native Dimensions for new Sheet
-                const sheetWidth1 = 704; 
-                const sheetHeight1 = 8200; 
+                // Buffered Dimensions to prevent Google's tiny scrollbars (704x8200 original)
+                const sheetWidth1 = 716; 
+                const sheetHeight1 = 8250; 
                 
                 // Only scale if the card is visible (width > 0)
                 if (containerWidth1 > 0) {
