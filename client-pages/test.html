@@ -98,19 +98,41 @@
         .info-card-title {
             font-size: 2.5rem;
             color: #4e513e;
-            margin-bottom: 25px;
+            margin-bottom: 35px;
             text-align: center;
             line-height: 1.2;
         }
-        .info-text {
-            color: #4f2d2c;
-            font-size: 1.15rem;
-            line-height: 1.6;
-            margin-bottom: 15px;
-            text-align: left;
+        .detail-item {
+            margin-bottom: 35px; 
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
         }
-        .info-text:last-child {
+        .detail-item:last-child {
             margin-bottom: 0;
+        }
+        .detail-item h3 {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 999px; 
+            margin-bottom: 12px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+        .detail-item p {
+            color: #4f2d2c;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin: 0;
+            width: 100%;
+            padding-left: 5px; 
+            text-align: left;
         }
 
         /* --- Google Sheet Card --- */
@@ -382,6 +404,14 @@
             .info-card-title {
                 font-size: 2rem;
             }
+            .detail-item h3 {
+                font-size: 1.1rem;
+                padding: 6px 15px;
+                margin-bottom: 15px;
+            }
+            .detail-item {
+                margin-bottom: 30px;
+            }
             .proforma-header {
                 padding: 40px 20px 45px 20px;
             }
@@ -421,9 +451,20 @@
             <div class="info-card-content">
                 <h2 class="info-card-title">How It Works</h2>
                 
-                <!-- Put your text here -->
-                <p class="info-text">Welcome to the Buyer Breakdown. Here is where you can add the information, steps, or details about the process.</p>
-                <p class="info-text">You can add as many paragraphs as you need. The formatting will automatically keep it clean and easy to read.</p>
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;The Breakdown</h3>
+                    <p>This purpose of this page is to provide a breakdown for a purchase based on your income information combined with a specific property. Every property has different considerations, and any one property can be structured multiple ways.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Live Updates</h3>
+                    <p>This page can be updated in real time based on whichever property we are looking at. Bookmark the page for easy access later.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Fully Configurable</h3>
+                    <p>The decision is ultimately yours about how you want the purchase to be structured. Always give me your feedback about what you want to see adjusted.</p>
+                </div>
                 
             </div>
         </div>
