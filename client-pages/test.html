@@ -91,6 +91,28 @@
             overflow: hidden;
         }
 
+        /* --- Info Card (Top Card) --- */
+        .info-card-content {
+            padding: 50px 40px 40px 40px;
+        }
+        .info-card-title {
+            font-size: 2.5rem;
+            color: #4e513e;
+            margin-bottom: 25px;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .info-text {
+            color: #4f2d2c;
+            font-size: 1.15rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .info-text:last-child {
+            margin-bottom: 0;
+        }
+
         /* --- Google Sheet Card --- */
         .sheet-card {
             background-color: #ffffff;
@@ -354,6 +376,12 @@
             .content-wrapper {
                 margin-top: -30px;
             }
+            .info-card-content {
+                padding: 40px 20px 30px 20px;
+            }
+            .info-card-title {
+                font-size: 2rem;
+            }
             .proforma-header {
                 padding: 40px 20px 45px 20px;
             }
@@ -388,6 +416,18 @@
 
     <div class="content-wrapper">
         
+        <!-- How It Works Card -->
+        <div class="card">
+            <div class="info-card-content">
+                <h2 class="info-card-title">How It Works</h2>
+                
+                <!-- Put your text here -->
+                <p class="info-text">Welcome to the Buyer Breakdown. Here is where you can add the information, steps, or details about the process.</p>
+                <p class="info-text">You can add as many paragraphs as you need. The formatting will automatically keep it clean and easy to read.</p>
+                
+            </div>
+        </div>
+
         <!-- Breakdown & Google Sheet Card -->
         <div class="card sheet-card">
             <!-- Header and Buttons -->
