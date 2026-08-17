@@ -177,6 +177,7 @@
             transition: all 0.3s ease;
             box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
             z-index: 10;
+            text-decoration: none;
         }
         .btn-download:hover {
             background-color: #9a5d40;
@@ -519,8 +520,8 @@
             <!-- Header and Buttons -->
             <div class="proforma-header">
                 
-                <!-- Square PDF Download Button (Direct Download) -->
-                <a href="https://docs.google.com/spreadsheets/d/1dAkP5-P1KY7jJ4ofHgQGEy8aAAdnD_OoyTHH3OCbEtY/export?format=pdf&gid=1674002527" download="Buyer_Breakdown.pdf" class="btn-download" title="Download PDF">
+                <!-- Hidden iFrame Triggers Download Instead of App -->
+                <a href="#" id="pdf-download-btn" class="btn-download" title="Download PDF">
                     <img src="https://andrewmarth.com/images/download_icon.png" alt="Download">
                 </a>
 
@@ -631,7 +632,26 @@
             }
         }
 
-        // 2. Backend Code Logic
+        // 2. Hidden iFrame PDF Download logic to bypass mobile App intents
+        document.getElementById('pdf-download-btn').addEventListener('click', function(e) {
+            e.preventDefault(); // Stop normal link behavior
+            const exportUrl = "https://docs.google.com/spreadsheets/d/1dAkP5-P1KY7jJ4ofHgQGEy8aAAdnD_OoyTHH3OCbEtY/export?format=pdf&gid=1674002527";
+            
+            // Create invisible iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = exportUrl;
+            document.body.appendChild(iframe);
+            
+            // Cleanup the invisible iframe after 5 seconds
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 5000);
+        });
+
+        // 3. Backend Code Logic
         document.getElementById('backend-btn').addEventListener('click', function() {
             const code = prompt("Enter Access Code:");
             if (code === "6874") {
