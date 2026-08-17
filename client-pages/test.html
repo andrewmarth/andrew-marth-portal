@@ -145,6 +145,7 @@
         .proforma-header {
             padding: 50px 40px 45px 40px;
             text-align: center;
+            position: relative; /* Needed to anchor the download button */
         }
         .proforma-header h2 {
             font-size: 2.5rem; 
@@ -157,6 +158,40 @@
             color: #4f2d2c;
             margin-bottom: 25px;
             opacity: 0.9;
+        }
+
+        /* --- Download Button --- */
+        .btn-download {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            width: 50px;
+            height: 50px;
+            background-color: #99724b;
+            border: 2px solid #0E2A3B;
+            border-radius: 12px; /* Square with rounded corners */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
+            z-index: 10;
+        }
+        .btn-download:hover {
+            background-color: #9a5d40;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        .btn-download img {
+            width: 22px;
+            height: 22px;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+            filter: brightness(0) invert(1); /* Turns icon white */
+        }
+        .btn-download:hover img {
+            transform: scale(1.1);
         }
 
         .buttons-container {
@@ -195,7 +230,7 @@
             height: 16px;
             object-fit: contain;
             transition: transform 0.3s ease;
-            filter: brightness(0) invert(1); /* Turns the icon white to match text */
+            filter: brightness(0) invert(1);
         }
         .btn-primary:hover img {
             transform: scale(1.1); 
@@ -415,6 +450,16 @@
             .proforma-header {
                 padding: 40px 20px 45px 20px;
             }
+            .btn-download {
+                top: 15px;
+                right: 15px;
+                width: 42px;
+                height: 42px;
+            }
+            .btn-download img {
+                width: 18px;
+                height: 18px;
+            }
             .proforma-header h2 {
                 font-size: 2rem; 
             }
@@ -473,6 +518,12 @@
         <div class="card sheet-card">
             <!-- Header and Buttons -->
             <div class="proforma-header">
+                
+                <!-- Square PDF Download Button -->
+                <a href="https://docs.google.com/spreadsheets/d/1dAkP5-P1KY7jJ4ofHgQGEy8aAAdnD_OoyTHH3OCbEtY/export?format=pdf&gid=1674002527" target="_blank" class="btn-download" title="Download PDF">
+                    <img src="https://andrewmarth.com/images/download_icon.png" alt="Download">
+                </a>
+
                 <h2>Breakdown</h2>
                 <p>All the details you need</p>
                 <div class="buttons-container">
