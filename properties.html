@@ -29,8 +29,9 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* List Mode State: unlocks scrolling on BOTH HTML and Body */
-        html.list-mode, body.list-mode {
+        /* List & Backend Mode State: unlocks scrolling on BOTH HTML and Body */
+        html.list-mode, body.list-mode,
+        html.backend-mode, body.backend-mode {
             overflow-y: auto !important;
             overflow-x: hidden !important;
             height: auto !important;
@@ -41,12 +42,18 @@
             font-family: 'Bricolage Grotesque', sans-serif;
         }
 
-        /* --- Map View Wrapper --- */
-        #map-view {
+        /* --- View Visibility Management --- */
+        #map-view, #list-view, #backend-view {
+            display: none; 
             width: 100%;
-            height: 100%;
-            position: relative;
         }
+
+        /* Show Map by default if no other classes exist */
+        body:not(.list-mode):not(.backend-mode) #map-view { display: block; height: 100%; position: relative; }
+        
+        /* Show specific views when their classes are active */
+        body.list-mode #list-view { display: flex; flex-direction: column; }
+        body.backend-mode #backend-view { display: flex; flex-direction: column; }
 
         /* --- Force Map to Background --- */
         #atlist-embed {
@@ -131,17 +138,7 @@
             object-fit: contain;
         }
 
-        /* --- List View Wrapper --- */
-        #list-view {
-            display: none; /* Hidden by default */
-            width: 100%;
-            flex-direction: column;
-        }
-        
-        body.list-mode #map-view { display: none; }
-        body.list-mode #list-view { display: flex; }
-
-        /* --- List View Hero Banner --- */
+        /* --- List/Backend View Hero Banner --- */
         .list-header {
             background: linear-gradient(rgba(78, 81, 62, 0.75), rgba(78, 81, 62, 0.75)), url('https://andrewmarth.com/images/background.jpeg');
             background-size: cover;
@@ -172,7 +169,7 @@
             padding: 0 20px 20px 20px;
         }
 
-        /* --- List Card Styling --- */
+        /* --- List/Backend Card Styling --- */
         .list-card-wrapper {
             max-width: 800px;
             width: 100%;
@@ -192,6 +189,19 @@
             overflow: hidden;
         }
 
+        /* --- Group Headers (Backend View) --- */
+        .sender-group-header {
+            font-size: 1.8rem;
+            color: #4e513e;
+            margin: 40px 0 10px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(14, 42, 59, 0.1);
+        }
+        
+        .sender-group-header:first-child {
+            margin-top: 20px;
+        }
+
         /* --- List Items --- */
         .list-item {
             display: flex;
@@ -206,6 +216,9 @@
             border-bottom: none;
             padding-bottom: 0;
         }
+
+        /* Prevent double borders when grouped */
+        .list-card > .list-item:last-of-type { border-bottom: none; }
 
         .item-info {
             flex-grow: 1;
@@ -230,11 +243,23 @@
             line-height: 1.4;
         }
 
+        /* Badges */
         .new-badge {
             color: #d9534f;
             font-weight: bold;
             margin-right: 5px;
             text-transform: uppercase;
+        }
+        
+        .reviewed-badge {
+            color: #d9534f; /* Default red */
+            font-weight: bold;
+            margin-right: 5px;
+            text-transform: uppercase;
+        }
+        
+        .reviewed-badge.complete {
+            color: #2e7d32; /* Distinct strong green */
         }
 
         .price-pill {
@@ -288,6 +313,31 @@
             0% { opacity: 0.6; }
             50% { opacity: 1; }
             100% { opacity: 0.6; }
+        }
+
+        /* --- Backend Button (Bottom of page) --- */
+        .backend-trigger-container {
+            text-align: center;
+            margin-bottom: 40px;
+            margin-top: -20px;
+        }
+
+        .btn-backend {
+            background: transparent;
+            border: none;
+            color: #4f2d2c;
+            opacity: 0.25; /* Very faint */
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+            padding: 10px 20px;
+            transition: opacity 0.3s ease;
+        }
+        
+        .btn-backend:hover {
+            opacity: 0.8;
         }
 
         /* --- Fullscreen Entry Overlay --- */
@@ -461,7 +511,6 @@
 
     <!-- ================= MAP VIEW (Default) ================= -->
     <div id="map-view">
-        <!-- Empty Map Embed (Loaded securely via JavaScript upon validation) -->
         <iframe 
             data-src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
             allow="geolocation 'self' https://my.atlist.com" 
@@ -472,24 +521,21 @@
             id="atlist-embed">
         </iframe>
 
-        <!-- Floating Branding Card -->
         <div class="floating-card">
             <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
             <h1>Investment Properties</h1>
         </div>
 
-        <!-- Toggle to List Button -->
-        <button class="view-toggle-btn" onclick="toggleView()">
+        <button class="view-toggle-btn" onclick="showListView()">
             <img src="https://andrewmarth.com/images/list_icon.png" alt="List">
             List
         </button>
     </div>
 
 
-    <!-- ================= LIST VIEW (Hidden initially) ================= -->
+    <!-- ================= LIST VIEW ================= -->
     <div id="list-view">
-        <!-- Toggle to Map Button (Fixed) -->
-        <button class="view-toggle-btn" onclick="toggleView()" style="z-index: 105;">
+        <button class="view-toggle-btn" onclick="showMapView()" style="z-index: 105;">
             <img src="https://andrewmarth.com/images/map_icon.png" alt="Map">
             Map View
         </button>
@@ -503,6 +549,34 @@
             <div class="list-card">
                 <div id="properties-container">
                     <div class="loading-text">Loading Properties...</div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Subtle trigger to access the Backend View -->
+        <div class="backend-trigger-container">
+            <button type="button" class="btn-backend" onclick="showBackendView()">Backend View</button>
+        </div>
+    </div>
+
+
+    <!-- ================= BACKEND VIEW ================= -->
+    <div id="backend-view">
+        <!-- Allows users to quickly get back to the List View -->
+        <button class="view-toggle-btn" onclick="showListView()" style="z-index: 105;">
+            <img src="https://andrewmarth.com/images/list_icon.png" alt="List">
+            List View
+        </button>
+
+        <header class="list-header">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.png" alt="Andrew Marth Real Estate">
+            <h1>Backend View</h1>
+        </header>
+
+        <main class="list-card-wrapper">
+            <div class="list-card">
+                <div id="backend-properties-container">
+                    <div class="loading-text">Loading Backend Data...</div>
                 </div>
             </div>
         </main>
@@ -585,30 +659,49 @@
             errorMessage.style.display = 'none';
         });
 
-        /* --- View Toggling & Data Fetching --- */
+        /* --- View Controllers --- */
         let listDataLoaded = false;
+        let backendDataLoaded = false;
+        const body = document.body;
+        const html = document.documentElement;
 
-        function toggleView() {
-            const body = document.body;
-            const html = document.documentElement; // Must target the HTML element as well
-            
-            if (body.classList.contains('list-mode')) {
-                // Switch back to Map (Locks Scroll)
-                body.classList.remove('list-mode');
-                html.classList.remove('list-mode');
-                window.scrollTo(0, 0); // Reset scroll position
-            } else {
-                // Switch to List (Unlocks Scroll)
-                body.classList.add('list-mode');
-                html.classList.add('list-mode');
-                
-                if (!listDataLoaded) {
-                    fetchPropertyList();
-                    listDataLoaded = true;
-                }
-            }
+        function showMapView() {
+            body.classList.remove('list-mode', 'backend-mode');
+            html.classList.remove('list-mode', 'backend-mode');
+            window.scrollTo(0, 0); 
         }
 
+        function showListView() {
+            body.classList.remove('backend-mode');
+            html.classList.remove('backend-mode');
+            
+            body.classList.add('list-mode');
+            html.classList.add('list-mode');
+            
+            if (!listDataLoaded) {
+                fetchPropertyList();
+                listDataLoaded = true;
+            }
+            window.scrollTo(0, 0);
+        }
+
+        function showBackendView() {
+            body.classList.remove('list-mode');
+            html.classList.remove('list-mode');
+            
+            body.classList.add('backend-mode');
+            html.classList.add('backend-mode');
+            
+            if (!backendDataLoaded) {
+                fetchBackendList();
+                backendDataLoaded = true;
+            }
+            window.scrollTo(0, 0);
+        }
+
+        /* --- Data Fetching Logic --- */
+
+        // Standard List Fetch
         async function fetchPropertyList() {
             const listUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:json&gid=1502147014';
             const container = document.getElementById('properties-container');
@@ -623,9 +716,8 @@
                 container.innerHTML = '';
                 
                 data.table.rows.forEach((row, index) => {
-                    // Skip header row if it contains the word 'Address'
                     if (index === 0 && row.c[1] && row.c[1].v && row.c[1].v.toLowerCase() === 'address') return;
-                    if (!row || !row.c || !row.c[1] || !row.c[1].v) return; // Ensure Address exists
+                    if (!row || !row.c || !row.c[1] || !row.c[1].v) return; 
                     
                     const dateAdded = row.c[0] ? (row.c[0].f || row.c[0].v) : '';
                     const address = row.c[1] ? row.c[1].v : '';
@@ -633,7 +725,6 @@
                     const link = row.c[3] ? row.c[3].v : '#';
                     const isNew = row.c[4] && row.c[4].v ? row.c[4].v : '';
 
-                    // Construct the "New" badge only if data exists in Col E
                     const newBadgeHtml = isNew ? `<span class="new-badge">${isNew} -</span> ` : '';
 
                     const itemHtml = `
@@ -659,6 +750,83 @@
             } catch (error) {
                 console.error("Error fetching properties:", error);
                 container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load properties.</div>';
+            }
+        }
+
+        // Grouped Backend Fetch
+        async function fetchBackendList() {
+            const backendUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:json&gid=540093866';
+            const container = document.getElementById('backend-properties-container');
+            
+            try {
+                const response = await fetch(backendUrl);
+                const text = await response.text();
+                
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonString);
+                
+                container.innerHTML = '';
+                
+                // Group the rows by Sender
+                const groups = {};
+
+                data.table.rows.forEach((row, index) => {
+                    // Skip header
+                    if (index === 0 && row.c[1] && row.c[1].v && row.c[1].v.toLowerCase() === 'address') return;
+                    if (!row || !row.c || !row.c[1] || !row.c[1].v) return; 
+
+                    // Extract the Sender (Column E / index 4)
+                    const sender = (row.c[4] && row.c[4].v) ? row.c[4].v : 'Unknown Sender';
+                    
+                    if (!groups[sender]) {
+                        groups[sender] = [];
+                    }
+                    groups[sender].push(row);
+                });
+
+                // Generate HTML from groups
+                for (const sender in groups) {
+                    container.innerHTML += `<h3 class="sender-group-header">${sender}</h3>`;
+                    
+                    groups[sender].forEach(row => {
+                        const dateAdded = row.c[0] ? (row.c[0].f || row.c[0].v) : '';
+                        const address = row.c[1] ? row.c[1].v : '';
+                        const price = row.c[2] ? (row.c[2].f || row.c[2].v) : '';
+                        const link = row.c[3] ? row.c[3].v : '#';
+                        
+                        // New Designation (Column G / index 6)
+                        const isNew = row.c[6] && row.c[6].v ? row.c[6].v : '';
+                        const newBadgeHtml = isNew ? `<span class="new-badge">${isNew} -</span> ` : '';
+
+                        // Reviewed Designation (Column H / index 7)
+                        const isReviewed = row.c[7] && row.c[7].v ? row.c[7].v : '';
+                        const reviewedClass = isReviewed.toLowerCase() === 'complete' ? 'complete' : '';
+                        const reviewedBadgeHtml = isReviewed ? `<span class="reviewed-badge ${reviewedClass}">${isReviewed} -</span> ` : '';
+
+                        const itemHtml = `
+                            <div class="list-item">
+                                <div class="item-info">
+                                    <div class="address">${address}</div>
+                                    <p class="subtext">${newBadgeHtml}${reviewedBadgeHtml}${dateAdded}</p>
+                                    <div class="price-pill">✦&nbsp;&nbsp;${price}</div>
+                                </div>
+                                <a href="${link}" target="_blank" rel="noopener noreferrer external" class="btn-launch">
+                                    View
+                                    <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch">
+                                </a>
+                            </div>
+                        `;
+                        container.innerHTML += itemHtml;
+                    });
+                }
+                
+                if (container.innerHTML === '') {
+                    container.innerHTML = '<div class="loading-text" style="color: #4f2d2c; animation: none;">No backend properties listed.</div>';
+                }
+                
+            } catch (error) {
+                console.error("Error fetching backend properties:", error);
+                container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load backend data.</div>';
             }
         }
     </script>
