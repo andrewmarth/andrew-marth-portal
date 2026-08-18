@@ -402,11 +402,35 @@
             opacity: 0.9;
         }
 
+        /* --- Auth Controls & Loading Spinner --- */
+        #auth-controls {
+            display: none; /* Hidden until loaded */
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .auth-loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #f7f4f0;
+            border-top: 5px solid #99724b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 30px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .input-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             margin-bottom: 20px;
+            width: 100%;
         }
 
         .code-input {
@@ -452,7 +476,7 @@
             justify-content: center;
             gap: 8px;
             background-color: #99724b; 
-            color: #ffffff; /* Reverted to white */
+            color: #ffffff; /* White text */
             border: 2px solid #0E2A3B; 
             padding: 15px 35px; 
             font-size: 1.1rem; 
@@ -601,12 +625,18 @@
             <p class="subtext">Please Read</p>
             <p class="body-text">The properties and information inside are confidential and intended to only be shared with you. Sharing the content inside is strictly forbidden. By entering, you accept these terms.</p>
             
-            <div class="input-container">
-                <input type="text" id="access-code" class="code-input" placeholder="Enter Access Code" autocomplete="off">
-                <p id="error-message" class="error-message">Invalid Access Code</p>
+            <!-- Loading Spinner -->
+            <div id="auth-loader" class="auth-loader"></div>
+
+            <!-- Hidden Until Data is Fetched -->
+            <div id="auth-controls">
+                <div class="input-container">
+                    <input type="text" id="access-code" class="code-input" placeholder="Enter Access Code" autocomplete="off">
+                    <p id="error-message" class="error-message">Invalid Access Code</p>
+                </div>
+                <button class="btn-primary" id="explore-btn">Explore</button>
             </div>
 
-            <button class="btn-primary" id="explore-btn">Explore</button>
         </div>
     </div>
 
@@ -617,12 +647,23 @@
         const authUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:csv&gid=1766991810';
         let validCodes = [];
 
+        // Fetch Codes and Reveal Inputs
         fetch(authUrl)
             .then(response => response.text())
             .then(csv => {
                 validCodes = csv.split('\n').map(code => code.replace(/"/g, '').trim()).filter(code => code !== '');
+                
+                // Hide loader and show controls
+                document.getElementById('auth-loader').style.display = 'none';
+                document.getElementById('auth-controls').style.display = 'flex';
             })
-            .catch(error => console.error('Error loading codes:', error));
+            .catch(error => {
+                console.error('Error loading codes:', error);
+                
+                // Show controls even on error to fail gracefully
+                document.getElementById('auth-loader').style.display = 'none';
+                document.getElementById('auth-controls').style.display = 'flex';
+            });
 
         const exploreBtn = document.getElementById('explore-btn');
         const codeInput = document.getElementById('access-code');
