@@ -186,29 +186,25 @@
             box-shadow: 6px 6px 0px #0E2A3B;
             width: 100%;
             padding: 10px 40px 30px 40px;
-            overflow: hidden;
+            overflow: hidden; /* Clips the full-width bars perfectly */
         }
 
         /* --- Group Headers (Backend View) --- */
         .sender-group-header {
-            display: inline-flex;
-            align-items: center;
-            background-color: #99724b; /* Brown Pill */
-            color: #ffffff;
-            font-size: 1.2rem;
+            background-color: #0E2A3B; /* Ink color */
+            color: #e9e2d8; /* Cream text */
+            font-size: 1.4rem;
             font-family: 'Bricolage Grotesque', sans-serif;
             font-weight: bold;
-            padding: 8px 24px;
-            border-radius: 999px;
-            margin: 40px 0 10px 0;
-            line-height: 1;
-            letter-spacing: 0.5px;
-            border: 2px solid #0E2A3B;
-            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
+            padding: 12px 20px;
+            margin: 40px -40px 10px -40px; /* Negative margin pulls it to the edges of the card */
+            text-align: center;
+            letter-spacing: 1px;
+            display: block;
         }
         
         .sender-group-header:first-child {
-            margin-top: 20px;
+            margin-top: -10px; /* Pushes it completely flush with the top of the card */
         }
 
         /* --- List Items --- */
@@ -292,7 +288,7 @@
             justify-content: center;
             gap: 8px;
             background-color: #99724b; 
-            color: #ffffff; 
+            color: #e9e2d8; /* Cream text only for this button */
             border: 2px solid #0E2A3B; 
             padding: 12px 28px; 
             font-size: 1.05rem; 
@@ -456,7 +452,7 @@
             justify-content: center;
             gap: 8px;
             background-color: #99724b; 
-            color: #ffffff; 
+            color: #ffffff; /* Reverted to white */
             border: 2px solid #0E2A3B; 
             padding: 15px 35px; 
             font-size: 1.1rem; 
@@ -498,6 +494,11 @@
             }
             .list-card {
                 padding: 10px 20px 30px 20px;
+            }
+            .sender-group-header {
+                /* Pull negative margin tight to mobile card edges */
+                margin-left: -20px;
+                margin-right: -20px;
             }
             .list-item {
                 flex-direction: column;
@@ -796,8 +797,8 @@
 
                 // Generate HTML from groups
                 for (const sender in groups) {
-                    // Inject Brown Pill Group Header
-                    container.innerHTML += `<div class="sender-group-header">✦&nbsp;&nbsp;${sender}</div>`;
+                    // Inject Ink Bar Group Header
+                    container.innerHTML += `<div class="sender-group-header">${sender}</div>`;
                     
                     groups[sender].forEach(row => {
                         const dateAdded = row.c[0] ? (row.c[0].f || row.c[0].v) : '';
