@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Net Sheet | Andrew Marth Real Estate</title>
+    
+    <!-- Google Fonts Import -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- General Reset & Styling --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Prevents ALL horizontal scrolling across all mobile browsers */
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body {
+            font-family: 'Familjen Grotesk', sans-serif; 
+            line-height: 1.6;
+            color: #4f2d2c; 
+            background-color: #e9e2d8; 
+        }
+        
+        /* Updated Header Font */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Bricolage Grotesque', sans-serif;
+        }
+
+        /* --- Header / Hero Section --- */
+        header {
+            background: linear-gradient(rgba(78, 81, 62, 0.75), rgba(78, 81, 62, 0.75)), url('https://andrewmarth.com/images/background.jpeg');
+            background-size: cover;
+            background-position: center;
+            padding: 100px 20px 80px 20px; 
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 15px; 
+        }
+        
+        .header-logo {
+            width: 100%;
+            max-width: 380px; 
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
+        }
+
+        .hero-title {
+            color: #e9e2d8;
+            font-size: 3.5rem;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+            padding: 0 20px 20px 20px;
+        }
+
+        /* --- Page Layout & Spacing --- */
+        .content-wrapper {
+            max-width: 800px;
+            margin: -40px auto 40px auto; 
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px; 
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- Universal Card Styling --- */
+        .card {
+            background-color: #ffffff;
+            border-radius: 20px;
+            border: 2px solid #0E2A3B;
+            box-shadow: 6px 6px 0px #0E2A3B;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        /* --- Info Card (Top Card) --- */
+        .info-card-content {
+            padding: 50px 40px 40px 40px;
+        }
+        .info-card-title {
+            font-size: 2.5rem;
+            color: #4e513e;
+            margin-bottom: 35px;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .detail-item {
+            margin-bottom: 35px; 
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+        }
+        .detail-item:last-child {
+            margin-bottom: 0;
+        }
+        .detail-item h3 {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 999px; 
+            margin-bottom: 12px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+        .detail-item p {
+            color: #4f2d2c;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin: 0;
+            width: 100%;
+            padding-left: 5px; 
+            text-align: left;
+        }
+
+        /* --- Google Sheet Card --- */
+        .sheet-card {
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .proforma-header {
+            padding: 50px 40px 45px 40px;
+            text-align: center;
+            position: relative; /* Needed to anchor the download button */
+        }
+        .proforma-header h2 {
+            font-size: 2.5rem; 
+            color: #4e513e;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+        .proforma-header p {
+            font-size: 1.1rem;
+            color: #4f2d2c;
+            margin-bottom: 25px;
+            opacity: 0.9;
+        }
+
+        /* --- Download Button --- */
+        .btn-download {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            width: 50px;
+            height: 50px;
+            background-color: transparent; /* Transparent background */
+            border: 2px solid #0E2A3B;
+            border-radius: 12px; /* Square with rounded corners */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 10;
+            text-decoration: none;
+        }
+        .btn-download img {
+            width: 22px;
+            height: 22px;
+            object-fit: contain;
+            /* Filter removed so the native dark color shows against the transparent/white background */
+        }
+
+        .buttons-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-primary { 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: #99724b; 
+            color: #ffffff; 
+            border: 2px solid #0E2A3B; 
+            padding: 15px 35px; 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            border-radius: 999px; 
+            cursor: pointer; 
+            text-decoration: none;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2); 
+            flex: 1 1 auto; 
+            max-width: 320px;
+        }
+        .btn-primary img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+            filter: brightness(0) invert(1);
+        }
+
+        /* Scrolling Marquee Banner */
+        .marquee-banner {
+            background-color: #9a5d40; 
+            color: #e9e2d8; 
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 12px 0;
+            display: flex;
+        }
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee-scroll 80s linear infinite; 
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: bold;
+            font-size: 1.1rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        .marquee-content span {
+            display: inline-block;
+        }
+        @keyframes marquee-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* The containers for the iframe */
+        .iframe-container {
+            width: 100%;
+            height: 7330px; /* Buffered Height (7280 + 50) */
+            overflow: hidden; 
+        }
+        
+        #iframe-wrapper {
+            width: 716px; /* Buffered Width */
+            height: 7330px; /* Buffered Height (7280 + 50) */
+            margin: 0 auto; 
+            transform-origin: top center; 
+            overflow: hidden;
+        }
+
+        .sheet-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            overflow: hidden !important;
+        }
+
+        /* --- Profile Section (Outside of card) --- */
+        .profile-section-outside {
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        
+        .gear-container {
+            position: relative;
+            width: 100%;
+            max-width: 250px; 
+            aspect-ratio: 1 / 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .gear-spinner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            animation: spin 24s linear infinite; 
+            z-index: 0;
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1)); 
+        }
+        
+        .cookie-shape {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        .gear-container img.profile-pic {
+            width: 74%; 
+            height: 74%;
+            border-radius: 50%;
+            object-fit: cover;
+            position: relative;
+            z-index: 1;
+            border: 4px solid #e9e2d8; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .contact-info {
+            color: #4f2d2c;
+            font-size: 1.2rem;
+            line-height: 1.8;
+        }
+        .contact-info h3 {
+            font-size: 1.8rem;
+            color: #4e513e;
+            margin-bottom: 5px;
+        }
+        .contact-info a {
+            color: #99724b;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        /* --- Backend Section --- */
+        .backend-wrapper {
+            max-width: 800px;
+            margin: 0 auto 20px auto; 
+            padding: 0 20px;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            animation: slideInUp 0.4s ease forwards;
+        }
+
+        .backend-card {
+            padding: 50px 40px;
+            text-align: center;
+        }
+        
+        .backend-trigger-container {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: -30px; /* Pulls it tight against the footer */
+            position: relative;
+            z-index: 10;
+        }
+
+        .btn-backend {
+            background: transparent;
+            border: none;
+            color: #4f2d2c;
+            opacity: 0.25; /* Very faint */
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+            padding: 10px 20px;
+        }
+
+        @keyframes slideInUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { transform: translateY(0); }
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 60px 30px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            margin-top: 50px;
+        }
+        .footer-disclosure {
+            max-width: 1000px;
+            margin: 0 auto; 
+            font-size: 0.85rem;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .header-logo {
+                max-width: 250px; 
+            }
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            .content-wrapper {
+                margin-top: -30px;
+            }
+            .info-card-content {
+                padding: 40px 20px 30px 20px;
+            }
+            .info-card-title {
+                font-size: 2rem;
+            }
+            .detail-item h3 {
+                font-size: 1.1rem;
+                padding: 6px 15px;
+                margin-bottom: 15px;
+            }
+            .detail-item {
+                margin-bottom: 30px;
+            }
+            .proforma-header {
+                padding: 40px 20px 45px 20px;
+            }
+            .btn-download {
+                top: 15px;
+                right: 15px;
+                width: 42px;
+                height: 42px;
+            }
+            .btn-download img {
+                width: 18px;
+                height: 18px;
+            }
+            .proforma-header h2 {
+                font-size: 2rem; 
+            }
+            .buttons-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .btn-primary {
+                width: 100%;
+                max-width: 100%;
+            }
+            .card {
+                width: calc(100% - 6px);
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .backend-card {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.png" alt="Andrew Marth Real Estate" class="header-logo">
+        <h1 class="hero-title" id="hero-title-text">Seller Net Sheet</h1>
+    </header>
+
+    <div class="content-wrapper">
+        
+        <!-- How It Works Card -->
+        <div class="card">
+            <div class="info-card-content">
+                <h2 class="info-card-title">How It Works</h2>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;The Breakdown</h3>
+                    <p>The purpose of this sheet is to show you what you will net after all costs and payoffs. Every offer we receive will be different, and it is important to see exactly how they each affect the bottom line.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Live Updates</h3>
+                    <p>This page can be updated in real time based on any offer we receive. Bookmark the page for easy access later.</p>
+                </div>
+                
+                <div class="detail-item">
+                    <h3>✦&nbsp;&nbsp;Fully Configurable</h3>
+                    <p>The decision is ultimately yours about how you want the sale to be structured. Always give me your feedback about what you want to see adjusted.</p>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- Breakdown & Google Sheet Card -->
+        <div class="card sheet-card">
+            <!-- Header and Buttons -->
+            <div class="proforma-header">
+                
+                <!-- Square PDF Download Button (Direct Download) -->
+                <a href="#" id="pdf-download-btn" class="btn-download" title="Download PDF">
+                    <img src="https://andrewmarth.com/images/download_icon.png" alt="Download">
+                </a>
+
+                <h2>Breakdown</h2>
+                <p>All the details you need</p>
+                <div class="buttons-container">
+                    <a href="https://drive.google.com/drive/folders/1K2LOT39Stzx-93EzZGeJyan6JfnGlvYj?dmr=1&ec=wgc-drive-globalnav-goto" target="_blank" rel="noopener noreferrer" class="btn-primary">
+                        Past Breakdowns
+                        <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch icon">
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Scrolling Marquee Border -->
+            <div class="marquee-banner">
+                <div class="marquee-content">
+                    <span>✦&nbsp;&nbsp;Let me know your feedback&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your goals&nbsp;&nbsp;✦&nbsp;&nbsp;Verify for accuracy&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your feedback&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your goals&nbsp;&nbsp;✦&nbsp;&nbsp;Verify for accuracy&nbsp;&nbsp;</span><!--
+                    --><span>✦&nbsp;&nbsp;Let me know your feedback&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your goals&nbsp;&nbsp;✦&nbsp;&nbsp;Verify for accuracy&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your feedback&nbsp;&nbsp;✦&nbsp;&nbsp;Let me know your goals&nbsp;&nbsp;✦&nbsp;&nbsp;Verify for accuracy&nbsp;&nbsp;</span>
+                </div>
+            </div>
+
+            <!-- Dynamically Proportional Iframe Container -->
+            <div class="iframe-container" id="iframe-container">
+                <div id="iframe-wrapper">
+                    <iframe 
+                        src="https://docs.google.com/spreadsheets/d/1mdXNtFG3ILn4LO5jruIdsYytsYAECzcE94hcOJp_fZk/htmlembed?gid=1674002527&widget=false&headers=false&chrome=false" 
+                        class="sheet-iframe" 
+                        title="Seller Net Sheet"
+                        scrolling="no">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Section Outside of Card -->
+        <div class="profile-section-outside">
+            <div class="gear-container">
+                <div class="gear-spinner">
+                    <img src="https://andrewmarth.com/images/9_sided_cookie.svg" alt="Decorative Shape" class="cookie-shape" onerror="this.onerror=null; this.src='https://andrewmarth.com/images/9_sided_cookie.png';">
+                </div>
+                <img src="https://andrewmarth.com/images/az_pfp_graded.png" alt="Andrew Marth" class="profile-pic">
+            </div>
+            
+            <div class="contact-info">
+                <h3>Andrew Marth</h3>
+                <p>Real Estate Agent</p>
+                <p><a href="tel:4806521330">480.652.1330</a></p>
+                <p><a href="mailto:andrew@andrewmarth.com">andrew@andrewmarth.com</a></p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden Backend Card -->
+    <div class="backend-wrapper" id="backend-card-wrapper">
+        <div class="card backend-card">
+            <h2 style="font-size: 2.5rem; color: #4e513e; margin-bottom: 25px; line-height: 1.2;">Back End</h2>
+            <div class="buttons-container">
+                <a href="https://docs.google.com/spreadsheets/d/1mdXNtFG3ILn4LO5jruIdsYytsYAECzcE94hcOJp_fZk/edit?gid=1674002527#gid=1674002527" target="_blank" rel="noopener noreferrer" class="btn-primary">
+                    Open Google Sheet
+                    <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch icon">
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backend Access Button -->
+    <div class="backend-trigger-container">
+        <button type="button" class="btn-backend" id="backend-btn">Backend</button>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only. Information is compiled from sources deemed reliable but is subject to errors, omissions, changes in price, condition, sale, or withdrawal without notice. This is not intended to solicit property already listed. Photos may be virtually staged or digitally enhanced and may not reflect actual property conditions.
+        </p>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // 1. Dynamic iframe scaling script to guarantee no scrollbars on any device
+        function scaleSheet() {
+            const container1 = document.getElementById('iframe-container');
+            const wrapper1 = document.getElementById('iframe-wrapper');
+            
+            if (container1 && wrapper1) {
+                const containerWidth1 = container1.clientWidth; 
+                
+                // Buffered Dimensions to prevent Google's tiny scrollbars (704x7280 original)
+                const sheetWidth1 = 716; 
+                const sheetHeight1 = 7330; 
+                
+                // Only scale if the card is visible (width > 0)
+                if (containerWidth1 > 0) {
+                    if (containerWidth1 < sheetWidth1) {
+                        const scale1 = (containerWidth1 - 1) / sheetWidth1;
+                        wrapper1.style.transform = `scale(${scale1})`;
+                        wrapper1.style.transformOrigin = 'top left'; 
+                        wrapper1.style.margin = '0'; 
+                        container1.style.height = `${sheetHeight1 * scale1}px`;
+                    } else {
+                        wrapper1.style.transform = 'scale(1)';
+                        wrapper1.style.transformOrigin = 'top center';
+                        wrapper1.style.margin = '0 auto'; 
+                        container1.style.height = `${sheetHeight1}px`;
+                    }
+                }
+            }
+        }
+
+        // 2. Fetch Seller Name from Cell A1 of the Config Sheet
+        async function loadSellerName() {
+            const sheetId = '1mdXNtFG3ILn4LO5jruIdsYytsYAECzcE94hcOJp_fZk';
+            const gid = '767048504';
+            // Limit range to A1 to safely and quickly fetch just the single cell
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}&range=A1:A1`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonString);
+                
+                if (data && data.table && data.table.rows && data.table.rows[0] && data.table.rows[0].c && data.table.rows[0].c[0] && data.table.rows[0].c[0].v) {
+                    const sellerName = data.table.rows[0].c[0].v;
+                    const titleEl = document.getElementById('hero-title-text');
+                    if (titleEl && sellerName) {
+                        titleEl.textContent = `${sellerName} Seller Net Sheet`;
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching seller name:", error);
+                // On failure, it just silently leaves the default "Seller Net Sheet" text intact
+            }
+        }
+
+        // 3. Hidden iFrame PDF Download logic to bypass mobile App intents
+        document.getElementById('pdf-download-btn').addEventListener('click', function(e) {
+            e.preventDefault(); // Stop normal link behavior
+            const exportUrl = "https://docs.google.com/spreadsheets/d/1mdXNtFG3ILn4LO5jruIdsYytsYAECzcE94hcOJp_fZk/export?format=pdf&gid=1674002527";
+            
+            // Create invisible iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = exportUrl;
+            document.body.appendChild(iframe);
+            
+            // Cleanup the invisible iframe after 5 seconds
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 5000);
+        });
+
+        // 4. Backend Code Logic
+        document.getElementById('backend-btn').addEventListener('click', function() {
+            const code = prompt("Enter Access Code:");
+            if (code === "6874") {
+                // Hide the button
+                this.style.display = 'none';
+                
+                // Show the hidden card wrapper
+                const backendWrapper = document.getElementById('backend-card-wrapper');
+                backendWrapper.style.display = 'flex';
+                
+                // Smoothly scroll the user down so they see it
+                backendWrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else if (code !== null) {
+                alert("Incorrect code.");
+            }
+        });
+
+        // Run the math and API fetches when the page loads, and re-calculate if the phone is rotated
+        window.addEventListener('DOMContentLoaded', () => {
+            scaleSheet();
+            loadSellerName();
+        });
+        window.addEventListener('resize', scaleSheet);
+    </script>
+
+</body>
+</html>
