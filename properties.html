@@ -476,7 +476,7 @@
             justify-content: center;
             gap: 8px;
             background-color: #99724b; 
-            color: #ffffff; /* White text */
+            color: #ffffff; /* Reverted to white */
             border: 2px solid #0E2A3B; 
             padding: 15px 35px; 
             font-size: 1.1rem; 
@@ -653,16 +653,13 @@
             .then(csv => {
                 validCodes = csv.split('\n').map(code => code.replace(/"/g, '').trim()).filter(code => code !== '');
                 
-                // Hide loader and show controls
+                // Hide loader and show controls ONLY on success
                 document.getElementById('auth-loader').style.display = 'none';
                 document.getElementById('auth-controls').style.display = 'flex';
             })
             .catch(error => {
                 console.error('Error loading codes:', error);
-                
-                // Show controls even on error to fail gracefully
-                document.getElementById('auth-loader').style.display = 'none';
-                document.getElementById('auth-controls').style.display = 'flex';
+                // Spinner will spin forever on error, controls remain hidden.
             });
 
         const exploreBtn = document.getElementById('explore-btn');
