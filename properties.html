@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Investment Properties | Andrew Marth Real Estate</title>
     
-    <!-- Google Fonts Import (Matches your brand style) -->
+    <!-- Google Fonts Import -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
@@ -18,20 +18,48 @@
             padding: 0;
         }
 
-        /* Lock the body and html to exact screen dimensions to prevent double-scrolling */
+        /* Default state: locked for the map */
         html, body {
             width: 100%;
             height: 100%;
             overflow: hidden; 
-            background-color: #e9e2d8; /* Brand background color while the map loads */
+            background-color: #e9e2d8;
             font-family: 'Familjen Grotesk', sans-serif;
+            color: #4f2d2c;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        h1, h2 {
+        /* List Mode State: unlocks scrolling */
+        body.list-mode {
+            overflow-y: auto;
+            overflow-x: hidden;
+            height: auto;
+            min-height: 100vh;
+        }
+
+        h1, h2, h3 {
             font-family: 'Bricolage Grotesque', sans-serif;
         }
 
-        /* --- Floating Header Card --- */
+        /* --- Map View Wrapper --- */
+        #map-view {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* --- Force Map to Background --- */
+        #atlist-embed {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            z-index: 1; /* Lowest level */
+        }
+
+        /* --- Floating Header Card (Map View) --- */
         .floating-card {
             position: absolute;
             top: 25px;
@@ -69,15 +97,197 @@
             margin: 0;
         }
 
-        /* --- Force Map to Background --- */
-        #atlist-embed {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            z-index: 1; /* Lowest level */
+        /* --- View Toggle Button --- */
+        .view-toggle-btn {
+            position: fixed; /* Fixed so it stays put */
+            top: 25px;
+            right: 25px;
+            z-index: 100;
+            
+            background-color: #ffffff;
+            color: #4e513e;
+            border: 2px solid #0E2A3B;
+            border-radius: 12px;
+            box-shadow: 4px 4px 0px #0E2A3B;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            font-family: inherit;
+            
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+        
+        .view-toggle-btn:hover {
+            opacity: 0.85;
+        }
+
+        .view-toggle-btn img {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
+        }
+
+        /* --- List View Wrapper --- */
+        #list-view {
+            display: none; /* Hidden by default */
+            width: 100%;
+            flex-direction: column;
+        }
+        
+        body.list-mode #map-view { display: none; }
+        body.list-mode #list-view { display: flex; }
+
+        /* --- List View Hero Banner --- */
+        .list-header {
+            background: linear-gradient(rgba(78, 81, 62, 0.75), rgba(78, 81, 62, 0.75)), url('https://andrewmarth.com/images/background.jpeg');
+            background-size: cover;
+            background-position: center;
+            padding: 100px 20px 80px 20px; 
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 15px; 
+        }
+
+        .list-header img {
+            width: 100%;
+            max-width: 380px; 
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
+        }
+
+        .list-header h1 {
+            color: #e9e2d8;
+            font-size: 3.5rem;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+            padding: 0 20px 20px 20px;
+        }
+
+        /* --- List Card Styling --- */
+        .list-card-wrapper {
+            max-width: 800px;
+            width: 100%;
+            margin: -40px auto 60px auto; 
+            padding: 0 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .list-card {
+            background-color: #ffffff;
+            border-radius: 20px;
+            border: 2px solid #0E2A3B;
+            box-shadow: 6px 6px 0px #0E2A3B;
+            width: 100%;
+            padding: 10px 40px 30px 40px;
+            overflow: hidden;
+        }
+
+        /* --- List Items --- */
+        .list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 30px 0;
+            border-bottom: 1px solid #e0d5c9;
+            gap: 20px;
+        }
+        
+        .list-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .item-info {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .item-info .address {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #4e513e;
+            margin-bottom: 3px;
+            line-height: 1.2;
+        }
+
+        .item-info .subtext {
+            font-size: 1rem;
+            color: #4f2d2c;
+            opacity: 0.85;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .new-badge {
+            color: #d9534f;
+            font-weight: bold;
+            margin-right: 5px;
+            text-transform: uppercase;
+        }
+
+        .price-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: #4e513e; 
+            color: #e9e2d8; 
+            font-size: 1.15rem;
+            font-weight: bold;
+            padding: 6px 20px;
+            border-radius: 999px; 
+            line-height: 1;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-launch { 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: #99724b; 
+            color: #ffffff; 
+            border: 2px solid #0E2A3B; 
+            padding: 12px 28px; 
+            font-size: 1.05rem; 
+            font-weight: bold; 
+            border-radius: 999px; 
+            cursor: pointer; 
+            text-decoration: none;
+            flex-shrink: 0;
+        }
+
+        .btn-launch img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+            filter: brightness(0) invert(1);
+        }
+
+        .loading-text {
+            text-align: center;
+            padding: 40px;
+            color: #99724b;
+            font-weight: bold;
+            font-size: 1.2rem;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
         }
 
         /* --- Fullscreen Entry Overlay --- */
@@ -87,10 +297,10 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background-color: rgba(233, 226, 216, 0.4); /* Slight tint of your brand background */
-            backdrop-filter: blur(12px); /* The heavy blur effect */
+            background-color: rgba(233, 226, 216, 0.4); 
+            backdrop-filter: blur(12px); 
             -webkit-backdrop-filter: blur(12px);
-            z-index: 500; /* Sits above EVERYTHING, including the logo card */
+            z-index: 500; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -98,7 +308,6 @@
             transition: opacity 0.5s ease, visibility 0.5s ease;
         }
 
-        /* --- Entry Modal Card --- */
         .entry-card {
             background-color: #ffffff;
             border-radius: 20px;
@@ -137,7 +346,6 @@
             opacity: 0.9;
         }
 
-        /* --- Input Field Styling --- */
         .input-container {
             display: flex;
             flex-direction: column;
@@ -178,11 +386,10 @@
             color: #d9534f;
             font-size: 0.95rem;
             font-weight: bold;
-            display: none; /* Hidden by default */
+            display: none; 
             margin-bottom: 5px;
         }
 
-        /* --- Button Styling --- */
         .btn-primary { 
             display: inline-flex;
             align-items: center;
@@ -196,24 +403,9 @@
             font-weight: bold; 
             border-radius: 999px; 
             cursor: pointer; 
-            transition: all 0.3s ease; 
             text-decoration: none;
-            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2); 
             width: 100%;
             max-width: 320px;
-        }
-        .btn-primary:hover { 
-            background-color: #9a5d40; 
-            transform: translateY(-5px); 
-            box-shadow: 0 8px 15px rgba(0,0,0,0.1); 
-        }
-        .btn-primary::after {
-            content: '\2192'; 
-            font-size: 1.2em;
-            transition: transform 0.3s ease;
-        }
-        .btn-primary:hover::after {
-            transform: translateX(5px); 
         }
 
         /* --- Mobile Optimization --- */
@@ -231,7 +423,30 @@
             .floating-card h1 {
                 font-size: 1.15rem; 
             }
-            
+            .view-toggle-btn {
+                top: auto;
+                bottom: 25px;
+                right: auto;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            .list-header h1 {
+                font-size: 2.5rem;
+            }
+            .list-card-wrapper {
+                margin-top: -30px;
+            }
+            .list-card {
+                padding: 10px 20px 30px 20px;
+            }
+            .list-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .btn-launch {
+                width: 100%;
+            }
             .entry-card {
                 padding: 40px 20px;
                 width: calc(100% - 10px);
@@ -239,35 +454,61 @@
             .entry-card h2 {
                 font-size: 1.8rem;
             }
-            .entry-card .body-text {
-                font-size: 1.05rem;
-            }
-            .btn-primary, .code-input {
-                max-width: 100%;
-            }
         }
     </style>
 </head>
 <body>
 
-    <!-- Empty Map Embed (Loaded securely via JavaScript upon validation) -->
-    <iframe 
-        data-src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
-        allow="geolocation 'self' https://my.atlist.com" 
-        loading="lazy" 
-        frameborder="0" 
-        scrolling="no" 
-        allowfullscreen 
-        id="atlist-embed">
-    </iframe>
+    <!-- ================= MAP VIEW (Default) ================= -->
+    <div id="map-view">
+        <!-- Empty Map Embed (Loaded securely via JavaScript upon validation) -->
+        <iframe 
+            data-src="https://my.atlist.com/map/a61c8078-3e9a-45b2-b53a-98d21ebb427c?share=true" 
+            allow="geolocation 'self' https://my.atlist.com" 
+            loading="lazy" 
+            frameborder="0" 
+            scrolling="no" 
+            allowfullscreen 
+            id="atlist-embed">
+        </iframe>
 
-    <!-- Floating Branding Card -->
-    <div class="floating-card">
-        <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
-        <h1>Investment Properties</h1>
+        <!-- Floating Branding Card -->
+        <div class="floating-card">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo.png" alt="Andrew Marth Real Estate">
+            <h1>Investment Properties</h1>
+        </div>
+
+        <!-- Toggle to List Button -->
+        <button class="view-toggle-btn" onclick="toggleView()">
+            <img src="https://andrewmarth.com/images/list_icon.png" alt="List">
+            List
+        </button>
     </div>
 
-    <!-- Fullscreen Entry Overlay (Sits on top of everything) -->
+
+    <!-- ================= LIST VIEW (Hidden initially) ================= -->
+    <div id="list-view">
+        <!-- Toggle to Map Button (Fixed) -->
+        <button class="view-toggle-btn" onclick="toggleView()" style="z-index: 105;">
+            Map View
+        </button>
+
+        <header class="list-header">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.png" alt="Andrew Marth Real Estate">
+            <h1>Investment Properties</h1>
+        </header>
+
+        <main class="list-card-wrapper">
+            <div class="list-card">
+                <div id="properties-container">
+                    <div class="loading-text">Loading Properties...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <!-- ================= FULLSCREEN ENTRY OVERLAY ================= -->
     <div class="entry-overlay" id="entry-overlay">
         <div class="entry-card" id="entry-card">
             <h2>Investment Property Portal</h2>
@@ -283,17 +524,16 @@
         </div>
     </div>
 
-    <!-- JavaScript to handle Google Sheet fetching and validation -->
+
+    <!-- ================= JAVASCRIPT ================= -->
     <script>
-        // Use Google's standard CSV export endpoint to bypass API Keys
-        const sheetUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:csv&gid=1766991810';
+        /* --- Authentication Logic --- */
+        const authUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:csv&gid=1766991810';
         let validCodes = [];
 
-        // Fetch the codes as soon as the page loads
-        fetch(sheetUrl)
+        fetch(authUrl)
             .then(response => response.text())
             .then(csv => {
-                // Split the CSV by row, remove any accidental quotes or spaces
                 validCodes = csv.split('\n').map(code => code.replace(/"/g, '').trim()).filter(code => code !== '');
             })
             .catch(error => console.error('Error loading codes:', error));
@@ -303,12 +543,10 @@
         const errorMessage = document.getElementById('error-message');
         const mapIframe = document.getElementById('atlist-embed');
 
-        // Function to check the code
         function validateCode() {
             const enteredCode = codeInput.value.trim();
 
             if (validCodes.includes(enteredCode)) {
-                // SUCCESS: Proceed into the portal
                 codeInput.classList.remove('error');
                 errorMessage.style.display = 'none';
 
@@ -318,43 +556,106 @@
                 const overlay = document.getElementById('entry-overlay');
                 const card = document.getElementById('entry-card');
                 
-                // Slide the card down slightly as it fades out for a premium feel
                 card.style.transform = 'translateY(20px)';
                 overlay.style.opacity = '0';
                 overlay.style.visibility = 'hidden';
                 
-                // Remove it completely from the DOM after the transition so it doesn't block map clicks
                 setTimeout(() => {
                     overlay.style.display = 'none';
                 }, 500);
 
             } else {
-                // FAIL: Show error state
                 codeInput.classList.add('error');
                 errorMessage.style.display = 'block';
-                // Add a small shake effect
                 codeInput.style.transform = 'translateX(-5px)';
                 setTimeout(() => codeInput.style.transform = 'translateX(5px)', 100);
                 setTimeout(() => codeInput.style.transform = 'translateX(0)', 200);
             }
         }
 
-        // Trigger on button click
         exploreBtn.addEventListener('click', validateCode);
 
-        // Also trigger if the user presses "Enter" on their keyboard while typing
         codeInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                validateCode();
-            }
+            if (e.key === 'Enter') { validateCode(); }
         });
         
-        // Clear error state as soon as they start typing again
         codeInput.addEventListener('input', function() {
             codeInput.classList.remove('error');
             errorMessage.style.display = 'none';
         });
-    </script>
 
+        /* --- View Toggling & Data Fetching --- */
+        let listDataLoaded = false;
+
+        function toggleView() {
+            const body = document.body;
+            
+            if (body.classList.contains('list-mode')) {
+                // Switch back to Map
+                body.classList.remove('list-mode');
+                window.scrollTo(0, 0); // Reset scroll position
+            } else {
+                // Switch to List
+                body.classList.add('list-mode');
+                if (!listDataLoaded) {
+                    fetchPropertyList();
+                    listDataLoaded = true;
+                }
+            }
+        }
+
+        async function fetchPropertyList() {
+            const listUrl = 'https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/gviz/tq?tqx=out:json&gid=1502147014';
+            const container = document.getElementById('properties-container');
+            
+            try {
+                const response = await fetch(listUrl);
+                const text = await response.text();
+                
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                const data = JSON.parse(jsonString);
+                
+                container.innerHTML = '';
+                
+                data.table.rows.forEach((row, index) => {
+                    // Skip header row if it contains the word 'Address'
+                    if (index === 0 && row.c[1] && row.c[1].v && row.c[1].v.toLowerCase() === 'address') return;
+                    if (!row || !row.c || !row.c[1] || !row.c[1].v) return; // Ensure Address exists
+                    
+                    const dateAdded = row.c[0] ? (row.c[0].f || row.c[0].v) : '';
+                    const address = row.c[1] ? row.c[1].v : '';
+                    const price = row.c[2] ? (row.c[2].f || row.c[2].v) : '';
+                    const link = row.c[3] ? row.c[3].v : '#';
+                    const isNew = row.c[4] && row.c[4].v ? row.c[4].v : '';
+
+                    // Construct the "New" badge only if data exists in Col E
+                    const newBadgeHtml = isNew ? `<span class="new-badge">${isNew} -</span> ` : '';
+
+                    const itemHtml = `
+                        <div class="list-item">
+                            <div class="item-info">
+                                <div class="address">${address}</div>
+                                <p class="subtext">${newBadgeHtml}${dateAdded}</p>
+                                <div class="price-pill">✦&nbsp;&nbsp;${price}</div>
+                            </div>
+                            <a href="${link}" target="_blank" rel="noopener noreferrer external" class="btn-launch">
+                                View
+                                <img src="https://andrewmarth.com/images/new_tab_icon.png" alt="Launch">
+                            </a>
+                        </div>
+                    `;
+                    container.innerHTML += itemHtml;
+                });
+                
+                if (container.innerHTML === '') {
+                    container.innerHTML = '<div class="loading-text" style="color: #4f2d2c; animation: none;">No properties listed.</div>';
+                }
+                
+            } catch (error) {
+                console.error("Error fetching properties:", error);
+                container.innerHTML = '<div class="loading-text" style="color: #d9534f; animation: none;">Failed to load properties.</div>';
+            }
+        }
+    </script>
 </body>
 </html>
