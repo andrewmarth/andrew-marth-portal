@@ -29,11 +29,11 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* List Mode State: unlocks scrolling */
-        body.list-mode {
-            overflow-y: auto;
-            overflow-x: hidden;
-            height: auto;
+        /* List Mode State: unlocks scrolling on BOTH HTML and Body */
+        html.list-mode, body.list-mode {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            height: auto !important;
             min-height: 100vh;
         }
 
@@ -589,14 +589,18 @@
 
         function toggleView() {
             const body = document.body;
+            const html = document.documentElement; // Must target the HTML element as well
             
             if (body.classList.contains('list-mode')) {
-                // Switch back to Map
+                // Switch back to Map (Locks Scroll)
                 body.classList.remove('list-mode');
+                html.classList.remove('list-mode');
                 window.scrollTo(0, 0); // Reset scroll position
             } else {
-                // Switch to List
+                // Switch to List (Unlocks Scroll)
                 body.classList.add('list-mode');
+                html.classList.add('list-mode');
+                
                 if (!listDataLoaded) {
                     fetchPropertyList();
                     listDataLoaded = true;
