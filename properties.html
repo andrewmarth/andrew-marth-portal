@@ -566,7 +566,7 @@
         
         <!-- Subtle trigger to access the Backend View -->
         <div class="backend-trigger-container">
-            <button type="button" class="btn-backend" onclick="showBackendView()">Backend View</button>
+            <button type="button" class="btn-backend" onclick="promptBackendView()">Backend View</button>
         </div>
     </div>
 
@@ -694,6 +694,15 @@
                 listDataLoaded = true;
             }
             window.scrollTo(0, 0);
+        }
+
+        function promptBackendView() {
+            const code = prompt("Enter Access Code:");
+            if (code === "6874") {
+                showBackendView();
+            } else if (code !== null) {
+                alert("Incorrect code.");
+            }
         }
 
         function showBackendView() {
