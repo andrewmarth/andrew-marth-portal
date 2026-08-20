@@ -304,15 +304,15 @@
             overflow: hidden;
         }
 
-        /* Specific dimensions for each sheet */
+        /* Specific dimensions for each sheet with anti-scrollbar buffers */
         #wholesaler-sheet-1 {
             width: 685px;
             height: 1795px;
         }
 
         #wholesaler-sheet-2 {
-            width: 600px;
-            height: 1785px;
+            width: 620px; /* Added 20px width buffer */
+            height: 1850px; /* Added 65px height buffer */
         }
 
         /* --- Button Styling --- */
@@ -726,19 +726,23 @@
             const iframe1 = document.getElementById('wholesaler-sheet-1');
             if (wrapper1 && iframe1) {
                 const width1 = wrapper1.clientWidth;
-                const scale1 = width1 / 685; // Native width of sheet 1
+                const sheetWidth1 = 685;
+                const sheetHeight1 = 1795;
+                const scale1 = width1 / sheetWidth1; 
                 iframe1.style.transform = `scale(${scale1})`;
-                wrapper1.style.height = `${1795 * scale1}px`; // Native height of sheet 1
+                wrapper1.style.height = `${sheetHeight1 * scale1}px`; 
             }
 
-            // Scale Second Sheet
+            // Scale Second Sheet (With added dimensions buffer to prevent internal scrollbars)
             const wrapper2 = document.getElementById('wholesaler-wrapper-2');
             const iframe2 = document.getElementById('wholesaler-sheet-2');
             if (wrapper2 && iframe2) {
                 const width2 = wrapper2.clientWidth;
-                const scale2 = width2 / 600; // Native width of sheet 2
+                const sheetWidth2 = 620; // Buffered Native Width
+                const sheetHeight2 = 1850; // Buffered Native Height
+                const scale2 = width2 / sheetWidth2; 
                 iframe2.style.transform = `scale(${scale2})`;
-                wrapper2.style.height = `${1785 * scale2}px`; // Native height of sheet 2
+                wrapper2.style.height = `${sheetHeight2 * scale2}px`; 
             }
         }
 
