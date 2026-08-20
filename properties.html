@@ -673,6 +673,14 @@
             if (validCodes.includes(enteredCode)) {
                 codeInput.classList.remove('error');
                 errorMessage.style.display = 'none';
+                
+                // ASYNC LOGGING: Send the successful code to the Google Apps Script webhook
+                const logUrl = 'https://script.google.com/macros/s/AKfycbxvu_m9DupklXGH_FlWb9-Y2-kfVnGirE1lyIC09mgAvX94j4zvW0g0o_RLTt6jZqYg/exec';
+                fetch(logUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'code': enteredCode })
+                }).catch(err => console.error("Logging error:", err)); // Silently fail if logging gets blocked so user isn't stuck
 
                 // SECURE LOAD: Inject the map link into the iframe only now
                 mapIframe.src = mapIframe.getAttribute('data-src');
