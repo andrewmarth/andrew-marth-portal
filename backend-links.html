@@ -304,15 +304,15 @@
             overflow: hidden;
         }
 
-        /* Specific dimensions for each sheet with anti-scrollbar buffers */
+        /* Specific dimensions for each sheet with massive anti-scrollbar buffers */
         #wholesaler-sheet-1 {
             width: 685px;
             height: 1795px;
         }
 
         #wholesaler-sheet-2 {
-            width: 640px; /* Increased buffer */
-            height: 1900px; /* Increased buffer */
+            width: 750px; /* Massively expanded to swallow horizontal scrollbar */
+            height: 2100px; /* Massively expanded to swallow vertical scrollbar */
         }
 
         /* --- Button Styling --- */
@@ -573,9 +573,9 @@
                     <iframe id="wholesaler-sheet-1" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
                 </div>
 
-                <!-- Second Google Sheet -->
+                <!-- Second Google Sheet (added headers=false) -->
                 <div id="wholesaler-wrapper-2" class="wholesaler-wrapper">
-                    <iframe id="wholesaler-sheet-2" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=1999578495&widget=false&chrome=false"></iframe>
+                    <iframe id="wholesaler-sheet-2" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=1999578495&widget=false&chrome=false&headers=false"></iframe>
                 </div>
 
             </div>
@@ -738,8 +738,8 @@
             const iframe2 = document.getElementById('wholesaler-sheet-2');
             if (wrapper2 && iframe2) {
                 const width2 = wrapper2.clientWidth;
-                const sheetWidth2 = 640; // Increased Buffered Native Width
-                const sheetHeight2 = 1900; // Increased Buffered Native Height
+                const sheetWidth2 = 750; // Massively Increased Buffer
+                const sheetHeight2 = 2100; // Massively Increased Buffer
                 const scale2 = width2 / sheetWidth2; 
                 iframe2.style.transform = `scale(${scale2})`;
                 wrapper2.style.height = `${sheetHeight2 * scale2}px`; 
