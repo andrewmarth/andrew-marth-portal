@@ -292,14 +292,27 @@
             background: #ffffff;
             margin-top: 15px;
         }
+
+        .wholesaler-wrapper + .wholesaler-wrapper {
+            margin-top: 50px; /* Space between the two sheets */
+        }
         
         .wholesaler-sheet {
-            width: 685px;
-            height: 1795px;
             border: none;
             transform-origin: top left;
             display: block;
             overflow: hidden;
+        }
+
+        /* Specific dimensions for each sheet */
+        #wholesaler-sheet-1 {
+            width: 685px;
+            height: 1795px;
+        }
+
+        #wholesaler-sheet-2 {
+            width: 600px;
+            height: 1785px;
         }
 
         /* --- Button Styling --- */
@@ -545,7 +558,7 @@
             </div>
         </div>
         
-        <!-- 5. Wholesalers Embedded Sheet Card -->
+        <!-- 5. Wholesalers Embedded Sheets Card -->
         <div class="main-card">
             <div class="card-header has-bg">
                 <div class="corner-mask corner-mask-left"></div>
@@ -554,9 +567,17 @@
                 <h2>Wholesalers</h2>
             </div>
             <div class="card-body">
-                <div id="wholesaler-wrapper" class="wholesaler-wrapper">
-                    <iframe id="wholesaler-sheet" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
+                
+                <!-- First Google Sheet -->
+                <div id="wholesaler-wrapper-1" class="wholesaler-wrapper">
+                    <iframe id="wholesaler-sheet-1" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=403841140&widget=false&chrome=false"></iframe>
                 </div>
+
+                <!-- Second Google Sheet -->
+                <div id="wholesaler-wrapper-2" class="wholesaler-wrapper">
+                    <iframe id="wholesaler-sheet-2" class="wholesaler-sheet" frameborder="0" scrolling="no" src="https://docs.google.com/spreadsheets/d/1kP49fvsl3K8-1Cn6DnBtzVBIt-moE9MEsO0bTWefWMI/htmlembed?gid=1999578495&widget=false&chrome=false"></iframe>
+                </div>
+
             </div>
         </div>
     </main>
@@ -677,8 +698,6 @@
                         itemDiv.appendChild(btn);
 
                     } else {
-                        // All links now use standard _blank behavior. 
-                        // Because we fixed the Manifest Scope, Android will handle the rest natively!
                         const btn = document.createElement('a');
                         btn.className = 'btn';
                         btn.href = linkOrCode;
@@ -701,18 +720,26 @@
             }
         }
         
-        function scaleWholesalerSheet() {
-            const wrapper = document.getElementById('wholesaler-wrapper');
-            const iframe = document.getElementById('wholesaler-sheet');
-            if (!wrapper || !iframe) return;
-            
-            const wrapperWidth = wrapper.clientWidth;
-            const nativeWidth = 685;
-            const nativeHeight = 1795;
-            const scale = wrapperWidth / nativeWidth;
-            
-            iframe.style.transform = `scale(${scale})`;
-            wrapper.style.height = `${nativeHeight * scale}px`;
+        function scaleWholesalerSheets() {
+            // Scale First Sheet
+            const wrapper1 = document.getElementById('wholesaler-wrapper-1');
+            const iframe1 = document.getElementById('wholesaler-sheet-1');
+            if (wrapper1 && iframe1) {
+                const width1 = wrapper1.clientWidth;
+                const scale1 = width1 / 685; // Native width of sheet 1
+                iframe1.style.transform = `scale(${scale1})`;
+                wrapper1.style.height = `${1795 * scale1}px`; // Native height of sheet 1
+            }
+
+            // Scale Second Sheet
+            const wrapper2 = document.getElementById('wholesaler-wrapper-2');
+            const iframe2 = document.getElementById('wholesaler-sheet-2');
+            if (wrapper2 && iframe2) {
+                const width2 = wrapper2.clientWidth;
+                const scale2 = width2 / 600; // Native width of sheet 2
+                iframe2.style.transform = `scale(${scale2})`;
+                wrapper2.style.height = `${1785 * scale2}px`; // Native height of sheet 2
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -721,7 +748,7 @@
             loadGoogleSheetData('1113112382', 'personal-container', false);
             loadGoogleSheetData('0', 'control-board-container', true);
             
-            scaleWholesalerSheet();
+            scaleWholesalerSheets();
             
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').then(() => {
@@ -732,7 +759,7 @@
             }
         });
         
-        window.addEventListener('resize', scaleWholesalerSheet);
+        window.addEventListener('resize', scaleWholesalerSheets);
     </script>
 </body>
 </html>
