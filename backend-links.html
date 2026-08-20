@@ -311,8 +311,8 @@
         }
 
         #wholesaler-sheet-2 {
-            width: 620px; /* Added 20px width buffer */
-            height: 1850px; /* Added 65px height buffer */
+            width: 640px; /* Increased buffer */
+            height: 1900px; /* Increased buffer */
         }
 
         /* --- Button Styling --- */
@@ -733,13 +733,13 @@
                 wrapper1.style.height = `${sheetHeight1 * scale1}px`; 
             }
 
-            // Scale Second Sheet (With added dimensions buffer to prevent internal scrollbars)
+            // Scale Second Sheet (With extra dimension buffers to strictly prevent internal scrollbars)
             const wrapper2 = document.getElementById('wholesaler-wrapper-2');
             const iframe2 = document.getElementById('wholesaler-sheet-2');
             if (wrapper2 && iframe2) {
                 const width2 = wrapper2.clientWidth;
-                const sheetWidth2 = 620; // Buffered Native Width
-                const sheetHeight2 = 1850; // Buffered Native Height
+                const sheetWidth2 = 640; // Increased Buffered Native Width
+                const sheetHeight2 = 1900; // Increased Buffered Native Height
                 const scale2 = width2 / sheetWidth2; 
                 iframe2.style.transform = `scale(${scale2})`;
                 wrapper2.style.height = `${sheetHeight2 * scale2}px`; 
