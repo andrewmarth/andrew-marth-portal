@@ -10,6 +10,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
     
+    <!-- JSZip Library for Unzipping files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
     <style>
         /* --- General Reset & Styling --- */
         * {
@@ -439,6 +442,71 @@
             opacity: 0.8;
         }
 
+        /* --- Zip Upload Section --- */
+        .zip-upload-section {
+            padding: 40px;
+            text-align: center;
+            background-color: #fcfbfa;
+            border-top: 2px solid rgba(14, 42, 59, 0.1);
+            border-radius: 0 0 20px 20px;
+        }
+        .zip-upload-section h3 {
+            font-size: 1.8rem;
+            color: #4e513e;
+            margin-bottom: 15px;
+        }
+        .zip-upload-section p {
+            font-size: 1rem;
+            color: #4f2d2c;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+        
+        .upload-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        input[type="file"] {
+            border: 2px dashed #99724b;
+            padding: 20px;
+            border-radius: 12px;
+            background-color: #ffffff;
+            width: 100%;
+            color: #4f2d2c;
+            cursor: pointer;
+        }
+
+        /* Progress Bar Styling */
+        .progress-container {
+            width: 100%;
+            display: none; /* Hidden until upload starts */
+            margin-top: 15px;
+        }
+        .progress-track {
+            width: 100%;
+            height: 12px;
+            background-color: #e0d5c9;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #99724b;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        .progress-text {
+            font-size: 0.95rem;
+            color: #4f2d2c;
+            font-weight: bold;
+        }
+
         @keyframes slideInUp {
             0% { opacity: 0; transform: translateY(20px); }
             100% { opacity: 1; transform: translateY(0); }
@@ -472,7 +540,7 @@
                 margin-top: -30px;
             }
             .details-card, .backend-wrapper .card {
-                padding: 40px 20px;
+                padding: 40px 20px 0 20px; /* Bottom padding handled by child divs */
             }
             .property-title {
                 font-size: 2rem;
@@ -515,6 +583,9 @@
                 width: calc(100% - 6px);
                 margin-left: auto;
                 margin-right: auto;
+            }
+            .zip-upload-section {
+                padding: 30px 20px;
             }
         }
     </style>
@@ -657,6 +728,26 @@
                     </iframe>
                 </div>
             </div>
+            
+            <!-- ZIP File Uploader Zone -->
+            <div class="zip-upload-section">
+                <h3>Upload Pictures</h3>
+                <p>Upload a .zip file to automatically extract and push the photos directly to the Google Drive folder.</p>
+                
+                <div class="upload-controls">
+                    <input type="file" id="zip-file-input" accept=".zip" />
+                    <button type="button" class="btn-primary" id="btn-upload-zip" style="width: 100%; max-width: 100%;">Upload & Extract</button>
+                    
+                    <!-- Progress Bar (Hidden initially) -->
+                    <div class="progress-container" id="upload-progress-container">
+                        <div class="progress-track">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                        <div class="progress-text" id="upload-progress-text">Preparing upload...</div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -674,7 +765,7 @@
 
     <!-- Scripts -->
     <script>
-        // 1. Dynamic iframe scaling script to guarantee no scrollbars on any device
+        // 1. Dynamic iframe scaling script
         function scaleSheet() {
             // First Sheet (Proforma)
             const container1 = document.getElementById('iframe-container');
@@ -682,12 +773,9 @@
             
             if (container1 && wrapper1) {
                 const containerWidth1 = container1.clientWidth; 
-                
-                // Buffered dimensions to prevent Google from spawning internal scrollbars
                 const sheetWidth1 = 720; 
                 const sheetHeight1 = 20972; 
                 
-                // Only scale if the card is visible (width > 0)
                 if (containerWidth1 > 0) {
                     if (containerWidth1 < sheetWidth1) {
                         const scale1 = (containerWidth1 - 1) / sheetWidth1;
@@ -710,12 +798,9 @@
             
             if (container2 && wrapper2) {
                 const containerWidth2 = container2.clientWidth; 
-                
-                // Buffered dimensions (700x560 + safety margins)
                 const sheetWidth2 = 726; 
                 const sheetHeight2 = 600; 
                 
-                // Only scale if the backend card is currently unlocked and visible (width > 0)
                 if (containerWidth2 > 0) {
                     if (containerWidth2 < sheetWidth2) {
                         const scale2 = (containerWidth2 - 1) / sheetWidth2;
@@ -733,30 +818,143 @@
             }
         }
 
-        // 2. Backend Code Logic
+        // 2. Backend View Unlock Logic
         document.getElementById('backend-btn').addEventListener('click', function() {
             const code = prompt("Enter Access Code:");
             if (code === "6874") {
-                // Hide the button
                 this.style.display = 'none';
-                
-                // Show the hidden card wrapper
                 const backendWrapper = document.getElementById('backend-card-wrapper');
                 backendWrapper.style.display = 'flex';
-                
-                // Instantly recalculate dimensions now that the card is physically rendered!
                 scaleSheet();
-                
-                // Smoothly scroll the user down so they see it
                 backendWrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
             } else if (code !== null) {
                 alert("Incorrect code.");
             }
         });
 
-        // Run the math when the page loads, and re-calculate if the phone is rotated
+        // Run math when page loads and resizes
         window.addEventListener('DOMContentLoaded', scaleSheet);
         window.addEventListener('resize', scaleSheet);
+
+        // 3. Zip Extraction & Google Drive Upload Logic
+        document.getElementById('btn-upload-zip').addEventListener('click', async function() {
+            const fileInput = document.getElementById('zip-file-input');
+            const file = fileInput.files[0];
+            
+            if (!file || !file.name.toLowerCase().endsWith('.zip')) {
+                alert("Please select a valid .zip file.");
+                return;
+            }
+
+            // UI State Change: Hide button, show progress
+            this.style.display = 'none';
+            fileInput.style.display = 'none';
+            const progressContainer = document.getElementById('upload-progress-container');
+            const progressFill = document.getElementById('upload-progress-fill');
+            const progressText = document.getElementById('upload-progress-text');
+            progressContainer.style.display = 'block';
+            
+            // Replaced with actual Google Apps Script Web App URL
+            const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyCBBKd-G1kHNxuJUzW4tlljs9WKcpgRRmFqw8ziwORVs1jVI7ztVTm2qUWCE5vssg7/exec';
+            
+            // The Target Google Drive Folder ID for Indianola
+            const TARGET_FOLDER_ID = '1ianClscpwvvSxjKbMdMvv-2yB4MRcMK4';
+
+            try {
+                // 1. Crack open the Zip in RAM
+                progressText.textContent = "Unzipping file locally...";
+                const zip = await JSZip.loadAsync(file);
+                const filesToUpload = [];
+
+                // 2. Filter out junk/hidden files (like __MACOSX) and folders
+                zip.forEach((relativePath, zipEntry) => {
+                    if (!zipEntry.dir && !relativePath.includes('__MACOSX') && !relativePath.startsWith('.')) {
+                        filesToUpload.push(zipEntry);
+                    }
+                });
+
+                const totalFiles = filesToUpload.length;
+                if (totalFiles === 0) {
+                    alert("No valid files found inside the zip.");
+                    location.reload(); 
+                    return;
+                }
+
+                let uploadedCount = 0;
+                let skippedFiles = [];
+                
+                // Google's 50MB payload limit (Base64 adds ~33% bloat). 
+                // Setting a safe strict limit of ~45,000,000 characters (~33.7MB uncompressed limit)
+                const MAX_BASE64_LENGTH = 45000000;
+
+                // 3. Loop through and upload one by one
+                for (const zipEntry of filesToUpload) {
+                    // Extract file to base64 format for safe transit
+                    const base64Data = await zipEntry.async("base64");
+                    
+                    // --- THE SAFEGUARD: Size Check ---
+                    if (base64Data.length > MAX_BASE64_LENGTH) {
+                        console.warn("Skipping oversized file: " + zipEntry.name);
+                        skippedFiles.push(zipEntry.name);
+                        
+                        // Update UI progress for skipped file
+                        const percent = Math.round(((uploadedCount + skippedFiles.length) / totalFiles) * 100);
+                        progressFill.style.width = percent + '%';
+                        progressText.textContent = `Processed ${uploadedCount + skippedFiles.length} of ${totalFiles} files...`;
+                        continue; // Skip the upload and instantly move to the next file
+                    }
+
+                    // Basic check to tell Google Drive what kind of file it is
+                    let mimeType = 'application/octet-stream';
+                    if (zipEntry.name.match(/\.jpe?g$/i)) mimeType = 'image/jpeg';
+                    else if (zipEntry.name.match(/\.png$/i)) mimeType = 'image/png';
+                    else if (zipEntry.name.match(/\.gif$/i)) mimeType = 'image/gif';
+
+                    const payload = {
+                        folderId: TARGET_FOLDER_ID,
+                        fileName: zipEntry.name.split('/').pop(), // Removes folder paths if inside zip
+                        mimeType: mimeType,
+                        base64: base64Data
+                    };
+
+                    // Send to Google Apps Script
+                    const response = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' }, // Bypass complex CORS checks
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        console.warn("Upload failed for: " + zipEntry.name);
+                        skippedFiles.push(zipEntry.name);
+                    } else {
+                        uploadedCount++;
+                    }
+
+                    // Update UI
+                    const percent = Math.round(((uploadedCount + skippedFiles.length) / totalFiles) * 100);
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = `Processed ${uploadedCount + skippedFiles.length} of ${totalFiles} files...`;
+                }
+
+                // Complete UI Update
+                if (skippedFiles.length > 0) {
+                    progressText.textContent = `Upload Complete! ${skippedFiles.length} file(s) skipped (oversized/error).`;
+                    progressFill.style.backgroundColor = "#c09050"; // Warning Gold
+                } else {
+                    progressText.textContent = "Upload Complete!";
+                    progressFill.style.backgroundColor = "#2e7d32"; // Success Green
+                }
+                
+            } catch (error) {
+                console.error("Upload process failed:", error);
+                alert("An error occurred during the extraction or upload process. Check the console for details.");
+                // Reset UI to try again
+                this.style.display = 'inline-flex';
+                fileInput.style.display = 'block';
+                progressContainer.style.display = 'none';
+            }
+        });
     </script>
 
 </body>
