@@ -268,6 +268,10 @@
             color: #2e7d32; /* Distinct strong green */
         }
 
+        .reviewed-badge.rejected {
+            color: #c09050; /* Warning Gold / Yellow */
+        }
+
         .price-pill {
             display: inline-flex;
             align-items: center;
@@ -863,13 +867,20 @@
                         
                         // Reviewed Designation (Column H / index 7)
                         const isReviewed = row.c[7] && row.c[7].v ? row.c[7].v : '';
-                        const isComplete = isReviewed.toLowerCase() === 'complete';
-                        const reviewedClass = isComplete ? 'complete' : '';
+                        const isReviewedLower = isReviewed.toLowerCase().trim();
+                        
+                        let reviewedClass = '';
+                        if (isReviewedLower === 'complete') {
+                            reviewedClass = 'complete';
+                        } else if (isReviewedLower.includes('rejected') || isReviewedLower.includes('sold') || isReviewedLower.includes('deleted')) {
+                            reviewedClass = 'rejected';
+                        }
+                        
                         const reviewedBadgeHtml = isReviewed ? `<span class="reviewed-badge ${reviewedClass}">${isReviewed} -</span> ` : '';
 
                         // New Designation (Column G / index 6)
                         const isNew = row.c[6] && row.c[6].v ? row.c[6].v : '';
-                        const newBadgeClass = isComplete ? 'new-badge complete' : 'new-badge'; // If complete, make New tag green too!
+                        const newBadgeClass = (isReviewedLower === 'complete') ? 'new-badge complete' : 'new-badge'; // If complete, make New tag green too!
                         const newBadgeHtml = isNew ? `<span class="${newBadgeClass}">${isNew} -</span> ` : '';
 
                         const itemHtml = `
