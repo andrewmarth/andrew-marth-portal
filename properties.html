@@ -268,7 +268,8 @@
             color: #2e7d32; /* Distinct strong green */
         }
 
-        .reviewed-badge.rejected {
+        .reviewed-badge.rejected,
+        .new-badge.rejected {
             color: #c09050; /* Warning Gold / Yellow */
         }
 
@@ -880,7 +881,13 @@
 
                         // New Designation (Column G / index 6)
                         const isNew = row.c[6] && row.c[6].v ? row.c[6].v : '';
-                        const newBadgeClass = (isReviewedLower === 'complete') ? 'new-badge complete' : 'new-badge'; // If complete, make New tag green too!
+                        
+                        // Cascade the complete or rejected class to the 'New' badge as well
+                        let newBadgeClass = 'new-badge';
+                        if (reviewedClass !== '') {
+                            newBadgeClass += ' ' + reviewedClass;
+                        }
+                        
                         const newBadgeHtml = isNew ? `<span class="${newBadgeClass}">${isNew} -</span> ` : '';
 
                         const itemHtml = `
