@@ -262,13 +262,13 @@
 
         #backend-iframe-container {
             width: 100%;
-            height: 600px; /* Base Desktop Height (560px native + 40px safety buffer) */
+            height: 960px; /* Base Desktop Height */
             overflow: hidden; 
         }
         
         #backend-iframe-wrapper {
             width: 726px; /* Buffered Width (700px native + 26px safety buffer) */
-            height: 600px; 
+            height: 960px; 
             margin: 0 auto; 
             transform-origin: top center; 
             overflow: hidden;
@@ -799,7 +799,7 @@
             if (container2 && wrapper2) {
                 const containerWidth2 = container2.clientWidth; 
                 const sheetWidth2 = 726; 
-                const sheetHeight2 = 600; 
+                const sheetHeight2 = 960; 
                 
                 if (containerWidth2 > 0) {
                     if (containerWidth2 < sheetWidth2) {
