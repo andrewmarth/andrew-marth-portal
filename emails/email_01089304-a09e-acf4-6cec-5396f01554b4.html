@@ -1,0 +1,578 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" style="min-height: 100%; background-color: #E1E1E6;">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width">
+
+    
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+
+      
+    
+  <style>a:hover { color: #737D42; }a:active { color: #737D42; }a:visited { color: #737D42; }h1 a:visited { color: #737D42; }h2 a:visited { color: #737D42; }h3 a:visited { color: #737D42; }h4 a:visited { color: #737D42; }h5 a:visited { color: #737D42; }h6 a:visited { color: #737D42; }table.button:hover table tr td a { color: #333; }table.button:active table tr td a { color: #333; }table.button table tr td a:visited { color: #333; }table.button.tiny:hover table tr td a { color: #333; }table.button.tiny:active table tr td a { color: #333; }table.button.tiny table tr td a:visited { color: #333; }table.button.small:hover table tr td a { color: #333; }table.button.small:active table tr td a { color: #333; }table.button.small table tr td a:visited { color: #333; }table.button.large:hover table tr td a { color: #333; }table.button.large:active table tr td a { color: #333; }table.button.large table tr td a:visited { color: #333; }table.button:hover table td { background: #545c30; color: #333; }table.button:visited table td { background: #545c30; color: #333; }table.button:active table td { background: #545c30; color: #333; }table.button:hover table a { border: 0 solid #545c30; }table.button:visited table a { border: 0 solid #545c30; }table.button:active table a { border: 0 solid #545c30; }table.button.secondary:hover table td { background: #919191; color: #333; }table.button.secondary:hover table a { border: 0 solid #919191; }table.button.secondary:hover table td a { color: #333; }table.button.secondary:active table td a { color: #333; }table.button.secondary table td a:visited { color: #333; }table.button.success:hover table td { background: #23bf5d; }table.button.success:hover table a { border: 0 solid #23bf5d; }table.button.alert:hover table td { background: #e23317; }table.button.alert:hover table a { border: 0 solid #e23317; }table.button.warning:hover table td { background: #cc8b00; }table.button.warning:hover table a { border: 0px solid #cc8b00; }.thumbnail:hover { box-shadow: 0 0 6px 1px rgba(221,234,248,0.5); }.thumbnail:focus { box-shadow: 0 0 6px 1px rgba(221,234,248,0.5); }@font-face { font-family: 'gdsherpa'; font-weight: 1 900; src: url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSherpa-vf4.woff2') format('woff2'), url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSherpa-vf4.woff2') format('woff2-variations'); unicode-range: U+0-10FFFF; font-display: swap; }@font-face { font-family: 'gd-sage'; font-weight: 700; src: url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSage-bold.woff2') format('woff2'), url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSage-bold.woff') format('woff'),url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSage-bold.ttf') format('truetype'); unicode-range: U+0-10FFFF; font-display: swap; }@font-face { font-family: 'gd-sage'; font-weight: 400; src: url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSage-regular.woff2') format('woff2'), url('https://img6.wsimg.com/ux-assets/@ux/fonts/4.5.0/GDSage-regular.woff') format('woff'); unicode-range: U+0-10FFFF; font-display: swap; }@font-face { font-family: 'Lato'; font-style: italic; font-weight: 400; font-display: swap; src: url(https://fonts.gstatic.com/s/lato/v25/S6u8w4BMUTPHjxswWw.ttf) format('truetype'); }@font-face { font-family: 'Lato'; font-style: italic; font-weight: 700; font-display: swap; src: url(https://fonts.gstatic.com/s/lato/v25/S6u_w4BMUTPHjxsI5wqPHA.ttf) format('truetype'); }@font-face { font-family: 'Lato'; font-style: normal; font-weight: 400; font-display: swap; src: url(https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHvxk.ttf) format('truetype'); }@font-face { font-family: 'Lato'; font-style: normal; font-weight: 700; font-display: swap; src: url(https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVew8.ttf) format('truetype'); }</style><style>@media only screen and (max-width: 702px) { .small-float-center { margin: 0 auto !important; float: none !important; text-align: center !important; }.small-text-center { text-align: center !important; }.small-text-left { text-align: left !important; }.small-text-right { text-align: right !important; }.hide-for-large { display: block !important; width: auto !important; overflow: visible !important; max-height: none !important; font-size: inherit !important; line-height: inherit !important; }table.body table.container .hide-for-large { display: table !important; width: 100% !important; }table.body table.container .row.hide-for-large { display: table !important; width: 100% !important; }table.body table.container .callout-inner.hide-for-large { display: table-cell !important; width: 100% !important; }table.body table.container .show-for-large { display: none !important; width: 0; mso-hide: all; overflow: hidden; }table.body img { width: auto; height: auto; }table.body center { min-width: 0 !important; }table.body .container { width: 95% !important; }table.body .columns { height: auto !important; -moz-box-sizing: border-box; -webkit-box-sizing: border-box; box-sizing: border-box; padding-left: 16px !important; padding-right: 16px !important; }table.body .column { height: auto !important; -moz-box-sizing: border-box; -webkit-box-sizing: border-box; box-sizing: border-box; padding-left: 16px !important; padding-right: 16px !important; }table.body .columns .column { padding-left: 0 !important; padding-right: 0 !important; }table.body .columns .columns { padding-left: 0 !important; padding-right: 0 !important; }table.body .column .column { padding-left: 0 !important; padding-right: 0 !important; }table.body .column .columns { padding-left: 0 !important; padding-right: 0 !important; }table.body .collapse .columns { padding-left: 0 !important; padding-right: 0 !important; }table.body .collapse .column { padding-left: 0 !important; padding-right: 0 !important; }td.small-1 { display: inline-block !important; width: 8.333333% !important; }th.small-1 { display: inline-block !important; width: 8.333333% !important; }td.small-2 { display: inline-block !important; width: 16.666666% !important; }th.small-2 { display: inline-block !important; width: 16.666666% !important; }td.small-3 { display: inline-block !important; width: 25% !important; }th.small-3 { display: inline-block !important; width: 25% !important; }td.small-4 { display: inline-block !important; width: 33.333333% !important; }th.small-4 { display: inline-block !important; width: 33.333333% !important; }td.small-5 { display: inline-block !important; width: 41.666666% !important; }th.small-5 { display: inline-block !important; width: 41.666666% !important; }td.small-6 { display: inline-block !important; width: 50% !important; }th.small-6 { display: inline-block !important; width: 50% !important; }td.small-7 { display: inline-block !important; width: 58.333333% !important; }th.small-7 { display: inline-block !important; width: 58.333333% !important; }td.small-8 { display: inline-block !important; width: 66.666666% !important; }th.small-8 { display: inline-block !important; width: 66.666666% !important; }td.small-9 { display: inline-block !important; width: 75% !important; }th.small-9 { display: inline-block !important; width: 75% !important; }td.small-10 { display: inline-block !important; width: 83.333333% !important; }th.small-10 { display: inline-block !important; width: 83.333333% !important; }td.small-11 { display: inline-block !important; width: 91.666666% !important; }th.small-11 { display: inline-block !important; width: 91.666666% !important; }td.small-12 { display: inline-block !important; width: 100% !important; }th.small-12 { display: inline-block !important; width: 100% !important; }.columns td.small-12 { display: block !important; width: 100% !important; }.column td.small-12 { display: block !important; width: 100% !important; }.columns th.small-12 { display: block !important; width: 100% !important; }.column th.small-12 { display: block !important; width: 100% !important; }table.body td.small-offset-1 { margin-left: 8.333333% !important; }table.body th.small-offset-1 { margin-left: 8.333333% !important; }table.body td.small-offset-2 { margin-left: 16.666666% !important; }table.body th.small-offset-2 { margin-left: 16.666666% !important; }table.body td.small-offset-3 { margin-left: 25% !important; }table.body th.small-offset-3 { margin-left: 25% !important; }table.body td.small-offset-4 { margin-left: 33.333333% !important; }table.body th.small-offset-4 { margin-left: 33.333333% !important; }table.body td.small-offset-5 { margin-left: 41.666666% !important; }table.body th.small-offset-5 { margin-left: 41.666666% !important; }table.body td.small-offset-6 { margin-left: 50% !important; }table.body th.small-offset-6 { margin-left: 50% !important; }table.body td.small-offset-7 { margin-left: 58.333333% !important; }table.body th.small-offset-7 { margin-left: 58.333333% !important; }table.body td.small-offset-8 { margin-left: 66.666666% !important; }table.body th.small-offset-8 { margin-left: 66.666666% !important; }table.body td.small-offset-9 { margin-left: 75% !important; }table.body th.small-offset-9 { margin-left: 75% !important; }table.body td.small-offset-10 { margin-left: 83.333333% !important; }table.body th.small-offset-10 { margin-left: 83.333333% !important; }table.body td.small-offset-11 { margin-left: 91.666666% !important; }table.body th.small-offset-11 { margin-left: 91.666666% !important; }table.body table.columns td.expander { display: none !important; }table.body table.columns th.expander { display: none !important; }table.body .right-text-pad { padding-left: 10px !important; }table.body .text-pad-right { padding-left: 10px !important; }table.body .left-text-pad { padding-right: 10px !important; }table.body .text-pad-left { padding-right: 10px !important; }table.menu { width: 100% !important; }table.menu td { width: auto !important; display: inline-block !important; }table.menu th { width: auto !important; display: inline-block !important; }table.menu.vertical td { display: block !important; }table.menu.vertical th { display: block !important; }table.menu.small-vertical td { display: block !important; }table.menu.small-vertical th { display: block !important; }table.menu[align="center"] { width: auto !important; }table.button.small-expand { width: 100% !important; }table.button.small-expanded { width: 100% !important; }table.button.small-expand table { width: 100%; }table.button.small-expanded table { width: 100%; }table.button.small-expand table a { text-align: center !important; width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; }table.button.small-expanded table a { text-align: center !important; width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; }table.button.small-expand center { min-width: 0; }table.button.small-expanded center { min-width: 0; } }</style></head>
+
+  <body style="width: 100% !important; min-width: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; -moz-box-sizing: border-box; -webkit-box-sizing: border-box; box-sizing: border-box; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin-top: 0; margin-right: 0; margin-bottom: 0; margin-left: 0; padding-top: 0; padding-right: 0; padding-bottom: 0; padding-left: 0;"><p style="mso-hide:all;font-size:0px;background-color:transparent;position:absolute;height:1px"><img src="https://email.cloud.secureclick.net/view?id=56389.11375902.1.7ce9a46c91b20da5edcf391680a2f8c2" alt="" border="0" width="0" height="0"></p>
+    <table class="body" data-made-with-foundation="" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; background-color: #E1E1E6; height: 100%; width: 100%; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" bgcolor="#E1E1E6">
+      <tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+        <td class="center" align="center" valign="top" style="word-wrap: break-word; -webkit-hyphens: auto; -moz-hyphens: auto; hyphens: auto; border-collapse: collapse !important; vertical-align: top; text-align: left; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;">
+          <table class="container--body container" align="center" style="border-spacing: 0; border-collapse: initial; vertical-align: top; text-align: inherit; width: 686px; border-radius: 10px; overflow: hidden; background: #fff none; margin: 24px auto 0; padding: 0; border: 1px none #fff;" bgcolor="#fff" background="https://go.madmimi.com/none"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left"><td style="word-wrap: break-word; -webkit-hyphens: auto; -moz-hyphens: auto; hyphens: auto; border-collapse: collapse !important; vertical-align: top; text-align: left; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left" valign="top">
+            
+<div>
+          <table class="atomic collapse row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 694px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 0 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          
+            <a target="_blank" title="" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1918.1.a10867e4121bd26dfe5b76f52f2dfd75"><img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/8c4703e3-ff2a-472b-8d9e-ba2ecf32b9e2.jpeg/:/rs=w:686" alt="" width="684" class="banner" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: 100% !important; max-width: 100%; clear: both; display: block; border-top-style: none; border-right-style: none; border-bottom-style: none; border-left-style: none;"></a>
+          
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center"><span style="font-weight: bold;">NO DAISY CHAINS - ALWAYS DIRECT - ALWAYS LOWEST PRICE</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center"><span style="font-weight: bold;">FOR FASTEST RESPONSE TEXT ANY QUESTIONS TO SAM 602-754-8005</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center"><span style="font-weight: bold;">PRICE IS NET TO SELLER PLEASE ADD YOUR FEE ON TOP</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/a08804ef-7b67-c0e6-f477-fb46ed76b7fe.jpeg/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">2929 E Eberle Ln Phoenix, AZ 85032</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">3 bed / 2 bath  </li>
+<li dir="auto" style="text-align: start;">1,670 sq. ft. </li>
+<li dir="auto" style="text-align: start;">9,931 lot </li>
+<li dir="auto" style="text-align: start;">1971 build </li>
+<li dir="auto" style="text-align: start;">no hoa </li>
+<li dir="auto" style="text-align: start;">ZONED MULTI-FAM </li>
+<li dir="auto" style="text-align: start;">vacant, text for access</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price:</span> $325,000</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span class="font-size-xl" size="XL" style="font-size: 1.55em;"></span><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1919.1.b9649d9a9a9fc63fb9ee371b2a3ed3a9"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/Screenshot%202026-08-31%20170834.png/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">7230 N 37th Ave Phoenix, AZ 85051</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">4 bed / 2 bath  </li>
+<li dir="auto" style="text-align: start;">1,982 sq. ft. </li>
+<li dir="auto" style="text-align: start;">8,878 lot </li>
+<li dir="auto" style="text-align: start;">1960 build </li>
+<li dir="auto" style="text-align: start;">no hoa </li>
+<li dir="auto" style="text-align: start;">2 car garage </li>
+<li dir="auto" style="text-align: start;">new roof 2026! </li>
+<li dir="auto" style="text-align: start;">new hvac 2024! </li>
+<li dir="auto" style="text-align: start;">vacant, text for access</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price: </span>$309,900</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1920.1.23fb1aec961e7378e08a85b669ed8a9d"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/f2ae3acd-ac64-5fb6-dd3d-625fae3a9012.jpeg/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">4609 W Rancho Dr Glendale, AZ 85301</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">3 bed / 2 bath </li>
+<li dir="auto" style="text-align: start;">1,508 sq. ft.  </li>
+<li dir="auto" style="text-align: start;">7,065 lot </li>
+<li dir="auto" style="text-align: start;">1972 build </li>
+<li dir="auto" style="text-align: start;">no hoa </li>
+<li dir="auto" style="text-align: start;">ROOF 5 YEARS OLD </li>
+<li dir="auto" style="text-align: start;">HVAC 1 YEAR OLD </li>
+<li dir="auto" style="text-align: start;">pool </li>
+<li dir="auto" style="text-align: start;">occupied, text for access (30day post 10k holdback)</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price:</span> $289,900</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1921.1.bd82fc2ec412f2cc5e47e56fe69235b4"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/Screenshot%202026-08-31%20214124.png/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">2312 E Nancy Ln Phoenix, AZ 85042</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">3 bed / 1 bath  </li>
+<li dir="auto" style="text-align: start;">1,325 sq. ft. </li>
+<li dir="auto" style="text-align: start;">6,007 lot </li>
+<li dir="auto" style="text-align: start;">1958 build </li>
+<li dir="auto" style="text-align: start;">no hoa </li>
+<li dir="auto" style="text-align: start;">occupied, text for access</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price: </span>$245,000</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1922.1.e4b850bb106878ab90412c49e9ff7662"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/Screenshot%202026-08-23%20211459.png/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">4406 N 30th Dr Phoenix, AZ 85017</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">3 bed / 2 bath  </li>
+<li dir="auto" style="text-align: start;">1,500 sq. ft. </li>
+<li dir="auto" style="text-align: start;">6,303 lot </li>
+<li dir="auto" style="text-align: start;">1952 build </li>
+<li dir="auto" style="text-align: start;">no hoa </li>
+<li dir="auto" style="text-align: start;">new AC </li>
+<li dir="auto" style="text-align: start;">new upgraded panel! </li>
+<li dir="auto" style="text-align: start;">occupied, text for access (vacant @ COE!)</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price:</span> $219,900</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1923.1.0ee9d5987b30fffbd9e5a8cb24c98399"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/677cac2c-ad3b-513e-dda5-7928bd3f4df1.jpeg/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">40440 N High Meadows Dr San Tan Valley, AZ 85140</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              <ul class="unordered-list" style="margin-top: 0; margin-bottom: 0; list-style-type: disc; padding: 0 40px;">
+<li dir="auto" style="text-align: start;">3 bed / 2 bath  </li>
+<li dir="auto" style="text-align: start;">1,077 sq. ft. </li>
+<li dir="auto" style="text-align: start;">4,483 lot </li>
+<li dir="auto" style="text-align: start;">2004 build </li>
+<li dir="auto" style="text-align: start;">2 car garage </li>
+<li dir="auto" style="text-align: start;">vacant, text for access</li>
+</ul>
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><span style="font-weight: bold;">Wholesale Price:</span> $225,000</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start"><a class="link" target="_blank" style="color: #737D42; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://email.cloud.secureclick.net/c/56389?id=11375902.1924.1.55de73877db2c1a0c8155534279e5e3d"><span class="font-size-xl" size="XL" style="font-size: 1.55em;">CLICK HERE FOR MORE PHOTOS</span></a></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center"><span class="font-size-xl" style="font-weight: bold; text-decoration: underline; font-size: 1.55em;" size="XL">NEED HARD MONEY OR QUALITY MATERIALS? </span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center"><span class="font-size-xl" style="font-weight: bold; text-decoration: underline; font-size: 1.55em;" size="XL">SEE OUR REFERRAL PARTNERS BELOW</span></p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/Screenshot%202025-04-20%20203040.png/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="atomic row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <div class="image">
+            <img src="https://img1.wsimg.com/isteam/ip/da4dca16-83b3-4271-9bf3-05013a0f9dc0/Screenshot%202025-04-20%20203034.png/:/rs=w:686" alt="" width="652" style="outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; width: auto; max-width: 100%; clear: both; display: block;">
+          </div>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="text-center" style="text-align: center; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="center">Terms:</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start">Cash, Hard Money only. Property comes in "AS-IS" condition. Buyer pays all closing costs and escrow fees.</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start">Open escrow with $10,000 nonrefundable earnest deposit with a cashier's check made out to our title company of choice.</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start">Wholesalers + Realtors Please ADD your Fee before sending out. Price is NET to seller.</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start">Buyer to verify all information as seller makes no claims or warranties expressed or implied. Buyer must perform due diligence and hold seller harmless.</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        
+          <table class="row" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; position: relative; display: table; padding: 0;"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+            <th class="small-12 large-12 columns first last" style="width: 670px; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; vertical-align: top; margin: 0 auto; padding: 0 16px 16px;" align="left" valign="top"><table style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: left; width: 100%; padding: 0;"><tr style="vertical-align: top; text-align: left; padding: 0;" align="left">
+<th style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left">
+              
+          <p dir="auto" class="" style="color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: start; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="start">Wholesale price is a "net to seller" price. No SPDS No Clue, As-Is sale. All properties are either owned or in an equitable title position selling or assigning an equitable title position, or in some cases is co-marketing real estate on behalf of its affiliates. NONE of the info above is deemed accurate and is for informational purposes only. Seller and its members or representatives make no guarantees concerning property condition, value, characteristics or financial benefits.*&lt;-</p>
+        
+            </th>
+<th class="expander" style="visibility: hidden; width: 0; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; font-size: 15px; margin: 0; padding: 0;" align="left"></th>
+</tr></table></th>
+          </tr></tbody></table>
+        </div>
+          </td></tr></tbody></table>
+          <table class="container--footer container" align="center" style="border-spacing: 0; border-collapse: collapse; vertical-align: top; text-align: inherit; background-image: none; width: 686px; margin: 0 auto; padding: 0;" background="https://go.madmimi.com/none"><tbody><tr style="vertical-align: top; text-align: left; padding: 0;" align="left"><td style="word-wrap: break-word; -webkit-hyphens: auto; -moz-hyphens: auto; hyphens: auto; border-collapse: collapse !important; vertical-align: top; text-align: left; color: #333E76; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; line-height: 150%; font-size: 15px; margin: 0; padding: 16px;" align="left" valign="top">
+            
+        <div class="footer" style="text-align: center; font-size: 80%; color: #AAB76B; padding-bottom: 5px;" align="center">
+          
+          
+          9015 w union hills dr, peoria, AZ, US, 85383
+          <a target="_blank" style="color: #AAB76B; font-family: &quot;Lato&quot;,&quot;Helvetica Neue&quot;,Helvetica,Roboto,Arial,sans-serif; font-weight: normal; text-align: left; line-height: 150%; text-decoration: underline; margin: 0; padding: 0;" href="https://gem.godaddy.com/opt_out?pact=11375902-192112157-019e4215-c580-7906-a2c9-fbfc9a0169b0-f82bc6b87a20e9f4cd9fa362ccd5a6984ea6fc38">Unsubscribe</a>
+        </div>
+                </td></tr></tbody></table>
+        </td>
+      </tr>
+    </table>
+    
+    <div style="display: none; white-space: nowrap; font: 15px/0 courier;">                                                             </div>
+  </body>
+</html>
