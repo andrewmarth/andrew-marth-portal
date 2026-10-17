@@ -2,50 +2,451 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting | Andrew Marth Real Estate</title>
-    
-    <!-- 1. HTML Meta Refresh Redirect -->
-    <meta http-equiv="refresh" content="0; url=https://andrewmarth.com">
-    
-    <!-- 2. JavaScript Fallback Redirect -->
-    <script>
-        // Using replace() prevents the portal index from being stuck in the back-button history
-        window.location.replace("https://andrewmarth.com");
-    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>My Portal | Andrew Marth Real Estate</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
 
     <style>
-        /* Basic brand styling just in case the page flashes for a split second */
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #e9e2d8;
-            color: #4f2d2c;
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in (avoids a flash of the page before redirecting) */
+        body.is-checking > * { visibility: hidden; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
             text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
         }
-        p {
-            font-size: 1.2rem;
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
         }
-        a {
-            color: #99724b;
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .sign-out {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
             font-weight: bold;
             text-decoration: none;
-            transition: color 0.3s ease;
+            transition: background-color 0.25s ease, transform 0.25s ease;
         }
-        a:hover {
-            color: #9a5d40;
-            text-decoration: underline;
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
         }
     </style>
 </head>
-<body>
-    
-    <!-- 3. Manual Fallback Link -->
-    <p>Redirecting to <a href="https://andrewmarth.com">andrewmarth.com</a>...</p>
+<body class="is-checking">
 
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <button type="button" class="sign-out" id="sign-out">
+                Sign Out
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+            </button>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow">Client Portal</span>
+            <h1 id="greeting">Welcome</h1>
+            <p class="hero-sub">Everything for your home search, in one place.</p>
+        </div>
+    </header>
+
+    <main>
+        <!-- 1. Who's signed in -->
+        <section class="main-card reveal">
+            <span class="card-eyebrow">Your Account</span>
+            <h2>Signed In</h2>
+            <div class="id-row">
+                <span class="id-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                </span>
+                <div>
+                    <div class="id-label">Client ID</div>
+                    <div class="id-value" id="client-id">&nbsp;</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Info from the Google Sheet (placeholder for now) -->
+        <section class="main-card reveal">
+            <span class="card-eyebrow">Your Details</span>
+            <h2>Overview</h2>
+            <div id="details">
+                <span class="spinner" aria-hidden="true"></span>
+                <p class="status-text">Loading your information...</p>
+            </div>
+        </section>
+
+        <!-- 3. Contact -->
+        <section class="main-card contact-card reveal">
+            <span class="card-eyebrow">Questions?</span>
+            <h2>Ready When You Are</h2>
+            <p>Call or text Andrew anytime.</p>
+            <div class="btn-row">
+                <a class="btn" href="tel:4806521330">Call 480.652.1330</a>
+                <a class="btn" href="sms:4806521330">Send a Text</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, phoneToId, FIREBASE_SDK } from '/firebase-config.js';
+
+        const detailsEl = document.getElementById('details');
+        const idEl = document.getElementById('client-id');
+        const greetingEl = document.getElementById('greeting');
+        const signOutBtn = document.getElementById('sign-out');
+
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const formatId = id => id.length === 10 ? `(${id.slice(0, 3)}) ${id.slice(3, 6)}-${id.slice(6)}` : id;
+
+        function showStatus(text, isError = false) {
+            detailsEl.innerHTML = `<p class="status-text${isError ? ' is-error' : ''}">${escapeHtml(text)}</p>`;
+        }
+
+        // Show each column of the client's row as "Column: Value"
+        function renderDetails(row) {
+            const entries = Object.entries(row || {}).filter(([k, v]) => k && v !== '' && v !== null && k.toLowerCase() !== 'id');
+            if (!entries.length) {
+                showStatus('Nothing here yet. Check back soon!');
+                return;
+            }
+            const firstName = row['First Name'] || row['Name'] || '';
+            if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
+            detailsEl.innerHTML = '<ul class="details">' + entries.map(([k, v]) => {
+                const value = String(v);
+                const shown = /^https?:\/\//i.test(value)
+                    ? `<a href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">Open</a>`
+                    : escapeHtml(value);
+                return `<li><span class="k">${escapeHtml(k)}</span><span class="v">${shown}</span></li>`;
+            }).join('') + '</ul>';
+        }
+
+        function showPlaceholder() {
+            detailsEl.innerHTML = `
+                <div class="placeholder-note">
+                    <strong>Coming soon.</strong> Your home search details will show up here.
+                </div>`;
+        }
+
+        // Ask the private Google Sheet script for this client's row only
+        async function loadDetails(user) {
+            if (!PORTAL_API_URL) { showPlaceholder(); return; }
+            try {
+                const idToken = await user.getIdToken();
+                const res = await fetch(PORTAL_API_URL, {
+                    method: 'POST',
+                    // text/plain keeps this a "simple" request, which Apps Script accepts from other sites
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ idToken }),
+                });
+                const data = await res.json();
+                if (data.ok) renderDetails(data.row);
+                else if (data.error === 'not_found') showStatus('We don\'t have your details on file yet. Andrew will add them soon!');
+                else throw new Error(data.error || 'Request failed');
+            } catch (err) {
+                console.error(err);
+                showStatus('We couldn\'t load your information. Please refresh to try again.', true);
+            }
+        }
+
+        function showPage(id) {
+            idEl.textContent = formatId(id);
+            document.body.classList.remove('is-checking');
+            initReveal();
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) {
+                items.forEach(el => el.classList.add('is-visible'));
+                return;
+            }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        // Local preview only: /?demo shows the signed-in layout with sample data
+        const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+        if (isLocal && new URLSearchParams(location.search).has('demo')) {
+            showPage('4805550123');
+            renderDetails({ ID: '4805550123', 'First Name': 'Jordan Sample', 'Search Area': 'Tempe, Chandler', 'Budget': '$450,000', 'Status': 'Touring homes' });
+            signOutBtn.addEventListener('click', () => location.replace('/login'));
+        } else if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page
+                if (!user) { location.replace('/login'); return; }
+                showPage(phoneToId(user.phoneNumber));
+                loadDetails(user);
+            });
+
+            signOutBtn.addEventListener('click', async () => {
+                signOutBtn.disabled = true;
+                await signOut(auth);
+            });
+        }
+    </script>
 </body>
 </html>

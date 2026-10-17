@@ -5,7 +5,7 @@
   "scope": "https://portal.andrewmarth.com/backend-links",
   "display": "standalone",
   "background_color": "#e9e2d8",
-  "theme_color": "#e9e2d8",
+  "theme_color": "#4e513e",
   "icons": [
     {
       "src": "https://andrewmarth.com/images/links.png",

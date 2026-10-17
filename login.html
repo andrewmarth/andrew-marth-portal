@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Sign In | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --error: #c0392b;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { background-color: var(--olive); }
+        body {
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.5;
+            color: var(--brown);
+            min-height: 100vh;
+            min-height: 100svh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        h1, h2 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Video background (same as the website) --- */
+        .bg-video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+        .bg-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.62) 0%, rgba(78, 81, 62, 0.88) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.4) 55%, rgba(79, 45, 44, 0.8) 100%);
+        }
+
+        .page {
+            min-height: 100vh;
+            min-height: 100svh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 26px;
+            padding: calc(env(safe-area-inset-top, 0px) + 28px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px) 20px;
+        }
+
+        .top-logo { display: block; line-height: 0; }
+        .top-logo img { height: 40px; width: auto; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35)); }
+
+        /* --- Sign-in card --- */
+        .card {
+            width: calc(100% - 6px);
+            max-width: 440px;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 36px 32px 30px 32px;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: rise 0.8s var(--ease) 0.1s forwards;
+        }
+        @keyframes rise { to { opacity: 1; transform: none; } }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 10px;
+        }
+        .eyebrow::before, .eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+
+        .card h1 { font-size: 2.1rem; line-height: 1.1; color: var(--brown); margin-bottom: 8px; }
+        .card .lead { font-size: 1.02rem; opacity: 0.85; margin-bottom: 24px; }
+
+        /* Steps slide between "phone" and "code" */
+        .step { display: none; }
+        .step.is-active { display: block; animation: stepIn 0.42s var(--ease) both; }
+        @keyframes stepIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+        .field-label { display: block; text-align: left; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+
+        .phone-field {
+            display: flex;
+            align-items: center;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .phone-field:focus-within { background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .phone-prefix { padding: 0 6px 0 22px; font-weight: bold; font-size: 1.1rem; color: var(--olive); }
+        .phone-field input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; }
+
+        .text-input {
+            width: 100%;
+            min-height: 56px;
+            padding: 14px 22px 14px 6px;
+            font-family: inherit;
+            font-size: 1.15rem;
+            color: var(--brown);
+        }
+        .code-input {
+            width: 100%;
+            min-height: 60px;
+            border: 2px solid var(--navy);
+            border-radius: 18px;
+            background: #f7f4f0;
+            text-align: center;
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: 0.45em;
+            padding: 10px 0 10px 0.45em;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .code-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .has-error .phone-field, .has-error .code-input { border-color: var(--error); background: #fdf2f2; }
+
+        .message { min-height: 1.4em; margin: 10px 4px 0 4px; font-size: 0.92rem; font-weight: bold; text-align: left; }
+        .message.is-error { color: var(--error); }
+        .message.is-info { color: var(--olive); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 52px;
+            margin-top: 16px;
+            padding: 12px 24px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 1.05rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
+            transition: background-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+        }
+        @media (hover: hover) {
+            .btn:not(:disabled):hover { background-color: var(--rust); transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.65; cursor: wait; }
+        .btn .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .spinner { display: inline-block; }
+        .btn.is-loading .btn-arrow { display: none; }
+        .btn-arrow { width: 18px; height: 18px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .link-row { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
+        .link-btn {
+            background: none;
+            border: none;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: var(--tan);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            cursor: pointer;
+            min-height: 44px;
+            padding: 0 4px;
+        }
+        .link-btn:disabled { color: var(--brown); opacity: 0.5; text-decoration: none; cursor: default; }
+
+        .fine-print { margin-top: 18px; font-size: 0.78rem; opacity: 0.65; line-height: 1.4; }
+
+        /* Setup notice (shown until Firebase is configured) */
+        .setup-notice {
+            display: none;
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #fdf6e9;
+            border: 1px solid rgba(192, 144, 80, 0.5);
+            font-size: 0.92rem;
+            text-align: left;
+        }
+        .not-configured .setup-notice { display: block; }
+
+        #recaptcha-container { position: absolute; }
+        .mini-footer { font-size: 0.75rem; text-align: center; color: var(--cream); opacity: 0.72; line-height: 1.4; }
+        .mini-footer a { color: var(--cream); text-decoration: none; }
+
+        @media (max-width: 480px) {
+            .card { padding: 30px 22px 24px 22px; }
+            .card h1 { font-size: 1.9rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card, .step.is-active { animation: none; opacity: 1; transform: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <video class="bg-video" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+        <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+    </video>
+    <div class="bg-overlay"></div>
+
+    <div class="page">
+        <a href="https://andrewmarth.com" class="top-logo" aria-label="Andrew Marth Real Estate">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+        </a>
+
+        <main class="card" id="card">
+            <span class="eyebrow">Client Portal</span>
+
+            <!-- Step 1: phone number -->
+            <form class="step is-active" id="step-phone" novalidate>
+                <h1>Sign In</h1>
+                <p class="lead">Enter your mobile number and we'll text you a sign-in code.</p>
+
+                <label class="field-label" for="phone">Mobile Number</label>
+                <div class="phone-field">
+                    <span class="phone-prefix">+1</span>
+                    <input class="text-input" id="phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="(480) 555-0123" enterkeyhint="send" required>
+                </div>
+                <p class="message" id="phone-message" role="alert"></p>
+
+                <button type="submit" class="btn" id="send-btn">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Text Me a Code
+                    <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </button>
+
+                <div class="setup-notice">
+                    <strong>Sign-in isn't switched on yet.</strong> Add your Firebase settings to <code>firebase-config.js</code> to turn it on.
+                </div>
+
+                <p class="fine-print">By continuing you agree to receive a one-time text message. Message and data rates may apply.</p>
+            </form>
+
+            <!-- Step 2: texted code -->
+            <form class="step" id="step-code" novalidate>
+                <h1>Enter Your Code</h1>
+                <p class="lead" id="code-lead">We texted a 6-digit code to your phone.</p>
+
+                <label class="field-label" for="code">6-Digit Code</label>
+                <input class="code-input" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="••••••" enterkeyhint="done" required>
+                <p class="message" id="code-message" role="alert"></p>
+
+                <button type="submit" class="btn" id="verify-btn">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Sign In
+                    <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </button>
+
+                <div class="link-row">
+                    <button type="button" class="link-btn" id="change-btn">Use a different number</button>
+                    <button type="button" class="link-btn" id="resend-btn" disabled>Resend code</button>
+                </div>
+            </form>
+        </main>
+
+        <div id="recaptcha-container"></div>
+
+        <footer class="mini-footer">
+            Andrew Marth, agent affiliated with Compass &middot; AZ License SA711359000 &middot; <a href="tel:4806521330">480.652.1330</a>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, FIREBASE_SDK } from '/firebase-config.js';
+
+        const card = document.getElementById('card');
+        const stepPhone = document.getElementById('step-phone');
+        const stepCode = document.getElementById('step-code');
+        const phoneInput = document.getElementById('phone');
+        const codeInput = document.getElementById('code');
+        const phoneMsg = document.getElementById('phone-message');
+        const codeMsg = document.getElementById('code-message');
+        const sendBtn = document.getElementById('send-btn');
+        const verifyBtn = document.getElementById('verify-btn');
+        const resendBtn = document.getElementById('resend-btn');
+        const changeBtn = document.getElementById('change-btn');
+        const codeLead = document.getElementById('code-lead');
+
+        const digitsOnly = s => s.replace(/\D/g, '');
+        const formatUS = d => !d ? '' : d.length < 4 ? `(${d}` : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+
+        // Format the phone number as it's typed: (480) 555-0123
+        phoneInput.addEventListener('input', () => {
+            let d = digitsOnly(phoneInput.value);
+            if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+            phoneInput.value = formatUS(d.slice(0, 10));
+            setMessage(stepPhone, phoneMsg, '');
+        });
+        codeInput.addEventListener('input', () => {
+            codeInput.value = digitsOnly(codeInput.value).slice(0, 6);
+            setMessage(stepCode, codeMsg, '');
+            // Auto-submit once all 6 digits are in (including codes autofilled from the text)
+            if (codeInput.value.length === 6) stepCode.requestSubmit();
+        });
+
+        function setMessage(step, el, text, kind = 'error') {
+            el.textContent = text;
+            el.className = 'message' + (text ? ` is-${kind}` : '');
+            step.classList.toggle('has-error', Boolean(text) && kind === 'error');
+        }
+        function setLoading(btn, loading) {
+            btn.disabled = loading;
+            btn.classList.toggle('is-loading', loading);
+        }
+        function showStep(step) {
+            [stepPhone, stepCode].forEach(s => s.classList.toggle('is-active', s === step));
+        }
+
+        // Friendly versions of Firebase's error codes
+        function friendlyError(err) {
+            const code = (err && err.code) || '';
+            const map = {
+                'auth/invalid-phone-number': 'That phone number doesn\'t look right. Please check it and try again.',
+                'auth/missing-phone-number': 'Please enter your mobile number.',
+                'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
+                'auth/quota-exceeded': 'We can\'t send texts right now. Please try again later.',
+                'auth/invalid-verification-code': 'That code isn\'t right. Please check the text and try again.',
+                'auth/code-expired': 'That code has expired. Tap "Resend code" for a new one.',
+                'auth/captcha-check-failed': 'We couldn\'t verify this browser. Please refresh and try again.',
+                'auth/invalid-app-credential': 'We couldn\'t verify this browser. Please refresh and try again.',
+                'auth/network-request-failed': 'No connection. Please check your internet and try again.',
+                'auth/operation-not-allowed': 'Phone sign-in isn\'t switched on yet.',
+            };
+            return map[code] || 'Something went wrong. Please try again.';
+        }
+
+        // Not set up yet: show the notice and keep the form disabled
+        if (!isConfigured) {
+            card.classList.add('not-configured');
+            sendBtn.disabled = true;
+        } else {
+            startSignIn().catch(err => {
+                console.error(err);
+                setMessage(stepPhone, phoneMsg, 'Sign-in couldn\'t load. Please refresh the page.');
+            });
+        }
+
+        async function startSignIn() {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+
+            const auth = getAuth(initializeApp(firebaseConfig));
+            auth.useDeviceLanguage();
+
+            // Already signed in? Go straight to the portal home page.
+            onAuthStateChanged(auth, user => { if (user) location.replace('/'); });
+
+            let verifier = null;
+            let confirmation = null;
+            let resendTimer = null;
+            let lastNumber = '';
+
+            // Google's invisible "are you human" check, required before sending a text.
+            // It lives in its own hidden box (not on the button) so it only runs when we send a code,
+            // and any challenge it shows must be finished before we move to the code screen.
+            verifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+
+            // Each check can only be used once, so reset it before sending another code
+            async function resetVerifier() {
+                try {
+                    const widgetId = await verifier.render();
+                    window.grecaptcha.reset(widgetId);
+                } catch (e) { console.error(e); }
+            }
+
+            function startResendCountdown() {
+                let s = 30;
+                resendBtn.disabled = true;
+                resendBtn.textContent = `Resend code (${s}s)`;
+                clearInterval(resendTimer);
+                resendTimer = setInterval(() => {
+                    s -= 1;
+                    if (s <= 0) {
+                        clearInterval(resendTimer);
+                        resendBtn.disabled = false;
+                        resendBtn.textContent = 'Resend code';
+                    } else {
+                        resendBtn.textContent = `Resend code (${s}s)`;
+                    }
+                }, 1000);
+            }
+
+            async function sendCode(number) {
+                confirmation = await signInWithPhoneNumber(auth, `+1${number}`, verifier);
+                lastNumber = number;
+                codeLead.textContent = `We texted a 6-digit code to ${formatUS(number)}.`;
+                startResendCountdown();
+            }
+
+            stepPhone.addEventListener('submit', async e => {
+                e.preventDefault();
+                const number = digitsOnly(phoneInput.value);
+                if (number.length !== 10) {
+                    setMessage(stepPhone, phoneMsg, 'Please enter your 10-digit mobile number.');
+                    phoneInput.focus();
+                    return;
+                }
+                setLoading(sendBtn, true);
+                try {
+                    await sendCode(number);
+                    codeInput.value = '';
+                    showStep(stepCode);
+                    codeInput.focus();
+                } catch (err) {
+                    console.error(err);
+                    setMessage(stepPhone, phoneMsg, friendlyError(err));
+                    resetVerifier();
+                } finally {
+                    setLoading(sendBtn, false);
+                }
+            });
+
+            stepCode.addEventListener('submit', async e => {
+                e.preventDefault();
+                const code = digitsOnly(codeInput.value);
+                if (code.length !== 6) {
+                    setMessage(stepCode, codeMsg, 'Please enter the 6-digit code from the text.');
+                    codeInput.focus();
+                    return;
+                }
+                if (verifyBtn.disabled) return;
+                setLoading(verifyBtn, true);
+                try {
+                    await confirmation.confirm(code);
+                    setMessage(stepCode, codeMsg, 'Signed in! Taking you to your portal...', 'info');
+                    location.replace('/');
+                } catch (err) {
+                    console.error(err);
+                    setMessage(stepCode, codeMsg, friendlyError(err));
+                    codeInput.select();
+                    setLoading(verifyBtn, false);
+                }
+            });
+
+            resendBtn.addEventListener('click', async () => {
+                resendBtn.disabled = true;
+                try {
+                    await resetVerifier();
+                    await sendCode(lastNumber);
+                    setMessage(stepCode, codeMsg, 'A new code is on its way.', 'info');
+                } catch (err) {
+                    console.error(err);
+                    setMessage(stepCode, codeMsg, friendlyError(err));
+                    resendBtn.disabled = false;
+                }
+            });
+
+            changeBtn.addEventListener('click', () => {
+                clearInterval(resendTimer);
+                confirmation = null;
+                setMessage(stepCode, codeMsg, '');
+                resetVerifier();
+                showStep(stepPhone);
+                phoneInput.focus();
+            });
+        }
+    </script>
+</body>
+</html>
