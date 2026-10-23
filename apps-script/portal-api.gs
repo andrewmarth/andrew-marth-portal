@@ -149,9 +149,25 @@ function doPost(e) {
 }
 
 // Writes the submitted income values to the client's income row. Returns an error code, or '' when saved.
+// Income levels and the columns each one has in the INCOME sheet ("PRIMARY JOB TITLE", "QUINARY BONUS AMOUNT"...)
+const INCOME_LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
+const INCOME_LEVEL_FIELDS = ['JOB TITLE', 'WEEKLY SALARY', 'HOURLY RATE', 'WEEKLY HOURS', 'WEEKLY TIPS', 'COMMISSION INTERVAL',
+  'COMMISSION AMOUNT', 'BONUS INTERVAL', 'BONUS AMOUNT', '1099 YEARLY INCOME', '1099 INCOME DESCRIPTION'];
+
 function saveIncome_(id, submitted) {
   const sheet = getSheet_(INCOME_SHEET_ID, INCOME_SHEET_NAME);
-  const headers = readHeaders_(sheet, true);
+  var headers = readHeaders_(sheet, true);
+  // A level's columns are added to the end of the sheet the first time someone saves them (in level, then field order)
+  const sent = {};
+  Object.keys(submitted || {}).forEach(function (k) { sent[String(k).trim().toUpperCase()] = true; });
+  const missing = [];
+  INCOME_LEVELS.forEach(function (L) {
+    INCOME_LEVEL_FIELDS.forEach(function (f) {
+      const name = L + ' ' + f;
+      if (sent[name] && !headers.some(function (h) { return h.toUpperCase() === name; })) missing.push(name);
+    });
+  });
+  if (missing.length) headers = addMissingColumns_(sheet, headers, missing);
   const idCol = idColumn_(headers);
 
   // Clean every submitted value; only real income columns are accepted

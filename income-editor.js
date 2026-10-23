@@ -1,7 +1,7 @@
 // Income math and the "Your Income" edit pop-up, shared by settings.html and pages.html.
-// Columns match the INCOME sheet: PRIMARY / SECONDARY / TERTIARY income levels plus monthly debt payments.
+// Columns match the INCOME sheet: PRIMARY / SECONDARY / TERTIARY / QUATERNARY / QUINARY income levels plus monthly debt payments.
 
-export const LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY'];
+export const LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
 const DEBT_COLUMNS = ['CAR LOAN PAYMENT', 'MORTGAGE PAYMENT', 'CREDIT CARD PAYMENT', 'OTHER PAYMENT'];
 // How many times a year each interval pays out (Bi-Annually = twice a year)
 const PER_YEAR = { weekly: 52, monthly: 12, quarterly: 4, annually: 1, biannually: 2 };
@@ -94,19 +94,21 @@ const CSS = `
 .income-dialog .type-picker input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
 
 .income-dialog .type-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
-/* Each section is "view" (what's entered, one row per item with a pencil), "empty" (a + button) or "edit" (the full form) */
-.income-dialog .ie-summary { display: none; }
+/* Each section is "view" (a summary with an edit button), "empty" (a + button) or "edit" (the full form, one at a time) */
+.income-dialog .ie-summary, .income-dialog .ie-add, .income-dialog .ie-locked, .income-dialog .ie-edited, .income-dialog .ie-done-row { display: none; }
 .income-dialog .income-section[data-mode="view"] .ie-summary { display: block; }
-.income-dialog .income-section[data-mode="view"] .type-picker,
-.income-dialog .income-section[data-mode="view"] .sub-label,
-.income-dialog .income-section[data-mode="view"] .type-fields { display: none; }
-.income-dialog .ie-inline { padding: 12px 0; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
-.income-dialog .ie-inline:last-child { border-bottom: none; }
-.income-dialog .income-section[data-mode="empty"] > :not(.section-head):not(.ie-add) { display: none; }
-.income-dialog .income-section[data-mode="empty"] .section-total,
-.income-dialog .income-section:not([data-mode="view"]) .ie-edit-all { display: none; }
-.income-dialog .ie-add { display: none; }
 .income-dialog .income-section[data-mode="empty"] .ie-add { display: flex; }
+.income-dialog .income-section[data-mode="edit"] .ie-done-row { display: flex; justify-content: flex-end; margin-top: 18px; }
+.income-dialog .income-section:not([data-mode="edit"]) > .type-picker,
+.income-dialog .income-section:not([data-mode="edit"]) > .type-fields,
+.income-dialog .income-section:not([data-mode="edit"]) .section-total { display: none; }
+.income-dialog .income-section.is-locked .ie-locked { display: flex; }
+.income-dialog .income-section.is-edited .ie-edited { display: flex; }
+.income-dialog .ie-card { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 18px; border-radius: 16px; background: #f7f4f0; border: 1px solid rgba(78, 81, 62, 0.15); }
+.income-dialog .ie-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.income-dialog .ie-card-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
+.income-dialog .ie-card-sub { font-size: 0.85rem; opacity: 0.7; }
+.income-dialog .ie-card-amount { flex: 0 0 auto; font-weight: bold; color: var(--olive); white-space: nowrap; }
 .income-dialog .ie-add {
     align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 16px;
     border: 2px dashed rgba(78, 81, 62, 0.45); border-radius: 16px; background: #fbf9f6;
@@ -114,24 +116,34 @@ const CSS = `
 }
 .income-dialog .ie-add span.ie-plus { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--olive); color: var(--cream); display: flex; align-items: center; justify-content: center; }
 .income-dialog .ie-add svg { width: 18px; height: 18px; }
-@media (hover: hover) { .income-dialog .ie-add:hover { border-color: var(--navy); } }
-.income-dialog .ie-row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
-.income-dialog .ie-row:last-child { border-bottom: none; }
-.income-dialog .ie-row[hidden] { display: none; }
-.income-dialog .ie-k { font-weight: bold; flex: 0 1 auto; }
-.income-dialog .ie-v { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+@media (hover: hover) { .income-dialog .ie-add:not(:disabled):hover { border-color: var(--navy); } }
 .income-dialog .ie-edit {
-    flex: 0 0 auto; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
     border: 2px solid var(--navy); border-radius: 50%; background: var(--white); color: var(--olive); cursor: pointer;
 }
-.income-dialog .ie-edit svg { width: 16px; height: 16px; }
-@media (hover: hover) { .income-dialog .ie-edit:hover { background: var(--olive); color: var(--cream); } }
-.income-dialog .ie-edit-all {
-    margin-left: auto; padding: 4px 2px; border: none; background: none; cursor: pointer;
-    font-family: inherit; font-size: 0.85rem; font-weight: bold; color: var(--rust); text-decoration: underline; text-underline-offset: 3px;
-}
+.income-dialog .ie-edit svg { width: 17px; height: 17px; }
+@media (hover: hover) { .income-dialog .ie-edit:not(:disabled):hover { background: var(--olive); color: var(--cream); } }
+.income-dialog .ie-edit:disabled, .income-dialog .ie-add:disabled { opacity: 0.45; cursor: not-allowed; }
+.income-dialog .ie-locked { align-items: center; gap: 8px; margin: 10px 0 0 4px; font-size: 0.85rem; font-style: italic; opacity: 0.75; }
+.income-dialog .ie-locked svg, .income-dialog .ie-edited svg { width: 16px; height: 16px; flex-shrink: 0; }
+.income-dialog .ie-edited { align-items: flex-start; gap: 8px; margin-top: 10px; padding: 10px 14px; border-radius: 14px; background: #fdf6e9; border: 1px dashed rgba(192, 144, 80, 0.7); font-size: 0.88rem; font-weight: bold; }
+.income-dialog .ie-edited svg { color: var(--gold); margin-top: 2px; }
+.income-dialog .ie-done { min-height: 44px; padding: 8px 26px; }
 .income-dialog .section-head { align-items: center; }
+/* "Are you sure?" when closing with unsaved changes */
+.income-dialog .ie-confirm { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 20px; border-radius: inherit; background: rgba(14, 42, 59, 0.45); }
+.income-dialog .ie-confirm[hidden] { display: none; }
+.income-dialog .ie-confirm-card { width: 100%; max-width: 380px; padding: 22px 22px 18px 22px; border-radius: 20px; background: var(--white); border: 2px solid var(--navy); box-shadow: 4px 4px 0 var(--navy); }
+.income-dialog .ie-confirm-card h3 { font-size: 1.35rem; margin-bottom: 6px; }
+.income-dialog .ie-confirm-card p { font-size: 0.95rem; opacity: 0.8; margin-bottom: 14px; }
+.income-dialog .ie-confirm-card .form-actions { flex-wrap: wrap; }
 .income-dialog .type-fields[hidden] { display: none; }
+/* Extra pay: a Yes/No question, then (on Yes) its inputs */
+.income-dialog .ie-yn { grid-column: 1 / -1; }
+.income-dialog .ie-q { font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+.income-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; margin-bottom: 0; }
+.income-dialog .ie-extra { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.income-dialog .ie-extra[hidden] { display: none; }
 .income-dialog .span-2 { grid-column: 1 / -1; }
 .income-dialog .sub-label { grid-column: 1 / -1; margin: 6px 0 -4px 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
 .income-dialog .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
@@ -162,9 +174,7 @@ const CSS = `
     .income-dialog .dialog-scroll { padding: 4px 20px 8px 20px; }
     .income-dialog .dialog-foot { padding: 12px 20px calc(env(safe-area-inset-bottom, 0px) + 16px) 20px; border-radius: 0; }
     .income-dialog .type-fields { grid-template-columns: 1fr; }
-    .income-dialog .ie-row { flex-wrap: wrap; }
-    .income-dialog .ie-row .ie-v { flex-basis: calc(100% - 60px); order: 3; text-align: left; opacity: 0.85; margin-top: -6px; }
-    .income-dialog .ie-row .ie-k { flex: 1; }
+    .income-dialog .ie-extra { grid-template-columns: 1fr; }
     .income-dialog .type-picker label { font-size: 0.85rem; }
     .income-dialog .form-actions { flex-direction: column-reverse; }
     .income-dialog .form-actions .btn { width: 100%; }
@@ -182,22 +192,40 @@ const numberField = (col, label, id = slug(col)) => field(id, label, '<input id=
 const textField = (col, label, span, id = slug(col)) => field(id, label, '<input id="' + id + '" data-col="' + col + '" type="text" maxlength="100" autocomplete="off">', span);
 const intervalField = (col, label, id = slug(col)) => field(id, label, '<select id="' + id + '" data-col="' + col + '"><option value="">Select...</option>'
     + INTERVALS.map(i => '<option value="' + i + '">' + (i === 'Bi-Annually' ? 'Bi-Annually (twice a year)' : i) + '</option>').join('') + '</select>');
-// Tips, commission and bonus can be added to salary or hourly pay (ids get a prefix so salary/hourly don't clash)
+// Tips, commission and bonus can be added to salary or hourly pay (ids get a prefix so salary/hourly don't clash).
+// Each one asks Yes/No first; its inputs show only after Yes (and are left out, so saved blank, on No).
+const yesNo = (L, p, kind, question) => {
+    const name = 'ie-' + L.toLowerCase() + '-' + p + kind;
+    return '<div class="ie-yn"><p class="ie-q">' + question + '</p><div class="type-picker yes-no" role="radiogroup" aria-label="' + question + '">'
+        + '<input type="radio" name="' + name + '" id="' + name + '-yes" value="yes" data-extra-toggle="' + kind + '"><label for="' + name + '-yes">Yes</label>'
+        + '<input type="radio" name="' + name + '" id="' + name + '-no" value="no" data-extra-toggle="' + kind + '" checked><label for="' + name + '-no">No</label></div></div>';
+};
 const extras = (L, p) => '<p class="sub-label">Extra Pay</p>'
-    + moneyField(L + ' WEEKLY TIPS', 'Weekly Tips', true, p + slug(L + ' WEEKLY TIPS'))
-    + intervalField(L + ' COMMISSION INTERVAL', 'Commission Paid', p + slug(L + ' COMMISSION INTERVAL'))
-    + moneyField(L + ' COMMISSION AMOUNT', 'Commission Amount', false, p + slug(L + ' COMMISSION AMOUNT'))
-    + intervalField(L + ' BONUS INTERVAL', 'Bonus Paid', p + slug(L + ' BONUS INTERVAL'))
-    + moneyField(L + ' BONUS AMOUNT', 'Bonus Amount', false, p + slug(L + ' BONUS AMOUNT'));
+    + yesNo(L, p, 'tips', 'Do you earn tips?')
+    + '<div class="ie-extra" data-extra="tips" hidden>' + moneyField(L + ' WEEKLY TIPS', 'Weekly Tips', true, p + slug(L + ' WEEKLY TIPS')) + '</div>'
+    + yesNo(L, p, 'commission', 'Do you earn commission?')
+    + '<div class="ie-extra" data-extra="commission" hidden>' + intervalField(L + ' COMMISSION INTERVAL', 'Commission Paid', p + slug(L + ' COMMISSION INTERVAL'))
+        + moneyField(L + ' COMMISSION AMOUNT', 'Commission Amount', false, p + slug(L + ' COMMISSION AMOUNT')) + '</div>'
+    + yesNo(L, p, 'bonus', 'Do you earn bonuses?')
+    + '<div class="ie-extra" data-extra="bonus" hidden>' + intervalField(L + ' BONUS INTERVAL', 'Bonus Paid', p + slug(L + ' BONUS INTERVAL'))
+        + moneyField(L + ' BONUS AMOUNT', 'Bonus Amount', false, p + slug(L + ' BONUS AMOUNT')) + '</div>';
+// Each extra's columns, for answering its Yes/No from saved data
+const EXTRA_COLUMNS = { tips: ['WEEKLY TIPS'], commission: ['COMMISSION AMOUNT', 'COMMISSION INTERVAL'], bonus: ['BONUS AMOUNT', 'BONUS INTERVAL'] };
 const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
 const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
-const sectionExtras = title => '<button type="button" class="ie-add" data-add><span class="ie-plus">' + PLUS_ICON + '</span>Add ' + title + '</button><div class="ie-summary"></div>';
-const editAll = '<button type="button" class="ie-edit-all" data-edit-all>Edit All</button>';
+const LOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const CAUTION_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+// Above the questions: the + button (empty), the summary (filled), and the notes; below them: Done
+const sectionExtras = title => '<button type="button" class="ie-add" data-add><span class="ie-plus">' + PLUS_ICON + '</span>Add ' + title + '</button>'
+    + '<div class="ie-summary"></div>'
+    + '<p class="ie-edited">' + CAUTION_ICON + '<span>Edited, but not saved yet. Press Save Changes to keep it.</span></p>'
+    + '<p class="ie-locked">' + LOCK_ICON + '<span></span></p>';
+const doneRow = '<div class="ie-done-row"><button type="button" class="btn ie-done" data-done>Done</button></div>';
 const levelSection = (L, title) => {
     const key = 'ie-' + L.toLowerCase();
     const radio = (value, label) => '<input type="radio" name="' + key + '-type" id="' + key + '-type-' + value + '" value="' + value + '"><label for="' + key + '-type-' + value + '">' + label + '</label>';
     return '<fieldset class="income-section" data-level="' + L + '">'
-        + '<div class="section-head"><h3>' + title + '</h3><span class="section-total" data-total="' + L + '"></span>' + editAll + '</div>'
+        + '<div class="section-head"><h3>' + title + '</h3><span class="section-total" data-total="' + L + '"></span></div>'
         + sectionExtras(title)
         + '<div class="type-picker" role="radiogroup" aria-label="' + title + ' type">' + radio('none', 'None') + radio('salary', 'Salary') + radio('hourly', 'Hourly') + radio('1099', '1099') + '</div>'
         + '<div class="type-fields" data-type="salary" hidden>' + textField(L + ' JOB TITLE', 'Job Title', true, key + '-salary-title')
@@ -206,20 +234,25 @@ const levelSection = (L, title) => {
             + moneyField(L + ' HOURLY RATE', 'Hourly Rate') + numberField(L + ' WEEKLY HOURS', 'Hours per Week') + extras(L, 'h-') + '</div>'
         + '<div class="type-fields" data-type="1099" hidden>' + moneyField(L + ' 1099 YEARLY INCOME', 'Yearly 1099 Income', true)
             + textField(L + ' 1099 INCOME DESCRIPTION', 'Description of Work', true) + '</div>'
+        + doneRow
         + '</fieldset>';
 };
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 const DIALOG_HTML = '<form class="income-form" novalidate>'
     + '<div class="dialog-head"><h2 id="income-dialog-title">Your Income</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
     + '<p class="muted">Add each job or source of income, plus your monthly debt payments.</p>'
-    + '<div class="dialog-scroll">' + levelSection('PRIMARY', 'Primary Income') + levelSection('SECONDARY', 'Secondary Income') + levelSection('TERTIARY', 'Tertiary Income')
-        + '<fieldset class="income-section" data-level="DEBT"><div class="section-head"><h3>Monthly Debt Payments</h3>' + editAll + '</div>' + sectionExtras('Monthly Debt Payments') + '<div class="type-fields">'
+    + '<div class="dialog-scroll">' + levelSection('PRIMARY', 'Primary Income') + levelSection('SECONDARY', 'Secondary Income') + levelSection('TERTIARY', 'Tertiary Income') + levelSection('QUATERNARY', 'Fourth Income') + levelSection('QUINARY', 'Fifth Income')
+        + '<fieldset class="income-section" data-level="DEBT"><div class="section-head"><h3>Monthly Debt Payments</h3></div>' + sectionExtras('Monthly Debt Payments') + '<div class="type-fields">'
         + moneyField('CAR LOAN PAYMENT', 'Car Loan') + moneyField('MORTGAGE PAYMENT', 'Mortgage') + moneyField('CREDIT CARD PAYMENT', 'Credit Cards') + moneyField('OTHER PAYMENT', 'Other Payments')
-        + '</div></fieldset></div>'
+        + '</div>' + doneRow + '</fieldset></div>'
     + '<div class="dialog-foot"><div class="total-row"><span>Monthly Income</span><span class="total-value" data-grand-total>$0.00</span></div>'
         + '<p class="form-message" role="alert"></p>'
         + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
         + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Changes</button></div></div>'
+    + '<div class="ie-confirm" hidden role="alertdialog" aria-labelledby="ie-confirm-title"><div class="ie-confirm-card"><h3 id="ie-confirm-title">Are you sure?</h3>'
+        + '<p>Your changes haven’t been saved. If you close now, they’ll be lost.</p>'
+        + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-keep>Keep Editing</button>'
+        + '<button type="button" class="btn" data-discard>Discard Changes</button></div></div></div>'
     + '</form>';
 
 // The pop-up's styles (a centered card on wide screens, a swipe-up sheet on phones). Other pop-ups that use the
@@ -273,7 +306,8 @@ export function createIncomeEditor({ save, onSaved }) {
     const isDecimal = el => el.getAttribute('inputmode') === 'decimal';
     function formGetter(L) {
         const group = visibleGroup(L);
-        return c => { const el = group && group.querySelector('[data-col="' + L + ' ' + c + '"]'); return el ? el.value : ''; };
+        // Inputs tucked away (an extra answered No) don't count
+        return c => { const el = group && group.querySelector('[data-col="' + L + ' ' + c + '"]'); return el && !el.closest('[hidden]') ? el.value : ''; };
     }
     function showType(L) {
         const type = selectedType(L);
@@ -290,74 +324,102 @@ export function createIncomeEditor({ save, onSaved }) {
     }
     // --- View / empty / edit sections ---
     const TYPE_NAMES = { none: 'None', salary: 'Salary', hourly: 'Hourly', '1099': '1099' };
+    const TITLES = { PRIMARY: 'Primary Income', SECONDARY: 'Secondary Income', TERTIARY: 'Tertiary Income', QUATERNARY: 'Fourth Income', QUINARY: 'Fifth Income', DEBT: 'Monthly Debt Payments' };
+    const DEBT_NAMES = { 'CAR LOAN PAYMENT': 'Car Loan', 'MORTGAGE PAYMENT': 'Mortgage', 'CREDIT CARD PAYMENT': 'Credit Cards', 'OTHER PAYMENT': 'Other' };
     const sections = () => [...form.querySelectorAll('.income-section')];
-    const hasValue = el => (el.tagName === 'SELECT' ? !!el.value : isDecimal(el) ? num(el.value) > 0 : !!el.value.trim());
-    const shown = el => !el.closest('[hidden]');
-    function setMode(section, mode) {
-        section.dataset.mode = mode;
-        if (mode === 'view') summarize(section);
-    }
-    // One row per entered value (and the income type), each with a pencil that opens just that input
+    let editing = null;  // the one section open for editing (or null)
+    let snapshot = {};   // each section's answers when the pop-up opened
+    // A section's answers, as they'd be saved
+    const answersOf = (section, all = collect()) => {
+        const L = section.dataset.level;
+        return JSON.stringify(Object.keys(all).filter(k => (L === 'DEBT' ? DEBT_COLUMNS.includes(k) : k.startsWith(L + ' '))).sort().map(k => [k, all[k]]));
+    };
+    const isFilled = (section, all = collect()) => {
+        const L = section.dataset.level;
+        return L === 'DEBT' ? DEBT_COLUMNS.some(c => num(all[c]) > 0) : detectType(all, L) !== 'none';
+    };
+    const dirty = () => { const all = collect(); return sections().some(sec => answersOf(sec, all) !== snapshot[sec.dataset.level]); };
+
+    // The summary: job title (or description) and type on the left, the monthly amount, and an edit button
     function summarize(section) {
         const L = section.dataset.level;
+        const all = collect();
+        let title, sub, amount;
+        if (L === 'DEBT') {
+            const entered = DEBT_COLUMNS.filter(c => num(all[c]) > 0);
+            title = 'Monthly Debts';
+            sub = entered.map(c => DEBT_NAMES[c]).join(', ');
+            amount = entered.reduce((sum, c) => sum + num(all[c]), 0);
+        } else {
+            const type = selectedType(L);
+            title = (type === '1099' ? all[L + ' 1099 INCOME DESCRIPTION'] : all[L + ' JOB TITLE']) || TITLES[L];
+            sub = TYPE_NAMES[type] + (type === '1099' ? ' income' : '');
+            amount = levelYearly(formGetter(L), type) / 12;
+        }
         const box = section.querySelector('.ie-summary');
-        const row = (label, value, target) => '<div class="ie-row" data-row="' + target + '"><span class="ie-k">' + label + '</span><span class="ie-v"></span>'
-            + '<button type="button" class="ie-edit" aria-label="Edit ' + label + '" data-edit="' + target + '">' + PENCIL_ICON + '</button></div>';
-        const rows = [];
-        const values = [];
-        if (L !== 'DEBT') { rows.push(row('Income Type', '', 'type')); values.push(TYPE_NAMES[selectedType(L)] || 'None'); }
-        section.querySelectorAll('[data-col]').forEach(el => {
-            if (!shown(el) || !hasValue(el)) return;
-            const label = el.closest('.field').querySelector('label').textContent;
-            rows.push(row(label, '', el.id));
-            values.push(el.tagName === 'SELECT' ? el.options[el.selectedIndex].text
-                : el.classList.contains('money') ? money.format(num(el.value)) : el.value.trim());
+        box.innerHTML = '<div class="ie-card"><span class="ie-card-text"><span class="ie-card-title"></span><span class="ie-card-sub"></span></span>'
+            + '<span class="ie-card-amount"></span><button type="button" class="ie-edit" data-edit aria-label="Edit ' + TITLES[L] + '">' + PENCIL_ICON + '</button></div>';
+        box.querySelector('.ie-card-title').textContent = title;
+        box.querySelector('.ie-card-sub').textContent = sub;
+        box.querySelector('.ie-card-amount').textContent = money.format(amount) + ' / mo';
+    }
+    // Redraw every section: which mode it's in, whether it's locked (another one is being edited), and edited-not-saved
+    function render() {
+        const all = collect();
+        // Income levels are added in order: every level with something in it shows, plus only the first empty one
+        // (from what's in the form right now, saved or not)
+        const firstEmpty = LEVELS.find(L => !isFilled(sectionFor(L), all));
+        sections().forEach(section => {
+            const L = section.dataset.level;
+            section.hidden = L !== 'DEBT' && section !== editing && !isFilled(section, all) && L !== firstEmpty;
+            const mode = section === editing ? 'edit' : isFilled(section, all) ? 'view' : 'empty';
+            section.dataset.mode = mode;
+            if (mode === 'view') summarize(section);
+            const locked = !!editing && section !== editing;
+            section.classList.toggle('is-locked', locked);
+            section.querySelectorAll('[data-edit], [data-add]').forEach(b => { b.disabled = locked; });
+            if (locked) section.querySelector('.ie-locked span').textContent = 'Press Done on ' + TITLES[editing.dataset.level] + ' before editing this section.';
+            section.classList.toggle('is-edited', section !== editing && answersOf(section, all) !== snapshot[L]);
         });
-        box.innerHTML = rows.join('');
-        box.querySelectorAll('.ie-v').forEach((v, i) => { v.textContent = values[i]; });
+    }
+    function startEditing(section, adding) {
+        if (editing && editing !== section) return;
+        const L = section.dataset.level;
+        // A new income starts as Salary so its questions show right away
+        if (adding && L !== 'DEBT' && selectedType(L) === 'none') {
+            form.querySelector('#ie-' + L.toLowerCase() + '-type-salary').checked = true;
+            showType(L);
+            updateTotals();
+        }
+        editing = section;
+        render();
+        const first = [...section.querySelectorAll('.type-fields input, .type-fields select')].find(el => !el.closest('[hidden]'));
+        if (first) first.focus();
     }
     form.addEventListener('click', e => {
         const section = e.target.closest('.income-section');
         if (!section) return;
-        if (e.target.closest('[data-add]')) {
-            // Open the whole section; income starts as Salary so its questions show right away
-            const L = section.dataset.level;
-            if (L !== 'DEBT' && selectedType(L) === 'none') { form.querySelector('#ie-' + L.toLowerCase() + '-type-salary').checked = true; showType(L); updateTotals(); }
-            setMode(section, 'edit');
-            const first = [...section.querySelectorAll('.type-fields input, .type-fields select')].find(shown);
-            if (first) first.focus();
-        } else if (e.target.closest('[data-edit-all]')) {
-            setMode(section, 'edit');
-        } else if (e.target.closest('[data-edit]')) {
-            const target = e.target.closest('[data-edit]').dataset.edit;
-            // Changing the income type changes which questions apply, so that opens the whole section
-            if (target === 'type') { setMode(section, 'edit'); return; }
-            // The row turns into its input, right where it is: a copy that writes through to the real field
-            const input = form.querySelector('#' + target);
-            const row = section.querySelector('.ie-row[data-row="' + target + '"]');
-            const label = input.closest('.field').querySelector('label').textContent;
-            const copy = input.cloneNode(true);
-            copy.removeAttribute('data-col');
-            copy.id = target + '-inline';
-            copy.value = input.value;
-            const holder = document.createElement('div');
-            holder.className = 'field ie-inline';
-            holder.innerHTML = '<label for="' + copy.id + '"></label>';
-            holder.querySelector('label').textContent = label;
-            if (input.closest('.money-wrap')) { const wrap = document.createElement('div'); wrap.className = 'money-wrap'; wrap.append(copy); holder.append(wrap); }
-            else holder.append(copy);
-            const sync = () => { input.value = copy.value; input.dispatchEvent(new Event('input', { bubbles: true })); };
-            copy.addEventListener('input', sync);
-            copy.addEventListener('change', () => { sync(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-            // Leaving it puts the row back, with the new value
-            holder.addEventListener('focusout', () => setTimeout(() => {
-                if (holder.contains(document.activeElement) || !holder.isConnected) return;
-                if (section.dataset.mode === 'view') summarize(section);
-            }, 0));
-            row.replaceWith(holder);
-            copy.focus();
+        if (e.target.closest('[data-add]')) startEditing(section, true);
+        else if (e.target.closest('[data-edit]')) startEditing(section, false);
+        else if (e.target.closest('[data-done]')) {
+            const problem = validate();
+            if (problem) { message.textContent = problem; return; }
+            message.textContent = '';
+            editing = null;
+            render();
+            section.scrollIntoView({ block: 'nearest' });
         }
     });
+
+    // "Are you sure?" before throwing away unsaved changes
+    const confirmBox = form.querySelector('.ie-confirm');
+    function requestClose() {
+        if (saveBtn.disabled) return;
+        if (dirty()) { confirmBox.hidden = false; confirmBox.querySelector('[data-keep]').focus(); return; }
+        dialog.close();
+    }
+    confirmBox.querySelector('[data-keep]').addEventListener('click', () => { confirmBox.hidden = true; });
+    confirmBox.querySelector('[data-discard]').addEventListener('click', () => { confirmBox.hidden = true; dialog.close(); });
 
     function fill() {
         form.querySelectorAll('[data-col]').forEach(el => {
@@ -375,22 +437,34 @@ export function createIncomeEditor({ save, onSaved }) {
         LEVELS.forEach(L => {
             form.querySelector('#ie-' + L.toLowerCase() + '-type-' + detectType(current, L)).checked = true;
             showType(L);
+            sectionFor(L).querySelectorAll('.type-fields').forEach(group => {
+                Object.keys(EXTRA_COLUMNS).forEach(kind => {
+                    const has = EXTRA_COLUMNS[kind].some(c => String(getCol(current, L + ' ' + c) || '').trim() && (c.endsWith('INTERVAL') || num(getCol(current, L + ' ' + c)) > 0));
+                    const yes = group.querySelector('input[data-extra-toggle="' + kind + '"][value="yes"]');
+                    if (!yes) return;
+                    yes.checked = has;
+                    group.querySelector('input[data-extra-toggle="' + kind + '"][value="no"]').checked = !has;
+                    showExtra(yes);
+                });
+            });
         });
         updateTotals();
-        // Sections with something entered start as rows; empty ones start as a + button
-        sections().forEach(section => {
-            const L = section.dataset.level;
-            const filled = L === 'DEBT' ? DEBT_COLUMNS.some(c => num(getCol(current, c)) > 0) : detectType(current, L) !== 'none';
-            setMode(section, filled ? 'view' : 'empty');
-        });
+        // Remember the answers as loaded (to spot edits), and start with nothing open
+        const all = collect();
+        snapshot = {};
+        sections().forEach(section => { snapshot[section.dataset.level] = answersOf(section, all); });
+        editing = null;
+        confirmBox.hidden = true;
+        render();
     }
 
     // Checks the fields that are showing. Returns an error message, or '' when everything's fine.
     function validate() {
         form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
         const bad = (el, msg) => {
+            // Open the section with the problem (only one section is open at a time)
             const section = el.closest('.income-section');
-            if (section && section.dataset.mode !== 'edit') setMode(section, 'edit');
+            if (section && editing !== section) { editing = section; render(); }
             el.classList.add('is-invalid');
             el.focus();
             return msg;
@@ -405,14 +479,19 @@ export function createIncomeEditor({ save, onSaved }) {
             const group = visibleGroup(L);
             if (!group) continue;
             const input = c => group.querySelector('[data-col="' + L + ' ' + c + '"]');
-            const name = L.charAt(0) + L.slice(1).toLowerCase() + ' income';
+            const name = TITLES[L];
             const need = (c, what) => num(input(c).value) > 0 ? '' : bad(input(c), name + ': please enter ' + what + '.');
             const missing = type === 'salary' ? need('WEEKLY SALARY', 'the weekly salary')
                 : type === 'hourly' ? need('HOURLY RATE', 'the hourly rate') || need('WEEKLY HOURS', 'the hours per week')
                 : type === '1099' ? need('1099 YEARLY INCOME', 'the yearly 1099 income') : '';
             if (missing) return missing;
             if (type === 'salary' || type === 'hourly') {
+                const said = kind => group.querySelector('input[data-extra-toggle="' + kind + '"][value="yes"]').checked;
+                if (said('tips') && !(num(input('WEEKLY TIPS').value) > 0)) return bad(input('WEEKLY TIPS'), name + ': please enter the weekly tips, or answer No.');
+                if (said('commission') && !(num(input('COMMISSION AMOUNT').value) > 0) && !input('COMMISSION INTERVAL').value) return bad(input('COMMISSION INTERVAL'), name + ': please enter the commission, or answer No.');
+                if (said('bonus') && !(num(input('BONUS AMOUNT').value) > 0) && !input('BONUS INTERVAL').value) return bad(input('BONUS INTERVAL'), name + ': please enter the bonus, or answer No.');
                 for (const kind of ['COMMISSION', 'BONUS']) {
+                    if (!said(kind.toLowerCase())) continue;
                     const amount = input(kind + ' AMOUNT');
                     const interval = input(kind + ' INTERVAL');
                     if (num(amount.value) > 0 && !interval.value) return bad(interval, name + ': please choose how often the ' + kind.toLowerCase() + ' is paid.');
@@ -438,13 +517,30 @@ export function createIncomeEditor({ save, onSaved }) {
     function setSaving(saving) {
         form.querySelectorAll('input, select, button').forEach(el => { el.disabled = saving; });
         saveBtn.classList.toggle('is-loading', saving);
+        if (!saving) render(); // put the locked sections' buttons back the way they were
     }
-    const close = () => { if (!saveBtn.disabled) dialog.close(); };
-    form.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', close));
-    dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
-    dialog.addEventListener('cancel', e => { if (saveBtn.disabled) e.preventDefault(); });
+    form.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', requestClose));
+    dialog.addEventListener('click', e => { if (e.target === dialog) requestClose(); });
+    // Escape: same as Cancel (asks first when there are unsaved changes)
+    dialog.addEventListener('cancel', e => {
+        e.preventDefault();
+        if (!confirmBox.hidden) { confirmBox.hidden = true; return; }
+        requestClose();
+    });
+    // Show an extra's inputs only while its question is answered Yes
+    function showExtra(toggle) {
+        const group = toggle.closest('.type-fields');
+        const box = group.querySelector('.ie-extra[data-extra="' + toggle.dataset.extraToggle + '"]');
+        const yes = group.querySelector('input[data-extra-toggle="' + toggle.dataset.extraToggle + '"][value="yes"]').checked;
+        box.hidden = !yes;
+    }
     form.addEventListener('change', e => {
-        if (e.target.type === 'radio') showType(e.target.name.replace(/^ie-/, '').split('-')[0].toUpperCase());
+        if (e.target.dataset && e.target.dataset.extraToggle) {
+            showExtra(e.target);
+            const first = !e.target.closest('.type-fields').querySelector('.ie-extra[data-extra="' + e.target.dataset.extraToggle + '"]').hidden
+                && e.target.closest('.type-fields').querySelector('.ie-extra[data-extra="' + e.target.dataset.extraToggle + '"] input, .ie-extra[data-extra="' + e.target.dataset.extraToggle + '"] select');
+            if (first) first.focus();
+        } else if (e.target.type === 'radio') showType(e.target.name.replace(/^ie-/, '').split('-')[0].toUpperCase());
         updateTotals();
     });
     form.addEventListener('input', e => {
