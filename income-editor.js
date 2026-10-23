@@ -94,6 +94,43 @@ const CSS = `
 .income-dialog .type-picker input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
 
 .income-dialog .type-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+/* Each section is "view" (what's entered, one row per item with a pencil), "empty" (a + button) or "edit" (the full form) */
+.income-dialog .ie-summary { display: none; }
+.income-dialog .income-section[data-mode="view"] .ie-summary { display: block; }
+.income-dialog .income-section[data-mode="view"] .type-picker,
+.income-dialog .income-section[data-mode="view"] .sub-label,
+.income-dialog .income-section[data-mode="view"] .type-fields { display: none; }
+.income-dialog .ie-inline { padding: 12px 0; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+.income-dialog .ie-inline:last-child { border-bottom: none; }
+.income-dialog .income-section[data-mode="empty"] > :not(.section-head):not(.ie-add) { display: none; }
+.income-dialog .income-section[data-mode="empty"] .section-total,
+.income-dialog .income-section:not([data-mode="view"]) .ie-edit-all { display: none; }
+.income-dialog .ie-add { display: none; }
+.income-dialog .income-section[data-mode="empty"] .ie-add { display: flex; }
+.income-dialog .ie-add {
+    align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 16px;
+    border: 2px dashed rgba(78, 81, 62, 0.45); border-radius: 16px; background: #fbf9f6;
+    font-family: inherit; font-size: 1rem; font-weight: bold; color: var(--rust); text-align: left; cursor: pointer;
+}
+.income-dialog .ie-add span.ie-plus { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--olive); color: var(--cream); display: flex; align-items: center; justify-content: center; }
+.income-dialog .ie-add svg { width: 18px; height: 18px; }
+@media (hover: hover) { .income-dialog .ie-add:hover { border-color: var(--navy); } }
+.income-dialog .ie-row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+.income-dialog .ie-row:last-child { border-bottom: none; }
+.income-dialog .ie-row[hidden] { display: none; }
+.income-dialog .ie-k { font-weight: bold; flex: 0 1 auto; }
+.income-dialog .ie-v { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.income-dialog .ie-edit {
+    flex: 0 0 auto; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+    border: 2px solid var(--navy); border-radius: 50%; background: var(--white); color: var(--olive); cursor: pointer;
+}
+.income-dialog .ie-edit svg { width: 16px; height: 16px; }
+@media (hover: hover) { .income-dialog .ie-edit:hover { background: var(--olive); color: var(--cream); } }
+.income-dialog .ie-edit-all {
+    margin-left: auto; padding: 4px 2px; border: none; background: none; cursor: pointer;
+    font-family: inherit; font-size: 0.85rem; font-weight: bold; color: var(--rust); text-decoration: underline; text-underline-offset: 3px;
+}
+.income-dialog .section-head { align-items: center; }
 .income-dialog .type-fields[hidden] { display: none; }
 .income-dialog .span-2 { grid-column: 1 / -1; }
 .income-dialog .sub-label { grid-column: 1 / -1; margin: 6px 0 -4px 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
@@ -125,6 +162,9 @@ const CSS = `
     .income-dialog .dialog-scroll { padding: 4px 20px 8px 20px; }
     .income-dialog .dialog-foot { padding: 12px 20px calc(env(safe-area-inset-bottom, 0px) + 16px) 20px; border-radius: 0; }
     .income-dialog .type-fields { grid-template-columns: 1fr; }
+    .income-dialog .ie-row { flex-wrap: wrap; }
+    .income-dialog .ie-row .ie-v { flex-basis: calc(100% - 60px); order: 3; text-align: left; opacity: 0.85; margin-top: -6px; }
+    .income-dialog .ie-row .ie-k { flex: 1; }
     .income-dialog .type-picker label { font-size: 0.85rem; }
     .income-dialog .form-actions { flex-direction: column-reverse; }
     .income-dialog .form-actions .btn { width: 100%; }
@@ -149,11 +189,16 @@ const extras = (L, p) => '<p class="sub-label">Extra Pay</p>'
     + moneyField(L + ' COMMISSION AMOUNT', 'Commission Amount', false, p + slug(L + ' COMMISSION AMOUNT'))
     + intervalField(L + ' BONUS INTERVAL', 'Bonus Paid', p + slug(L + ' BONUS INTERVAL'))
     + moneyField(L + ' BONUS AMOUNT', 'Bonus Amount', false, p + slug(L + ' BONUS AMOUNT'));
+const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
+const sectionExtras = title => '<button type="button" class="ie-add" data-add><span class="ie-plus">' + PLUS_ICON + '</span>Add ' + title + '</button><div class="ie-summary"></div>';
+const editAll = '<button type="button" class="ie-edit-all" data-edit-all>Edit All</button>';
 const levelSection = (L, title) => {
     const key = 'ie-' + L.toLowerCase();
     const radio = (value, label) => '<input type="radio" name="' + key + '-type" id="' + key + '-type-' + value + '" value="' + value + '"><label for="' + key + '-type-' + value + '">' + label + '</label>';
     return '<fieldset class="income-section" data-level="' + L + '">'
-        + '<div class="section-head"><h3>' + title + '</h3><span class="section-total" data-total="' + L + '"></span></div>'
+        + '<div class="section-head"><h3>' + title + '</h3><span class="section-total" data-total="' + L + '"></span>' + editAll + '</div>'
+        + sectionExtras(title)
         + '<div class="type-picker" role="radiogroup" aria-label="' + title + ' type">' + radio('none', 'None') + radio('salary', 'Salary') + radio('hourly', 'Hourly') + radio('1099', '1099') + '</div>'
         + '<div class="type-fields" data-type="salary" hidden>' + textField(L + ' JOB TITLE', 'Job Title', true, key + '-salary-title')
             + moneyField(L + ' WEEKLY SALARY', 'Weekly Salary', true) + extras(L, 's-') + '</div>'
@@ -168,7 +213,7 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
     + '<div class="dialog-head"><h2 id="income-dialog-title">Your Income</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
     + '<p class="muted">Add each job or source of income, plus your monthly debt payments.</p>'
     + '<div class="dialog-scroll">' + levelSection('PRIMARY', 'Primary Income') + levelSection('SECONDARY', 'Secondary Income') + levelSection('TERTIARY', 'Tertiary Income')
-        + '<fieldset class="income-section" data-level="DEBT"><div class="section-head"><h3>Monthly Debt Payments</h3></div><div class="type-fields">'
+        + '<fieldset class="income-section" data-level="DEBT"><div class="section-head"><h3>Monthly Debt Payments</h3>' + editAll + '</div>' + sectionExtras('Monthly Debt Payments') + '<div class="type-fields">'
         + moneyField('CAR LOAN PAYMENT', 'Car Loan') + moneyField('MORTGAGE PAYMENT', 'Mortgage') + moneyField('CREDIT CARD PAYMENT', 'Credit Cards') + moneyField('OTHER PAYMENT', 'Other Payments')
         + '</div></fieldset></div>'
     + '<div class="dialog-foot"><div class="total-row"><span>Monthly Income</span><span class="total-value" data-grand-total>$0.00</span></div>'
@@ -243,6 +288,77 @@ export function createIncomeEditor({ save, onSaved }) {
         });
         grandTotal.textContent = money.format(yearly / 12);
     }
+    // --- View / empty / edit sections ---
+    const TYPE_NAMES = { none: 'None', salary: 'Salary', hourly: 'Hourly', '1099': '1099' };
+    const sections = () => [...form.querySelectorAll('.income-section')];
+    const hasValue = el => (el.tagName === 'SELECT' ? !!el.value : isDecimal(el) ? num(el.value) > 0 : !!el.value.trim());
+    const shown = el => !el.closest('[hidden]');
+    function setMode(section, mode) {
+        section.dataset.mode = mode;
+        if (mode === 'view') summarize(section);
+    }
+    // One row per entered value (and the income type), each with a pencil that opens just that input
+    function summarize(section) {
+        const L = section.dataset.level;
+        const box = section.querySelector('.ie-summary');
+        const row = (label, value, target) => '<div class="ie-row" data-row="' + target + '"><span class="ie-k">' + label + '</span><span class="ie-v"></span>'
+            + '<button type="button" class="ie-edit" aria-label="Edit ' + label + '" data-edit="' + target + '">' + PENCIL_ICON + '</button></div>';
+        const rows = [];
+        const values = [];
+        if (L !== 'DEBT') { rows.push(row('Income Type', '', 'type')); values.push(TYPE_NAMES[selectedType(L)] || 'None'); }
+        section.querySelectorAll('[data-col]').forEach(el => {
+            if (!shown(el) || !hasValue(el)) return;
+            const label = el.closest('.field').querySelector('label').textContent;
+            rows.push(row(label, '', el.id));
+            values.push(el.tagName === 'SELECT' ? el.options[el.selectedIndex].text
+                : el.classList.contains('money') ? money.format(num(el.value)) : el.value.trim());
+        });
+        box.innerHTML = rows.join('');
+        box.querySelectorAll('.ie-v').forEach((v, i) => { v.textContent = values[i]; });
+    }
+    form.addEventListener('click', e => {
+        const section = e.target.closest('.income-section');
+        if (!section) return;
+        if (e.target.closest('[data-add]')) {
+            // Open the whole section; income starts as Salary so its questions show right away
+            const L = section.dataset.level;
+            if (L !== 'DEBT' && selectedType(L) === 'none') { form.querySelector('#ie-' + L.toLowerCase() + '-type-salary').checked = true; showType(L); updateTotals(); }
+            setMode(section, 'edit');
+            const first = [...section.querySelectorAll('.type-fields input, .type-fields select')].find(shown);
+            if (first) first.focus();
+        } else if (e.target.closest('[data-edit-all]')) {
+            setMode(section, 'edit');
+        } else if (e.target.closest('[data-edit]')) {
+            const target = e.target.closest('[data-edit]').dataset.edit;
+            // Changing the income type changes which questions apply, so that opens the whole section
+            if (target === 'type') { setMode(section, 'edit'); return; }
+            // The row turns into its input, right where it is: a copy that writes through to the real field
+            const input = form.querySelector('#' + target);
+            const row = section.querySelector('.ie-row[data-row="' + target + '"]');
+            const label = input.closest('.field').querySelector('label').textContent;
+            const copy = input.cloneNode(true);
+            copy.removeAttribute('data-col');
+            copy.id = target + '-inline';
+            copy.value = input.value;
+            const holder = document.createElement('div');
+            holder.className = 'field ie-inline';
+            holder.innerHTML = '<label for="' + copy.id + '"></label>';
+            holder.querySelector('label').textContent = label;
+            if (input.closest('.money-wrap')) { const wrap = document.createElement('div'); wrap.className = 'money-wrap'; wrap.append(copy); holder.append(wrap); }
+            else holder.append(copy);
+            const sync = () => { input.value = copy.value; input.dispatchEvent(new Event('input', { bubbles: true })); };
+            copy.addEventListener('input', sync);
+            copy.addEventListener('change', () => { sync(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+            // Leaving it puts the row back, with the new value
+            holder.addEventListener('focusout', () => setTimeout(() => {
+                if (holder.contains(document.activeElement) || !holder.isConnected) return;
+                if (section.dataset.mode === 'view') summarize(section);
+            }, 0));
+            row.replaceWith(holder);
+            copy.focus();
+        }
+    });
+
     function fill() {
         form.querySelectorAll('[data-col]').forEach(el => {
             const v = getCol(current, el.dataset.col);
@@ -261,12 +377,24 @@ export function createIncomeEditor({ save, onSaved }) {
             showType(L);
         });
         updateTotals();
+        // Sections with something entered start as rows; empty ones start as a + button
+        sections().forEach(section => {
+            const L = section.dataset.level;
+            const filled = L === 'DEBT' ? DEBT_COLUMNS.some(c => num(getCol(current, c)) > 0) : detectType(current, L) !== 'none';
+            setMode(section, filled ? 'view' : 'empty');
+        });
     }
 
     // Checks the fields that are showing. Returns an error message, or '' when everything's fine.
     function validate() {
         form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-        const bad = (el, msg) => { el.classList.add('is-invalid'); el.focus(); return msg; };
+        const bad = (el, msg) => {
+            const section = el.closest('.income-section');
+            if (section && section.dataset.mode !== 'edit') setMode(section, 'edit');
+            el.classList.add('is-invalid');
+            el.focus();
+            return msg;
+        };
         for (const el of form.querySelectorAll('input[inputmode="decimal"]')) {
             if (el.closest('[hidden]') || !el.value.trim()) continue;
             const n = Number(el.value.trim().replace(/[$,]/g, ''));
