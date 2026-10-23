@@ -883,6 +883,30 @@
 
         /* Version dropdown in Property Details */
         .version-field { margin-top: 18px; }
+        /* "+ New Version" at the bottom of the version list (admins) */
+        .picker-add {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            min-height: 52px;
+            margin-top: 4px;
+            padding: 10px 14px;
+            border: none;
+            border-top: 1px solid rgba(78, 81, 62, 0.15);
+            border-radius: 0 0 14px 14px;
+            background: transparent;
+            color: var(--rust);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            text-align: left;
+            cursor: pointer;
+        }
+        .picker-add svg { width: 20px; height: 20px; flex-shrink: 0; }
+        @media (hover: hover) { .picker-add:hover { background: #f4efe8; } }
+        .version-dialog { max-width: 480px; }
+        .version-dialog .dialog-scroll { padding-top: 18px; padding-bottom: 20px; }
 
         /* Problem screen */
         .problem-card { text-align: center; padding: 44px 30px 40px 30px; }
@@ -1106,7 +1130,7 @@
 
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
-        import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
+        import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles } from '/income-editor.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -2382,7 +2406,7 @@
         function setupVersionPicker() {
             const versions = sortedVersions();
             const field = document.getElementById('version-field');
-            field.hidden = versions.length < 2;
+            field.hidden = versions.length < 2 && !data.isAdmin;
             if (field.hidden) return;
             const dateText = d => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
             makePicker({
@@ -2396,15 +2420,107 @@
                     icon: 'calendar',
                 })),
                 selected: [pageId],
-                onChange: switchVersion,
+                onChange: id => switchVersion(id),
             });
+            if (data.isAdmin) addNewVersionRow();
+        }
+
+        // --- New version (admins) ---
+        const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+        const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        // "+ New Version" at the bottom of the open dropdown
+        function addNewVersionRow() {
+            const picker = document.querySelector('#version-picker .picker');
+            const add = el('button', 'picker-add', PLUS_ICON + '<span>New Version</span>');
+            add.type = 'button';
+            add.addEventListener('pointerdown', e => e.preventDefault());
+            add.addEventListener('click', () => {
+                picker.classList.remove('is-open');
+                picker.querySelector('.picker-btn').setAttribute('aria-expanded', 'false');
+                openVersionDialog();
+            });
+            picker.querySelector('.picker-list').append(add);
+        }
+
+        let versionDialog = null;
+        function openVersionDialog() {
+            if (hasUnsavedSettings() && !confirm('Your unsaved settings changes won’t be copied into the new version and will be lost. Continue?')) return;
+            if (!versionDialog) versionDialog = buildVersionDialog();
+            versionDialog.open();
+        }
+        // The same pop-up as the income editor: a card on wide screens, a sheet that slides up on phones
+        function buildVersionDialog() {
+            ensureDialogStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog version-dialog';
+            dialog.setAttribute('aria-labelledby', 'version-dialog-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="version-dialog-title">New Version</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+                + '<p class="muted">Makes a copy of the version you’re viewing, dated today.</p>'
+                + '<div class="dialog-scroll"><div class="field"><label for="version-title-input">Version Title</label>'
+                + '<input id="version-title-input" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Counter Offer"></div></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
+                + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Create Version</button></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const form = dialog.querySelector('form');
+            const input = dialog.querySelector('#version-title-input');
+            const message = dialog.querySelector('.form-message');
+            const saveBtn = dialog.querySelector('[data-save]');
+            let saving = false;
+            const close = () => { if (!saving) dialog.close(); };
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+            // Tapping outside the pop-up closes it
+            dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+            dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
+            input.addEventListener('input', () => { message.textContent = ''; input.classList.remove('is-invalid'); });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                const title = input.value.trim();
+                if (!title) { message.textContent = 'Please enter a version title.'; input.classList.add('is-invalid'); input.focus(); return; }
+                saving = true;
+                saveBtn.disabled = true;
+                saveBtn.classList.add('is-loading');
+                try {
+                    await createVersion(title);
+                    saving = false;
+                    dialog.close();
+                } catch (err) {
+                    console.error(err);
+                    message.textContent = 'We couldn’t create the version. Please try again.';
+                } finally {
+                    saving = false;
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('is-loading');
+                }
+            });
+            return {
+                open() {
+                    input.value = '';
+                    input.classList.remove('is-invalid');
+                    message.textContent = '';
+                    dialog.showModal();
+                    input.focus();
+                },
+            };
+        }
+        // Copy the version being viewed into a new PAGES row, then load it (with the updated version list) and show it
+        async function createVersion(title) {
+            const made = await api({ action: 'createVersion', pageId, title });
+            if (!made.ok) throw new Error(made.error);
+            const fresh = await api({ action: 'page', pageId: made.pageId });
+            if (!fresh.ok) throw new Error(fresh.error);
+            data.versions = fresh.versions || data.versions;
+            switchVersion(made.pageId, true);
+            setupVersionPicker();
         }
         // Admin edits that haven't been saved yet (switching would throw them away)
         const hasUnsavedSettings = () => data.isAdmin && (Object.keys(draft).length > 0 || pickedLoanIndex !== loanIndex || pickedCash !== cashSelected);
-        function switchVersion(id) {
+        function switchVersion(id, skipCheck) {
             const chosen = (data.versions || []).find(v => text(col(v.page, 'PAGE ID')) === id);
             if (!chosen || id === pageId) return;
-            if (hasUnsavedSettings() && !confirm('Switch versions? Your unsaved settings changes will be lost.')) { setupVersionPicker(); return; }
+            if (!skipCheck && hasUnsavedSettings() && !confirm('Switch versions? Your unsaved settings changes will be lost.')) { setupVersionPicker(); return; }
             pageId = id;
             data.page = chosen.page;
             data.clients = chosen.clients;

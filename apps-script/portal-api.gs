@@ -120,6 +120,8 @@ function doPost(e) {
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
     // Home page: the Buyer Breakdown pages this account is listed on (and, for admins, every buyer's)
     if (body.action === 'myPages') return json_(myPagesData_(id, found.row));
+    // pages.html (admins): copy the page into a new version
+    if (body.action === 'createVersion') return json_(createVersion_(id, found.row, body));
     // pages.html (admins): change who can see the page
     if (body.action === 'updatePageAccess') return json_(updatePageAccess_(id, found.row, body));
 
@@ -277,6 +279,37 @@ function updatePageAccess_(id, account, body) {
 }
 
 // Adds any of the named headers that the sheet doesn't have yet to the end of row 1. Returns the updated headers.
+// Admins only: a new PAGES row copied from this page (formats included), with the next free PAGE ID,
+// the given VERSION TITLE and today's VERSION DATE
+function createVersion_(id, account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const title = cleanText_(body.title, 80);
+  if (!title) return { ok: false, error: 'missing_title' };
+  const found = findPage_(body.pageId);
+  if (!found || !isOnPage_(found.row, id)) return { ok: false, error: 'page_not_found' };
+  const sheet = found.sheet;
+  const headers = addMissingColumns_(sheet, found.headers, ['VERSION TITLE', 'VERSION DATE']);
+  const idCol = colFor_(headers, 'page id');
+  const lastRow = sheet.getLastRow();
+  // New PAGE ID: the highest number in the column plus 1 (raw values, so "4,269" or 4269.0 still count)
+  var highest = 0;
+  sheet.getRange(2, idCol, Math.max(lastRow - 1, 1), 1).getValues().forEach(function (r) {
+    const n = Number(String(r[0]).replace(/,/g, '').trim());
+    if (String(r[0]).trim() !== '' && isFinite(n)) highest = Math.max(highest, n);
+  });
+  const newId = Math.floor(highest) + 1;
+  const width = Math.max(sheet.getLastColumn(), headers.length);
+  // Add the row first: the sheet's grid may end right at the last page
+  sheet.insertRowAfter(lastRow);
+  const target = lastRow + 1;
+  sheet.getRange(found.rowNumber, 1, 1, width).copyTo(sheet.getRange(target, 1, 1, width));
+  sheet.getRange(target, idCol).setValue(newId);
+  sheet.getRange(target, colFor_(headers, 'version title')).setValue(title);
+  sheet.getRange(target, colFor_(headers, 'version date')).setValue(new Date());
+  SpreadsheetApp.flush();
+  return { ok: true, pageId: String(newId) };
+}
+
 function addMissingColumns_(sheet, headers, names) {
   const out = headers.slice();
   names.forEach(function (name) {

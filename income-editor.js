@@ -177,18 +177,23 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
         + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Changes</button></div></div>'
     + '</form>';
 
+// The pop-up's styles (a centered card on wide screens, a swipe-up sheet on phones). Other pop-ups that use the
+// same classes (.income-dialog, .dialog-head, .dialog-foot...) call this too.
+export function ensureDialogStyles() {
+    if (document.getElementById('income-editor-css')) return;
+    const style = document.createElement('style');
+    style.id = 'income-editor-css';
+    style.textContent = CSS;
+    document.head.appendChild(style);
+}
+
 /**
  * Builds the income pop-up (once) and returns { open(row) }.
  * save(income) gets { "COLUMN": value, ... } for every income column and must resolve to the saved row (or throw).
  * onSaved(row) runs after a successful save, once the pop-up has closed.
  */
 export function createIncomeEditor({ save, onSaved }) {
-    if (!document.getElementById('income-editor-css')) {
-        const style = document.createElement('style');
-        style.id = 'income-editor-css';
-        style.textContent = CSS;
-        document.head.appendChild(style);
-    }
+    ensureDialogStyles();
     const dialog = document.createElement('dialog');
     dialog.className = 'income-dialog';
     dialog.setAttribute('aria-labelledby', 'income-dialog-title');
