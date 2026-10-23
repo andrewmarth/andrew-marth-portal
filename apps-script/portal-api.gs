@@ -196,9 +196,14 @@ function findPage_(pageId) {
   return null;
 }
 
-// Only the accounts in the page's access columns may see it - admins included
+// Whether an account is listed in one of the page's access columns
 function isOnPage_(page, id) {
   return PAGE_ACCESS_COLUMNS.some(function (col) { return page[col] && phoneToId_(page[col]) === id; });
+}
+
+// Who may open a page: the accounts listed on it, and admins (always)
+function canSeePage_(page, id, account) {
+  return isAdmin_(account) || isOnPage_(page, id);
 }
 
 // Roles are TRUE/FALSE columns in ACCOUNT LIST (BUYER, SELLER, LANDLORD, FLIPPER BUYER, FLIPPER SELLER, ADMIN, LENDER).
@@ -227,7 +232,7 @@ function accountChoices_() {
 // account columns with their type beside them, plus one lender (or none)
 function updatePageAccess_(id, account, body) {
   const found = findPage_(body.pageId);
-  if (!found || !isOnPage_(found.row, id)) return { ok: false, error: 'page_not_found' };
+  if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
   if (!isAdmin_(account)) return { ok: false, error: 'not_allowed' };
 
   const accounts = accountChoices_();
@@ -288,7 +293,7 @@ function createVersion_(id, account, body) {
   const title = cleanText_(body.title, 80);
   if (!title) return { ok: false, error: 'missing_title' };
   const found = findPage_(body.pageId);
-  if (!found || !isOnPage_(found.row, id)) return { ok: false, error: 'page_not_found' };
+  if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
   const sheet = found.sheet;
   const headers = addMissingColumns_(sheet, found.headers, ['VERSION TITLE', 'VERSION DATE']);
   const idCol = colFor_(headers, 'page id');
@@ -453,7 +458,7 @@ function addMissingColumns_(sheet, headers, names) {
 function pageData_(id, account, pageId) {
   if (!String(pageId || '').trim()) return { ok: false, error: 'missing_page' };
   const found = findPage_(pageId);
-  if (!found || !isOnPage_(found.row, id)) return { ok: false, error: 'page_not_found' };
+  if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
   const page = found.row;
   const isAdmin = isAdmin_(account);
 
@@ -551,7 +556,7 @@ function addBuyerBreakdownData_(result, page) {
       return String(p['PAGE ID'] || '').trim()
         && String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'buyer breakdown'
         && addressKey_(p) === key
-        && isOnPage_(p, result.viewerId);
+        && (result.isAdmin || isOnPage_(p, result.viewerId));
     })
     .map(versionData_);
   // Admins get every inspector's price list, for the Settings dropdowns and to preview a new pick

@@ -1125,7 +1125,6 @@
                 <h3 class="money-section-title">Inspections</h3>
                 <div class="settings-grid" id="inspection-fields"></div>
             </div>
-            <p class="fine-note is-alert" id="access-warning" hidden>You're not on this list, so you'll lose access to this page once you save.</p>
             <div class="access-actions">
                 <p class="access-message" id="access-message" role="status"></p>
                 <button type="button" class="btn" id="access-save" disabled>
@@ -1871,7 +1870,6 @@
             const accounts = data.accounts || [];
             const saveBtn = document.getElementById('access-save');
             const message = document.getElementById('access-message');
-            const warning = document.getElementById('access-warning');
             const setMessage = (msg, kind) => { message.textContent = msg; message.className = 'access-message' + (msg ? ' is-' + kind : ''); };
 
             const accountItems = accounts.map(a => ({ value: a.id, main: a.name || phone(a.id), secondary: phone(a.id) }));
@@ -1926,7 +1924,6 @@
                 validateSettings();
                 setMessage('', '');
                 saveBtn.disabled = !people.value().length || Object.keys(fieldErrors).length > 0;
-                warning.hidden = people.value().includes(data.viewerId) || collaborators.value().includes(data.viewerId) || lender.value() === data.viewerId;
                 if (!people.value().length) setMessage('Choose at least one purchaser.', 'error');
                 else if (Object.keys(fieldErrors).length) setMessage('Please fix the highlighted settings before saving.', 'error');
             }
@@ -1948,8 +1945,6 @@
                     update();
                     setupVersionPicker();
                     setMessage('Saved! Your settings have been updated.', 'success');
-                    // Removed yourself? Reload, and the page will no longer open for you.
-                    if (!warning.hidden) setTimeout(() => location.reload(), 1500);
                 } catch (err) {
                     console.error(err);
                     setMessage('We couldn\'t save your settings. Please try again.', 'error');
