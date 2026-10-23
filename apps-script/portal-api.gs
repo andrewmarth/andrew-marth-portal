@@ -92,8 +92,12 @@ function cleanSetting_(kind, value) {
 // Allowed values for the commission and bonus interval columns
 const INTERVALS = ['Weekly', 'Monthly', 'Quarterly', 'Annually', 'Bi-Annually'];
 
+// Sheet reads made during one request (several page versions read the same sheets)
+var ROWS_CACHE_ = {};
+
 function doPost(e) {
   try {
+    ROWS_CACHE_ = {};
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     const phone = verifyPhone_(body.idToken);
     if (!phone) return json_({ ok: false, error: 'unauthorized' });
@@ -321,7 +325,7 @@ function myPagesData_(id, account) {
       city: String(p['CITY'] || '').trim(),
       state: String(p['STATE'] || '').trim(),
       zip: String(p['ZIP'] || '').trim(),
-      price: String(p['PURCHASE PRICE'] || '').trim(),
+      versionDate: String(p['VERSION DATE'] || '').trim(),
     };
   };
   const result = { ok: true, pages: pages.filter(function (p) { return isOnPage_(p, id); }).map(summary) };
@@ -368,23 +372,22 @@ function adminLinks_() {
 
 // Buyer Breakdown pages: every loan product, today's rate (first row) and the buyer's credit score
 function addBuyerBreakdownData_(result, page) {
-  // Credit score belongs to the page's buyer, not whoever is viewing (e.g. the lender)
-  var creditScore = null;
-  const buyerId = phoneToId_(page['PRIMARY ACCOUNT ID']);
-  if (buyerId) {
-    const income = findRow_(INCOME_SHEET_ID, INCOME_SHEET_NAME, buyerId);
-    if (income) creditScore = income.row['CREDIT SCORE'] || null;
-  }
+  const own = versionData_(page);
   result.loanProducts = allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME);
   result.interestRate = allRows_(RATE_SHEET_ID, RATE_SHEET_NAME)[0] || null;
-  result.creditScore = creditScore;
-  result.clients = pageClients_(page);
-  // The price-list row for each inspector chosen on the page (null when none is chosen or it isn't found)
-  result.inspectors = {
-    home: inspectorRow_(HOME_INSPECTORS_SHEET_ID, 'HOME INSPECTOR', page['HOME INSPECTOR']),
-    sewer: inspectorRow_(SEWER_INSPECTORS_SHEET_ID, 'SEWER INSPECTOR', page['SEWER INSPECTOR']),
-    termite: inspectorRow_(TERMITE_INSPECTORS_SHEET_ID, 'TERMITE INSPECTOR', page['TERMITE INSPECTOR']),
-  };
+  result.creditScore = own.creditScore;
+  result.clients = own.clients;
+  result.inspectors = own.inspectors;
+  // Every version of this address the viewer can see (this one included), for the version dropdown
+  const key = addressKey_(page);
+  result.versions = allRows_(PAGES_SHEET_ID, PAGES_SHEET_NAME)
+    .filter(function (p) {
+      return String(p['PAGE ID'] || '').trim()
+        && String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'buyer breakdown'
+        && addressKey_(p) === key
+        && isOnPage_(p, result.viewerId);
+    })
+    .map(versionData_);
   // Admins get every inspector's price list, for the Settings dropdowns and to preview a new pick
   if (result.isAdmin) {
     result.inspectorRows = {
@@ -395,8 +398,42 @@ function addBuyerBreakdownData_(result, page) {
   }
 }
 
+// What one version of a Buyer Breakdown page needs besides its own row
+function versionData_(page) {
+  // Credit score belongs to the page's buyer, not whoever is viewing (e.g. the lender)
+  var creditScore = null;
+  const buyerId = phoneToId_(page['PRIMARY ACCOUNT ID']);
+  if (buyerId) {
+    const income = allRows_(INCOME_SHEET_ID, INCOME_SHEET_NAME).filter(function (r) { return phoneToId_(r['ACCOUNT ID'] || r['ID']) === buyerId; })[0];
+    if (income) creditScore = income['CREDIT SCORE'] || null;
+  }
+  return {
+    page: page,
+    creditScore: creditScore,
+    clients: pageClients_(page),
+    // The price-list row for each inspector chosen on the page (null when none is chosen or it isn't found)
+    inspectors: {
+      home: inspectorRow_(HOME_INSPECTORS_SHEET_ID, 'HOME INSPECTOR', page['HOME INSPECTOR']),
+      sewer: inspectorRow_(SEWER_INSPECTORS_SHEET_ID, 'SEWER INSPECTOR', page['SEWER INSPECTOR']),
+      termite: inspectorRow_(TERMITE_INSPECTORS_SHEET_ID, 'TERMITE INSPECTOR', page['TERMITE INSPECTOR']),
+    },
+  };
+}
+
+// Pages for the same home share a street, city and zip (case, spacing and punctuation ignored)
+function addressKey_(page) {
+  return ['STREET ADDRESS', 'CITY', 'ZIP'].map(function (c) {
+    return String(page[c] || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }).join('|');
+}
+
 // Every non-empty row of a sheet's first tab as { "Column Header": value, ... }
 function firstTabRows_(sheetId) {
+  const key = sheetId + '|first';
+  if (!ROWS_CACHE_[key]) ROWS_CACHE_[key] = readFirstTab_(sheetId);
+  return ROWS_CACHE_[key];
+}
+function readFirstTab_(sheetId) {
   const values = SpreadsheetApp.openById(sheetId).getSheets()[0].getDataRange().getDisplayValues();
   const headers = values[0].map(function (h) { return String(h).trim(); });
   return values.slice(1)
@@ -412,18 +449,10 @@ function firstTabRows_(sheetId) {
 function inspectorRow_(sheetId, nameColumn, name) {
   const wanted = String(name || '').trim().toLowerCase();
   if (!wanted) return null;
-  const values = SpreadsheetApp.openById(sheetId).getSheets()[0].getDataRange().getDisplayValues();
-  const headers = values[0].map(function (h) { return String(h).trim(); });
-  const col = headers.findIndex(function (h) { return h.toUpperCase() === nameColumn; });
-  if (col < 0) return null;
-  for (var r = 1; r < values.length; r++) {
-    if (String(values[r][col]).trim().toLowerCase() === wanted) {
-      const row = {};
-      headers.forEach(function (h, c) { if (h) row[h] = values[r][c]; });
-      return row;
-    }
-  }
-  return null;
+  return firstTabRows_(sheetId).filter(function (r) {
+    const key = Object.keys(r).filter(function (h) { return h.toUpperCase() === nameColumn; })[0];
+    return key && String(r[key]).trim().toLowerCase() === wanted;
+  })[0] || null;
 }
 
 // Each person on the page (PRIMARY, then ALT 1-5) with their name, Purchaser/Collaborator type and INCOME row
@@ -449,6 +478,11 @@ function pageClients_(page) {
 
 // Every non-empty row of a tab as { "Column Header": value, ... }
 function allRows_(sheetId, sheetName) {
+  const key = sheetId + '|' + sheetName;
+  if (!ROWS_CACHE_[key]) ROWS_CACHE_[key] = readRows_(sheetId, sheetName);
+  return ROWS_CACHE_[key];
+}
+function readRows_(sheetId, sheetName) {
   const values = getSheet_(sheetId, sheetName).getDataRange().getDisplayValues();
   const headers = values[0].map(function (h) { return String(h).trim(); });
   return values.slice(1)

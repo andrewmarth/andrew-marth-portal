@@ -373,6 +373,31 @@
             .page-link:hover { border-color: var(--navy); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--navy); }
             .page-link:hover .page-link-arrow svg { transform: translateX(3px); }
         }
+        /* "View Older": pages 21+ days old, tucked away at the bottom of the card */
+        .older-pages { margin-top: 12px; }
+        .older-pages .page-link { opacity: 0.85; }
+        .view-older {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            min-height: 44px;
+            margin-top: 12px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--rust);
+            font-family: inherit;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .view-older svg { width: 18px; height: 18px; transition: transform 0.3s ease; }
+        .view-older[aria-expanded="true"] svg { transform: rotate(180deg); }
+        @media (hover: hover) { .view-older:hover { background: rgba(192, 144, 80, 0.12); } }
+        .glow-card .view-older { color: var(--gold); }
         .pages-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
 
         /* My Buyers: client dropdown (same look as the dropdowns on the breakdown page's Settings) */
@@ -651,12 +676,42 @@
         function renderPages(pages) {
             renderPageList(pageListEl, pages, 'No buyer breakdowns yet. They’ll show up here once Andrew makes one for you.');
         }
-        function renderPageList(target, pages, emptyText) {
-            if (!pages.length) {
-                target.innerHTML = '<p class="pages-empty">' + escapeHtml(emptyText) + '</p>';
-                return;
-            }
-            target.innerHTML = '<ul class="page-links">' + pages.map(p => {
+        const RECENT_DAYS = 21;
+        const CHEVRON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+        // VERSION DATE as the sheet shows it ("10/20/2026", "2026-10-20", "Oct 20, 2026"...): a local date, or null
+        function parseVersionDate(value) {
+            const v = String(value || '').trim();
+            let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if (m) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), m[1] - 1, m[2]);
+            m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (m) return new Date(Number(m[1]), m[2] - 1, m[3]);
+            const t = Date.parse(v);
+            return isNaN(t) ? null : new Date(t);
+        }
+        const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+        // One page per address (the newest VERSION DATE wins; pages with no date count as oldest), newest first,
+        // split into recent (under 21 days old) and older. With nothing recent, the newest page moves up top.
+        function groupPages(pages) {
+            const keyOf = p => [p.street, p.city, p.zip].map(x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()).join('|');
+            const dated = pages.map((p, order) => {
+                const d = parseVersionDate(p.versionDate);
+                return { page: p, order, time: d ? dayStart(d) : -Infinity, key: p.street ? keyOf(p) : 'id:' + p.id };
+            });
+            // Newest first; on the same date, keep the sheet's order (newer rows come first from the API)
+            dated.sort((x, y) => (y.time - x.time) || (x.order - y.order));
+            const seen = new Set();
+            const unique = dated.filter(d => (seen.has(d.key) ? false : (seen.add(d.key), true)));
+            const cutoff = dayStart(new Date()) - RECENT_DAYS * 86400000;
+            let recent = unique.filter(d => d.time > cutoff);
+            let older = unique.filter(d => d.time <= cutoff);
+            if (!recent.length && older.length) { recent = [older[0]]; older = older.slice(1); }
+            return { recent: recent.map(d => d.page), older: older.map(d => d.page) };
+        }
+
+        function pageRows(pages) {
+            return '<ul class="page-links">' + pages.map(p => {
                 const sub = [p.city, [p.state, p.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                 return '<li><a class="page-link" href="/pages?page=' + encodeURIComponent(p.id) + '">'
                     + '<span class="page-link-icon">' + HOUSE_ICON + '</span>'
@@ -664,6 +719,28 @@
                     + (sub ? '<br><span class="page-link-sub">' + escapeHtml(sub) + '</span>' : '') + '</span>'
                     + '<span class="page-link-arrow">' + ARROW_ICON + '</span></a></li>';
             }).join('') + '</ul>';
+        }
+
+        function renderPageList(target, pages, emptyText) {
+            if (!pages.length) {
+                target.innerHTML = '<p class="pages-empty">' + escapeHtml(emptyText) + '</p>';
+                return;
+            }
+            const { recent, older } = groupPages(pages);
+            target.innerHTML = pageRows(recent)
+                + (older.length
+                    ? '<div class="older-pages" hidden>' + pageRows(older) + '</div>'
+                    + '<button type="button" class="view-older" aria-expanded="false"><span>View Older</span>' + CHEVRON_ICON + '</button>'
+                    : '');
+            const toggle = target.querySelector('.view-older');
+            if (!toggle) return;
+            const olderEl = target.querySelector('.older-pages');
+            toggle.addEventListener('click', () => {
+                const open = olderEl.hidden;
+                olderEl.hidden = !open;
+                toggle.setAttribute('aria-expanded', String(open));
+                toggle.querySelector('span').textContent = open ? 'Hide Older' : 'View Older';
+            });
         }
 
         // --- My Buyers (admins) ---

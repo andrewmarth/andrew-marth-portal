@@ -59,8 +59,83 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in (avoids a flash of the page before redirecting) */
-        body.is-checking > * { visibility: hidden; }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
+        html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
+        .page-loader { touch-action: none; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* Morphing icon (loader.js): sits on the background and pops with a twist each time it changes */
+        .loader-badge {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 14px;
+            color: var(--brown);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-icon { width: 92px; height: 92px; overflow: visible; }
+        .loader-badge.is-morphing .loader-icon { animation: iconMorph 0.65s cubic-bezier(0.34, 1.4, 0.64, 1); }
+        @keyframes iconMorph {
+            0% { transform: rotate(0deg) scale(1); }
+            40% { transform: rotate(-12deg) scale(0.84); }
+            75% { transform: rotate(4deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .page-loader-text {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            opacity: 0.85;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+        .page-loader-text.is-leaving { opacity: 0; transform: translateY(-8px); }
+        .page-loader-text.is-entering { animation: phraseIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1); }
+        @keyframes phraseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 0.85; transform: none; } }
+        /* Loading bar: a gold segment that sweeps across the track, over and over */
+        .loader-bar {
+            position: relative;
+            width: 180px;
+            height: 6px;
+            margin-top: 16px;
+            border-radius: 999px;
+            background: rgba(78, 81, 62, 0.15);
+            overflow: hidden;
+        }
+        .loader-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--gold), var(--rust));
+            animation: loaderBar 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes loaderBar {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(250%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .loader-bar::before { animation-duration: 3s; }
+            .loader-badge.is-morphing .loader-icon, .page-loader-text.is-entering { animation: none; }
+        }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
         h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
         a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 
@@ -434,6 +509,13 @@
     </style>
 </head>
 <body class="is-checking">
+    <div class="page-loader" role="status">
+        <span class="loader-badge" aria-hidden="true"><svg class="loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg></span>
+        <span class="sr-only">Loading</span>
+        <span class="page-loader-text" aria-hidden="true">Nailing the boards...</span>
+        <span class="loader-bar" aria-hidden="true"></span>
+    </div>
+    <script src="/loader.js"></script>
 
     <header>
         <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
@@ -663,9 +745,13 @@
                 // Not signed in: send them to the login page
                 if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
                 currentUser = user;
-                document.body.classList.remove('is-checking');
-                initReveal();
-                loadProfile(user);
+                // Stay on the loading screen until the account details are in (each problem shows its own message),
+                // with a time limit so a stuck request can't hold the page forever
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([loadProfile(user), timeLimit]).then(() => {
+                    document.body.classList.remove('is-checking');
+                    initReveal();
+                });
             });
 
             form.addEventListener('submit', async e => {
