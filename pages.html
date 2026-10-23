@@ -1,0 +1,2293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Client Portal | Andrew Marth Real Estate</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        .page-loader .spinner { width: 38px; height: 38px; }
+        .page-loader-text { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.1rem; font-weight: 700; opacity: 0.8; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Current Tasks: empty state */
+        .tasks-empty {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .tasks-empty-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tasks-empty-icon svg { width: 22px; height: 22px; }
+        /* Once the card slides in: the circle pops, then the check draws itself */
+        .tasks-empty-icon { transform: scale(0); }
+        .tasks-empty-icon path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+        .reveal.is-visible .tasks-empty-icon { animation: check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s forwards; }
+        .reveal.is-visible .tasks-empty-icon path { animation: check-draw 0.45s ease-out 0.75s forwards; }
+        @keyframes check-pop { from { transform: scale(0); } to { transform: scale(1); } }
+        @keyframes check-draw { to { stroke-dashoffset: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .tasks-empty-icon { transform: none; }
+            .tasks-empty-icon path { stroke-dashoffset: 0; }
+            .reveal.is-visible .tasks-empty-icon, .reveal.is-visible .tasks-empty-icon path { animation: none; }
+        }
+        .confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
+        .tasks-empty-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
+        .tasks-empty-sub { font-size: 0.92rem; opacity: 0.75; }
+
+        /* Buyer Breakdowns: one row per page, linking to it */
+        .page-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .page-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+            color: inherit;
+            text-decoration: none;
+            transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .page-link-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--tan);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .page-link-icon svg { width: 21px; height: 21px; }
+        .page-link-text { flex: 1; min-width: 0; }
+        .page-link-street { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+        .page-link-sub { font-size: 0.9rem; opacity: 0.75; }
+        .page-link-arrow { flex: 0 0 auto; color: var(--rust); display: flex; }
+        .page-link-arrow svg { width: 20px; height: 20px; transition: transform 0.25s ease; }
+        @media (hover: hover) {
+            .page-link:hover { border-color: var(--navy); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--navy); }
+            .page-link:hover .page-link-arrow svg { transform: translateX(3px); }
+        }
+        .pages-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
+
+        /* My Buyers: client dropdown (same look as the dropdowns on the breakdown page's Settings) */
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        .client-picker { position: relative; }
+        .client-picker-btn {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            padding: 9px 46px 9px 22px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--brown);
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .client-picker-btn .is-placeholder { font-weight: normal; opacity: 0.55; }
+        .client-picker-btn > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-btn:focus-visible, .client-picker.is-open .client-picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .client-picker-list {
+            display: none;
+            margin-top: 8px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 20px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 6px;
+        }
+        .client-picker.is-open .client-picker-list { display: block; animation: clientPickerIn 0.18s ease both; }
+        @keyframes clientPickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .client-picker-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 50px;
+            padding: 9px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .client-picker-option > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .client-picker-option .cp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .client-picker-option .cp-main { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-option .cp-sub { font-size: 0.85rem; opacity: 0.7; }
+        .client-picker-option .cp-check { width: 18px; height: 18px; flex-shrink: 0; color: var(--olive); visibility: hidden; }
+        .client-picker-option[aria-selected="true"] .cp-check { visibility: visible; }
+        .client-picker-option.is-active, .client-picker-option:active { background-color: #f4efe8; }
+        @media (hover: hover) { .client-picker-option:hover { background-color: #f4efe8; } }
+        /* Brown card with soft gold and rust glows (same as the form card on the main site's Buying page): My Buyers and Links */
+        .glow-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        .glow-card::before,
+        .glow-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        .glow-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        .glow-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        .glow-card > *:not(.sr-only) { position: relative; z-index: 1; }
+        .glow-card .card-eyebrow { color: var(--gold); }
+        .glow-card h2 { color: var(--cream); }
+        .glow-card .client-picker-list, .glow-card .page-link, .glow-card .pages-empty { color: var(--brown); }
+        .glow-card .pages-empty { opacity: 1; border-color: rgba(78, 81, 62, 0.3); }
+        .glow-card .client-picker-list { box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.35); }
+        @media (hover: hover) { .glow-card .page-link:hover { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35); } }
+        .glow-card .links-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        .glow-card .status-text.is-error { color: #f2b8a8; }
+        .buyer-page-list { margin-top: 16px; }
+        .buyer-page-list:empty { display: none; }
+        @media (max-width: 600px) {
+            .client-picker-list { padding: 4px; box-shadow: 4px 4px 0px var(--navy); }
+            .client-picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
+        }
+
+        /* Links card: one group per SECTION */
+        .links-section + .links-section { margin-top: 24px; }
+        .links-section-title {
+            padding: 0 2px 6px 2px;
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--navy);
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--olive);
+        }
+        .page-link-icon.is-link { background: var(--olive); }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .contact-card .btn { gap: 8px; }
+        .contact-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+        /* Calling and texting are for phones: the home page's contact card is hidden on larger screens */
+        @media (min-width: 768px) { #contact-card { display: none; } }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
+        }
+        /* --- Buyer breakdown --- */
+        .main-card[hidden] { display: none; }
+        .detail-list, .money-list { list-style: none; margin-top: 4px; }
+        /* Escrow sections: Financial, Prorations, Loan, Title, Miscellaneous */
+        .money-section + .money-section { margin-top: 22px; }
+        .money-section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 2px 6px 2px;
+            border-bottom: 2px solid var(--navy);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--olive);
+        }
+        .money-section .money-list { margin-top: 0; }
+        .money-section .money-list li:last-child { border-bottom: none; }
+        .detail-list li, .money-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .detail-list li:last-child { border-bottom: none; }
+        .detail-list .k, .money-list .k { font-weight: bold; }
+        .detail-list .v { text-align: right; overflow-wrap: anywhere; }
+        .money-list .k small { display: block; font-weight: normal; font-size: 0.82rem; opacity: 0.7; }
+        /* Credit-cap notes: caution icon in gold, text in rust */
+        /* Disclaimers: the same yellow box everywhere (caution notes on escrow lines and the rate note) */
+        .money-list .k small.is-warning, .pay-list .k small.rate-note, .cash-list .k small.is-warning {
+            display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; padding: 8px 10px;
+            border-radius: 10px; background: #fdf6e9; border: 1px solid rgba(192, 144, 80, 0.5);
+            opacity: 1; color: var(--rust); font-weight: bold; line-height: 1.4;
+        }
+        .money-list .k small.is-warning svg, .cash-list .k small.is-warning svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--gold); }
+        .money-list .v { flex: 0 0 auto; text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        /* Money coming to the buyer is green, money they pay is red */
+        .money-list .v.is-credit { color: #2f7d4a; }
+        .money-list .v.is-debit { color: #b3392f; }
+        .money-list .v.is-zero { opacity: 0.45; }
+        .fine-note { margin-top: 14px; font-size: 0.85rem; line-height: 1.5; opacity: 0.75; }
+        .fine-note.is-alert { opacity: 1; padding: 12px 14px; border-radius: 14px; background: #fdf6e9; border: 1px solid rgba(192, 144, 80, 0.5); }
+
+        /* Payment & Approval card */
+        .pay-list { list-style: none; }
+        .pay-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 13px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .pay-list li:last-child { border-bottom: none; }
+        .pay-list .k { font-weight: bold; }
+        .pay-list .k small { display: block; font-weight: normal; font-size: 0.82rem; opacity: 0.7; }
+        .pay-list .v { font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .pay-list li.is-total { border-top: 2px solid var(--navy); border-bottom: none; }
+        .pay-list li.is-total .k, .pay-list li.is-total .v { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.1rem; font-weight: 800; }
+        .pay-grand {
+            margin-top: 22px;
+            padding: 20px 22px;
+            border-radius: 18px;
+            background: var(--brown);
+            color: var(--cream);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .pay-grand .label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
+        .pay-grand .caption { display: block; font-family: 'Familjen Grotesk', sans-serif; font-size: 0.85rem; font-weight: normal; opacity: 0.8; }
+        .pay-grand .amount { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+        .pay-list .k small.rate-note { max-width: 52ch; }
+
+        /* Approval estimate */
+        .pay-grand + .money-section { margin-top: 28px; }
+        /* Estimated Approval: one block, the details as small text underneath */
+        .pay-grand + .approval-box { margin-top: 16px; }
+        .approval-box { display: block; }
+        .approval-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .approval-details { list-style: none; margin-top: 10px; font-size: 0.88rem; line-height: 1.55; opacity: 0.88; }
+        .approval-details li + li { margin-top: 2px; }
+        .approval-details strong { font-weight: 700; }
+        .approval-box .none-provided { opacity: 0.75; }
+        .approval-box .enter-income-btn { min-height: 30px; padding: 3px 12px; font-size: 0.82rem; margin-left: 2px; }
+        .approval-box .status-pill { font-size: 0.82rem; padding: 5px 14px; }
+        .approval-box .status-pill.is-pass { background: #e3f1e7; color: #2f7d4a; }
+        .approval-box .status-pill.is-fail { background: #f8e3e1; color: #b3392f; }
+        .approval-box .status-pill.is-pending { background: var(--cream); color: var(--brown); opacity: 1; }
+        .pay-list .v.dti { display: inline-flex; align-items: center; gap: 10px; }
+        .status-pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; }
+        .status-pill.is-pass { background: rgba(47, 125, 74, 0.14); color: #2f7d4a; }
+        .status-pill.is-fail { background: rgba(179, 57, 47, 0.12); color: #b3392f; }
+        .status-pill.is-pending { background: #f2ede6; color: var(--brown); opacity: 0.8; }
+        .none-provided { font-style: italic; font-weight: normal; opacity: 0.6; }
+        .enter-income-btn {
+            min-height: 36px;
+            padding: 6px 16px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.25s ease;
+        }
+        @media (hover: hover) { .enter-income-btn:hover { background: var(--rust); } }
+        @media (max-width: 600px) {
+            .pay-list .v.dti { flex-direction: column; align-items: flex-end; gap: 4px; }
+        }
+
+        /* Cash Breakdown: when the buyer's money goes in (during escrow and at closing) */
+        .total-box {
+            margin-top: 22px;
+            padding: 22px 22px 18px 22px;
+            border-radius: 18px;
+            background: var(--brown);
+            color: var(--cream);
+        }
+        .total-box .label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+        .cash-group + .cash-group { margin-top: 16px; }
+        .cash-group-title {
+            padding: 10px 0 6px 0;
+            border-bottom: 2px solid rgba(233, 226, 216, 0.55);
+            font-family: 'Familjen Grotesk', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--gold);
+        }
+        .cash-list { list-style: none; }
+        .cash-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid rgba(233, 226, 216, 0.18); }
+        .cash-list .k small { display: block; font-size: 0.8rem; font-weight: normal; opacity: 0.75; }
+        .cash-list .k small.is-warning { opacity: 1; }
+        .cash-list .v { font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cash-list li.is-total { border-bottom: none; padding-top: 12px; }
+        .cash-list li.is-total .k { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.1rem; }
+        .cash-list li.is-total .v { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 1.35rem; }
+
+        .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field select {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 44px 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        .field select:focus { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+
+        /* --- Loan product picker: same look as the address suggestions on andrewmarth.com --- */
+        .field .field-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .picker { position: relative; z-index: 5; }
+        .picker-btn {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 46px 9px 22px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            font-family: inherit;
+            color: var(--brown);
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .picker-btn:focus-visible, .picker.is-open .picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        /* The list opens inside the card (this is the last card, so a floating list would cover the footer) */
+        .picker-list {
+            display: none;
+            margin-top: 8px;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 20px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 6px;
+        }
+        .picker.is-open .picker-list { display: block; animation: pickerIn 0.18s ease both; }
+        @keyframes pickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .picker-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 52px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            color: var(--brown);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .picker-option > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .picker-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
+        .picker-main { font-weight: bold; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .picker-secondary { font-size: 0.85rem; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .picker-check { width: 18px; height: 18px; flex-shrink: 0; color: var(--olive); visibility: hidden; }
+        .picker-option[aria-selected="true"] .picker-check { visibility: visible; }
+        .picker-option.is-active, .picker-option:active { background-color: #f4efe8; }
+        @media (hover: hover) { .picker-option:hover { background-color: #f4efe8; } }
+        .picker-option[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+        .picker-btn .picker-main.is-placeholder { font-weight: normal; opacity: 0.55; }
+
+        /* Checkbox version (choose several) */
+        .picker-box {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 7px;
+            background: var(--white);
+            color: var(--cream);
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .picker-box svg { width: 14px; height: 14px; opacity: 0; transition: opacity 0.15s ease; }
+        .picker-option[aria-selected="true"] .picker-box { background: var(--olive); border-color: var(--olive); }
+        .picker-option[aria-selected="true"] .picker-box svg { opacity: 1; }
+        .picker-tag {
+            flex-shrink: 0;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: rgba(192, 144, 80, 0.18);
+            color: var(--rust);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .picker-count { padding: 6px 14px 4px 14px; font-size: 0.78rem; font-weight: bold; opacity: 0.6; text-align: right; }
+
+        #loan-card .field + .field { margin-top: 22px; }
+        /* Settings: each value on its own row with an edit (pencil) button */
+        #loan-card .field.editable { margin-top: 0; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        #loan-card .settings-section .field.editable:last-child { border-bottom: none; }
+        .view-row { display: flex; align-items: center; gap: 14px; }
+        .view-row .vk { font-weight: bold; flex: 0 1 auto; }
+        .view-row .vv { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .view-row .vv.is-empty { font-style: italic; opacity: 0.55; }
+        .edited-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(192, 144, 80, 0.2); color: var(--rust); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        #loan-card .field.editable.is-changed { box-shadow: inset 4px 0 0 var(--gold); padding-left: 16px; background: linear-gradient(90deg, rgba(192, 144, 80, 0.08), transparent 60%); }
+        .field.editable.is-changed .edited-tag { display: inline-block; }
+        .field.editable.is-changed .view-row .vv { color: var(--rust); font-weight: bold; }
+        .field.editable:not(.is-editing) > .field-label,
+        .field.editable:not(.is-editing) > .field-body,
+        .field.editable:not(.is-editing) > .field-help,
+        .field.editable:not(.is-editing) > div:not(.view-row):not(.edit-done),
+        .field.editable:not(.is-editing) > .edit-done { display: none; }
+        .field.editable.is-editing > .view-row { display: none; }
+        .field.editable.is-editing { padding: 16px 14px; margin: 6px -14px; border-radius: 18px; background: #fbf9f6; border-bottom-color: transparent; }
+        .edit-done { display: flex; justify-content: flex-end; margin-top: 12px; }
+        .done-btn { min-height: 38px; padding: 6px 20px; border: 2px solid var(--navy); border-radius: 999px; background: var(--olive); color: var(--cream); font-family: inherit; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+        .edit-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--olive);
+            cursor: pointer;
+            transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+        }
+        .edit-btn svg { width: 17px; height: 17px; }
+        @media (hover: hover) { .edit-btn:hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+
+        /* Settings sections and inputs */
+        .settings-section { margin-top: 26px; }
+        .settings-section .money-section-title { margin-bottom: 4px; }
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 0; margin-top: 0; }
+        .settings-section > .money-section-title + .settings-grid { margin-top: 0; }
+        #loan-card .settings-grid .field + .field { margin-top: 0; }
+        .settings-grid .span-2 { grid-column: 1 / -1; }
+        .input-wrap { position: relative; }
+        .set-input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .set-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .input-wrap.has-prefix .set-input { padding-left: 36px; }
+        .input-wrap.has-suffix .set-input { padding-right: 64px; }
+        .adorn { position: absolute; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+        .adorn-prefix { left: 20px; }
+        .adorn-suffix { right: 20px; }
+        .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; padding: 5px; border-radius: 999px; background: #f2ede6; min-height: 54px; }
+        .seg button { min-height: 44px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--brown); cursor: pointer; white-space: nowrap; transition: background-color 0.2s ease, color 0.2s ease; }
+        .seg button.is-on { background: var(--olive); color: var(--cream); }
+        .seg button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+        .pair { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+        .pair-even { grid-template-columns: 1fr 1fr; }
+        .field-help a { color: var(--tan); font-weight: bold; }
+        .field-error { margin: 6px 0 0 6px; font-size: 0.85rem; font-weight: bold; color: #b3392f; }
+        .field-error + .field-help, .field-help + .field-error { margin-top: 4px; }
+        .field-help { margin: 8px 0 0 6px; font-size: 0.85rem; opacity: 0.7; }
+        .access-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+        .access-message { flex: 1; min-width: 180px; font-size: 0.92rem; font-weight: bold; }
+        .access-message.is-error { color: var(--rust); }
+        .access-message.is-success { color: var(--olive); }
+
+        /* Settings card: brown with soft gold and rust glows (same as the home page's My Buyers card) */
+        #loan-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        #loan-card::before,
+        #loan-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        #loan-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        #loan-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        #loan-card > * { position: relative; z-index: 1; }
+        #loan-card .card-eyebrow { color: var(--gold); }
+        #loan-card h2 { color: var(--cream); }
+        #loan-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        #loan-card .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
+        #loan-card .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
+        #loan-card .field.editable.is-changed .view-row .vv { color: var(--gold); }
+        #loan-card .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
+        /* The open editor stays light, so its inputs read the same as before */
+        /* (the #loan-card row padding would otherwise win over the editor's own padding) */
+        #loan-card .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
+        #loan-card .access-message.is-error { color: #f2b8a8; }
+        #loan-card .access-message.is-success { color: var(--gold); }
+        button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        button.btn:disabled { opacity: 0.55; cursor: default; transform: none; }
+        .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+
+        @media (max-width: 600px) {
+            .detail-list li { flex-direction: column; gap: 2px; }
+            .detail-list .v { text-align: left; }
+            .money-list li { gap: 12px; }
+            .total-box { padding: 20px 18px 14px 18px; }
+            .cash-list li.is-total .v { font-size: 1.2rem; }
+            .picker-list { padding: 4px; box-shadow: 4px 4px 0px var(--navy); }
+            .picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
+            .access-actions .btn { width: 100%; }
+            .settings-grid { grid-template-columns: 1fr; }
+            .pair:not(.pair-even) { grid-template-columns: 1fr; }
+            /* Phones: label on top, value under it, pencil on the right */
+            .view-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 2px; }
+            .view-row .vk { grid-column: 1; }
+            .view-row .vv { grid-column: 1; text-align: left; opacity: 0.85; }
+            .view-row .edit-btn { grid-column: 2; grid-row: 1 / span 3; }
+            .view-row .edited-tag { grid-column: 1; justify-self: start; }
+        }
+    </style>
+</head>
+<body class="is-checking">
+
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <div class="top-actions">
+                <a href="/" class="sign-out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                    Back
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow" id="hero-eyebrow">Client Portal</span>
+            <!-- Generic while loading: the page type (buyer breakdown, seller net sheet, proforma...) fills these in -->
+            <h1 id="hero-title">Your Property</h1>
+            <p class="hero-sub" id="hero-sub">Loading your property details...</p>
+        </div>
+    </header>
+
+    <main>
+        <!-- Loading / problems -->
+        <section class="main-card" id="status-card">
+            <span class="spinner" aria-hidden="true"></span>
+            <p class="status-text" id="status-text">Loading your page...</p>
+        </section>
+
+        <!-- 1. The home -->
+        <section class="main-card reveal" id="property-card" hidden>
+            <span class="card-eyebrow">The Home</span>
+            <h2>Property Details</h2>
+            <ul class="detail-list" id="property-list"></ul>
+        </section>
+
+        <!-- 2. Escrow breakdown -->
+        <section class="main-card reveal" id="escrow-card" hidden>
+            <span class="card-eyebrow">Cash To Close</span>
+            <h2>Escrow Breakdown</h2>
+            <div id="escrow-list"></div>
+            <div class="total-box">
+                <h3 class="label">Cash Breakdown</h3>
+                <div class="cash-group">
+                    <h4 class="cash-group-title">During Escrow</h4>
+                    <ul class="cash-list" id="cash-escrow"></ul>
+                </div>
+                <div class="cash-group">
+                    <h4 class="cash-group-title">At Closing</h4>
+                    <ul class="cash-list" id="cash-closing"></ul>
+                </div>
+            </div>
+            <p class="fine-note">
+                These are estimates, not a loan offer. Prepaid interest and HOA dues are counted from the closing date
+                through the end of that month. The property tax credit is the seller's share of this year's taxes
+                (January 1 through the day before closing), minus the first-half payment once it comes due on October 1.
+            </p>
+        </section>
+
+        <!-- 3. Monthly payment -->
+        <section class="main-card reveal" id="payment-card" hidden>
+            <span class="card-eyebrow">Monthly Cost</span>
+            <h2 id="payment-title">Payment &amp; Approval</h2>
+            <div id="payment-list"></div>
+        </section>
+
+        <!-- 4. Inputs (admins only): which loan product the numbers use -->
+        <section class="main-card reveal" id="loan-card" hidden>
+            <span class="card-eyebrow">The Inputs</span>
+            <h2>Settings</h2>
+            <!-- People: who can see this page (up to 6 purchasers / collaborators) and the lender -->
+            <div class="settings-section">
+            <h3 class="money-section-title">People</h3>
+            <div class="field">
+                <span class="field-label" id="people-label">Purchasers</span>
+                <div id="people-picker"></div>
+                <p class="field-help">Purchasers' incomes count toward approval, and their credit scores are averaged for the rate.</p>
+            </div>
+            <div class="field">
+                <span class="field-label" id="collab-label">Collaborators</span>
+                <div id="collab-picker"></div>
+                <p class="field-help">Collaborators can view this page but aren't part of the loan. Up to 6 purchasers and collaborators in total.</p>
+            </div>
+            <div class="field">
+                <span class="field-label" id="lender-label">Lender</span>
+                <div id="lender-picker"></div>
+            </div>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="money-section-title">Purchase</h3>
+                <div class="settings-grid" id="purchase-fields"></div>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="money-section-title">Loan</h3>
+                <div class="field">
+                    <span class="field-label" id="loan-label">Loan Product</span>
+                    <div id="loan-picker"></div>
+                </div>
+                <div class="settings-grid" id="loan-fields"></div>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="money-section-title">Miscellaneous</h3>
+                <div class="settings-grid" id="misc-fields"></div>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="money-section-title">Inspections</h3>
+                <div class="settings-grid" id="inspection-fields"></div>
+            </div>
+            <p class="fine-note is-alert" id="access-warning" hidden>You're not on this list, so you'll lose access to this page once you save.</p>
+            <div class="access-actions">
+                <p class="access-message" id="access-message" role="status"></p>
+                <button type="button" class="btn" id="access-save" disabled>
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Settings
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
+
+        const params = new URLSearchParams(location.search);
+        const pageId = (params.get('page') || '').trim();
+
+        const statusCard = document.getElementById('status-card');
+        const statusText = document.getElementById('status-text');
+        const propertyCard = document.getElementById('property-card');
+        const loanCard = document.getElementById('loan-card');
+        const escrowCard = document.getElementById('escrow-card');
+        const paymentCard = document.getElementById('payment-card');
+        const signOutBtn = document.getElementById('sign-out');
+
+        const FALLBACK_CREDIT_SCORE = 720;
+        const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+        // The escrow card shows whole dollars; the math underneath keeps the cents
+        const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+        let data = null;
+        // What the breakdown shows...
+        let loanIndex = 0;
+        let cashSelected = false;
+        // ...and what the Settings card's Loan Product picker has chosen (checked right away, shown once saved)
+        let pickedLoanIndex = 0;
+        let pickedCash = false;
+        // Set by the settings card so a Loan Product change turns on its Save button
+        let onSettingsChanged = () => {};
+        let currentUser = null;
+
+        // --- Reading sheet values ---
+        // Display values can look like "900000", "$900,000" or "0.97". A trailing % means "divide by 100".
+        function num(v) {
+            const s = String(v == null ? '' : v).trim();
+            const n = parseFloat(s.replace(/[^0-9.-]/g, ''));
+            if (!isFinite(n)) return 0;
+            return s.endsWith('%') ? n / 100 : n;
+        }
+        // Case-insensitive column lookup
+        function col(row, name) {
+            const key = Object.keys(row || {}).find(k => k.trim().toUpperCase() === name);
+            return key ? row[key] : '';
+        }
+        const text = v => String(v == null ? '' : v).trim();
+        const isTrue = v => text(v).toUpperCase() === 'TRUE';
+        const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+
+        // "10/20/2026" (sheet format) or "2026-10-20" -> local date
+        function parseDate(v) {
+            const s = text(v);
+            let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) return new Date(+m[3], +m[1] - 1, +m[2]);
+            m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+            const d = new Date(s);
+            return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        }
+        const addDays = (d, days) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+        const fmtDate = d => d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Not set';
+
+        // --- Matching a value to the right column ---
+        // Credit score tiers in LOAN PRODUCTS: <600, 600-620, ... 780-800, 800+ (lower number included)
+        function creditTier(score) {
+            if (score < 600) return '<600';
+            if (score >= 800) return '800+';
+            const low = Math.floor(score / 20) * 20;
+            return low + '-' + (low + 20);
+        }
+        // Prepaid mortgage insurance tiers by down payment: 0%-5%, 5%-10%, 10%-20%, 20%+ (lower number included)
+        function downPaymentTier(downPct) {
+            const pct = Math.round(downPct * 1e6) / 1e4; // as a percent, rounded to avoid float noise
+            if (pct < 5) return '0%-5%';
+            if (pct < 10) return '5%-10%';
+            if (pct < 20) return '10%-20%';
+            return '20%+';
+        }
+
+        // --- The math ---
+        // Credits can only pay for normal closing costs. Together, the seller credit, additional lender credit
+        // and census credit may not be more than those costs; any extra is taken off the seller credit first,
+        // then (once that's down to $0) the lender credit, then the census credit.
+        // 0.01 -> "1%", 0.029442 -> "2.94%"
+        const percent = n => (Math.round(n * 10000) / 100).toString() + '%';
+
+        function capCredits(lines, price) {
+            const costs = Math.max(0, -lines.filter(l => l.cost).reduce((sum, l) => sum + l.amount, 0));
+            const credits = lines.filter(l => l.capped).sort((a, b) => a.capped - b.capped);
+            let extra = round2(credits.reduce((sum, l) => sum + l.amount, 0) - costs);
+            credits.forEach(l => {
+                if (extra <= 0 || l.amount <= 0) return;
+                const cut = Math.min(l.amount, extra);
+                const original = l.amount;
+                l.amount = round2(l.amount - cut);
+                extra = round2(extra - cut);
+                const originalPct = l.capped === 1 && price ? ' (' + percent(original / price) + ')' : '';
+                (l.warnings = l.warnings || []).push('Reduced from ' + wholeMoney.format(original) + originalPct + ' because credits can only cover closing costs');
+            });
+        }
+
+        function calculate(page, product, rateRow, creditScoreRaw) {
+            const price = num(col(page, 'PURCHASE PRICE'));
+            const pointsPurchased = num(col(page, 'LENDER POINTS PURCHASED'));
+
+            // Credit score: the buyer's from INCOME, or 720 if we don't have one
+            const parsedScore = parseInt(text(creditScoreRaw), 10);
+            const hasScore = parsedScore >= 300 && parsedScore <= 900;
+            const creditScore = hasScore ? parsedScore : FALLBACK_CREDIT_SCORE;
+
+            // Loan amount: purchase price x retail LTV, plus the prepaid mortgage insurance when it's financed
+            // into the loan (PREPAID MI APPLIED = TRUE). When FALSE, the buyer pays it at closing instead.
+            // A blank MAX column means "no limit"
+            const maxOf = name => text(col(product, name)) === '' ? Infinity : num(col(product, name));
+            const enteredLtv = num(col(page, 'RETAIL LTV'));
+            const maxLtv = maxOf('MAX LTV');
+            const ltv = Math.min(enteredLtv, maxLtv);
+            // Cash purchase (CASH PURCHASE = TRUE): no loan, so every loan-based amount below comes out to $0
+            const isCash = isTrue(col(page, 'CASH PURCHASE'));
+            const loanWarnings = !isCash && enteredLtv > maxLtv
+                ? ['Limited to this loan\'s ' + percent(maxLtv) + ' maximum loan-to-value (' + percent(enteredLtv) + ' was entered)'] : [];
+            const baseLoan = isCash ? 0 : price * ltv;
+            const downPct = price ? (price - baseLoan) / price : 0;
+            const pmiRate = num(col(product, 'PREPAID MORTGAGE INSURANCE RATE ' + downPaymentTier(downPct) + ' DOWN'));
+            const prepaidMI = baseLoan * pmiRate;
+            const miFinanced = isTrue(col(page, 'PREPAID MI APPLIED'));
+            const loan = baseLoan + (miFinanced ? prepaidMI : 0);
+
+            // Interest rate: today's rate + credit score adjustment - (buydown per point x points)
+            const rate = num(col(rateRow, 'TODAY INTEREST RATE'))
+                + num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)))
+                - num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100);
+
+            // Dates
+            const acceptance = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
+            const closing = acceptance ? addDays(acceptance, num(col(page, 'ESCROW DURATION'))) : null;
+            const daysInMonth = closing ? new Date(closing.getFullYear(), closing.getMonth() + 1, 0).getDate() : 30;
+            // Closing day through the last day of the month, both included
+            const daysLeft = closing ? daysInMonth - closing.getDate() + 1 : 0;
+
+            // Property tax credit (Arizona: taxes are paid in arrears; first half due Oct 1, second half Mar 1).
+            // The seller owes Jan 1 through the day before closing. Once the first half is due (Oct 1),
+            // the seller has paid (or escrow pays from their side) the first half, so that part isn't credited.
+            const yearlyTaxes = num(col(page, 'YEARLY TAXES'));
+            let taxCredit = 0;
+            if (closing) {
+                const year = closing.getFullYear();
+                const yearDays = new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
+                const sellerDays = Math.round((closing - new Date(year, 0, 1)) / 86400000);
+                const sellerShare = yearlyTaxes * sellerDays / yearDays;
+                const firstHalfPaid = closing >= new Date(year, 9, 1) ? yearlyTaxes / 2 : 0;
+                taxCredit = Math.max(0, sellerShare - firstHalfPaid);
+            }
+
+            const hoPremium = price * num(col(page, 'HOMEOWNERS INSURANCE RATE'));
+            const insuranceMonths = num(col(product, 'MONTHS COLLECTED FOR INSURANCE'));
+            const designation = text(col(page, 'CENSUS DESIGNATION')).toUpperCase();
+            const censusEligible = designation && isTrue(col(product, 'CENSUS CREDIT ' + designation));
+
+            // Seller credit can't be more than the loan product's MAX SELLER CREDIT %
+            const enteredSellerPct = num(col(page, 'SELLER CREDIT'));
+            const maxSellerPct = maxOf('MAX SELLER CREDIT %');
+            const sellerPct = isCash ? 0 : Math.min(enteredSellerPct, maxSellerPct);
+            const sellerWarnings = isCash
+                ? (enteredSellerPct > 0 ? ['Seller credits only apply to loans, so the ' + percent(enteredSellerPct) + ' seller credit isn\'t used on a cash purchase'] : [])
+                : enteredSellerPct > maxSellerPct
+                    ? ['Limited to this loan\'s ' + percent(maxSellerPct) + ' maximum seller credit (' + percent(enteredSellerPct) + ' was entered)'] : [];
+
+            // HOA fees only count when the buyer pays them
+            const hoaFee = (section, name, key) => {
+                const amount = num(col(page, 'HOA ' + key + ' FEE'));
+                const payer = text(col(page, 'WHO PAYS ' + key + ' FEE'));
+                const buyerPays = payer.toLowerCase() === 'buyer';
+                return { section, cost: true, label: name, amount: buyerPays ? -amount : 0, note: !buyerPays && amount > 0 ? 'Paid by ' + (payer || 'seller').toLowerCase() : '' };
+            };
+
+            // Listed in display order; each line's section is the heading it shows under
+            const lines = [
+                { section: 'Financial', label: 'Purchase Price', amount: -price },
+                { section: 'Financial', capped: 1, label: 'Seller Credit To Buyer', amount: price * sellerPct, warnings: sellerWarnings },
+
+                { section: 'Prorations', cost: true, label: 'Primary HOA Dues Proration', amount: -(num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft) },
+                { section: 'Prorations', cost: true, label: 'Master HOA Dues Proration', amount: -(num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft) },
+                { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit },
+
+                { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings },
+                // Seller credit can only help pay the prepaid MI when it isn't already financed into the loan
+                { section: 'Loan', cost: !miFinanced, label: 'Prepaid Mortgage Insurance', amount: -prepaidMI },
+                { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))) },
+                { section: 'Loan', cost: true, label: 'Prepaid Interest', amount: -(loan * rate / 360 * daysLeft), note: daysLeft + ' days' },
+                { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan) },
+                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: censusEligible ? loan * num(col(product, 'CENSUS CREDIT %')) : 0 },
+                { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths) },
+                { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))) },
+                // Flat lender fees from the LOAN PRODUCTS sheet ("APPRASIAL" is spelled that way in the sheet)
+                { section: 'Loan', cost: true, label: 'Appraisal Fee', amount: -num(col(product, 'APPRAISAL FEE AT CLOSING')) },
+                { section: 'Loan', cost: true, label: 'Appraisal Management Fee', amount: -num(col(product, 'APPRASIAL MANAGEMENT FEE')) },
+                { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')) },
+                { section: 'Loan', cost: true, label: 'Flood Certification Fee', amount: -num(col(product, 'FLOOD CERT FEE')) },
+                { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')) },
+                { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')) },
+
+                { section: 'Title', cost: true, label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
+                { section: 'Title', cost: true, label: 'ALTA Loan Policy Fee', amount: -(loan * num(col(page, 'ALTA TITLE RATE'))) },
+
+                { section: 'Miscellaneous', cost: true, label: 'Homeowners Insurance Premium', amount: -hoPremium },
+                hoaFee('Miscellaneous', 'HOA Transfer Fee', 'TRANSFER'),
+                hoaFee('Miscellaneous', 'HOA Capital Improvement Fee', 'CAP'),
+                hoaFee('Miscellaneous', 'HOA Disclosure Fee', 'DISCLOSURE'),
+                hoaFee('Miscellaneous', 'HOA Other Fee', 'OTHER'),
+                { section: 'Miscellaneous', cost: true, label: 'Buyers Agent Commission', amount: -(price * num(col(page, 'BUYERS AGENT COMMISSION %')) + num(col(page, 'BUYERS AGENT COMMISSION $'))) },
+            ].map(line => ({ ...line, amount: round2(line.amount) }));
+
+            if (isCash) {
+                lines.forEach(l => {
+                    if (l.section === 'Loan' || l.label === 'ALTA Loan Policy Fee') { l.amount = 0; l.hidden = true; }
+                });
+            }
+
+            capCredits(lines, price);
+            const sellerLine = lines.find(l => l.capped === 1);
+            if (sellerLine && price) sellerLine.label = 'Seller Credit To Buyer (' + percent(sellerLine.amount / price) + ')';
+
+            // Money the buyer brings in before closing (or is given), shown as credits in Financial
+            const earnestMoney = round2(num(col(page, 'EARNEST MONEY DEPOSIT')));
+            const giftFunds = round2(num(col(page, 'GIFT FUNDS')));
+            const appraisalDeposit = isCash ? 0 : round2(num(col(product, 'APPRAISAL DEPOSIT')));
+            const funds = [
+                { section: 'Financial', label: 'Earnest Money Deposit', amount: earnestMoney },
+                { section: 'Financial', label: 'Gift Funds', amount: giftFunds },
+                { section: 'Financial', label: 'Appraisal Deposit', amount: appraisalDeposit, hidden: isCash },
+            ];
+
+            // Cash to close balances everything above to zero: positive means the buyer still owes it,
+            // negative means the credits cover more than the costs and the buyer gets a refund
+            const cashToClose = -round2([...lines, ...funds].reduce((sum, l) => sum + l.amount, 0));
+            const cashLine = { section: 'Financial', label: cashToClose < 0 ? 'Refund To Buyer' : 'Cash To Close', amount: cashToClose };
+
+            // Financial lines first (price, seller credit, the funds, then cash to close), then everything else
+            const financialEnd = lines.findIndex(l => l.section !== 'Financial');
+            const allLines = [...lines.slice(0, financialEnd), ...funds, cashLine, ...lines.slice(financialEnd)];
+
+            // Monthly payment. Principal & interest is a standard fixed-rate payment on the final loan amount
+            // at the final rate, over LOAN TERM years.
+            const months = num(col(product, 'LOAN TERM')) * 12;
+            const monthlyRate = rate / 12;
+            const principalInterest = !months ? 0
+                : monthlyRate ? loan * monthlyRate / (1 - Math.pow(1 + monthlyRate, -months))
+                : loan / months;
+            const monthlyTaxes = yearlyTaxes / 12;
+            const monthlyInsurance = hoPremium / 12;
+            // Monthly mortgage insurance: only when the loan-to-value (loan before prepaid MI / price) is above the
+            // product's PMI LTV THRESHOLD, at LOAN PRODUCT PMI RATE x the full loan amount, per year / 12
+            const pmiThreshold = num(col(product, 'PMI LTV THRESHOLD'));
+            const loanToValue = price ? baseLoan / price : 0;
+            const monthlyPMI = !isCash && text(col(product, 'PMI LTV THRESHOLD')) !== '' && loanToValue > pmiThreshold + 1e-9
+                ? loan * num(col(product, 'LOAN PRODUCT PMI RATE')) / 12 : 0;
+            const mortgagePayment = principalInterest + monthlyTaxes + monthlyInsurance + monthlyPMI;
+            const primaryDues = num(col(page, 'HOA PRIMARY MONTHLY DUES'));
+            const masterDues = num(col(page, 'HOA MASTER MONTHLY DUES'));
+            const payment = {
+                principalInterest, monthlyTaxes, monthlyInsurance, monthlyPMI, mortgagePayment, primaryDues, masterDues,
+                totalMonthly: mortgagePayment + primaryDues + masterDues, termYears: months / 12,
+            };
+
+            return { isCash, lines: allLines, cashToClose, cashLabel: cashLine.label, earnestMoney, giftFunds, appraisalDeposit,
+                payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes };
+        }
+
+        // --- Showing it ---
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        // Nearest whole dollar, with halves rounded away from zero for both credits and charges
+        const toDollars = n => Math.sign(n) * Math.round(Math.abs(n));
+        // Rounded to the nearest dollar for display, with a + or − sign
+        function signedMoney(n) {
+            const dollars = toDollars(n);
+            if (dollars === 0) return wholeMoney.format(0);
+            return (dollars > 0 ? '+' : '−') + wholeMoney.format(Math.abs(dollars));
+        }
+
+        function renderProperty(page, result) {
+            const address = [text(col(page, 'STREET ADDRESS')), text(col(page, 'CITY')), [text(col(page, 'STATE')), text(col(page, 'ZIP'))].filter(Boolean).join(' ')]
+                .filter(Boolean).join(', ');
+            const rows = [
+                ['Address', address],
+                ['Property Type', text(col(page, 'PROPERTY TYPE'))],
+                ['Year Built', text(col(page, 'YEAR BUILT'))],
+                ['Yearly Property Taxes', money.format(result.yearlyTaxes)],
+                ['Projected Offer Acceptance Date', fmtDate(result.acceptance)],
+                ['Projected Close Of Escrow', fmtDate(result.closing)],
+            ];
+            document.getElementById('property-list').innerHTML = rows
+                .map(([k, v]) => '<li><span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(v || '-') + '</span></li>').join('');
+
+
+            document.getElementById('hero-title').textContent = text(col(page, 'STREET ADDRESS')) || 'Your Home';
+            document.getElementById('hero-sub').textContent = [text(col(page, 'CITY')), [text(col(page, 'STATE')), text(col(page, 'ZIP'))].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Estimated costs to buy this home.';
+        }
+
+        // Caution triangle in the site's gold, instead of the yellow emoji
+        const CAUTION_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+
+        function renderEscrow(result) {
+            const lineHtml = l => {
+                const shown = toDollars(l.amount);
+                const cls = shown > 0 ? ' is-credit' : shown < 0 ? ' is-debit' : ' is-zero';
+                const note = (l.note ? '<small>' + escapeHtml(l.note) + '</small>' : '')
+                    + (l.warnings || []).map(w => '<small class="is-warning">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small>').join('');
+                return '<li><span class="k">' + escapeHtml(l.label) + note + '</span><span class="v' + cls + '">' + signedMoney(l.amount) + '</span></li>';
+            };
+            // One heading + list per section, in the order the lines are listed
+            const shownLines = result.lines.filter(l => !l.hidden);
+            const sections = [...new Set(shownLines.map(l => l.section))];
+            document.getElementById('escrow-list').innerHTML = sections.map(name =>
+                '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
+                + '<ul class="money-list">' + shownLines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>'
+            ).join('');
+            renderCashBreakdown(result);
+        }
+
+        // Cash Breakdown: amounts the buyer puts in, in whole dollars (a refund shows as a minus)
+        function renderCashBreakdown(result) {
+            const amount = n => (toDollars(n) < 0 ? '−' : '') + wholeMoney.format(Math.abs(toDollars(n)));
+            // rows: [label, amount, { note, warning }]
+            const list = (rows, totalLabel) => rows.map(([k, v, extra = {}]) => '<li><span class="k">' + escapeHtml(k)
+                    + (extra.note ? '<small>' + escapeHtml(extra.note) + '</small>' : '')
+                    + (extra.warning ? '<small class="is-warning">' + CAUTION_ICON + '<span>' + escapeHtml(extra.warning) + '</span></small>' : '')
+                    + '</span><span class="v">' + amount(v) + '</span></li>').join('')
+                + '<li class="is-total"><span class="k">' + escapeHtml(totalLabel) + '</span><span class="v">' + amount(rows.reduce((s, [, v]) => s + v, 0)) + '</span></li>';
+            const insp = result.inspections || {};
+            const inspectionRow = (label, i) => (i && !i.hidden ? [[label, i.amount, i]] : []);
+            document.getElementById('cash-escrow').innerHTML = list([
+                ['Earnest Money Deposit', result.earnestMoney],
+                ...(result.isCash ? [] : [['Appraisal Deposit', result.appraisalDeposit]]),
+                ...inspectionRow('Home Inspection', insp.home),
+                ...inspectionRow('Sewer Inspection', insp.sewer),
+                ...inspectionRow('Termite Inspection', insp.termite),
+            ], 'Total');
+            document.getElementById('cash-closing').innerHTML = list([
+                ['Gift Funds', result.giftFunds],
+                [result.cashLabel, result.cashToClose],
+            ], 'Total');
+        }
+
+        // --- Inspections (paid during escrow) ---
+        // Price lists have tiered columns like "GENERAL FEE 1000sqft - 1250sqft" or "AGE FEE 25yrs - 50yrs"
+        // (a "<1000sqft" column covers everything below 1000). The lower number is included.
+        // Below the first tier there's no fee for that column type (e.g. homes under 25 years old have no age fee);
+        // above the last tier, the last tier's fee is used.
+        function tierFee(row, prefix, value) {
+            const tiers = Object.keys(row || {}).filter(k => k.toUpperCase().startsWith(prefix)).map(k => {
+                const nums = (k.slice(prefix.length).match(/\d+(\.\d+)?/g) || []).map(Number);
+                const below = /</.test(k);
+                return { fee: num(row[k]), low: below ? 0 : nums[0], high: below ? nums[0] : nums[1] };
+            }).filter(t => isFinite(t.low) && isFinite(t.high));
+            if (!tiers.length) return 0;
+            const match = tiers.find(t => value >= t.low && value < t.high);
+            if (match) return match.fee;
+            const top = tiers.reduce((a, b) => (b.high > a.high ? b : a));
+            return value >= top.high ? top.fee : 0;
+        }
+
+        function inspections(page, lists) {
+            const sqft = num(col(page, 'SQFT'));
+            const accepted = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
+            const age = (accepted ? accepted.getFullYear() : new Date().getFullYear()) - num(col(page, 'YEAR BUILT'));
+            const base = row => tierFee(row, 'GENERAL FEE ', sqft) + tierFee(row, 'AGE FEE ', age);
+            const notFound = name => 'We couldn\'t find pricing for ' + name + ', so this shows $0';
+
+            // Home inspection: size + age fees, plus any add-ons chosen on the page
+            const homeName = text(col(page, 'HOME INSPECTOR'));
+            let home;
+            if (!homeName) {
+                home = { amount: 0, warning: 'No home inspection is chosen. Waiving the inspection isn\'t recommended: it\'s the best way to find problems with the home before you buy.' };
+            } else if (!lists.home) {
+                home = { amount: 0, warning: notFound(homeName) };
+            } else {
+                const addOn = (flag, fee) => (isTrue(col(page, flag)) ? num(col(lists.home, fee)) : 0);
+                home = { amount: round2(base(lists.home)
+                    + addOn('HOME INSPECTOR POOL', 'POOL ADDON FEE')
+                    + addOn('HOME INSPECTOR SEWER', 'SEWER ADDON FEE')
+                    + addOn('HOME INSPECTOR TERMITE', 'TERMITE ADDON FEE')), note: homeName };
+            }
+
+            // Sewer and termite inspections are optional: no inspector chosen means the line is hidden
+            const optional = (column, row) => {
+                const name = text(col(page, column));
+                if (!name) return { amount: 0, hidden: true };
+                if (!row) return { amount: 0, warning: notFound(name) };
+                return { amount: round2(base(row)), note: name };
+            };
+            return { home, sewer: optional('SEWER INSPECTOR', lists.sewer), termite: optional('TERMITE INSPECTOR', lists.termite) };
+        }
+
+        // Purchasers on this page (collaborators don't count toward the loan)
+        const purchasers = () => (data.clients || []).filter(c => c.type !== 'Collaborator');
+
+        // Credit score for the rate and DTI limits: the average of the purchasers' scores.
+        // Anyone without a score on file counts as the 720 fallback, and the rate gets a disclaimer.
+        function purchaserCreditScore() {
+            const scores = purchasers().map(c => {
+                const n = parseInt(text(col(c.income || {}, 'CREDIT SCORE')), 10);
+                return n >= 300 && n <= 900 ? n : null;
+            });
+            const missing = !scores.length || scores.some(n => n === null);
+            const used = scores.length ? scores.map(n => (n === null ? FALLBACK_CREDIT_SCORE : n)) : [FALLBACK_CREDIT_SCORE];
+            return { score: Math.round(used.reduce((a, b) => a + b, 0) / used.length), missing, count: used.length };
+        }
+
+        function update() {
+            const product = data.loanProducts[loanIndex] || {};
+            const credit = purchaserCreditScore();
+            // The Loan Product picker's "Cash" choice decides whether this is a cash purchase
+            const page = { ...data.page, ...draft, 'CASH PURCHASE': cashSelected ? 'TRUE' : 'FALSE' };
+            const result = calculate(page, product, data.interestRate || {}, String(credit.score));
+            result.hasScore = !credit.missing;
+            result.scoreCount = credit.count;
+            // Admins have every inspector's prices, so a newly picked inspector previews right away
+            const findInspector = (list, column) => (list || []).find(r => text(col(r, column)).toLowerCase() === text(col(page, column)).toLowerCase()) || null;
+            const lists = data.inspectorRows
+                ? { home: findInspector(data.inspectorRows.home, 'HOME INSPECTOR'), sewer: findInspector(data.inspectorRows.sewer, 'SEWER INSPECTOR'), termite: findInspector(data.inspectorRows.termite, 'TERMITE INSPECTOR') }
+                : data.inspectors || {};
+            result.inspections = inspections(page, lists);
+            renderProperty(page, result);
+            renderEscrow(result);
+            renderPayment(result, product);
+        }
+
+        // Principal & Interest line: the rate and term, plus a disclaimer (*) when a credit score had to be estimated
+        function principalInterestRow(result) {
+            const p = result.payment;
+            const terms = p.termYears ? (result.rate * 100).toFixed(3) + '%' + (result.hasScore ? '' : '*') + ' for ' + p.termYears + ' years' : '';
+            const disclaimer = result.hasScore ? '' : '* ' + (result.scoreCount > 1
+                ? 'Not every purchaser has a credit score on file, so ' + FALLBACK_CREDIT_SCORE + ' was used for anyone missing one. This rate uses their average score of ' + result.creditScore + '.'
+                : 'We don\'t have a credit score on file yet, so this rate is estimated using a ' + FALLBACK_CREDIT_SCORE + ' credit score.')
+                + ' Your actual rate may be higher or lower.';
+            return '<li><span class="k">Principal &amp; Interest'
+                + (terms ? '<small>' + escapeHtml(terms) + '</small>' : '')
+                + (disclaimer ? '<small class="rate-note">' + escapeHtml(disclaimer) + '</small>' : '')
+                + '</span><span class="v">' + wholeMoney.format(toDollars(p.principalInterest)) + '</span></li>';
+        }
+
+        // Payment & Approval card: mortgage payment, then HOA dues, each with a total
+        function renderPayment(result, product) {
+            const p = result.payment;
+            const row = (k, v, note) => '<li><span class="k">' + escapeHtml(k) + (note ? '<small>' + escapeHtml(note) + '</small>' : '') + '</span><span class="v">' + wholeMoney.format(toDollars(v)) + '</span></li>';
+            const total = (k, v) => '<li class="is-total"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + wholeMoney.format(toDollars(v)) + '</span></li>';
+            // Cash purchase: no mortgage, so one "Monthly Payments" list (taxes, insurance, HOA dues),
+            // the Total Monthly Obligation, and no income or approval sections (so the card is just "Payment")
+            document.getElementById('payment-title').textContent = result.isCash ? 'Payment' : 'Payment & Approval';
+            if (result.isCash) {
+                document.getElementById('payment-list').innerHTML =
+                    '<section class="money-section"><h3 class="money-section-title">Monthly Payments</h3><ul class="pay-list">'
+                    + row('Taxes', p.monthlyTaxes)
+                    + row('Insurance', p.monthlyInsurance)
+                    + row('Monthly Primary HOA Dues', p.primaryDues)
+                    + row('Monthly Master HOA Dues', p.masterDues)
+                    + '</ul></section>'
+                    + '<div class="pay-grand"><span class="label">Total Monthly Obligation<span class="caption">Taxes, insurance and HOA dues</span></span><span class="amount">' + wholeMoney.format(toDollars(p.totalMonthly)) + '</span></div>';
+                return;
+            }
+            document.getElementById('payment-list').innerHTML =
+                '<section class="money-section"><h3 class="money-section-title">Mortgage Payment</h3><ul class="pay-list">'
+                + principalInterestRow(result)
+                // Hidden when it doesn't apply (or rounds to $0)
+                + (toDollars(p.monthlyPMI) > 0 ? row('Mortgage Insurance', p.monthlyPMI) : '')
+                + row('Taxes', p.monthlyTaxes)
+                + row('Insurance', p.monthlyInsurance)
+                + total('Total Mortgage Payment', p.mortgagePayment)
+                + '</ul></section>'
+                + '<section class="money-section"><h3 class="money-section-title">HOA Dues</h3><ul class="pay-list">'
+                + row('Monthly Primary HOA Dues', p.primaryDues)
+                + row('Monthly Master HOA Dues', p.masterDues)
+                + '</ul></section>'
+                + '<div class="pay-grand"><span class="label">Total Monthly Obligation<span class="caption">Mortgage payment plus HOA dues</span></span><span class="amount">' + wholeMoney.format(toDollars(p.totalMonthly)) + '</span></div>'
+                + renderApproval(result, product);
+            document.querySelectorAll('[data-enter-income]').forEach(btn => btn.addEventListener('click', openOwnIncome));
+        }
+
+        // --- Estimated approval ---
+        // Each client's monthly income (same math as the settings page) and monthly debts, then two DTI checks
+        // against the loan product's limits for the buyer's credit score:
+        //   Total DTI = (total monthly obligation + existing debts) / total monthly income
+        //   Housing only DTI = total monthly obligation / total monthly income
+        const pct = n => (Math.round(n * 10000) / 100).toFixed(2) + '%';
+        function renderApproval(result, product) {
+            const clients = purchasers();
+            const people = clients.map(c => ({ ...c, monthly: c.income ? monthlyIncome(c.income) : 0, debts: c.income ? monthlyDebts(c.income) : 0 }));
+            const totalIncome = people.reduce((sum, c) => sum + c.monthly, 0);
+            const totalDebts = people.reduce((sum, c) => sum + c.debts, 0);
+            const obligation = result.payment.totalMonthly;
+            // Until every purchaser has entered their income, the totals and approval are "TBD" and the DTI math is hidden
+            const incomeMissing = !people.length || people.some(c => !(c.monthly > 0));
+            const dollars = n => wholeMoney.format(toDollars(n));
+
+            // One line per purchaser: their monthly income and debts
+            const clientLines = people.map(c => {
+                const name = escapeHtml(c.name || phone(c.id));
+                if (c.monthly > 0) return '<li><strong>' + name + '</strong>: ' + dollars(c.monthly) + '/mo income · ' + dollars(c.debts) + '/mo debts</li>';
+                // The signed-in purchaser can add their own income right here
+                return '<li><strong>' + name + '</strong>: '
+                    + (c.id === data.viewerId ? '<button type="button" class="enter-income-btn" data-enter-income>Enter Income</button>' : '<span class="none-provided">None Provided</span>')
+                    + '</li>';
+            }).join('');
+
+            const tier = creditTier(result.creditScore);
+            const scoreText = result.creditScore + (result.scoreCount > 1 ? ' average' : '') + (result.hasScore ? '' : ' (estimated)') + ' credit score';
+            const check = (label, debt, maxColumn) => {
+                const max = num(col(product, maxColumn + ' ' + tier));
+                const ratio = !incomeMissing && totalIncome > 0 ? debt / totalIncome : null;
+                return {
+                    pass: ratio !== null && ratio <= max,
+                    line: '<li><strong>' + label + '</strong>: ' + (ratio === null ? 'TBD' : pct(ratio) + (ratio <= max ? ' ✓' : ' ✗'))
+                        + ' (max ' + pct(max) + ')</li>',
+                };
+            };
+            const total = check('Total DTI', obligation + totalDebts, 'MAX DTI CREDIT SCORE');
+            const housing = check('Housing Only DTI', obligation, 'MAX DTI HOUSING ONLY CREDIT SCORE');
+            const status = incomeMissing ? '<span class="status-pill is-pending">TBD</span>'
+                : '<span class="status-pill ' + (total.pass && housing.pass ? 'is-pass">Approved' : 'is-fail">Not Approved') + '</span>';
+
+            return '<div class="pay-grand approval-box">'
+                + '<div class="approval-head"><span class="label">Estimated Approval</span>' + status + '</div>'
+                + '<ul class="approval-details">'
+                + clientLines
+                + '<li><strong>Total</strong>: ' + (incomeMissing ? 'TBD' : dollars(totalIncome) + '/mo income · ' + dollars(totalDebts) + '/mo debts') + '</li>'
+                + total.line + housing.line
+                + '<li>Limits are for a ' + scoreText + '.</li>'
+                + '</ul></div>'
+                + '<p class="fine-note">This is an estimate, not a loan approval. Your lender will verify your income, debts and credit.</p>';
+        }
+
+        // "Enter Income" opens the same income pop-up as the settings page
+        let incomeEditor = null;
+        function openOwnIncome() {
+            const me = (data.clients || []).find(c => c.id === data.viewerId);
+            if (!me) return;
+            if (!incomeEditor) {
+                incomeEditor = createIncomeEditor({
+                    save: async income => {
+                        const json = await api({ action: 'updateIncome', income });
+                        if (!json.ok) throw new Error(json.error);
+                        return json.income;
+                    },
+                    onSaved: row => {
+                        const client = (data.clients || []).find(c => c.id === data.viewerId);
+                        if (client) client.income = row;
+                        update();
+                    },
+                });
+            }
+            incomeEditor.open(me.income);
+        }
+
+        // --- Settings card pickers (admins only) ---
+        // A dropdown in the style of the website's address suggestions.
+        // items: [{ value, main, secondary }]. Single choice closes on pick; multiple shows checkboxes (up to max).
+        const CHECK_ICON = '<svg class="picker-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        const BOX_ICON = '<span class="picker-box" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>';
+        const ICONS = {
+            bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/></svg>',
+            cash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>',
+            home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+            map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
+            tool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+            none: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>',
+        };
+        let pickerCount = 0;
+        // max can be a number or a function (when two pickers share a limit); blocked(value) marks choices taken elsewhere
+        function makePicker({ mount, labelId, items, multiple = false, max = Infinity, blocked = () => false, summary, selected = [], placeholder = 'Choose...', tag, onChange }) {
+            const maxNow = () => (typeof max === 'function' ? max() : max);
+            const uid = 'picker-' + (++pickerCount);
+            let chosen = selected.filter(v => items.some(it => it.value === v)).slice(0, typeof max === 'number' ? max : Infinity);
+            const summaryText = n => (summary ? summary(n) : n + ' of ' + maxNow() + ' selected');
+            let highlighted = -1;
+
+            mount.innerHTML = '<div class="picker">'
+                + '<button type="button" class="picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + uid + '-list" aria-labelledby="' + labelId + ' ' + uid + '-btn" id="' + uid + '-btn">'
+                + '<span class="picker-text"><span class="picker-main"></span><span class="picker-secondary"></span></span></button>'
+                + '<div class="picker-list" id="' + uid + '-list" role="listbox" aria-labelledby="' + labelId + '"' + (multiple ? ' aria-multiselectable="true"' : '') + '>'
+                + items.map((it, i) => '<div class="picker-option" role="option" id="' + uid + '-opt-' + i + '">'
+                    + (multiple ? BOX_ICON : (ICONS[it.icon] || ICONS.bank))
+                    + '<span class="picker-text"><span class="picker-main">' + escapeHtml(it.main) + '</span>'
+                    + (it.secondary ? '<span class="picker-secondary">' + escapeHtml(it.secondary) + '</span>' : '') + '</span>'
+                    + (multiple ? '<span class="picker-tag" hidden>' + escapeHtml(tag || '') + '</span>' : CHECK_ICON) + '</div>').join('')
+                + (multiple ? '<div class="picker-count"></div>' : '')
+                + '</div></div>';
+            const picker = mount.firstElementChild;
+            const button = picker.querySelector('.picker-btn');
+            const options = [...picker.querySelectorAll('.picker-option')];
+            const count = picker.querySelector('.picker-count');
+
+            function render() {
+                const full = chosen.length >= maxNow();
+                options.forEach((o, i) => {
+                    const on = chosen.includes(items[i].value);
+                    o.setAttribute('aria-selected', String(on));
+                    if (multiple) {
+                        o.setAttribute('aria-disabled', String(!on && (full || blocked(items[i].value))));
+                        // Tag the first pick (e.g. "Buyer")
+                        const t = o.querySelector('.picker-tag');
+                        if (t) t.hidden = !(tag && chosen[0] === items[i].value);
+                    }
+                });
+                const picked = chosen.map(v => items.find(it => it.value === v));
+                const main = button.querySelector('.picker-main');
+                const sub = button.querySelector('.picker-secondary');
+                if (!picked.length) {
+                    main.textContent = placeholder;
+                    sub.textContent = '';
+                } else if (multiple) {
+                    main.textContent = picked.map(p => p.main).join(', ');
+                    sub.textContent = summaryText(picked.length);
+                } else {
+                    main.textContent = picked[0].main;
+                    sub.textContent = picked[0].secondary || '';
+                }
+                main.classList.toggle('is-placeholder', !picked.length);
+                if (count) count.textContent = summaryText(chosen.length) + (full ? ' (limit reached)' : '');
+            }
+            function highlight(i) {
+                highlighted = i;
+                options.forEach((o, j) => o.classList.toggle('is-active', j === i));
+                if (i >= 0) button.setAttribute('aria-activedescendant', options[i].id);
+                else button.removeAttribute('aria-activedescendant');
+            }
+            const isOpen = () => picker.classList.contains('is-open');
+            function open() {
+                picker.classList.add('is-open');
+                button.setAttribute('aria-expanded', 'true');
+                highlight(Math.max(0, items.findIndex(it => chosen.includes(it.value))));
+            }
+            function close() {
+                picker.classList.remove('is-open');
+                button.setAttribute('aria-expanded', 'false');
+                highlight(-1);
+            }
+            function pick(i) {
+                const value = items[i].value;
+                if (multiple) {
+                    if (chosen.includes(value)) chosen = chosen.filter(v => v !== value);
+                    else if (chosen.length < maxNow() && !blocked(value)) chosen = chosen.concat([value]);
+                    else return; // already at the limit
+                } else {
+                    close();
+                    if (chosen[0] === value) return;
+                    chosen = [value];
+                }
+                render();
+                if (onChange) onChange(multiple ? chosen.slice() : chosen[0]);
+            }
+
+            button.addEventListener('click', () => isOpen() ? close() : open());
+            options.forEach((o, i) => {
+                // Keep focus on the button while tapping an option
+                o.addEventListener('pointerdown', e => e.preventDefault());
+                o.addEventListener('click', () => { pick(i); button.focus(); });
+            });
+            button.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!isOpen()) { open(); return; }
+                    highlight((highlighted + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+                } else if ((e.key === 'Enter' || e.key === ' ') && isOpen()) {
+                    e.preventDefault();
+                    if (highlighted >= 0) pick(highlighted); else close();
+                } else if (e.key === 'Escape' && isOpen()) {
+                    e.preventDefault();
+                    close();
+                }
+            });
+            // Tap or click anywhere else to close
+            document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
+            button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
+
+            render();
+            return { value: () => (multiple ? chosen.slice() : chosen[0]), refresh: render };
+        }
+
+        function setupLoanPicker() {
+            const products = data.loanProducts || [];
+            makePicker({
+                mount: document.getElementById('loan-picker'),
+                labelId: 'loan-label',
+                items: [{ value: 'cash', main: 'Cash', secondary: 'Cash purchase, no loan', icon: 'cash' }]
+                    .concat(products.map((p, i) => ({ value: String(i), main: text(col(p, 'LOAN PRODUCT NAME')) || 'Loan product ' + (i + 1), secondary: text(col(p, 'LENDER NAME')) }))),
+                selected: [cashSelected ? 'cash' : String(loanIndex)],
+                onChange: value => {
+                    // Re-run the checks (seller credit, loan amount...) against the product just picked.
+                    // The breakdown keeps the old product until Save Settings.
+                    pickedCash = value === 'cash';
+                    if (!pickedCash) pickedLoanIndex = Number(value);
+                    onSettingsChanged();
+                },
+            });
+        }
+
+        // After a save: the breakdown switches to the picked product (cash is saved to the sheet;
+        // a loan product lives in the link as ?loan= so a shared link opens the same product)
+        function applyPickedLoan() {
+            cashSelected = pickedCash;
+            loanIndex = pickedLoanIndex;
+            if (cashSelected) return;
+            params.set('loan', text(col(data.loanProducts[loanIndex], 'LOAN PRODUCT NAME')));
+            history.replaceState(null, '', location.pathname + '?' + params.toString());
+        }
+
+        // People (PRIMARY + ALT 1-5, each a Purchaser or Collaborator) and the lender who can see this page
+        const PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3', 'ALT ACCOUNT ID 4', 'ALT ACCOUNT ID 5'];
+        const TYPE_COLUMNS = ['PRIMARY ACCOUNT TYPE', 'ALT ACCOUNT TYPE 1', 'ALT ACCOUNT TYPE 2', 'ALT ACCOUNT TYPE 3', 'ALT ACCOUNT TYPE 4', 'ALT ACCOUNT TYPE 5'];
+        const MAX_PEOPLE = 6;
+        // Blank type counts as a purchaser
+        const isCollaborator = i => text(col(data.page, TYPE_COLUMNS[i])).toLowerCase() === 'collaborator';
+        const idOf = v => { const d = text(v).replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? d.slice(1) : d; };
+        const phone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
+        function setupAccessPickers() {
+            const accounts = data.accounts || [];
+            const saveBtn = document.getElementById('access-save');
+            const message = document.getElementById('access-message');
+            const warning = document.getElementById('access-warning');
+            const setMessage = (msg, kind) => { message.textContent = msg; message.className = 'access-message' + (msg ? ' is-' + kind : ''); };
+
+            const accountItems = accounts.map(a => ({ value: a.id, main: a.name || phone(a.id), secondary: phone(a.id) }));
+            const onPage = PEOPLE_COLUMNS.map((c, i) => ({ id: idOf(col(data.page, c)), collaborator: isCollaborator(i) })).filter(p => p.id);
+            // Purchasers and collaborators share the six spots, and nobody can be both
+            let people = null;
+            let collaborators = null;
+            const spotsLeft = () => MAX_PEOPLE - (people ? people.value().length : 0) - (collaborators ? collaborators.value().length : 0);
+            const spotsText = n => n + ' selected \u00b7 ' + spotsLeft() + ' of ' + MAX_PEOPLE + ' spots left';
+            people = makePicker({
+                mount: document.getElementById('people-picker'),
+                labelId: 'people-label',
+                items: accountItems,
+                multiple: true,
+                max: () => MAX_PEOPLE - (collaborators ? collaborators.value().length : 0),
+                blocked: v => Boolean(collaborators && collaborators.value().includes(v)),
+                summary: n => (collaborators ? spotsText(n) : n + ' selected'),
+                tag: 'Primary',
+                selected: onPage.filter(p => !p.collaborator).map(p => p.id),
+                placeholder: 'Choose purchasers',
+                onChange: changed,
+            });
+            collaborators = makePicker({
+                mount: document.getElementById('collab-picker'),
+                labelId: 'collab-label',
+                items: accountItems,
+                multiple: true,
+                max: () => MAX_PEOPLE - people.value().length,
+                blocked: v => people.value().includes(v),
+                summary: spotsText,
+                selected: onPage.filter(p => p.collaborator).map(p => p.id),
+                placeholder: 'Choose collaborators',
+                onChange: changed,
+            });
+            people.refresh();
+            collaborators.refresh();
+            const lender = makePicker({
+                mount: document.getElementById('lender-picker'),
+                labelId: 'lender-label',
+                // "None" is always first and clears the lender
+                items: [{ value: '', main: 'None', secondary: 'No lender access', icon: 'none' }]
+                    .concat(accounts.filter(a => a.isLender).map(a => ({ value: a.id, main: a.name || phone(a.id), secondary: a.bank || phone(a.id), icon: 'bank' }))),
+                selected: [idOf(col(data.page, 'LENDER ACCOUNT ID'))],
+                onChange: changed,
+            });
+
+            onSettingsChanged = changed;
+            function changed() {
+                // Each picker's limit and taken choices depend on the other one
+                people.refresh();
+                collaborators.refresh();
+                validateSettings();
+                setMessage('', '');
+                saveBtn.disabled = !people.value().length || Object.keys(fieldErrors).length > 0;
+                warning.hidden = people.value().includes(data.viewerId) || collaborators.value().includes(data.viewerId) || lender.value() === data.viewerId;
+                if (!people.value().length) setMessage('Choose at least one purchaser.', 'error');
+                else if (Object.keys(fieldErrors).length) setMessage('Please fix the highlighted settings before saving.', 'error');
+            }
+
+            saveBtn.addEventListener('click', async () => {
+                saveBtn.disabled = true;
+                saveBtn.classList.add('is-loading');
+                setMessage('', '');
+                try {
+                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields: draft });
+                    if (!json.ok) throw new Error(json.error);
+                    data.page = json.page;
+                    // Reload the people list so incomes and credit scores match the new purchasers
+                    const fresh = await api({ action: 'page', pageId });
+                    if (fresh.ok) { data.page = fresh.page; data.clients = fresh.clients; data.inspectors = fresh.inspectors; }
+                    draft = {};
+                    setTimeout(markSaved, 0);
+                    applyPickedLoan();
+                    update();
+                    setMessage('Saved! Your settings have been updated.', 'success');
+                    // Removed yourself? Reload, and the page will no longer open for you.
+                    if (!warning.hidden) setTimeout(() => location.reload(), 1500);
+                } catch (err) {
+                    console.error(err);
+                    setMessage('We couldn\'t save your settings. Please try again.', 'error');
+                    saveBtn.disabled = false;
+                } finally {
+                    saveBtn.classList.remove('is-loading');
+                }
+            });
+        }
+
+        // --- Settings fields (admins) ---
+        // Every edit goes into "draft" (sheet column -> the exact value that will be saved) and the page
+        // previews it right away. Save Settings writes the draft to the PAGES sheet.
+        let draft = {};
+        let fieldErrors = {};
+        const settingsBlocks = [];
+        // The page as it would look with the unsaved edits
+        const draftPage = () => ({ ...data.page, ...draft });
+        const current = column => (column in draft ? draft[column] : text(col(data.page, column)));
+
+        // Number formatting for the inputs (what's saved never has commas or symbols)
+        const digits = v => String(v == null ? '' : v).replace(/[^0-9]/g, '');
+        const withCommas = v => (v === '' ? '' : Number(v).toLocaleString('en-US'));
+        const decimalToPercent = v => (text(v) === '' ? '' : String(Math.round(num(v) * 1e6) / 1e4));
+        const percentToDecimal = v => {
+            const t = String(v).trim();
+            if (t === '') return '';
+            const n = Number(t.replace(/[%\s]/g, ''));
+            return isFinite(n) ? String(Math.round(n * 1e4) / 1e6) : null;
+        };
+        const toSheetDate = iso => { const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? (+m[2]) + '/' + (+m[3]) + '/' + m[1] : ''; };
+        const toInputDate = v => { const d = parseDate(v); return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : ''; };
+
+        function setDraft(column, value) {
+            draft[column] = value;
+            settingsEdited();
+        }
+        function settingsEdited() {
+            update();
+            onSettingsChanged();
+        }
+
+        // --- Building blocks ---
+        const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+        let fieldCount = 0;
+        function fieldShell(label, { span, help, key } = {}) {
+            const id = 'set-' + (++fieldCount);
+            const wrap = el('div', 'field' + (span ? ' span-2' : ''));
+            const lab = el('span', 'field-label');
+            lab.id = id + '-label';
+            lab.textContent = label;
+            const body = el('div', 'field-body');
+            const error = el('p', 'field-error');
+            error.hidden = true;
+            wrap.append(lab, body);
+            if (help) wrap.append(el('p', 'field-help', help));
+            wrap.append(error);
+            if (key) settingsBlocks.push({ key, error });
+            return { wrap, body, labelId: lab.id };
+        }
+        // A text box with an optional "$" in front or "%"/"days" after
+        function textBox({ value, prefix, suffix, placeholder, inputmode = 'numeric', onInput, onBlur, type = 'text' }) {
+            const wrap = el('div', 'input-wrap' + (prefix ? ' has-prefix' : '') + (suffix ? ' has-suffix' : ''));
+            if (prefix) wrap.append(el('span', 'adorn adorn-prefix', prefix));
+            const input = el('input', 'set-input');
+            input.type = type;
+            if (type === 'text') input.setAttribute('inputmode', inputmode);
+            input.autocomplete = 'off';
+            input.value = value;
+            if (placeholder) input.placeholder = placeholder;
+            input.addEventListener('input', () => onInput(input));
+            if (onBlur) input.addEventListener('blur', () => onBlur(input));
+            wrap.append(input);
+            if (suffix) wrap.append(el('span', 'adorn adorn-suffix', suffix));
+            return { wrap, input };
+        }
+        // Two (or more) buttons side by side; one is always on
+        function segToggle(options, selected, onPick, label) {
+            const seg = el('div', 'seg');
+            seg.setAttribute('role', 'radiogroup');
+            if (label) seg.setAttribute('aria-label', label);
+            options.forEach(([value, text]) => {
+                const b = el('button', value === selected ? 'is-on' : '', escapeHtml(text));
+                b.type = 'button';
+                b.setAttribute('role', 'radio');
+                b.setAttribute('aria-checked', String(value === selected));
+                b.addEventListener('click', () => {
+                    seg.querySelectorAll('button').forEach(x => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); });
+                    onPick(value);
+                });
+                seg.append(b);
+            });
+            return seg;
+        }
+
+        // --- Field kinds ---
+        function moneyField(parent, label, column, opts = {}) {
+            const f = fieldShell(label, opts);
+            const box = textBox({
+                value: withCommas(digits(current(column))), prefix: '$', placeholder: '0',
+                onInput: i => setDraft(column, digits(i.value)),
+                onBlur: i => { i.value = withCommas(digits(i.value)); },
+            });
+            f.body.append(box.wrap);
+            parent.append(f.wrap);
+            return box;
+        }
+        function wholeField(parent, label, column, { commas = false, suffix, key, ...opts } = {}) {
+            const f = fieldShell(label, { key, ...opts });
+            const show = v => (commas ? withCommas(v) : v);
+            const box = textBox({
+                value: show(digits(current(column))), suffix, placeholder: '0',
+                onInput: i => setDraft(column, digits(i.value)),
+                onBlur: i => { i.value = show(digits(i.value)); },
+            });
+            f.body.append(box.wrap);
+            parent.append(f.wrap);
+        }
+        function percentField(parent, label, column, opts = {}) {
+            const f = fieldShell(label, { key: column, ...opts });
+            const box = textBox({
+                value: decimalToPercent(current(column)), suffix: '%', placeholder: '0', inputmode: 'decimal',
+                onInput: i => { const d = percentToDecimal(i.value); fieldBad(column, d === null ? 'Please enter a number.' : ''); if (d !== null) setDraft(column, d); else settingsEdited(); },
+            });
+            f.body.append(box.wrap);
+            parent.append(f.wrap);
+        }
+        function choiceField(parent, label, column, items, opts = {}) {
+            const f = fieldShell(label, opts);
+            const mount = el('div');
+            f.body.append(mount);
+            parent.append(f.wrap);
+            makePicker({ mount, labelId: f.labelId, items, selected: [current(column)], placeholder: 'Choose...', onChange: v => setDraft(column, v) });
+        }
+        function toggleField(parent, label, column, options, opts = {}) {
+            const f = fieldShell(label, opts);
+            f.body.append(segToggle(options, current(column).toUpperCase() === 'TRUE' ? options[0][0] : options[1][0], v => setDraft(column, v), label));
+            parent.append(f.wrap);
+        }
+        // HOA fee with a Buyer / Seller toggle on the same line
+        function feeWithPayer(parent, label, feeColumn, payerColumn) {
+            const f = fieldShell(label, { span: true });
+            const row = el('div', 'pair');
+            const box = textBox({
+                value: withCommas(digits(current(feeColumn))), prefix: '$', placeholder: '0',
+                onInput: i => setDraft(feeColumn, digits(i.value)),
+                onBlur: i => { i.value = withCommas(digits(i.value)); },
+            });
+            const payer = /^seller$/i.test(current(payerColumn)) ? 'Seller' : 'Buyer';
+            row.append(box.wrap, segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payer, v => setDraft(payerColumn, v), label + ' paid by'));
+            f.body.append(row);
+            parent.append(f.wrap);
+        }
+        // Optional % and $ boxes side by side
+        function percentAndDollars(parent, label, pctColumn, dollarColumn, help) {
+            const f = fieldShell(label, { span: true, help, key: pctColumn });
+            const row = el('div', 'pair pair-even');
+            const pct = textBox({
+                value: decimalToPercent(current(pctColumn)), suffix: '%', placeholder: '0', inputmode: 'decimal',
+                onInput: i => { const d = percentToDecimal(i.value); fieldBad(pctColumn, d === null ? 'Please enter a number.' : ''); if (d !== null) setDraft(pctColumn, d); else settingsEdited(); },
+            });
+            const dollars = textBox({
+                value: withCommas(digits(current(dollarColumn))), prefix: '$', placeholder: '0',
+                onInput: i => setDraft(dollarColumn, digits(i.value)),
+                onBlur: i => { i.value = withCommas(digits(i.value)); },
+            });
+            row.append(pct.wrap, dollars.wrap);
+            f.body.append(row);
+            parent.append(f.wrap);
+        }
+
+        // Loan amount: entered as a % of the price or as dollars; always saved as RETAIL LTV (a decimal)
+        let loanMode = 'percent';
+        let loanDollars = '';
+        function loanAmountField(parent) {
+            const f = fieldShell('Loan Amount', { span: true, key: 'RETAIL LTV', help: 'Enter it as a percent of the purchase price or as a dollar amount.' });
+            f.wrap.dataset.display = 'loan';
+            const row = el('div', 'pair');
+            const price = () => num(current('PURCHASE PRICE'));
+            loanDollars = String(Math.round(price() * num(current('RETAIL LTV'))));
+            const box = textBox({
+                value: decimalToPercent(current('RETAIL LTV')), suffix: '%', placeholder: '0', inputmode: 'decimal',
+                onInput: i => {
+                    if (loanMode === 'percent') {
+                        const d = percentToDecimal(i.value);
+                        fieldBad('RETAIL LTV', d === null ? 'Please enter a number.' : '');
+                        if (d !== null) { loanDollars = String(Math.round(price() * num(d))); setDraft('RETAIL LTV', d); } else settingsEdited();
+                    } else {
+                        loanDollars = digits(i.value);
+                        setDraft('RETAIL LTV', price() ? String(Math.round(num(loanDollars) / price() * 1e6) / 1e6) : '0');
+                    }
+                },
+                onBlur: i => { if (loanMode === 'dollars') i.value = withCommas(digits(i.value)); },
+            });
+            const adorn = (prefix, suffix) => {
+                box.wrap.className = 'input-wrap' + (prefix ? ' has-prefix' : '') + (suffix ? ' has-suffix' : '');
+                box.wrap.querySelectorAll('.adorn').forEach(a => a.remove());
+                if (prefix) box.wrap.prepend(el('span', 'adorn adorn-prefix', prefix));
+                if (suffix) box.wrap.append(el('span', 'adorn adorn-suffix', suffix));
+            };
+            row.append(box.wrap, segToggle([['percent', '%'], ['dollars', '$']], 'percent', mode => {
+                loanMode = mode;
+                if (mode === 'dollars') { adorn('$', ''); box.input.setAttribute('inputmode', 'numeric'); box.input.value = withCommas(loanDollars); }
+                else { adorn('', '%'); box.input.setAttribute('inputmode', 'decimal'); box.input.value = decimalToPercent(current('RETAIL LTV')); }
+            }, 'Loan amount entered as'));
+            f.body.append(row);
+            parent.append(f.wrap);
+        }
+        // A new purchase price changes the loan's % when the loan was entered in dollars
+        function priceChanged() {
+            if (loanMode !== 'dollars') return;
+            const price = num(current('PURCHASE PRICE'));
+            draft['RETAIL LTV'] = price ? String(Math.round(num(loanDollars) / price * 1e6) / 1e6) : '0';
+        }
+
+        // --- Checks (shown under the field; Save stays off until they're fixed) ---
+        function fieldBad(key, message) {
+            if (message) fieldErrors[key] = message; else delete fieldErrors[key];
+        }
+        function validateSettings() {
+            if (!settingsBlocks.length) return;
+            const page = draftPage();
+            const product = pickedCash ? null : data.loanProducts[pickedLoanIndex] || {};
+            const maxOf = name => (!product || text(col(product, name)) === '' ? Infinity : num(col(product, name)));
+            const keep = k => (fieldErrors[k] === 'Please enter a number.' ? fieldErrors[k] : '');
+
+            // Seller credit: no more than the loan product allows
+            const seller = num(col(page, 'SELLER CREDIT'));
+            const maxSeller = maxOf('MAX SELLER CREDIT %');
+            fieldBad('SELLER CREDIT', keep('SELLER CREDIT') || (seller > maxSeller ? 'Can\'t be more than this loan\'s ' + percent(maxSeller) + ' maximum seller credit.' : ''));
+
+            // Year built: 1850 up to the year after the offer is accepted
+            const year = text(col(page, 'YEAR BUILT'));
+            const accepted = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
+            const latest = (accepted ? accepted.getFullYear() : new Date().getFullYear()) + 1;
+            fieldBad('YEAR BUILT', year !== '' && (num(year) < 1850 || num(year) > latest) ? 'Must be between 1850 and ' + latest + '.' : '');
+
+            // Loan amount: within the product's max loan-to-value and its min / max loan amounts
+            let loanError = keep('RETAIL LTV');
+            if (!loanError && product) {
+                const ltv = num(col(page, 'RETAIL LTV'));
+                // Whole dollars: a dollar entry is stored as a 6-decimal share of the price, which can be off by cents
+                const amount = Math.round(num(col(page, 'PURCHASE PRICE')) * ltv);
+                const maxLtv = maxOf('MAX LTV');
+                const maxLoan = maxOf('MAX LOAN AMOUNT');
+                const minLoan = text(col(product, 'MIN LOAN AMOUNT')) === '' ? 0 : num(col(product, 'MIN LOAN AMOUNT'));
+                if (ltv > maxLtv + 1e-9) loanError = 'Can\'t be more than this loan\'s ' + percent(maxLtv) + ' maximum loan-to-value.';
+                else if (amount > maxLoan) loanError = 'Comes to ' + wholeMoney.format(amount) + ', more than this loan\'s ' + wholeMoney.format(maxLoan) + ' maximum.';
+                else if (amount < minLoan) loanError = 'Comes to ' + wholeMoney.format(amount) + ', less than this loan\'s ' + wholeMoney.format(minLoan) + ' minimum.';
+            }
+            fieldBad('RETAIL LTV', loanError);
+
+            settingsBlocks.forEach(b => { b.error.textContent = fieldErrors[b.key] || ''; b.error.hidden = !fieldErrors[b.key]; });
+            refreshDisplays();
+        }
+
+        // --- The four sections ---
+        function setupSettingsFields() {
+            const purchase = document.getElementById('purchase-fields');
+            moneyField(purchase, 'Purchase Price', 'PURCHASE PRICE').input.addEventListener('input', () => { priceChanged(); settingsEdited(); });
+            percentField(purchase, 'Seller Credit', 'SELLER CREDIT');
+            choiceField(purchase, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
+            wholeField(purchase, 'Square Feet', 'SQFT', { commas: true, suffix: 'sq ft' });
+            wholeField(purchase, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
+            toggleField(purchase, 'Pool', 'HAS POOL', [['TRUE', 'Yes'], ['FALSE', 'No']]);
+            moneyField(purchase, 'Yearly Taxes', 'YEARLY TAXES');
+            choiceField(purchase, 'Census Designation', 'CENSUS DESIGNATION', ['Low', 'Moderate', 'Middle', 'Upper'].map(v => ({ value: v, main: v, icon: 'map' })),
+                { help: '<a href="https://geomap.ffiec.gov/ffiecgeomap/" target="_blank" rel="noopener noreferrer">Click here for the map</a>' });
+            const dateField = fieldShell('Offer Acceptance Date');
+            const dateBox = textBox({ type: 'date', value: toInputDate(current('OFFER ACCEPTANCE DATE')), onInput: i => setDraft('OFFER ACCEPTANCE DATE', toSheetDate(i.value)) });
+            dateField.body.append(dateBox.wrap);
+            purchase.append(dateField.wrap);
+            wholeField(purchase, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
+            moneyField(purchase, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');
+            moneyField(purchase, 'Gift Funds', 'GIFT FUNDS');
+
+            const loan = document.getElementById('loan-fields');
+            loanAmountField(loan);
+            percentField(loan, 'Points Purchased', 'LENDER POINTS PURCHASED');
+            toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']]);
+
+            const misc = document.getElementById('misc-fields');
+            percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
+            percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
+            percentField(misc, 'ALTA Loan Policy Fee', 'ALTA TITLE RATE');
+            percentField(misc, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE');
+            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
+            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
+            // The seller always pays the disclosure fee
+            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
+            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
+            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
+            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
+            percentAndDollars(misc, 'Buyer Paid Commission', 'BUYERS AGENT COMMISSION %', 'BUYERS AGENT COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
+            percentAndDollars(misc, 'Seller Paid Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
+
+            const insp = document.getElementById('inspection-fields');
+            const rows = data.inspectorRows || {};
+            const names = (list, column) => (list || []).map(r => text(col(r, column))).filter(Boolean);
+            const inspectorItems = (list, column) => [{ value: '', main: 'None', secondary: 'No inspection', icon: 'none' }]
+                .concat(names(list, column).map(n => ({ value: n, main: n, icon: 'tool' })));
+            choiceField(insp, 'Home Inspector', 'HOME INSPECTOR', inspectorItems(rows.home, 'HOME INSPECTOR'));
+            const addOnField = fieldShell('Home Inspector Add-ons');
+            const addOnMount = el('div');
+            addOnField.body.append(addOnMount);
+            insp.append(addOnField.wrap);
+            const addOns = [['HOME INSPECTOR POOL', 'Pool'], ['HOME INSPECTOR SEWER', 'Sewer'], ['HOME INSPECTOR TERMITE', 'Termite']];
+            makePicker({
+                mount: addOnMount, labelId: addOnField.labelId, multiple: true, max: 3,
+                items: addOns.map(([column, name]) => ({ value: column, main: name })),
+                selected: addOns.filter(([column]) => isTrue(current(column))).map(([column]) => column),
+                placeholder: 'No add-ons', summary: n => n + ' selected',
+                // Checked = TRUE, unchecked = FALSE
+                onChange: chosen => { addOns.forEach(([column]) => { draft[column] = chosen.includes(column) ? 'TRUE' : 'FALSE'; }); settingsEdited(); },
+            });
+            choiceField(insp, 'Sewer Inspector', 'SEWER INSPECTOR', inspectorItems(rows.sewer, 'SEWER INSPECTOR'));
+            choiceField(insp, 'Termite Inspector', 'TERMITE INSPECTOR', inspectorItems(rows.termite, 'TERMITE INSPECTOR'));
+
+            validateSettings();
+            makeEditable(document.getElementById('loan-card'));
+        }
+
+        // --- View / edit rows ---
+        // Each setting shows its current value with a pencil; the pencil opens the input, Done closes it again.
+        const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
+        const editableFields = [];
+        function makeEditable(card) {
+            card.querySelectorAll('.field').forEach(field => {
+                if (field.classList.contains('editable')) return;
+                const label = field.querySelector('.field-label');
+                if (!label) return;
+                field.classList.add('editable');
+                const row = el('div', 'view-row');
+                const name = el('span', 'vk');
+                name.textContent = label.textContent;
+                const value = el('span', 'vv');
+                const edit = el('button', 'edit-btn', PENCIL_ICON);
+                edit.type = 'button';
+                edit.title = 'Edit';
+                edit.setAttribute('aria-label', 'Edit ' + label.textContent);
+                row.append(name, value, edit);
+                field.prepend(row);
+                const done = el('div', 'edit-done');
+                const doneBtn = el('button', 'done-btn', 'Done');
+                doneBtn.type = 'button';
+                done.append(doneBtn);
+                // Errors stay at the bottom, under the Done button
+                const error = field.querySelector('.field-error');
+                if (error) field.insertBefore(done, error); else field.append(done);
+                edit.addEventListener('click', () => {
+                    field.classList.add('is-editing');
+                    const first = field.querySelector('.set-input, .picker-btn, .seg button');
+                    if (first) first.focus();
+                });
+                doneBtn.addEventListener('click', () => {
+                    field.classList.remove('is-editing');
+                    refreshDisplays();
+                    edit.focus();
+                });
+                const tag = el('span', 'edited-tag', 'Edited');
+                row.insertBefore(tag, value);
+                editableFields.push({ field, value, saved: null });
+            });
+            refreshDisplays();
+            markSaved();
+        }
+
+        // Whatever the rows show right now becomes the "saved" version (on load and after Save Settings)
+        function markSaved() {
+            editableFields.forEach(f => { f.saved = displayOf(f.field); });
+            refreshDisplays();
+        }
+
+        // What a field currently holds, read from its inputs: "$900,000", "3%", "Yes", "$50 · Buyer Pays"...
+        function displayOf(field) {
+            // Loan amount shows both: the % of the price and what that comes to
+            if (field.dataset.display === 'loan') {
+                const ltv = current('RETAIL LTV');
+                return ltv === '' ? '' : decimalToPercent(ltv) + '% · ' + wholeMoney.format(Math.round(num(current('PURCHASE PRICE')) * num(ltv)));
+            }
+            const picker = field.querySelector('.picker-btn .picker-main');
+            // A placeholder like "No add-ons" is a real answer; "Choose..." means nothing is picked
+            if (picker) return picker.classList.contains('is-placeholder') ? (/^choose/i.test(picker.textContent) ? '' : picker.textContent) : picker.textContent;
+            const parts = [];
+            field.querySelectorAll('.field-body .input-wrap, .field-body .seg').forEach(part => {
+                if (part.classList.contains('seg')) {
+                    const on = part.querySelector('button.is-on');
+                    // The loan amount's % / $ switch only says how it was typed in
+                    if (on && !/^[%$]$/.test(on.textContent)) parts.push(on.textContent);
+                    return;
+                }
+                const input = part.querySelector('input');
+                if (!input || input.value.trim() === '') return;
+                if (input.type === 'date') { const d = parseDate(input.value); parts.push(d ? fmtDate(d) : input.value); return; }
+                const pre = part.querySelector('.adorn-prefix');
+                const suf = part.querySelector('.adorn-suffix');
+                parts.push((pre ? pre.textContent : '') + input.value + (suf ? (/^[%]/.test(suf.textContent) ? '' : ' ') + suf.textContent : ''));
+            });
+            return parts.join(' \u00b7 ');
+        }
+        function refreshDisplays() {
+            editableFields.forEach(({ field, value, saved }) => {
+                const text = displayOf(field);
+                value.textContent = text || 'Not set';
+                value.classList.toggle('is-empty', !text);
+                // Edited = different from the saved value (changing it back clears this)
+                field.classList.toggle('is-changed', saved !== null && text !== saved);
+            });
+        }
+        // Talks to the private Google Sheet script as the signed-in person
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            const res = await fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            });
+            return res.json();
+        }
+
+        function showProblem(message) {
+            statusCard.querySelector('.spinner').hidden = true;
+            statusText.className = 'status-text is-error';
+            statusText.textContent = message;
+        }
+
+        // Each PAGE TYPE in the PAGES sheet has its own way of showing the page
+        const PAGE_TYPES = {
+            'buyer breakdown': showBuyerBreakdown,
+        };
+
+        async function load(user) {
+            if (!pageId) { showProblem('This link is missing its page ID. Please check the link Andrew sent you.'); return; }
+            if (!PORTAL_API_URL) { showProblem('Pages aren\'t available yet.'); return; }
+            currentUser = user;
+            try {
+                const json = await api({ action: 'page', pageId });
+                if (!json.ok) {
+                    if (json.error === 'page_not_found') showProblem('We couldn\'t find this page. Check the link, or ask Andrew to share it with you.');
+                    else if (json.error === 'not_found') showProblem('We don\'t have your account on file yet. Please reach out to Andrew.');
+                    else throw new Error(json.error);
+                    return;
+                }
+                data = json;
+                const type = text(data.pageType);
+                document.getElementById('hero-eyebrow').textContent = type || 'Client Portal';
+                document.title = (type || 'Client Portal') + ' | Andrew Marth Client Portal';
+                const show = PAGE_TYPES[type.toLowerCase()];
+                if (!show) { showProblem('This page isn\'t ready to view yet. Please check back soon.'); return; }
+                show();
+            } catch (err) {
+                console.error(err);
+                showProblem('We couldn\'t load this page. Please refresh to try again.');
+            }
+        }
+
+        // PAGE TYPE "Buyer Breakdown": property details, escrow breakdown, and the admin settings card
+        function showBuyerBreakdown() {
+            if (!(data.loanProducts || []).length) { showProblem('No loan products are set up yet. Please check back soon.'); return; }
+            // A shared link can name the loan product (?loan=); otherwise use the first one
+            loanIndex = Math.max(0, data.loanProducts.findIndex(p => text(col(p, 'LOAN PRODUCT NAME')) === params.get('loan')));
+            cashSelected = isTrue(col(data.page, 'CASH PURCHASE'));
+            pickedLoanIndex = loanIndex;
+            pickedCash = cashSelected;
+            update();
+            if (data.isAdmin) {
+                setupLoanPicker();
+                setupAccessPickers();
+                setupSettingsFields();
+            }
+            statusCard.hidden = true;
+            [propertyCard, escrowCard, paymentCard].forEach(c => { c.hidden = false; });
+            // Only admins can change the inputs; everyone else sees the numbers for the chosen product
+            loanCard.hidden = !data.isAdmin;
+            initReveal();
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) {
+                items.forEach(el => el.classList.add('is-visible'));
+                return;
+            }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                document.body.classList.remove('is-checking');
+                load(user);
+            });
+
+            signOutBtn.addEventListener('click', async () => {
+                signOutBtn.disabled = true;
+                await signOut(auth);
+            });
+        }
+    </script>
+</body>
+</html>

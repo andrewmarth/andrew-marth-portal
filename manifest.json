@@ -1,23 +1,32 @@
 {
-  "name": "Backend Links",
-  "short_name": "Links",
-  "start_url": "https://portal.andrewmarth.com/backend-links",
-  "scope": "https://portal.andrewmarth.com/backend-links",
+  "name": "Homes",
+  "short_name": "Homes",
+  "description": "Everything for your home search, in one place.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#e9e2d8",
   "theme_color": "#4e513e",
   "icons": [
     {
-      "src": "https://andrewmarth.com/images/links.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "https://andrewmarth.com/images/links.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

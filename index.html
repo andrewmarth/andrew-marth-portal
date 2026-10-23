@@ -6,6 +6,15 @@
     <title>My Portal | Andrew Marth Real Estate</title>
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,8 +59,24 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in (avoids a flash of the page before redirecting) */
-        body.is-checking > * { visibility: hidden; }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        .page-loader .spinner { width: 38px; height: 38px; }
+        .page-loader-text { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.1rem; font-weight: 700; opacity: 0.8; }
         h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
         a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 
@@ -84,8 +109,12 @@
             gap: 12px;
         }
         .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
         .sign-out {
             display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
             align-items: center;
             gap: 8px;
             min-height: 40px;
@@ -103,6 +132,10 @@
             transition: background-color 0.25s ease, border-color 0.25s ease;
         }
         .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
         @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
 
         .hero-content { position: relative; z-index: 2; }
@@ -209,6 +242,173 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Current Tasks: empty state */
+        .tasks-empty {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .tasks-empty-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tasks-empty-icon svg { width: 22px; height: 22px; }
+        /* Once the card slides in: the circle pops, then the check draws itself */
+        .tasks-empty-icon { transform: scale(0); }
+        .tasks-empty-icon path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+        .reveal.is-visible .tasks-empty-icon { animation: check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s forwards; }
+        .reveal.is-visible .tasks-empty-icon path { animation: check-draw 0.45s ease-out 0.75s forwards; }
+        @keyframes check-pop { from { transform: scale(0); } to { transform: scale(1); } }
+        @keyframes check-draw { to { stroke-dashoffset: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .tasks-empty-icon { transform: none; }
+            .tasks-empty-icon path { stroke-dashoffset: 0; }
+            .reveal.is-visible .tasks-empty-icon, .reveal.is-visible .tasks-empty-icon path { animation: none; }
+        }
+        .confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
+        .tasks-empty-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
+        .tasks-empty-sub { font-size: 0.92rem; opacity: 0.75; }
+
+        /* Buyer Breakdowns: one row per page, linking to it */
+        .page-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .page-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+            color: inherit;
+            text-decoration: none;
+            transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .page-link-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--tan);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .page-link-icon svg { width: 21px; height: 21px; }
+        .page-link-text { flex: 1; min-width: 0; }
+        .page-link-street { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+        .page-link-sub { font-size: 0.9rem; opacity: 0.75; }
+        .page-link-arrow { flex: 0 0 auto; color: var(--rust); display: flex; }
+        .page-link-arrow svg { width: 20px; height: 20px; transition: transform 0.25s ease; }
+        @media (hover: hover) {
+            .page-link:hover { border-color: var(--navy); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--navy); }
+            .page-link:hover .page-link-arrow svg { transform: translateX(3px); }
+        }
+        .pages-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
+
+        /* My Buyers: client dropdown (same look as the dropdowns on the breakdown page's Settings) */
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        .client-picker { position: relative; }
+        .client-picker-btn {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            padding: 9px 46px 9px 22px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--brown);
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .client-picker-btn .is-placeholder { font-weight: normal; opacity: 0.55; }
+        .client-picker-btn > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-btn:focus-visible, .client-picker.is-open .client-picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .client-picker-list {
+            display: none;
+            margin-top: 8px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 20px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 6px;
+        }
+        .client-picker.is-open .client-picker-list { display: block; animation: clientPickerIn 0.18s ease both; }
+        @keyframes clientPickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .client-picker-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 50px;
+            padding: 9px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .client-picker-option > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .client-picker-option .cp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .client-picker-option .cp-main { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-option .cp-sub { font-size: 0.85rem; opacity: 0.7; }
+        .client-picker-option .cp-check { width: 18px; height: 18px; flex-shrink: 0; color: var(--olive); visibility: hidden; }
+        .client-picker-option[aria-selected="true"] .cp-check { visibility: visible; }
+        .client-picker-option.is-active, .client-picker-option:active { background-color: #f4efe8; }
+        @media (hover: hover) { .client-picker-option:hover { background-color: #f4efe8; } }
+        /* Brown card with soft gold and rust glows (same as the form card on the main site's Buying page): My Buyers and Links */
+        .glow-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        .glow-card::before,
+        .glow-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        .glow-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        .glow-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        .glow-card > *:not(.sr-only) { position: relative; z-index: 1; }
+        .glow-card .card-eyebrow { color: var(--gold); }
+        .glow-card h2 { color: var(--cream); }
+        .glow-card .client-picker-list, .glow-card .page-link, .glow-card .pages-empty { color: var(--brown); }
+        .glow-card .pages-empty { opacity: 1; border-color: rgba(78, 81, 62, 0.3); }
+        .glow-card .client-picker-list { box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.35); }
+        @media (hover: hover) { .glow-card .page-link:hover { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35); } }
+        .glow-card .links-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        .glow-card .status-text.is-error { color: #f2b8a8; }
+        .buyer-page-list { margin-top: 16px; }
+        .buyer-page-list:empty { display: none; }
+        @media (max-width: 600px) {
+            .client-picker-list { padding: 4px; box-shadow: 4px 4px 0px var(--navy); }
+            .client-picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
+        }
+
+        /* Links card: one group per SECTION */
+        .links-section + .links-section { margin-top: 24px; }
+        .links-section-title {
+            padding: 0 2px 6px 2px;
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--navy);
+            font-family: inherit;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--olive);
+        }
+        .page-link-icon.is-link { background: var(--olive); }
+
         .placeholder-note {
             padding: 16px 18px;
             border-radius: 16px;
@@ -222,6 +422,10 @@
         .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
         .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
         .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .contact-card .btn { gap: 8px; }
+        .contact-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+        /* Calling and texting are for phones: the home page's contact card is hidden on larger screens */
+        @media (min-width: 768px) { #contact-card { display: none; } }
         .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
         .btn {
             display: inline-flex;
@@ -259,6 +463,8 @@
             header { padding-bottom: 100px; }
             .top-bar { margin-bottom: 34px; }
             .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
             .main-card { padding: 24px 20px 20px 20px; }
             .main-card h2 { font-size: 1.45rem; }
             .details li { flex-direction: column; gap: 2px; }
@@ -271,6 +477,10 @@
     </style>
 </head>
 <body class="is-checking">
+    <div class="page-loader" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="page-loader-text">Loading your portal...</span>
+    </div>
 
     <header>
         <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
@@ -281,10 +491,15 @@
             <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
                 <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
             </a>
-            <button type="button" class="sign-out" id="sign-out">
-                Sign Out
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-            </button>
+            <div class="top-actions">
+                <a href="/settings" class="sign-out icon-only" aria-label="Settings" title="Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
         </div>
         <div class="hero-content">
             <span class="hero-eyebrow">Client Portal</span>
@@ -294,40 +509,62 @@
     </header>
 
     <main>
-        <!-- 1. Who's signed in -->
-        <section class="main-card reveal">
-            <span class="card-eyebrow">Your Account</span>
-            <h2>Signed In</h2>
-            <div class="id-row">
-                <span class="id-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+        <!-- 1. Current tasks (placeholder until tasks are hooked up) -->
+        <section class="main-card reveal" id="tasks-card">
+            <span class="card-eyebrow">To Do</span>
+            <h2>Current Tasks</h2>
+            <div class="tasks-empty">
+                <span class="tasks-empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength="1"/></svg>
                 </span>
                 <div>
-                    <div class="id-label">Client ID</div>
-                    <div class="id-value" id="client-id">&nbsp;</div>
+                    <div class="tasks-empty-title">All caught up</div>
+                    <div class="tasks-empty-sub">You don't have any tasks right now.</div>
                 </div>
             </div>
         </section>
 
-        <!-- 2. Info from the Google Sheet (placeholder for now) -->
-        <section class="main-card reveal">
-            <span class="card-eyebrow">Your Details</span>
-            <h2>Overview</h2>
-            <div id="details">
+        <!-- 2. Buyer Breakdown pages this account is on (only for accounts with BUYER = TRUE) -->
+        <section class="main-card reveal" id="breakdowns-card" hidden>
+            <span class="card-eyebrow">Buying A Property</span>
+            <h2>Buyer Breakdowns</h2>
+            <div id="page-list">
                 <span class="spinner" aria-hidden="true"></span>
-                <p class="status-text">Loading your information...</p>
+                <p class="status-text">Loading your pages...</p>
             </div>
         </section>
 
-        <!-- 3. Contact -->
-        <section class="main-card contact-card reveal">
+        <!-- 3. Admins only: any buyer's Buyer Breakdowns -->
+        <section class="main-card glow-card reveal" id="buyers-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>My Buyers</h2>
+            <span class="sr-only" id="buyer-picker-label">Buyer</span>
+            <div id="buyer-picker"></div>
+            <div id="buyer-page-list" class="buyer-page-list"></div>
+        </section>
+
+        <!-- 4. Contact -->
+        <section class="main-card contact-card reveal" id="contact-card">
             <span class="card-eyebrow">Questions?</span>
             <h2>Ready When You Are</h2>
             <p>Call or text Andrew anytime.</p>
             <div class="btn-row">
-                <a class="btn" href="tel:4806521330">Call 480.652.1330</a>
-                <a class="btn" href="sms:4806521330">Send a Text</a>
+                <a class="btn" href="tel:4806521330" aria-label="Call 480.652.1330">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    Call
+                </a>
+                <a class="btn" href="sms:4806521330" aria-label="Text 480.652.1330">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Text
+                </a>
             </div>
+        </section>
+
+        <!-- 5. Admins only: links to other services, from the LINKS sheet -->
+        <section class="main-card glow-card reveal" id="links-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Links</h2>
+            <div id="links-list"></div>
         </section>
     </main>
 
@@ -339,48 +576,180 @@
     </footer>
 
     <script type="module">
-        import { firebaseConfig, isConfigured, PORTAL_API_URL, phoneToId, FIREBASE_SDK } from '/firebase-config.js';
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
 
-        const detailsEl = document.getElementById('details');
-        const idEl = document.getElementById('client-id');
         const greetingEl = document.getElementById('greeting');
         const signOutBtn = document.getElementById('sign-out');
 
+        const pageListEl = document.getElementById('page-list');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        const formatId = id => id.length === 10 ? `(${id.slice(0, 3)}) ${id.slice(3, 6)}-${id.slice(6)}` : id;
+        const HOUSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>';
+        const ARROW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
 
-        function showStatus(text, isError = false) {
-            detailsEl.innerHTML = `<p class="status-text${isError ? ' is-error' : ''}">${escapeHtml(text)}</p>`;
+        // One linked row per page: street on top, then "City, ST 85000 · $500,000"
+        function renderPages(pages) {
+            renderPageList(pageListEl, pages, 'No buyer breakdowns yet. They’ll show up here once Andrew makes one for you.');
         }
-
-        // Show each column of the client's row as "Column: Value"
-        function renderDetails(row) {
-            const entries = Object.entries(row || {}).filter(([k, v]) => k && v !== '' && v !== null && k.toLowerCase() !== 'id');
-            if (!entries.length) {
-                showStatus('Nothing here yet. Check back soon!');
+        function renderPageList(target, pages, emptyText) {
+            if (!pages.length) {
+                target.innerHTML = '<p class="pages-empty">' + escapeHtml(emptyText) + '</p>';
                 return;
             }
-            const firstName = row['First Name'] || row['Name'] || '';
-            if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
-            detailsEl.innerHTML = '<ul class="details">' + entries.map(([k, v]) => {
-                const value = String(v);
-                const shown = /^https?:\/\//i.test(value)
-                    ? `<a href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">Open</a>`
-                    : escapeHtml(value);
-                return `<li><span class="k">${escapeHtml(k)}</span><span class="v">${shown}</span></li>`;
+            target.innerHTML = '<ul class="page-links">' + pages.map(p => {
+                const place = [p.city, [p.state, p.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                // Prices come through as typed in the sheet ("900000" or "$900,000"): show them as $900,000
+                const amount = Number(String(p.price || '').replace(/[^0-9.]/g, ''));
+                const price = amount > 0 ? '$' + Math.round(amount).toLocaleString('en-US') : '';
+                const sub = [place, price].filter(Boolean).join(' · ');
+                return '<li><a class="page-link" href="/pages?page=' + encodeURIComponent(p.id) + '">'
+                    + '<span class="page-link-icon">' + HOUSE_ICON + '</span>'
+                    + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(p.street || p.id) + '</span>'
+                    + (sub ? '<br><span class="page-link-sub">' + escapeHtml(sub) + '</span>' : '') + '</span>'
+                    + '<span class="page-link-arrow">' + ARROW_ICON + '</span></a></li>';
             }).join('') + '</ul>';
         }
 
-        function showPlaceholder() {
-            detailsEl.innerHTML = `
-                <div class="placeholder-note">
-                    <strong>Coming soon.</strong> Your home search details will show up here.
-                </div>`;
+        // --- My Buyers (admins) ---
+        const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+        const CHECK_ICON = '<svg class="cp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        const formatPhone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
+
+        // Dropdown of every BUYER account; picking one lists the Buyer Breakdowns they're on
+        function renderBuyers(buyers, buyerPages) {
+            const card = document.getElementById('buyers-card');
+            const mount = document.getElementById('buyer-picker');
+            const listEl = document.getElementById('buyer-page-list');
+            card.hidden = false;
+            if (!buyers.length) {
+                mount.innerHTML = '<p class="pages-empty">No accounts are marked as buyers yet.</p>';
+                return;
+            }
+            let chosen = null;
+            let highlighted = -1;
+            mount.innerHTML = '<div class="client-picker">'
+                + '<button type="button" class="client-picker-btn" id="buyer-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="buyer-picker-list" aria-labelledby="buyer-picker-label buyer-picker-btn"><span></span></button>'
+                + '<div class="client-picker-list" id="buyer-picker-list" role="listbox" aria-labelledby="buyer-picker-label">'
+                + buyers.map((b, i) => '<div class="client-picker-option" role="option" id="buyer-opt-' + i + '" aria-selected="false">' + PERSON_ICON
+                    + '<span class="cp-text"><span class="cp-main">' + escapeHtml(b.name || formatPhone(b.id)) + '</span>'
+                    + (b.name ? '<span class="cp-sub">' + escapeHtml(formatPhone(b.id)) + '</span>' : '') + '</span>' + CHECK_ICON + '</div>').join('')
+                + '</div></div>';
+            const picker = mount.firstElementChild;
+            const button = picker.querySelector('.client-picker-btn');
+            const label = button.firstElementChild;
+            const options = [...picker.querySelectorAll('.client-picker-option')];
+
+            function render() {
+                options.forEach((o, i) => o.setAttribute('aria-selected', String(chosen === i)));
+                label.textContent = chosen === null ? 'Choose a buyer...' : (buyers[chosen].name || formatPhone(buyers[chosen].id));
+                label.classList.toggle('is-placeholder', chosen === null);
+                if (chosen === null) { listEl.innerHTML = ''; return; }
+                const buyer = buyers[chosen];
+                renderPageList(listEl, buyerPages.filter(p => (p.people || []).includes(buyer.id)),
+                    'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
+            }
+            function highlight(i) {
+                highlighted = i;
+                options.forEach((o, j) => o.classList.toggle('is-active', j === i));
+                if (i >= 0) { button.setAttribute('aria-activedescendant', options[i].id); options[i].scrollIntoView({ block: 'nearest' }); }
+                else button.removeAttribute('aria-activedescendant');
+            }
+            const isOpen = () => picker.classList.contains('is-open');
+            function open() { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(chosen === null ? 0 : chosen); }
+            function close() { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); }
+            function pick(i) { close(); chosen = i; render(); }
+
+            button.addEventListener('click', () => isOpen() ? close() : open());
+            options.forEach((o, i) => {
+                o.addEventListener('pointerdown', e => e.preventDefault());
+                o.addEventListener('click', () => { pick(i); button.focus(); });
+            });
+            button.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!isOpen()) { open(); return; }
+                    highlight((highlighted + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+                } else if ((e.key === 'Enter' || e.key === ' ') && isOpen()) {
+                    e.preventDefault();
+                    if (highlighted >= 0) pick(highlighted); else close();
+                } else if (e.key === 'Escape' && isOpen()) {
+                    e.preventDefault();
+                    close();
+                }
+            });
+            document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
+            button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
+            render();
+        }
+
+        // --- Links (admins) ---
+        const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+        const EXTERNAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+
+        // Grouped by SECTION, in the order each section first appears in the sheet; each link opens in a new tab
+        function renderLinks(links) {
+            const card = document.getElementById('links-card');
+            const listEl = document.getElementById('links-list');
+            card.hidden = false;
+            if (!links) {
+                listEl.innerHTML = '<p class="status-text is-error">We couldn’t load the links. Please refresh to try again.</p>';
+                return;
+            }
+            if (!links.length) {
+                listEl.innerHTML = '<p class="pages-empty">No links yet. Add some to the LINKS sheet.</p>';
+                return;
+            }
+            const sections = [];
+            links.forEach(l => {
+                const name = l.section || 'Other';
+                let group = sections.find(g => g.name === name);
+                if (!group) sections.push(group = { name, links: [] });
+                group.links.push(l);
+            });
+            listEl.innerHTML = sections.map(g => '<div class="links-section"><h3 class="links-section-title">' + escapeHtml(g.name) + '</h3>'
+                + '<ul class="page-links">' + g.links.map(l => '<li><a class="page-link" href="' + escapeHtml(l.link) + '" target="_blank" rel="noopener noreferrer">'
+                    + '<span class="page-link-icon is-link">' + LINK_ICON + '</span>'
+                    + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(l.title || l.link) + '</span>'
+                    + (l.description ? '<br><span class="page-link-sub">' + escapeHtml(l.description) + '</span>' : '') + '</span>'
+                    + '<span class="page-link-arrow">' + EXTERNAL_ICON + '</span></a></li>').join('') + '</ul></div>').join('');
+        }
+
+        // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
+        async function loadPages(user) {
+            if (!PORTAL_API_URL) { renderPages([]); return; }
+            try {
+                const idToken = await user.getIdToken();
+                const res = await fetch(PORTAL_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ idToken, action: 'myPages' }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    renderPages(data.pages || []);
+                    // Only admins get the buyer list
+                    if (data.buyers) {
+                        renderBuyers(data.buyers, data.buyerPages || []);
+                        renderLinks(data.links);
+                    }
+                }
+                else if (data.error === 'not_found') renderPages([]);
+                else throw new Error(data.error || 'Request failed');
+            } catch (err) {
+                console.error(err);
+                pageListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your pages. Please refresh to try again.</p>';
+            }
+        }
+
+        // "Welcome, Jordan" from the account's first name
+        function greet(row) {
+            const find = name => (Object.entries(row || {}).find(([k]) => k.toLowerCase() === name) || [])[1] || '';
+            const firstName = find('first name') || find('name');
+            if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
         }
 
         // Ask the private Google Sheet script for this client's row only
         async function loadDetails(user) {
-            if (!PORTAL_API_URL) { showPlaceholder(); return; }
+            if (!PORTAL_API_URL) return;
             try {
                 const idToken = await user.getIdToken();
                 const res = await fetch(PORTAL_API_URL, {
@@ -390,31 +759,88 @@
                     body: JSON.stringify({ idToken }),
                 });
                 const data = await res.json();
-                if (data.ok) renderDetails(data.row);
-                else if (data.error === 'not_found') showStatus('We don\'t have your details on file yet. Andrew will add them soon!');
-                else throw new Error(data.error || 'Request failed');
+                if (data.ok) {
+                    greet(data.row);
+                    // The Buying A Property card is only for buyers
+                    document.getElementById('breakdowns-card').hidden = String((data.row || {}).BUYER || '').trim().toUpperCase() !== 'TRUE';
+                    // Admins don't need the "call or text Andrew" card
+                    document.getElementById('contact-card').hidden = String((data.row || {}).ADMIN || '').trim().toUpperCase() === 'TRUE';
+                }
+                else if (data.error !== 'not_found') throw new Error(data.error || 'Request failed');
             } catch (err) {
+                // The greeting just stays "Welcome"
                 console.error(err);
-                showStatus('We couldn\'t load your information. Please refresh to try again.', true);
             }
         }
 
-        function showPage(id) {
-            idEl.textContent = formatId(id);
+        function showPage() {
             document.body.classList.remove('is-checking');
             initReveal();
         }
 
+        // A quick burst of confetti from the "All caught up" checkmark, in the site colors
+        function confettiBurst() {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const icon = document.querySelector('.tasks-empty-icon');
+            if (!icon) return;
+            const canvas = document.createElement('canvas');
+            canvas.className = 'confetti-canvas';
+            document.body.append(canvas);
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = innerWidth * dpr;
+            canvas.height = innerHeight * dpr;
+            ctx.scale(dpr, dpr);
+            const box = icon.getBoundingClientRect();
+            const x0 = box.left + box.width / 2, y0 = box.top + box.height / 2;
+            const colors = ['#c09050', '#9a5d40', '#4e513e', '#99724b', '#e3c79a', '#4f2d2c'];
+            const pieces = Array.from({ length: 90 }, () => {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 4 + Math.random() * 7;
+                return {
+                    x: x0, y: y0,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 4,
+                    w: 5 + Math.random() * 6, h: 3 + Math.random() * 5,
+                    spin: Math.random() * Math.PI, vspin: (Math.random() - 0.5) * 0.35,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    round: Math.random() < 0.3,
+                };
+            });
+            const duration = 1800;
+            const start = performance.now();
+            (function frame(now) {
+                const t = (now - start) / duration;
+                ctx.clearRect(0, 0, innerWidth, innerHeight);
+                if (t >= 1) { canvas.remove(); return; }
+                ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+                pieces.forEach(p => {
+                    p.vx *= 0.97; p.vy = p.vy * 0.97 + 0.32;
+                    p.x += p.vx; p.y += p.vy; p.spin += p.vspin;
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.spin);
+                    ctx.fillStyle = p.color;
+                    if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.h / 1.6, 0, Math.PI * 2); ctx.fill(); }
+                    else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.spin)) + 1);
+                    ctx.restore();
+                });
+                requestAnimationFrame(frame);
+            })(start);
+        }
+
         function initReveal() {
             const items = document.querySelectorAll('.reveal');
+            // The confetti goes off as the checkmark finishes drawing
+            const shown = el => { el.classList.add('is-visible'); if (el.id === 'tasks-card') setTimeout(confettiBurst, 1050); };
             if (!('IntersectionObserver' in window)) {
-                items.forEach(el => el.classList.add('is-visible'));
+                items.forEach(shown);
                 return;
             }
             const observer = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
-                        entry.target.classList.add('is-visible');
+                        shown(entry.target);
                         observer.unobserve(entry.target);
                     }
                 });
@@ -425,8 +851,13 @@
         // Local preview only: /?demo shows the signed-in layout with sample data
         const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
         if (isLocal && new URLSearchParams(location.search).has('demo')) {
-            showPage('4805550123');
-            renderDetails({ ID: '4805550123', 'First Name': 'Jordan Sample', 'Search Area': 'Tempe, Chandler', 'Budget': '$450,000', 'Status': 'Touring homes' });
+            showPage();
+            greet({ 'First Name': 'Jordan Sample' });
+            document.getElementById('breakdowns-card').hidden = false;
+            const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', price: '$525,000', people: ['4805550123'] };
+            renderPages([demoPage]);
+            renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
+            renderLinks([{ title: 'Sample Link', description: 'A service you use', section: 'Tools', link: 'https://example.com' }]);
             signOutBtn.addEventListener('click', () => location.replace('/login'));
         } else if (!isConfigured) {
             location.replace('/login');
@@ -437,9 +868,11 @@
 
             onAuthStateChanged(auth, user => {
                 // Not signed in: send them to the login page
-                if (!user) { location.replace('/login'); return; }
-                showPage(phoneToId(user.phoneNumber));
-                loadDetails(user);
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                // Stay on the loading screen until both sheet requests are done (each handles its own errors),
+                // with a time limit so a stuck request can't hold the page forever
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([Promise.all([loadDetails(user), loadPages(user)]), timeLimit]).then(showPage);
             });
 
             signOutBtn.addEventListener('click', async () => {

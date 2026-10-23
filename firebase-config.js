@@ -13,7 +13,7 @@ export const firebaseConfig = {
 
 // 2. Client data: the Web app URL from deploying apps-script/portal-api.gs
 //    (Deploy > New deployment > Web app). Leave empty to show the placeholder.
-export const PORTAL_API_URL = '';
+export const PORTAL_API_URL = 'https://script.google.com/macros/s/AKfycbw7_6-r-ShjTBpqlkKeYTuTjdIH8-njHdEgEHuXFszDHWPg1L5AP5yaCawutnSEx3Z6/exec';
 
 // True once the Firebase values above have been filled in
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.appId);

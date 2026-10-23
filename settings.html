@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Settings | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in (avoids a flash of the page before redirecting) */
+        body.is-checking > * { visibility: hidden; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
+        }
+
+        /* --- Settings rows --- */
+        .setting-list { list-style: none; margin-top: 6px; }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 4px;
+            border-top: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .setting-row:last-child { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .setting-label { font-weight: bold; flex: 0 1 auto; }
+        .setting-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .setting-value.is-empty { font-style: italic; opacity: 0.6; }
+        .edit-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--olive);
+            cursor: pointer;
+            transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+        }
+        .edit-btn svg { width: 17px; height: 17px; }
+        .edit-btn:disabled { opacity: 0.4; cursor: default; }
+        @media (hover: hover) { .edit-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+        /* Nothing on file yet: the pencil becomes a "Start" pill */
+        .edit-btn.is-start {
+            width: auto;
+            gap: 6px;
+            padding: 0 14px 0 16px;
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .edit-btn.is-start svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
+        .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
+        .page-message:empty { min-height: 0; margin: 0; }
+        .page-message.is-error { color: var(--rust); }
+        .page-message.is-success { color: var(--olive); }
+
+        /* --- Edit pop-up (centered card on desktop, slides up from the bottom on phones) --- */
+        .edit-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 480px;
+            padding: 0;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+            overflow: visible;
+        }
+        .edit-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .edit-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .edit-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .dialog-inner { padding: 28px 28px 24px 28px; }
+        .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .dialog-head h2 { font-size: 1.6rem; line-height: 1.15; }
+        .close-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            margin: -4px -6px 0 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: #f2ede6;
+            color: var(--brown);
+            cursor: pointer;
+        }
+        .close-btn svg { width: 18px; height: 18px; }
+        .muted { opacity: 0.75; font-size: 0.95rem; margin-bottom: 18px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .field input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .form-message { min-height: 1.4em; margin: 12px 4px 0 4px; font-size: 0.92rem; font-weight: bold; color: var(--rust); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+        button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        button.btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .btn-secondary:hover { background: #f2ede6; } }
+        .btn .btn-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+
+        @media (max-width: 600px) {
+            .setting-row { gap: 10px; padding: 14px 0; }
+            .setting-label { font-size: 0.95rem; }
+            .edit-btn { width: 36px; height: 36px; }
+            /* The Start button already says nothing is on file, so skip the "Not added yet" text on phones */
+            .setting-value.is-empty { visibility: hidden; }
+            .edit-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .edit-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .dialog-inner { padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column-reverse; }
+            .form-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .edit-dialog[open], .edit-dialog[open]::backdrop { animation: none; }
+        }
+    </style>
+</head>
+<body class="is-checking">
+
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <div class="top-actions">
+                <a href="/" class="sign-out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                    Back
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow">Client Portal</span>
+            <h1>Settings</h1>
+            <p class="hero-sub">Keep your information up to date.</p>
+        </div>
+    </header>
+
+    <main>
+        <section class="main-card reveal">
+            <span class="card-eyebrow">Your Profile</span>
+            <h2>Edit Your Information</h2>
+            <ul class="setting-list">
+                <li class="setting-row">
+                    <span class="setting-label">Your Legal Name</span>
+                    <span class="setting-value" id="name-value">Loading...</span>
+                    <button type="button" class="edit-btn" id="edit-name" aria-label="Edit your legal name" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                </li>
+                <li class="setting-row">
+                    <span class="setting-label">Monthly Income</span>
+                    <span class="setting-value" id="income-value">Loading...</span>
+                    <button type="button" class="edit-btn" id="edit-income" aria-label="Edit your income" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                </li>
+            </ul>
+            <p class="page-message" id="page-message" role="status"></p>
+        </section>
+    </main>
+
+    <!-- Edit name pop-up -->
+    <dialog class="edit-dialog" id="name-dialog" aria-labelledby="name-dialog-title">
+        <form class="dialog-inner" id="name-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="name-dialog-title">Your Legal Name</h2>
+                <button type="button" class="close-btn" id="close-dialog" aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted">Enter your name as it appears on your ID.</p>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="first-name">First Name</label>
+                    <input id="first-name" name="firstName" type="text" autocomplete="given-name" maxlength="50" required>
+                </div>
+                <div class="field">
+                    <label for="last-name">Last Name</label>
+                    <input id="last-name" name="lastName" type="text" autocomplete="family-name" maxlength="50" required>
+                </div>
+            </div>
+            <p class="form-message" id="form-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                <button type="submit" class="btn" id="save-btn">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { monthlyIncome, createIncomeEditor } from '/income-editor.js';
+
+        const nameValue = document.getElementById('name-value');
+        const editBtn = document.getElementById('edit-name');
+        const pageMsg = document.getElementById('page-message');
+        const dialog = document.getElementById('name-dialog');
+        const form = document.getElementById('name-form');
+        const firstInput = document.getElementById('first-name');
+        const lastInput = document.getElementById('last-name');
+        const saveBtn = document.getElementById('save-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const closeBtn = document.getElementById('close-dialog');
+        const formMsg = document.getElementById('form-message');
+        const signOutBtn = document.getElementById('sign-out');
+
+        const findValue = (row, name) => (Object.entries(row || {}).find(([k]) => k.toLowerCase() === name) || [])[1] || '';
+        let profile = { firstName: '', lastName: '' };
+
+        function setPageMessage(text, kind = 'error') {
+            pageMsg.textContent = text;
+            pageMsg.className = 'page-message' + (text ? ` is-${kind}` : '');
+        }
+        function setSaving(saving) {
+            [firstInput, lastInput, cancelBtn, closeBtn].forEach(el => { el.disabled = saving; });
+            saveBtn.disabled = saving;
+            saveBtn.classList.toggle('is-loading', saving);
+        }
+
+        // A line with information on file gets the pencil; an empty line gets a "Start" button instead
+        const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
+        const START_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+        function setLineButton(btn, hasData, what) {
+            btn.classList.toggle('is-start', !hasData);
+            btn.innerHTML = hasData ? PENCIL_ICON : 'Start' + START_ICON;
+            btn.setAttribute('aria-label', (hasData ? 'Edit ' : 'Add ') + what);
+            btn.title = hasData ? 'Edit' : 'Start';
+            btn.disabled = false;
+        }
+
+        function showProfile(row) {
+            profile = { firstName: findValue(row, 'first name'), lastName: findValue(row, 'last name') };
+            const full = `${profile.firstName} ${profile.lastName}`.trim();
+            nameValue.textContent = full || 'Not added yet';
+            nameValue.classList.toggle('is-empty', !full);
+            setLineButton(editBtn, Boolean(full), 'your legal name');
+        }
+
+        // Talks to the private Google Sheet script (it only ever touches this person's own row)
+        async function callApi(user, payload = {}) {
+            const idToken = await user.getIdToken();
+            const res = await fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            });
+            return res.json();
+        }
+
+        async function loadProfile(user) {
+            if (!PORTAL_API_URL) { nameValue.textContent = ''; setPageMessage('Settings aren\'t available yet.'); return; }
+            try {
+                const data = await callApi(user);
+                if (data.ok) { showProfile(data.row); showIncome(data.income); }
+                else if (data.error === 'not_found') { nameValue.textContent = ''; incomeValue.textContent = ''; setPageMessage('We don\'t have your details on file yet. Andrew will add them soon!'); }
+                else throw new Error(data.error);
+            } catch (err) {
+                console.error(err);
+                nameValue.textContent = '';
+                incomeValue.textContent = '';
+                setPageMessage('We couldn\'t load your information. Please refresh to try again.');
+            }
+        }
+
+        // Pop-up open / close
+        function openDialog() {
+            firstInput.value = profile.firstName;
+            lastInput.value = profile.lastName;
+            formMsg.textContent = '';
+            setPageMessage('');
+            dialog.showModal();
+            firstInput.focus();
+        }
+        function closeDialog() { if (!saveBtn.disabled) dialog.close(); }
+        editBtn.addEventListener('click', openDialog);
+        cancelBtn.addEventListener('click', closeDialog);
+        closeBtn.addEventListener('click', closeDialog);
+        // Tap outside the card to close
+        dialog.addEventListener('click', e => { if (e.target === dialog) closeDialog(); });
+        // Don't let Escape close it mid-save
+        dialog.addEventListener('cancel', e => { if (saveBtn.disabled) e.preventDefault(); });
+        [firstInput, lastInput].forEach(input => input.addEventListener('input', () => { formMsg.textContent = ''; }));
+
+        // --- Income (the edit pop-up lives in /income-editor.js, shared with pages.html) ---
+        const incomeValue = document.getElementById('income-value');
+        const incomeBtn = document.getElementById('edit-income');
+        const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+        let incomeRow = {};
+        let incomeEditor = null;
+
+        function showIncome(row) {
+            incomeRow = row || {};
+            const monthly = monthlyIncome(incomeRow);
+            incomeValue.textContent = monthly > 0 ? money.format(monthly) : 'Not added yet';
+            incomeValue.classList.toggle('is-empty', !(monthly > 0));
+            setLineButton(incomeBtn, monthly > 0, 'your income');
+        }
+        incomeBtn.addEventListener('click', () => {
+            if (!incomeEditor) return;
+            setPageMessage('');
+            incomeEditor.open(incomeRow);
+        });
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) {
+                items.forEach(el => el.classList.add('is-visible'));
+                return;
+            }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+            let currentUser = null;
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                currentUser = user;
+                document.body.classList.remove('is-checking');
+                initReveal();
+                loadProfile(user);
+            });
+
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                const firstName = firstInput.value.trim();
+                const lastName = lastInput.value.trim();
+                if (!firstName || !lastName) {
+                    formMsg.textContent = 'Please enter both your first and last name.';
+                    (firstName ? lastInput : firstInput).focus();
+                    return;
+                }
+                setSaving(true);
+                try {
+                    const data = await callApi(currentUser, { action: 'updateName', firstName, lastName });
+                    if (!data.ok) throw new Error(data.error);
+                    showProfile(data.row);
+                    setSaving(false);
+                    dialog.close();
+                    setPageMessage('Saved! Your name has been updated.', 'success');
+                } catch (err) {
+                    console.error(err);
+                    formMsg.textContent = 'We couldn\'t save your changes. Please try again.';
+                    setSaving(false);
+                }
+            });
+
+            incomeEditor = createIncomeEditor({
+                save: async income => {
+                    const data = await callApi(currentUser, { action: 'updateIncome', income });
+                    if (!data.ok) throw new Error(data.error);
+                    return data.income;
+                },
+                onSaved: row => {
+                    showIncome(row);
+                    setPageMessage('Saved! Your income has been updated.', 'success');
+                },
+            });
+
+            signOutBtn.addEventListener('click', async () => {
+                signOutBtn.disabled = true;
+                await signOut(auth);
+            });
+        }
+    </script>
+</body>
+</html>
