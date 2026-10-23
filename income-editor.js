@@ -187,6 +187,22 @@ export function ensureDialogStyles() {
     document.head.appendChild(style);
 }
 
+// While a pop-up is open, phones would still scroll the page behind it (overflow: hidden isn't enough on iOS),
+// so the page is pinned where it is until the pop-up closes, then put back at the same spot
+export function lockPageScroll(dialog) {
+    const y = window.scrollY;
+    const html = document.documentElement;
+    const body = document.body;
+    const saved = { overflow: html.style.overflow, position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right };
+    html.style.overflow = 'hidden';
+    Object.assign(body.style, { position: 'fixed', top: -y + 'px', left: '0', right: '0' });
+    dialog.addEventListener('close', () => {
+        html.style.overflow = saved.overflow;
+        Object.assign(body.style, { position: saved.position, top: saved.top, left: saved.left, right: saved.right });
+        window.scrollTo({ top: y, behavior: 'instant' });
+    }, { once: true });
+}
+
 /**
  * Builds the income pop-up (once) and returns { open(row) }.
  * save(income) gets { "COLUMN": value, ... } for every income column and must resolve to the saved row (or throw).
@@ -331,6 +347,7 @@ export function createIncomeEditor({ save, onSaved }) {
             fill();
             message.textContent = '';
             dialog.showModal();
+            lockPageScroll(dialog);
             form.querySelector('.dialog-scroll').scrollTop = 0;
         },
     };

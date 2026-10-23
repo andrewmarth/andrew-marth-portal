@@ -1130,7 +1130,7 @@
 
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
-        import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles } from '/income-editor.js';
+        import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -2501,6 +2501,7 @@
                     input.classList.remove('is-invalid');
                     message.textContent = '';
                     dialog.showModal();
+                    lockPageScroll(dialog);
                     input.focus();
                 },
             };
