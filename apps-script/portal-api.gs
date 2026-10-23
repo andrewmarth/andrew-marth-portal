@@ -120,6 +120,8 @@ function doPost(e) {
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
     // Home page: the Buyer Breakdown pages this account is listed on (and, for admins, every buyer's)
     if (body.action === 'myPages') return json_(myPagesData_(id, found.row));
+    // Home page (admins): add a new property for a buyer
+    if (body.action === 'createProperty') return json_(createProperty_(found.row, body));
     // pages.html (admins): copy the page into a new version
     if (body.action === 'createVersion') return json_(createVersion_(id, found.row, body));
     // pages.html (admins): change who can see the page
@@ -291,13 +293,7 @@ function createVersion_(id, account, body) {
   const headers = addMissingColumns_(sheet, found.headers, ['VERSION TITLE', 'VERSION DATE']);
   const idCol = colFor_(headers, 'page id');
   const lastRow = sheet.getLastRow();
-  // New PAGE ID: the highest number in the column plus 1 (raw values, so "4,269" or 4269.0 still count)
-  var highest = 0;
-  sheet.getRange(2, idCol, Math.max(lastRow - 1, 1), 1).getValues().forEach(function (r) {
-    const n = Number(String(r[0]).replace(/,/g, '').trim());
-    if (String(r[0]).trim() !== '' && isFinite(n)) highest = Math.max(highest, n);
-  });
-  const newId = Math.floor(highest) + 1;
+  const newId = nextPageId_(sheet, idCol);
   const width = Math.max(sheet.getLastColumn(), headers.length);
   // Add the row first: the sheet's grid may end right at the last page
   sheet.insertRowAfter(lastRow);
@@ -306,6 +302,138 @@ function createVersion_(id, account, body) {
   sheet.getRange(target, idCol).setValue(newId);
   sheet.getRange(target, colFor_(headers, 'version title')).setValue(title);
   sheet.getRange(target, colFor_(headers, 'version date')).setValue(new Date());
+  SpreadsheetApp.flush();
+  return { ok: true, pageId: String(newId) };
+}
+
+// New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)
+function nextPageId_(sheet, idCol) {
+  const lastRow = sheet.getLastRow();
+  var highest = 0;
+  if (lastRow >= 2) {
+    sheet.getRange(2, idCol, lastRow - 1, 1).getValues().forEach(function (r) {
+      const n = Number(String(r[0]).replace(/,/g, '').trim());
+      if (String(r[0]).trim() !== '' && isFinite(n)) highest = Math.max(highest, n);
+    });
+  }
+  return Math.floor(highest) + 1;
+}
+
+const PROPERTY_TYPES = ['Single Family', 'Townhome', 'Condo', 'Manufactured'];
+const CENSUS_DESIGNATIONS = ['Low', 'Moderate', 'Middle', 'Upper'];
+
+// Admins only: a new Buyer Breakdown row for a buyer, from the home page's New Property form.
+// The buyer goes in PRIMARY, then any other purchasers, then collaborators (six people at most).
+// Everything the form doesn't ask for starts at a standard placeholder; every other column stays blank.
+function createProperty_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const accounts = allRows_(SHEET_ID, SHEET_NAME);
+  const byId = {};
+  accounts.forEach(function (r) { const aid = phoneToId_(r['ACCOUNT ID']); if (aid) byId[aid] = r; });
+
+  // People
+  const clientId = phoneToId_(body.clientId);
+  if (!byId[clientId] || !hasRole_(byId[clientId], 'BUYER')) return { ok: false, error: 'bad_client' };
+  const people = [{ id: clientId, type: 'Purchaser' }];
+  const add = function (list, type, mustBeBuyer) {
+    (Array.isArray(list) ? list : []).forEach(function (v) {
+      const pid = phoneToId_(v);
+      if (!pid || !byId[pid] || (mustBeBuyer && !hasRole_(byId[pid], 'BUYER'))) return;
+      if (people.some(function (p) { return p.id === pid; })) return;
+      people.push({ id: pid, type: type });
+    });
+  };
+  add(body.purchasers, 'Purchaser', true);
+  add(body.collaborators, 'Collaborator', false);
+  if (people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
+
+  // Answers
+  const text = function (v, max) { return cleanText_(v, max || 120); };
+  const whole = function (v) {
+    const digits = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+    return digits === '' ? '' : Number(digits);
+  };
+  const address = body.address || {};
+  const street = text(address.street), city = text(address.city), state = text(address.state, 20), zip = text(address.zip, 10);
+  if (!street || !city || !state || !zip) return { ok: false, error: 'missing_address' };
+  const propertyType = PROPERTY_TYPES.filter(function (t) { return t === body.propertyType; })[0];
+  if (!propertyType) return { ok: false, error: 'bad_property_type' };
+  const price = whole(body.purchasePrice);
+  if (!(price > 0)) return { ok: false, error: 'missing_price' };
+  const product = allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME)[Number(body.loanProduct)];
+  if (!product) return { ok: false, error: 'bad_loan_product' };
+  const census = CENSUS_DESIGNATIONS.filter(function (c) { return c === body.census; })[0] || '';
+  const pool = body.hasPool === true || String(body.hasPool).toUpperCase() === 'TRUE';
+  const hoa = body.hoa || {};
+
+  const today = new Date();
+  const dayOnly = function (d, plus) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (plus || 0)); };
+
+  const values = {
+    'PAGE TYPE': 'Buyer Breakdown',
+    'STREET ADDRESS': street, 'CITY': city, 'STATE': state, 'ZIP': zip,
+    'PROPERTY TYPE': propertyType,
+    'SQFT': whole(body.sqft),
+    'YEAR BUILT': whole(body.yearBuilt),
+    'YEARLY TAXES': whole(body.yearlyTaxes),
+    'HAS POOL': pool, 'HOME INSPECTOR POOL': pool,
+    'PURCHASE PRICE': price,
+    'RETAIL LOAN PRODUCT ID': String(product['ACCOUNT ID'] || '').trim(),
+    'RETAIL LOAN PRODUCT NAME': String(product['LOAN PRODUCT NAME'] || '').trim(),
+    'HOA TRANSFER FEE': whole(hoa.transfer),
+    'HOA CAP FEE': whole(hoa.cap),
+    'HOA DISCLOSURE FEE': whole(hoa.disclosure),
+    'HOA OTHER FEE': whole(hoa.other),
+    'HOA PRIMARY MONTHLY DUES': whole(hoa.primary),
+    'HOA MASTER MONTHLY DUES': whole(hoa.master),
+    'CENSUS DESIGNATION': census,
+    // Placeholders
+    'SELLER CREDIT': 0,
+    'ESCROW FEE RATE': 0.002,
+    'OWNERS TITLE RATE': 0,
+    'ALTA TITLE RATE': 0.004,
+    'HOMEOWNERS INSURANCE RATE': 0.0035,
+    'RETAIL LTV': 0.8,
+    'WHO PAYS TRANSFER FEE': 'Buyer',
+    'WHO PAYS CAP FEE': 'Buyer',
+    'WHO PAYS DISCLOSURE FEE': 'Seller',
+    'WHO PAYS OTHER FEE': 'Buyer',
+    'OFFER ACCEPTANCE DATE': dayOnly(today, 1),
+    'ESCROW DURATION': 30,
+    'LENDER POINTS PURCHASED': 0,
+    'BUYERS AGENT COMMISSION %': 0,
+    'BUYERS AGENT COMMISSION $': 0,
+    // 1% of the price, to the nearest $100
+    'EARNEST MONEY DEPOSIT': Math.round(price * 0.01 / 100) * 100,
+    'GIFT FUNDS': 0,
+    'PREPAID MI APPLIED': true,
+    'CASH PURCHASE': false,
+    'HOME INSPECTOR': '22 Home Inspect',
+    'HOME INSPECTOR SEWER': false,
+    'HOME INSPECTOR TERMITE': true,
+    'SEWER INSPECTOR': 'AZ Rooter',
+    'SELLER PAID BUYER COMMISSION %': 0.03,
+    'VERSION TITLE': 'Initial Version',
+    'VERSION DATE': dayOnly(today, 0),
+  };
+  people.forEach(function (p, i) {
+    values[PAGE_PEOPLE_COLUMNS[i]] = p.id;
+    values[PAGE_ROLE_COLUMNS[i]] = p.type;
+  });
+
+  const sheet = getSheet_(PAGES_SHEET_ID, PAGES_SHEET_NAME);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim(); });
+  const idCol = colFor_(headers, 'page id');
+  const newId = nextPageId_(sheet, idCol);
+  values['PAGE ID'] = newId;
+  const row = headers.map(function (h) {
+    const key = Object.keys(values).filter(function (k) { return k.toUpperCase() === h.toUpperCase(); })[0];
+    return key === undefined ? '' : values[key];
+  });
+  // Add the row first (the sheet's grid may end right at the last page); it takes the formatting of the row above
+  const lastRow = sheet.getLastRow();
+  sheet.insertRowAfter(lastRow);
+  sheet.getRange(lastRow + 1, 1, 1, headers.length).setValues([row]);
   SpreadsheetApp.flush();
   return { ok: true, pageId: String(newId) };
 }
@@ -363,6 +491,11 @@ function myPagesData_(id, account) {
   };
   const result = { ok: true, pages: pages.filter(function (p) { return isOnPage_(p, id); }).map(summary) };
   if (isAdmin_(account)) {
+    // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
+    result.accounts = accountChoices_().map(function (a) { return { id: a.id, name: a.name }; });
+    result.loanProducts = allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME).map(function (p, i) {
+      return { index: i, name: String(p['LOAN PRODUCT NAME'] || '').trim(), lender: String(p['LENDER NAME'] || '').trim() };
+    });
     result.buyers = allRows_(SHEET_ID, SHEET_NAME)
       .filter(function (r) { return hasRole_(r, 'BUYER'); })
       .map(function (r) {

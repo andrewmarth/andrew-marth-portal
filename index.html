@@ -470,6 +470,21 @@
         @media (hover: hover) { .glow-card .page-link:hover { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35); } }
         .glow-card .links-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         .glow-card .status-text.is-error { color: #f2b8a8; }
+        /* "New Property" row at the bottom of a buyer's list (admins) */
+        .page-link-add {
+            width: 100%;
+            margin-top: 12px;
+            border-style: dashed;
+            border-color: rgba(78, 81, 62, 0.45);
+            background: rgba(247, 244, 240, 0.85);
+            font-family: inherit;
+            font-size: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .page-link-add .page-link-icon { background: var(--olive); }
+        .page-link-add .page-link-street { color: var(--rust); }
+        .older-pages + .page-link-add, .page-links + .page-link-add { margin-top: 12px; }
         .buyer-page-list { margin-top: 16px; }
         .buyer-page-list:empty { display: none; }
         @media (max-width: 600px) {
@@ -663,6 +678,7 @@
 
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { openNewPropertyForm } from '/new-property.js';
 
         const greetingEl = document.getElementById('greeting');
         const signOutBtn = document.getElementById('sign-out');
@@ -749,6 +765,29 @@
         const formatPhone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
 
         // Dropdown of every BUYER account; picking one lists the Buyer Breakdowns they're on
+        let currentUser = null;
+        // Admins: everything the New Property form needs, from the last page-list load
+        let adminData = null;
+        let selectedBuyerId = null;
+        const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            const res = await fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            });
+            return res.json();
+        }
+
+        // Save the New Property form, then reload the lists so the new page shows under the buyer
+        async function createProperty(answers) {
+            const json = await api({ action: 'createProperty', ...answers });
+            if (!json.ok) throw new Error(json.error || 'Request failed');
+            await loadPages(currentUser);
+        }
+
         function renderBuyers(buyers, buyerPages) {
             const card = document.getElementById('buyers-card');
             const mount = document.getElementById('buyer-picker');
@@ -758,7 +797,8 @@
                 mount.innerHTML = '<p class="pages-empty">No accounts are marked as buyers yet.</p>';
                 return;
             }
-            let chosen = null;
+            let chosen = buyers.findIndex(b => b.id === selectedBuyerId);
+            if (chosen < 0) chosen = null;
             let highlighted = -1;
             mount.innerHTML = '<div class="client-picker">'
                 + '<button type="button" class="client-picker-btn" id="buyer-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="buyer-picker-list" aria-labelledby="buyer-picker-label buyer-picker-btn"><span></span></button>'
@@ -780,6 +820,25 @@
                 const buyer = buyers[chosen];
                 renderPageList(listEl, buyerPages.filter(p => (p.people || []).includes(buyer.id)),
                     'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
+                // "New Property" is always the last property row (above the View Older toggle)
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'page-link page-link-add';
+                add.innerHTML = '<span class="page-link-icon">' + PLUS_ICON + '</span>'
+                    + '<span class="page-link-text"><span class="page-link-street">New Property</span><br><span class="page-link-sub"></span></span>';
+                add.querySelector('.page-link-sub').textContent = 'For ' + (buyer.name || formatPhone(buyer.id));
+                add.addEventListener('click', () => {
+                    if (!adminData) return;
+                    openNewPropertyForm({
+                        client: buyer,
+                        buyers: adminData.buyers,
+                        accounts: adminData.accounts,
+                        loanProducts: adminData.loanProducts,
+                        submit: createProperty,
+                    });
+                });
+                const toggle = listEl.querySelector('.view-older');
+                if (toggle) listEl.insertBefore(add, toggle); else listEl.append(add);
             }
             function highlight(i) {
                 highlighted = i;
@@ -790,7 +849,7 @@
             const isOpen = () => picker.classList.contains('is-open');
             function open() { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(chosen === null ? 0 : chosen); }
             function close() { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); }
-            function pick(i) { close(); chosen = i; render(); }
+            function pick(i) { close(); chosen = i; selectedBuyerId = buyers[i].id; render(); }
 
             button.addEventListener('click', () => isOpen() ? close() : open());
             options.forEach((o, i) => {
@@ -849,6 +908,7 @@
 
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
         async function loadPages(user) {
+            currentUser = user;
             if (!PORTAL_API_URL) { renderPages([]); return; }
             try {
                 const idToken = await user.getIdToken();
@@ -862,6 +922,7 @@
                     renderPages(data.pages || []);
                     // Only admins get the buyer list
                     if (data.buyers) {
+                        adminData = { buyers: data.buyers, accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
                         renderBuyers(data.buyers, data.buyerPages || []);
                         renderLinks(data.links);
                     }

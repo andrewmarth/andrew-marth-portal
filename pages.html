@@ -470,6 +470,21 @@
         @media (hover: hover) { .glow-card .page-link:hover { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35); } }
         .glow-card .links-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         .glow-card .status-text.is-error { color: #f2b8a8; }
+        /* "New Property" row at the bottom of a buyer's list (admins) */
+        .page-link-add {
+            width: 100%;
+            margin-top: 12px;
+            border-style: dashed;
+            border-color: rgba(78, 81, 62, 0.45);
+            background: rgba(247, 244, 240, 0.85);
+            font-family: inherit;
+            font-size: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .page-link-add .page-link-icon { background: var(--olive); }
+        .page-link-add .page-link-street { color: var(--rust); }
+        .older-pages + .page-link-add, .page-links + .page-link-add { margin-top: 12px; }
         .buyer-page-list { margin-top: 16px; }
         .buyer-page-list:empty { display: none; }
         @media (max-width: 600px) {
