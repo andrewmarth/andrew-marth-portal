@@ -682,6 +682,13 @@
 
         const greetingEl = document.getElementById('greeting');
         const signOutBtn = document.getElementById('sign-out');
+        // New-tab links always open outside the portal, even in the installed app
+        document.addEventListener('click', e => {
+            const link = e.target.closest('a[target="_blank"]');
+            if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            window.open(link.href, '_blank', 'noopener,noreferrer');
+        });
 
         const pageListEl = document.getElementById('page-list');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

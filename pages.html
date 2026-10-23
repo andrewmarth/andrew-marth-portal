@@ -1158,6 +1158,13 @@
         const escrowCard = document.getElementById('escrow-card');
         const paymentCard = document.getElementById('payment-card');
         const signOutBtn = document.getElementById('sign-out');
+        // New-tab links always open outside the portal, even in the installed app
+        document.addEventListener('click', e => {
+            const link = e.target.closest('a[target="_blank"]');
+            if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            window.open(link.href, '_blank', 'noopener,noreferrer');
+        });
         // The Settings card as first written, so it can be rebuilt for another version
         const settingsTemplate = loanCard.innerHTML;
 

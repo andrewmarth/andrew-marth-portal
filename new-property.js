@@ -13,6 +13,7 @@ const CSS = `
 .property-dialog .income-section .type-fields { margin-top: 2px; }
 .property-dialog .field-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
 .property-dialog .field-help { margin: 6px 0 0 8px; font-size: 0.82rem; opacity: 0.7; }
+.property-dialog .field-help a { color: var(--tan); font-weight: bold; }
 .property-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; margin-bottom: 0; min-height: 54px; align-items: center; }
 /* (the general ".field label" style would otherwise pull these to the top-left) */
 .property-dialog .type-picker label { display: flex; align-items: center; justify-content: center; margin: 0; min-height: 44px; font-size: 0.95rem; }
@@ -59,6 +60,7 @@ const CSS = `
 @media (hover: hover) { .property-dialog .mp-option:not(.is-disabled):hover, .property-dialog .addr-option:hover { background: #f4efe8; } }
 .property-dialog .addr-credit { padding: 4px 12px 2px 12px; font-size: 0.7rem; opacity: 0.55; text-align: right; }
 .property-dialog .addr-selected { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 8px; font-weight: bold; color: var(--olive); }
+.property-dialog .addr-selected[hidden] { display: none; }
 .property-dialog .addr-selected svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--tan); }
 .property-dialog .addr-manual { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-top: 4px; }
 .property-dialog .addr-manual[hidden] { display: none; }
@@ -223,7 +225,8 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
             + '</div>'
             + '<button type="button" class="addr-toggle" data-addr-toggle>Can’t find it? Enter the address manually</button></div>'
         + '<div class="field"><span class="field-label" id="np-type-label">Property Type</span><div data-type></div></div>'
-        + '<div class="field"><span class="field-label" id="np-census-label">Census Designation</span><div data-census></div></div>'
+        + '<div class="field"><span class="field-label" id="np-census-label">Census Designation</span><div data-census></div>'
+            + '<p class="field-help"><a href="https://geomap.ffiec.gov/ffiecgeomap/" target="_blank" rel="noopener noreferrer">Click here for the map</a></p></div>'
         + wholeField('np-sqft', 'Square Feet')
         + wholeField('np-year', 'Year Built', { commas: false, max: 4, placeholder: '1995' })
         + wholeField('np-taxes', 'Yearly Taxes', { money: true })
