@@ -153,6 +153,24 @@ function doPost(e) {
 const INCOME_LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
 const INCOME_LEVEL_FIELDS = ['JOB TITLE', 'WEEKLY SALARY', 'HOURLY RATE', 'WEEKLY HOURS', 'WEEKLY TIPS', 'COMMISSION INTERVAL',
   'COMMISSION AMOUNT', 'BONUS INTERVAL', 'BONUS AMOUNT', '1099 YEARLY INCOME', '1099 INCOME DESCRIPTION'];
+// Monthly debts and, beside each, its Yes/No answer (TRUE / FALSE)
+const DEBT_AMOUNT_COLUMNS = ['CAR LOAN PAYMENT', 'MORTGAGE PAYMENT', 'CREDIT CARD PAYMENT', 'OTHER PAYMENT'];
+const DEBT_FLAG_COLUMNS = ['HAS CAR LOAN', 'HAS MORTGAGE', 'HAS CREDIT CARDS', 'HAS OTHER PAYMENTS'];
+// How many of each debt (same order), and the text columns beside each payment. Entry n adds " n" to each name.
+const DEBT_MAX = [5, 5, 5, 10];
+const DEBT_TEXT_COLUMNS = [['CAR LOAN MAKE', 'CAR LOAN MODEL'], [], ['CREDIT CARD NAME'], ['OTHER PAYMENT NAME']];
+const debtCol_ = function (base, n) { return n === 1 ? base : base + ' ' + n; };
+// Every debt payment and name column, in sheet order (type, then entry)
+function debtEntryColumns_() {
+  const out = [];
+  DEBT_AMOUNT_COLUMNS.forEach(function (amount, d) {
+    for (var n = 1; n <= DEBT_MAX[d]; n++) {
+      DEBT_TEXT_COLUMNS[d].forEach(function (t) { out.push(debtCol_(t, n)); });
+      out.push(debtCol_(amount, n));
+    }
+  });
+  return out;
+}
 
 function saveIncome_(id, submitted) {
   const sheet = getSheet_(INCOME_SHEET_ID, INCOME_SHEET_NAME);
@@ -167,8 +185,34 @@ function saveIncome_(id, submitted) {
       if (sent[name] && !headers.some(function (h) { return h.toUpperCase() === name; })) missing.push(name);
     });
   });
+  DEBT_FLAG_COLUMNS.concat(debtEntryColumns_()).forEach(function (name) {
+    if (sent[name] && !headers.some(function (h) { return h.toUpperCase() === name; })) missing.push(name);
+  });
   if (missing.length) headers = addMissingColumns_(sheet, headers, missing);
   const idCol = idColumn_(headers);
+
+  // Every debt must be answered: FALSE, or TRUE with an amount over $0
+  const sentValue = function (name) {
+    const k = Object.keys(submitted || {}).filter(function (x) { return String(x).trim().toUpperCase() === name; })[0];
+    return k === undefined ? '' : String(submitted[k]).trim();
+  };
+  for (var d = 0; d < DEBT_FLAG_COLUMNS.length; d++) {
+    const flag = sentValue(DEBT_FLAG_COLUMNS[d]).toUpperCase();
+    if (flag !== 'TRUE' && flag !== 'FALSE') return 'invalid_debts';
+    if (flag === 'TRUE' && !(Number(sentValue(DEBT_AMOUNT_COLUMNS[d]).replace(/[$,\s]/g, '')) > 0)) return 'invalid_debts';
+    // Car loans: every payment needs its make and model
+    if (flag === 'TRUE' && d === 0) {
+      for (var n = 1; n <= DEBT_MAX[d]; n++) {
+        if (!(Number(sentValue(debtCol_(DEBT_AMOUNT_COLUMNS[d], n)).replace(/[$,\s]/g, '')) > 0)) continue;
+        if (!sentValue(debtCol_('CAR LOAN MAKE', n)) || !sentValue(debtCol_('CAR LOAN MODEL', n))) return 'invalid_debts';
+      }
+    }
+  }
+
+  // A credit score is required with every save
+  const scoreKey = Object.keys(submitted || {}).filter(function (k) { return String(k).trim().toUpperCase() === 'CREDIT SCORE'; })[0];
+  const score = scoreKey === undefined ? NaN : Number(String(submitted[scoreKey]).trim());
+  if (!(Math.floor(score) === score && score >= 300 && score <= 850)) return 'invalid_credit_score';
 
   // Clean every submitted value; only real income columns are accepted
   const updates = {};
@@ -691,6 +735,14 @@ function cleanIncomeValue_(header, value) {
     return match || null;
   }
   if (/(JOB TITLE|DESCRIPTION)$/.test(header)) return cleanText_(raw, 100);
+  // Car make / model, card names and other debt names are short text
+  if (/^(CAR LOAN MAKE|CAR LOAN MODEL|CREDIT CARD NAME|OTHER PAYMENT NAME)( \d+)?$/.test(header)) return cleanText_(raw, 100);
+  // Yes/No answers are saved as TRUE / FALSE
+  if (DEBT_FLAG_COLUMNS.indexOf(header) >= 0) {
+    if (raw.toUpperCase() === 'TRUE') return true;
+    if (raw.toUpperCase() === 'FALSE') return false;
+    return null;
+  }
   const num = Number(raw.replace(/[$,\s]/g, ''));
   if (!isFinite(num) || num < 0 || num > 100000000) return null;
   return Math.round(num * 100) / 100;

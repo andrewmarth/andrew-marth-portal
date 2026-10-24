@@ -372,7 +372,11 @@
             padding: 16px 4px;
             border-top: 1px solid rgba(78, 81, 62, 0.15);
         }
-        .setting-row:last-child { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        /* (the line under the last row is on the list, so it stays put when a row is hidden) */
+        .setting-list { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .setting-value .sv-line { display: block; white-space: nowrap; }
+        .setting-value .sv-line + .sv-line { opacity: 0.75; font-size: 0.92em; }
+        .setting-row[hidden] { display: none; }
         .setting-label { font-weight: bold; flex: 0 1 auto; }
         .setting-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
         .setting-value.is-empty { font-style: italic; opacity: 0.6; }
@@ -483,7 +487,11 @@
         .btn.is-loading .btn-spinner { display: inline-block; }
 
         @media (max-width: 600px) {
-            .setting-row { gap: 10px; padding: 14px 0; }
+            /* Phones: label on top, value(s) underneath, pencil on the right */
+            .setting-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 14px 0; }
+            .setting-label { grid-column: 1; }
+            .setting-value { grid-column: 1; text-align: left; opacity: 0.85; }
+            .setting-row .edit-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
             .setting-label { font-size: 0.95rem; }
             .edit-btn { width: 36px; height: 36px; }
             /* The Start button already says nothing is on file, so skip the "Not added yet" text on phones */
@@ -554,10 +562,11 @@
                     <span class="setting-value" id="name-value">Loading...</span>
                     <button type="button" class="edit-btn" id="edit-name" aria-label="Edit your legal name" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
                 </li>
-                <li class="setting-row">
-                    <span class="setting-label">Monthly Income</span>
+                <!-- Only for buyers (BUYER = TRUE in ACCOUNT LIST) -->
+                <li class="setting-row" id="income-row" hidden>
+                    <span class="setting-label">Income &amp; Debt</span>
                     <span class="setting-value" id="income-value">Loading...</span>
-                    <button type="button" class="edit-btn" id="edit-income" aria-label="Edit your income" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                    <button type="button" class="edit-btn" id="edit-income" aria-label="Edit your income and debt" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
                 </li>
             </ul>
             <p class="page-message" id="page-message" role="status"></p>
@@ -604,7 +613,7 @@
 
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
-        import { monthlyIncome, createIncomeEditor } from '/income-editor.js';
+        import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -666,7 +675,12 @@
             if (!PORTAL_API_URL) { nameValue.textContent = ''; setPageMessage('Settings aren\'t available yet.'); return; }
             try {
                 const data = await callApi(user);
-                if (data.ok) { showProfile(data.row); showIncome(data.income); }
+                if (data.ok) {
+                    showProfile(data.row);
+                    showIncome(data.income);
+                    // Income & Debt is only for buyers
+                    document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
+                }
                 else if (data.error === 'not_found') { nameValue.textContent = ''; incomeValue.textContent = ''; setPageMessage('We don\'t have your details on file yet. Andrew will add them soon!'); }
                 else throw new Error(data.error);
             } catch (err) {
@@ -699,14 +713,23 @@
         // --- Income (the edit pop-up lives in /income-editor.js, shared with pages.html) ---
         const incomeValue = document.getElementById('income-value');
         const incomeBtn = document.getElementById('edit-income');
-        const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+        // The Income & Debt line shows whole dollars
+        const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
         let incomeRow = {};
         let incomeEditor = null;
 
         function showIncome(row) {
             incomeRow = row || {};
             const monthly = monthlyIncome(incomeRow);
-            incomeValue.textContent = monthly > 0 ? money.format(monthly) : 'Not added yet';
+            // Both calculated totals, one per line: income, then debts
+            if (monthly > 0) {
+                incomeValue.innerHTML = '<span class="sv-line"></span><span class="sv-line"></span>';
+                const [inc, debt] = incomeValue.querySelectorAll('.sv-line');
+                inc.textContent = wholeMoney.format(monthly) + ' / mo income';
+                debt.textContent = wholeMoney.format(monthlyDebts(incomeRow)) + ' / mo debt';
+            } else {
+                incomeValue.textContent = 'Not added yet';
+            }
             incomeValue.classList.toggle('is-empty', !(monthly > 0));
             setLineButton(incomeBtn, monthly > 0, 'your income');
         }

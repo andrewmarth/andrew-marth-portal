@@ -2,7 +2,21 @@
 // Columns match the INCOME sheet: PRIMARY / SECONDARY / TERTIARY / QUATERNARY / QUINARY income levels plus monthly debt payments.
 
 export const LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
-const DEBT_COLUMNS = ['CAR LOAN PAYMENT', 'MORTGAGE PAYMENT', 'CREDIT CARD PAYMENT', 'OTHER PAYMENT'];
+// Debt types: the Yes/No column (TRUE / FALSE), the monthly payment column, how many of each, and the text columns
+// beside each payment. Entry 1 uses these names; entry n adds " n" ("CAR LOAN PAYMENT 2", "CAR LOAN MAKE 2"...).
+const DEBT_TYPES = [
+    { kind: 'car', title: 'Car Loans', one: 'car loan', flag: 'HAS CAR LOAN', amount: 'CAR LOAN PAYMENT', max: 5, question: 'Do you have a car loan payment?',
+        texts: [{ col: 'CAR LOAN MAKE', label: 'Make', required: true }, { col: 'CAR LOAN MODEL', label: 'Model', required: true }] },
+    { kind: 'mortgage', title: 'Mortgages', one: 'mortgage', flag: 'HAS MORTGAGE', amount: 'MORTGAGE PAYMENT', max: 5, question: 'Do you have a mortgage payment?', texts: [] },
+    { kind: 'cards', title: 'Credit Cards', one: 'credit card', flag: 'HAS CREDIT CARDS', amount: 'CREDIT CARD PAYMENT', max: 5, question: 'Do you have credit card payments?',
+        texts: [{ col: 'CREDIT CARD NAME', label: 'Card Name' }] },
+    { kind: 'other', title: 'Other Debts', one: 'other debt', flag: 'HAS OTHER PAYMENTS', amount: 'OTHER PAYMENT', max: 10, question: 'Do you have any other debt payments?',
+        texts: [{ col: 'OTHER PAYMENT NAME', label: 'Debt Name' }] },
+];
+const colN = (base, n) => (n === 1 ? base : base + ' ' + n);
+const debtAmounts = t => Array.from({ length: t.max }, (_, i) => colN(t.amount, i + 1));
+// Every debt column (answers, payments, names), for spotting edits
+const DEBT_ALL_COLUMNS = DEBT_TYPES.flatMap(t => [t.flag].concat(Array.from({ length: t.max }, (_, i) => [colN(t.amount, i + 1)].concat(t.texts.map(x => colN(x.col, i + 1)))).flat()));
 // How many times a year each interval pays out (Bi-Annually = twice a year)
 const PER_YEAR = { weekly: 52, monthly: 12, quarterly: 4, annually: 1, biannually: 2 };
 const INTERVALS = ['Weekly', 'Monthly', 'Quarterly', 'Annually', 'Bi-Annually'];
@@ -39,7 +53,8 @@ function levelYearly(get, type) {
 // Monthly income = total yearly income / 12
 export const monthlyIncome = row => LEVELS.reduce((sum, L) => sum + levelYearly(c => getCol(row, L + ' ' + c), detectType(row, L)), 0) / 12;
 // Monthly debts = car loan + mortgage + credit cards + other (all monthly amounts)
-export const monthlyDebts = row => DEBT_COLUMNS.reduce((sum, c) => sum + num(getCol(row, c)), 0);
+export const monthlyDebts = row => DEBT_TYPES.reduce((sum, t) => sum + (String(getCol(row, t.flag)).toUpperCase() === 'FALSE' ? 0
+    : debtAmounts(t).reduce((s2, c) => s2 + num(getCol(row, c)), 0)), 0);
 
 // --- Edit pop-up ---
 const CSS = `
@@ -144,6 +159,22 @@ const CSS = `
 .income-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; margin-bottom: 0; }
 .income-dialog .ie-extra { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 .income-dialog .ie-extra[hidden] { display: none; }
+/* Debts: each type in its own block, each entry in its own box */
+.income-dialog .ie-debt-group { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr; gap: 14px; padding: 16px; border-radius: 18px; background: #fbf9f6; border: 1px solid rgba(78, 81, 62, 0.18); }
+.income-dialog .ie-debt-title { font-size: 1.05rem; color: var(--olive); }
+.income-dialog .ie-debt-group .ie-extra { grid-template-columns: 1fr 1fr; }
+.income-dialog .ie-debt-entry { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 14px; border-radius: 14px; background: var(--white); border: 1px solid rgba(78, 81, 62, 0.15); }
+.income-dialog .ie-debt-entry[hidden] { display: none; }
+.income-dialog .ie-entry-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+.income-dialog .ie-remove { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: none; border-radius: 999px; background: none; cursor: pointer; font-family: inherit; font-size: 0.8rem; font-weight: bold; letter-spacing: 0; text-transform: none; color: var(--rust); }
+.income-dialog .ie-remove svg { width: 15px; height: 15px; }
+@media (hover: hover) { .income-dialog .ie-remove:hover { background: rgba(154, 93, 64, 0.1); } }
+.income-dialog .ie-add-entry { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; border: 2px dashed rgba(78, 81, 62, 0.4); border-radius: 14px; background: none; cursor: pointer; font-family: inherit; font-size: 0.95rem; font-weight: bold; color: var(--rust); }
+.income-dialog .ie-add-entry svg { width: 17px; height: 17px; }
+.income-dialog .ie-add-entry[hidden] { display: none; }
+@media (hover: hover) { .income-dialog .ie-add-entry:hover { border-color: var(--navy); } }
+.income-dialog .ie-optional { font-weight: normal; opacity: 0.6; }
+.income-dialog .field-help { margin: -6px 0 0 8px; font-size: 0.82rem; opacity: 0.7; }
 .income-dialog .span-2 { grid-column: 1 / -1; }
 .income-dialog .sub-label { grid-column: 1 / -1; margin: 6px 0 -4px 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
 .income-dialog .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
@@ -174,7 +205,8 @@ const CSS = `
     .income-dialog .dialog-scroll { padding: 4px 20px 8px 20px; }
     .income-dialog .dialog-foot { padding: 12px 20px calc(env(safe-area-inset-bottom, 0px) + 16px) 20px; border-radius: 0; }
     .income-dialog .type-fields { grid-template-columns: 1fr; }
-    .income-dialog .ie-extra { grid-template-columns: 1fr; }
+    .income-dialog .ie-extra, .income-dialog .ie-debt-group .ie-extra, .income-dialog .ie-debt-entry { grid-template-columns: 1fr; }
+    .income-dialog .ie-debt-group { padding: 14px 12px; }
     .income-dialog .type-picker label { font-size: 0.85rem; }
     .income-dialog .form-actions { flex-direction: column-reverse; }
     .income-dialog .form-actions .btn { width: 100%; }
@@ -199,6 +231,27 @@ const yesNo = (L, p, kind, question) => {
     return '<div class="ie-yn"><p class="ie-q">' + question + '</p><div class="type-picker yes-no" role="radiogroup" aria-label="' + question + '">'
         + '<input type="radio" name="' + name + '" id="' + name + '-yes" value="yes" data-extra-toggle="' + kind + '"><label for="' + name + '-yes">Yes</label>'
         + '<input type="radio" name="' + name + '" id="' + name + '-no" value="no" data-extra-toggle="' + kind + '" checked><label for="' + name + '-no">No</label></div></div>';
+};
+const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
+// One debt type, in its own block: the Yes/No (Yes by default; a hidden input holds TRUE / FALSE for the sheet),
+// then on Yes its entries (all written out; the unused ones stay hidden, so they're saved blank) and "+ Add another"
+const debtGroup = t => {
+    const name = 'ie-debt-' + t.kind;
+    const entry = n => '<div class="ie-debt-entry" data-entry="' + n + '"' + (n > 1 ? ' hidden' : '') + '>'
+        + (t.max > 1 ? '<div class="ie-entry-head"><span>' + t.title.replace(/s$/, '') + ' ' + n + '</span>'
+            + (n > 1 ? '<button type="button" class="ie-remove" data-remove-entry="' + n + '" aria-label="Remove ' + t.one + ' ' + n + '">' + TRASH_ICON + 'Remove</button>' : '') + '</div>' : '')
+        + t.texts.map(x => textField(colN(x.col, n), x.label + (x.required ? '' : ' <span class="ie-optional">(optional)</span>'), t.texts.length === 1)).join('')
+        + moneyField(colN(t.amount, n), 'Monthly Payment', true)
+        + '</div>';
+    return '<div class="ie-debt-group" data-debt="' + t.kind + '"><h4 class="ie-debt-title">' + t.title + '</h4>'
+        + '<div class="ie-yn"><p class="ie-q">' + t.question + '</p><div class="type-picker yes-no" role="radiogroup" aria-label="' + t.question + '">'
+        + '<input type="radio" name="' + name + '" id="' + name + '-yes" value="yes" data-extra-toggle="' + t.kind + '" data-flag="' + t.flag + '" checked><label for="' + name + '-yes">Yes</label>'
+        + '<input type="radio" name="' + name + '" id="' + name + '-no" value="no" data-extra-toggle="' + t.kind + '" data-flag="' + t.flag + '"><label for="' + name + '-no">No</label></div>'
+        + '<input type="hidden" data-col="' + t.flag + '" value="TRUE"></div>'
+        + '<div class="ie-extra" data-extra="' + t.kind + '">'
+        + Array.from({ length: t.max }, (_, i) => entry(i + 1)).join('')
+        + '<button type="button" class="ie-add-entry" data-add-entry="' + t.kind + '">' + PLUS_ICON + 'Add another ' + t.one + '</button>'
+        + '</div></div>';
 };
 const extras = (L, p) => '<p class="sub-label">Extra Pay</p>'
     + yesNo(L, p, 'tips', 'Do you earn tips?')
@@ -243,7 +296,11 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
     + '<p class="muted">Add each job or source of income, plus your monthly debt payments.</p>'
     + '<div class="dialog-scroll">' + levelSection('PRIMARY', 'Primary Income') + levelSection('SECONDARY', 'Secondary Income') + levelSection('TERTIARY', 'Tertiary Income') + levelSection('QUATERNARY', 'Fourth Income') + levelSection('QUINARY', 'Fifth Income')
         + '<fieldset class="income-section" data-level="DEBT"><div class="section-head"><h3>Monthly Debt Payments</h3></div>' + sectionExtras('Monthly Debt Payments') + '<div class="type-fields">'
-        + moneyField('CAR LOAN PAYMENT', 'Car Loan') + moneyField('MORTGAGE PAYMENT', 'Mortgage') + moneyField('CREDIT CARD PAYMENT', 'Credit Cards') + moneyField('OTHER PAYMENT', 'Other Payments')
+        + DEBT_TYPES.map(debtGroup).join('')
+        + '</div>' + doneRow + '</fieldset>'
+        + '<fieldset class="income-section" data-level="CREDIT"><div class="section-head"><h3>Credit Score</h3></div>' + sectionExtras('Credit Score') + '<div class="type-fields">'
+        + field('ie-credit-score', 'Credit Score', '<input id="ie-credit-score" data-col="CREDIT SCORE" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="720">', true)
+        + '<p class="field-help span-2">Your best estimate is fine (between 300 and 850).</p>'
         + '</div>' + doneRow + '</fieldset></div>'
     + '<div class="dialog-foot"><div class="total-row"><span>Monthly Income</span><span class="total-value" data-grand-total>$0.00</span></div>'
         + '<p class="form-message" role="alert"></p>'
@@ -324,19 +381,60 @@ export function createIncomeEditor({ save, onSaved }) {
     }
     // --- View / empty / edit sections ---
     const TYPE_NAMES = { none: 'None', salary: 'Salary', hourly: 'Hourly', '1099': '1099' };
-    const TITLES = { PRIMARY: 'Primary Income', SECONDARY: 'Secondary Income', TERTIARY: 'Tertiary Income', QUATERNARY: 'Fourth Income', QUINARY: 'Fifth Income', DEBT: 'Monthly Debt Payments' };
-    const DEBT_NAMES = { 'CAR LOAN PAYMENT': 'Car Loan', 'MORTGAGE PAYMENT': 'Mortgage', 'CREDIT CARD PAYMENT': 'Credit Cards', 'OTHER PAYMENT': 'Other' };
+    const TITLES = { PRIMARY: 'Primary Income', SECONDARY: 'Secondary Income', TERTIARY: 'Tertiary Income', QUATERNARY: 'Fourth Income', QUINARY: 'Fifth Income', DEBT: 'Monthly Debt Payments', CREDIT: 'Credit Score' };
+    const creditInput = form.querySelector('#ie-credit-score');
+    // Credit score: a whole number from 300 to 850
+    const creditOk = v => /^\d{3}$/.test(String(v || '').trim()) && Number(v) >= 300 && Number(v) <= 850;
+    creditInput.addEventListener('input', () => { creditInput.value = creditInput.value.replace(/\D/g, '').slice(0, 3); });
+    // --- Debt entries: show the ones in use, add another, remove one (later ones move up) ---
+    const groupOf = kind => form.querySelector('.ie-debt-group[data-debt="' + kind + '"]');
+    const entryInputs = (kind, n) => [...groupOf(kind).querySelectorAll('.ie-debt-entry[data-entry="' + n + '"] [data-col]')];
+    const shownEntries = kind => [...groupOf(kind).querySelectorAll('.ie-debt-entry')].filter(e => !e.hidden).length;
+    function showEntries(kind, count) {
+        const t = DEBT_TYPES.find(x => x.kind === kind);
+        groupOf(kind).querySelectorAll('.ie-debt-entry').forEach(e => { e.hidden = Number(e.dataset.entry) > count; });
+        groupOf(kind).querySelector('[data-add-entry]').hidden = count >= t.max;
+    }
+    form.addEventListener('click', e => {
+        const add = e.target.closest('[data-add-entry]');
+        const remove = e.target.closest('[data-remove-entry]');
+        if (add) {
+            const kind = add.dataset.addEntry;
+            const next = shownEntries(kind) + 1;
+            showEntries(kind, next);
+            const first = entryInputs(kind, next)[0];
+            if (first) first.focus();
+            updateTotals();
+        } else if (remove) {
+            const kind = remove.closest('.ie-debt-group').dataset.debt;
+            const count = shownEntries(kind);
+            // Move every later entry up one, then drop the last
+            for (let n = Number(remove.dataset.removeEntry); n < count; n++) {
+                const from = entryInputs(kind, n + 1);
+                entryInputs(kind, n).forEach((el, i) => { el.value = from[i].value; el.classList.remove('is-invalid'); });
+            }
+            entryInputs(kind, count).forEach(el => { el.value = ''; });
+            showEntries(kind, count - 1);
+            message.textContent = '';
+            updateTotals();
+        }
+    });
     const sections = () => [...form.querySelectorAll('.income-section')];
     let editing = null;  // the one section open for editing (or null)
     let snapshot = {};   // each section's answers when the pop-up opened
     // A section's answers, as they'd be saved
     const answersOf = (section, all = collect()) => {
         const L = section.dataset.level;
-        return JSON.stringify(Object.keys(all).filter(k => (L === 'DEBT' ? DEBT_COLUMNS.includes(k) : k.startsWith(L + ' '))).sort().map(k => [k, all[k]]));
+        // (Credit Score is just its one column: the credit card debt columns also start with "CREDIT ")
+        const mine = k => (L === 'DEBT' ? DEBT_ALL_COLUMNS.includes(k) : L === 'CREDIT' ? k === 'CREDIT SCORE' : k.startsWith(L + ' '));
+        return JSON.stringify(Object.keys(all).filter(mine).sort().map(k => [k, all[k]]));
     };
+    // Every debt answered: No, or Yes with an amount over $0
+    const debtsAnswered = all => DEBT_TYPES.every(t => all[t.flag] === 'FALSE' || num(all[t.amount]) > 0);
     const isFilled = (section, all = collect()) => {
         const L = section.dataset.level;
-        return L === 'DEBT' ? DEBT_COLUMNS.some(c => num(all[c]) > 0) : detectType(all, L) !== 'none';
+        if (L === 'CREDIT') return num(all['CREDIT SCORE']) > 0;
+        return L === 'DEBT' ? debtsAnswered(all) : detectType(all, L) !== 'none';
     };
     const dirty = () => { const all = collect(); return sections().some(sec => answersOf(sec, all) !== snapshot[sec.dataset.level]); };
 
@@ -345,11 +443,22 @@ export function createIncomeEditor({ save, onSaved }) {
         const L = section.dataset.level;
         const all = collect();
         let title, sub, amount;
-        if (L === 'DEBT') {
-            const entered = DEBT_COLUMNS.filter(c => num(all[c]) > 0);
+        if (L === 'CREDIT') {
+            const score = Number(all['CREDIT SCORE']);
+            title = String(score);
+            sub = score >= 740 ? 'Excellent' : score >= 670 ? 'Good' : score >= 580 ? 'Fair' : 'Needs work';
+        } else if (L === 'DEBT') {
+            // "2 Car Loans, Credit Cards": each type with payments (with a count when there's more than one)
+            const parts = [];
+            amount = 0;
+            DEBT_TYPES.forEach(t => {
+                const paid = debtAmounts(t).filter(c => num(all[c]) > 0);
+                if (!paid.length || all[t.flag] === 'FALSE') return;
+                amount += paid.reduce((sum, c) => sum + num(all[c]), 0);
+                parts.push(paid.length > 1 ? paid.length + ' ' + t.title : t.title.replace(/s$/, ''));
+            });
             title = 'Monthly Debts';
-            sub = entered.map(c => DEBT_NAMES[c]).join(', ');
-            amount = entered.reduce((sum, c) => sum + num(all[c]), 0);
+            sub = parts.length ? parts.join(', ') : 'No monthly debt payments';
         } else {
             const type = selectedType(L);
             title = (type === '1099' ? all[L + ' 1099 INCOME DESCRIPTION'] : all[L + ' JOB TITLE']) || TITLES[L];
@@ -361,7 +470,7 @@ export function createIncomeEditor({ save, onSaved }) {
             + '<span class="ie-card-amount"></span><button type="button" class="ie-edit" data-edit aria-label="Edit ' + TITLES[L] + '">' + PENCIL_ICON + '</button></div>';
         box.querySelector('.ie-card-title').textContent = title;
         box.querySelector('.ie-card-sub').textContent = sub;
-        box.querySelector('.ie-card-amount').textContent = money.format(amount) + ' / mo';
+        box.querySelector('.ie-card-amount').textContent = amount === undefined ? '' : money.format(amount) + ' / mo';
     }
     // Redraw every section: which mode it's in, whether it's locked (another one is being edited), and edited-not-saved
     function render() {
@@ -371,7 +480,7 @@ export function createIncomeEditor({ save, onSaved }) {
         const firstEmpty = LEVELS.find(L => !isFilled(sectionFor(L), all));
         sections().forEach(section => {
             const L = section.dataset.level;
-            section.hidden = L !== 'DEBT' && section !== editing && !isFilled(section, all) && L !== firstEmpty;
+            section.hidden = LEVELS.includes(L) && section !== editing && !isFilled(section, all) && L !== firstEmpty;
             const mode = section === editing ? 'edit' : isFilled(section, all) ? 'view' : 'empty';
             section.dataset.mode = mode;
             if (mode === 'view') summarize(section);
@@ -386,7 +495,7 @@ export function createIncomeEditor({ save, onSaved }) {
         if (editing && editing !== section) return;
         const L = section.dataset.level;
         // A new income starts as Salary so its questions show right away
-        if (adding && L !== 'DEBT' && selectedType(L) === 'none') {
+        if (adding && LEVELS.includes(L) && selectedType(L) === 'none') {
             form.querySelector('#ie-' + L.toLowerCase() + '-type-salary').checked = true;
             showType(L);
             updateTotals();
@@ -402,7 +511,7 @@ export function createIncomeEditor({ save, onSaved }) {
         if (e.target.closest('[data-add]')) startEditing(section, true);
         else if (e.target.closest('[data-edit]')) startEditing(section, false);
         else if (e.target.closest('[data-done]')) {
-            const problem = validate();
+            const problem = validate(section);
             if (problem) { message.textContent = problem; return; }
             message.textContent = '';
             editing = null;
@@ -448,7 +557,24 @@ export function createIncomeEditor({ save, onSaved }) {
                 });
             });
         });
+        DEBT_TYPES.forEach(t => {
+            // Yes when a payment is saved or the saved answer isn't FALSE (so Yes by default)
+            const yes = debtAmounts(t).some(c => num(getCol(current, c)) > 0) || String(getCol(current, t.flag)).toUpperCase() !== 'FALSE';
+            const radio = form.querySelector('#ie-debt-' + t.kind + '-' + (yes ? 'yes' : 'no'));
+            radio.checked = true;
+            form.querySelector('[data-col="' + t.flag + '"]').value = yes ? 'TRUE' : 'FALSE';
+            showExtra(radio);
+            // Show every entry up to the last one with something saved in it (at least one)
+            let count = 1;
+            for (let n = 1; n <= t.max; n++) {
+                if ([t.amount].concat(t.texts.map(x => x.col)).some(c => String(getCol(current, colN(c, n)) || '').trim())) count = n;
+            }
+            showEntries(t.kind, count);
+        });
         updateTotals();
+        // A score saved as "742.00" shows as 742
+        const savedScore = num(getCol(current, 'CREDIT SCORE'));
+        creditInput.value = savedScore ? String(Math.round(savedScore)) : '';
         // Remember the answers as loaded (to spot edits), and start with nothing open
         const all = collect();
         snapshot = {};
@@ -459,7 +585,7 @@ export function createIncomeEditor({ save, onSaved }) {
     }
 
     // Checks the fields that are showing. Returns an error message, or '' when everything's fine.
-    function validate() {
+    function validate(only) {
         form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
         const bad = (el, msg) => {
             // Open the section with the problem (only one section is open at a time)
@@ -499,6 +625,29 @@ export function createIncomeEditor({ save, onSaved }) {
                 }
             }
         }
+        // Debts: required before saving (and when pressing Done on them); 0 means No
+        if (!only || only.dataset.level === 'DEBT') {
+            for (const t of DEBT_TYPES) {
+                if (form.querySelector('#ie-debt-' + t.kind + '-no').checked) continue;
+                const count = shownEntries(t.kind);
+                for (let n = 1; n <= count; n++) {
+                    const which = 'the ' + t.one + (count > 1 ? ' ' + n : '');
+                    // Car loans need a make and model
+                    for (const x of t.texts.filter(x => x.required)) {
+                        const el = form.querySelector('[data-col="' + colN(x.col, n) + '"]');
+                        if (!el.value.trim()) return bad(el, 'Please enter the ' + x.label.toLowerCase() + ' for ' + which + '.');
+                    }
+                    const amount = form.querySelector('[data-col="' + colN(t.amount, n) + '"]');
+                    const raw = amount.value.trim();
+                    if (!raw) return bad(amount, 'Please enter the monthly payment for ' + which + (n === 1 ? ', or answer No.' : ', or remove it.'));
+                    if (!(num(raw) > 0)) return bad(amount, 'A $0 payment for ' + which + (n === 1 ? ' counts as No. Please enter the amount, or answer No.' : ' isn’t needed. Please enter the amount, or remove it.'));
+                }
+            }
+        }
+        // Required before saving (and when pressing Done on it)
+        if ((!only || only.dataset.level === 'CREDIT') && !creditOk(creditInput.value)) {
+            return bad(creditInput, creditInput.value.trim() ? 'Credit score must be a whole number from 300 to 850.' : 'Please enter your credit score before saving.');
+        }
         return '';
     }
 
@@ -537,6 +686,7 @@ export function createIncomeEditor({ save, onSaved }) {
     form.addEventListener('change', e => {
         if (e.target.dataset && e.target.dataset.extraToggle) {
             showExtra(e.target);
+            if (e.target.dataset.flag) form.querySelector('[data-col="' + e.target.dataset.flag + '"]').value = e.target.value === 'yes' ? 'TRUE' : 'FALSE';
             const first = !e.target.closest('.type-fields').querySelector('.ie-extra[data-extra="' + e.target.dataset.extraToggle + '"]').hidden
                 && e.target.closest('.type-fields').querySelector('.ie-extra[data-extra="' + e.target.dataset.extraToggle + '"] input, .ie-extra[data-extra="' + e.target.dataset.extraToggle + '"] select');
             if (first) first.focus();
