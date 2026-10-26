@@ -38,6 +38,11 @@ const RATE_SHEET_NAME = 'PAGE_LIST';
 const HOME_INSPECTORS_SHEET_ID = '1UBrhEIC44CsGioc7NvNQsI4G9OzF1DuRoUWifj0HOlU';
 const SEWER_INSPECTORS_SHEET_ID = '1mm9zcVYjg4JyzQzAYj3TqTMHZILkW4QYzdgWamHbUd4';
 const TERMITE_INSPECTORS_SHEET_ID = '199Yai63C7Fm5L0kNNb2SLCUOULFrDePz65K3Vyo6QwM';
+// Cash flow (cum.html), for accounts with CUM = TRUE: projected transactions and bank balances
+const CUM_TRANSACTIONS_SHEET_ID = '1cAi5-nh5V7YX88jFcr2ZQhRpx6K9z2UOEeF2JhWFnA4';
+const CUM_TRANSACTIONS_SHEET_NAME = 'TRANSACTIONS';
+const CUM_BALANCE_SHEET_ID = '1HZv-RQaWEawyiHs2Nrj-o_Nk3ad4L5-c3aW4TGtASAM';
+const CUM_BALANCE_SHEET_NAME = 'RECURRING';
 // Admins only: links to other services for the home page's Links card (first tab: TITLE, DESCRIPTION, SECTION, LINK)
 const LINKS_SHEET_ID = '16ZhBm5WgywQx8dZlE_7tksz6te26AZC2P8fq8U7A6E8';
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
@@ -120,6 +125,12 @@ function doPost(e) {
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
     // Home page: the Buyer Breakdown pages this account is listed on (and, for admins, every buyer's)
     if (body.action === 'myPages') return json_(myPagesData_(id, found.row));
+    // cum.html: this account's cash flow (CUM accounts only)
+    if (body.action === 'cashFlow') return json_(cashFlow_(id, found.row));
+    if (body.action === 'updateTransaction') return json_(changeTransaction_(id, found.row, body, false));
+    if (body.action === 'deleteTransaction') return json_(changeTransaction_(id, found.row, body, true));
+    if (body.action === 'addTransaction') return json_(addTransaction_(id, found.row, body));
+    if (body.action === 'updateBalance') return json_(updateBalance_(id, found.row, body));
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return json_(createProperty_(found.row, body));
     // pages.html (admins): copy the page into a new version
@@ -369,6 +380,168 @@ function createVersion_(id, account, body) {
   sheet.getRange(target, colFor_(headers, 'version date')).setValue(new Date());
   SpreadsheetApp.flush();
   return { ok: true, pageId: String(newId) };
+}
+
+// This account's latest bank balance (the newest Date in the balance sheet) and every one of its transactions.
+// Column names are matched without regard to case ("Date", "DATE").
+function cashFlow_(id, account) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const get = function (row, name) {
+    const key = Object.keys(row).filter(function (k) { return k.toUpperCase() === name; })[0];
+    return key === undefined ? '' : String(row[key]).trim();
+  };
+  const mine = function (row) { return phoneToId_(get(row, 'ACCOUNT ID')) === id; };
+  const time = function (text) { const t = new Date(text).getTime(); return isNaN(t) ? -Infinity : t; };
+  var balance = null;
+  allRows_(CUM_BALANCE_SHEET_ID, CUM_BALANCE_SHEET_NAME).filter(mine).forEach(function (row) {
+    const next = { date: get(row, 'DATE'), amount: get(row, 'BALANCE') };
+    // The newest date wins; on the same date, the lower row (entered later) wins
+    if (!balance || time(next.date) >= time(balance.date)) balance = next;
+  });
+  const transactions = cumTransactionRows_().rows.filter(function (t) { return t.accountId === id; }).map(function (t) {
+    return { row: t.rowNumber, date: t.date, description: t.description, amount: t.amount, type: t.type };
+  });
+  return { ok: true, balance: balance, transactions: transactions };
+}
+
+// Every row of the transactions sheet with its sheet row number (blank rows skipped)
+function cumTransactionRows_() {
+  const sheet = getSheet_(CUM_TRANSACTIONS_SHEET_ID, CUM_TRANSACTIONS_SHEET_NAME);
+  const values = sheet.getDataRange().getDisplayValues();
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
+  const col = { id: headers.indexOf('ACCOUNT ID'), date: headers.indexOf('DATE'), description: headers.indexOf('DESCRIPTION'), amount: headers.indexOf('AMOUNT'), type: headers.indexOf('TYPE') };
+  if (col.id < 0 || col.date < 0 || col.description < 0 || col.amount < 0) throw new Error('Transactions sheet is missing a column');
+  const rows = [];
+  for (var r = 1; r < values.length; r++) {
+    if (!values[r].some(function (v) { return String(v).trim() !== ''; })) continue;
+    rows.push({
+      rowNumber: r + 1,
+      accountId: phoneToId_(values[r][col.id]),
+      date: String(values[r][col.date]).trim(),
+      description: String(values[r][col.description]).trim(),
+      amount: String(values[r][col.amount]).trim(),
+      type: col.type < 0 ? '' : String(values[r][col.type]).trim(),
+    });
+  }
+  return { sheet: sheet, col: col, rows: rows };
+}
+
+// Edit (date, description, amount) or delete one of this account's transactions
+function changeTransaction_(id, account, body, remove) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const data = cumTransactionRows_();
+  const target = data.rows.filter(function (t) { return t.rowNumber === Number(body.row); })[0];
+  if (!target || target.accountId !== id) return { ok: false, error: 'not_found' };
+  // The row must still say what the person was looking at (otherwise the sheet changed underneath them)
+  const original = body.original || {};
+  if (String(original.date).trim() !== target.date || String(original.description).trim() !== target.description || String(original.amount).trim() !== target.amount) {
+    return { ok: false, error: 'changed' };
+  }
+  if (remove) {
+    data.sheet.deleteRow(target.rowNumber);
+    return { ok: true };
+  }
+  const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return { ok: false, error: 'invalid_date' };
+  const description = cleanText_(body.description, 100);
+  if (!description) return { ok: false, error: 'invalid_description' };
+  // A positive amount; Expense rows are saved negative, Income rows positive (anything else keeps the old sign)
+  const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
+  if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
+  const type = target.type.toLowerCase();
+  const negative = type === 'expense' || (type !== 'income' && Number(target.amount.replace(/[$,\s]/g, '')) < 0);
+  const amount = negative ? -size : size;
+  data.sheet.getRange(target.rowNumber, data.col.date + 1).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  data.sheet.getRange(target.rowNumber, data.col.description + 1).setValue(description);
+  data.sheet.getRange(target.rowNumber, data.col.amount + 1).setValue(Math.round(amount * 100) / 100);
+  return { ok: true };
+}
+
+// A new Income or Expense row for this account, under the last filled row (Expense amounts are saved negative)
+function addTransaction_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const kind = String(body.type || '').trim().toLowerCase();
+  if (kind !== 'income' && kind !== 'expense') return { ok: false, error: 'invalid_type' };
+  const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return { ok: false, error: 'invalid_date' };
+  const description = cleanText_(body.description, 100);
+  if (!description) return { ok: false, error: 'invalid_description' };
+  const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
+  if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const data = cumTransactionRows_();
+    const sheet = data.sheet;
+    const col = data.col;
+    if (col.type < 0) throw new Error('Transactions sheet is missing a TYPE column');
+    const last = data.rows.length ? data.rows[data.rows.length - 1].rowNumber : 1;
+    const row = last + 1;
+    if (row > sheet.getMaxRows()) sheet.insertRowAfter(sheet.getMaxRows());
+    const width = sheet.getLastColumn();
+    // Same look and dropdowns as the row above it
+    if (last >= 2) {
+      const above = sheet.getRange(last, 1, 1, width);
+      const target = sheet.getRange(row, 1, 1, width);
+      above.copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      above.copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+    }
+    // ACCOUNT ID written the way this account's other rows have it (falls back to the plain phone digits)
+    const mineRow = data.rows.filter(function (t) { return t.accountId === id; })[0];
+    const accountCell = mineRow ? sheet.getRange(mineRow.rowNumber, col.id + 1).getValue() : id;
+    // TYPE spelled the way the sheet already spells it ("Income" / "Expense")
+    const typeText = (data.rows.filter(function (t) { return t.type.toLowerCase() === kind; })[0] || {}).type
+      || (kind === 'income' ? 'Income' : 'Expense');
+    sheet.getRange(row, col.id + 1).setValue(accountCell);
+    sheet.getRange(row, col.date + 1).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    sheet.getRange(row, col.description + 1).setValue(description);
+    sheet.getRange(row, col.amount + 1).setValue(Math.round((kind === 'expense' ? -size : size) * 100) / 100);
+    sheet.getRange(row, col.type + 1).setValue(typeText);
+    return { ok: true, row: row };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Today's bank balance for this account, added under the last row of the balance sheet.
+// The date is the person's own "today" (YYYY-MM-DD), which must be within a day or two of the server's.
+function updateBalance_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return { ok: false, error: 'invalid_date' };
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Math.abs(date.getTime() - Date.now()) > 2 * 86400000) return { ok: false, error: 'invalid_date' };
+  const amount = Number(String(body.amount).replace(/[$,\s]/g, ''));
+  if (String(body.amount).trim() === '' || !isFinite(amount) || Math.abs(amount) > 100000000) return { ok: false, error: 'invalid_amount' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = getSheet_(CUM_BALANCE_SHEET_ID, CUM_BALANCE_SHEET_NAME);
+    const values = sheet.getDataRange().getDisplayValues();
+    const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
+    const col = { id: headers.indexOf('ACCOUNT ID'), date: headers.indexOf('DATE'), balance: headers.indexOf('BALANCE') };
+    if (col.id < 0 || col.date < 0 || col.balance < 0) throw new Error('Balance sheet is missing a column');
+    var last = 1;
+    var accountCell = id;
+    for (var r = 1; r < values.length; r++) {
+      if (!values[r].some(function (v) { return String(v).trim() !== ''; })) continue;
+      last = r + 1;
+      // ACCOUNT ID written the way this account's other rows have it
+      if (phoneToId_(values[r][col.id]) === id) accountCell = sheet.getRange(r + 1, col.id + 1).getValue();
+    }
+    const row = last + 1;
+    if (row > sheet.getMaxRows()) sheet.insertRowAfter(sheet.getMaxRows());
+    if (last >= 2) {
+      const width = sheet.getLastColumn();
+      sheet.getRange(last, 1, 1, width).copyTo(sheet.getRange(row, 1, 1, width), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    }
+    sheet.getRange(row, col.id + 1).setValue(accountCell);
+    sheet.getRange(row, col.date + 1).setValue(date);
+    sheet.getRange(row, col.balance + 1).setValue(Math.round(amount * 100) / 100);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)

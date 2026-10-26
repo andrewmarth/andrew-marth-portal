@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Cash Flow | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
+        html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
+        .page-loader { touch-action: none; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* Morphing icon (loader.js): sits on the background and pops with a twist each time it changes */
+        .loader-badge {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 14px;
+            color: var(--brown);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-icon { width: 92px; height: 92px; overflow: visible; }
+        .loader-badge.is-morphing .loader-icon { animation: iconMorph 0.65s cubic-bezier(0.34, 1.4, 0.64, 1); }
+        @keyframes iconMorph {
+            0% { transform: rotate(0deg) scale(1); }
+            40% { transform: rotate(-12deg) scale(0.84); }
+            75% { transform: rotate(4deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .page-loader-text {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            opacity: 0.85;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+        .page-loader-text.is-leaving { opacity: 0; transform: translateY(-8px); }
+        .page-loader-text.is-entering { animation: phraseIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1); }
+        @keyframes phraseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 0.85; transform: none; } }
+        /* Loading bar: a gold segment that sweeps across the track, over and over */
+        .loader-bar {
+            position: relative;
+            width: 180px;
+            height: 6px;
+            margin-top: 16px;
+            border-radius: 999px;
+            background: rgba(78, 81, 62, 0.15);
+            overflow: hidden;
+        }
+        .loader-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--gold), var(--rust));
+            animation: loaderBar 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes loaderBar {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(250%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .loader-bar::before { animation-duration: 3s; }
+            .loader-badge.is-morphing .loader-icon, .page-loader-text.is-entering { animation: none; }
+        }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
+        }
+
+        /* --- Settings rows --- */
+        .setting-list { list-style: none; margin-top: 6px; }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 4px;
+            border-top: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        /* (the line under the last row is on the list, so it stays put when a row is hidden) */
+        .setting-list { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .setting-value .sv-line { display: block; white-space: nowrap; }
+        .setting-value .sv-line + .sv-line { opacity: 0.75; font-size: 0.92em; }
+        .setting-row[hidden] { display: none; }
+        .setting-label { font-weight: bold; flex: 0 1 auto; }
+        .setting-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .setting-value.is-empty { font-style: italic; opacity: 0.6; }
+        .edit-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--olive);
+            cursor: pointer;
+            transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+        }
+        .edit-btn svg { width: 17px; height: 17px; }
+        .edit-btn:disabled { opacity: 0.4; cursor: default; }
+        @media (hover: hover) { .edit-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+        /* Nothing on file yet: the pencil becomes a "Start" pill */
+        .edit-btn.is-start {
+            width: auto;
+            gap: 6px;
+            padding: 0 14px 0 16px;
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .edit-btn.is-start svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
+        .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
+        .page-message:empty { min-height: 0; margin: 0; }
+        .page-message.is-error { color: var(--rust); }
+        .page-message.is-success { color: var(--olive); }
+
+        /* --- Edit pop-up (centered card on desktop, slides up from the bottom on phones) --- */
+        .edit-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 480px;
+            padding: 0;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+            overflow: visible;
+        }
+        .edit-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .edit-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .edit-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .dialog-inner { padding: 28px 28px 24px 28px; }
+        .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .dialog-head h2 { font-size: 1.6rem; line-height: 1.15; }
+        .close-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            margin: -4px -6px 0 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: #f2ede6;
+            color: var(--brown);
+            cursor: pointer;
+        }
+        .close-btn svg { width: 18px; height: 18px; }
+        .muted { opacity: 0.75; font-size: 0.95rem; margin-bottom: 18px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .field input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .form-message { min-height: 1.4em; margin: 12px 4px 0 4px; font-size: 0.92rem; font-weight: bold; color: var(--rust); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+        button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        button.btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .btn-secondary:hover { background: #f2ede6; } }
+        .btn .btn-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+
+        @media (max-width: 600px) {
+            /* Phones: label on top, value(s) underneath, pencil on the right */
+            .setting-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 14px 0; }
+            .setting-label { grid-column: 1; }
+            .setting-value { grid-column: 1; text-align: left; opacity: 0.85; }
+            .setting-row .edit-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            .setting-label { font-size: 0.95rem; }
+            .edit-btn { width: 36px; height: 36px; }
+            /* The Start button already says nothing is on file, so skip the "Not added yet" text on phones */
+            .setting-value.is-empty { visibility: hidden; }
+            .edit-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .edit-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .dialog-inner { padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column-reverse; }
+            .form-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .edit-dialog[open], .edit-dialog[open]::backdrop { animation: none; }
+        }
+
+        /* --- Cash flow list --- */
+        .flow-list { list-style: none; margin-top: 6px; }
+        .flow-row { display: flex; align-items: center; gap: 14px; padding: 14px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .flow-row:last-child { border-bottom: none; }
+        .flow-date { flex: 0 0 auto; width: 52px; text-align: center; line-height: 1.1; }
+        .flow-date .m { display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--rust); }
+        .flow-date .d { display: block; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.45rem; font-weight: 700; }
+        .flow-date .y { display: block; font-size: 0.7rem; opacity: 0.6; }
+        .flow-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .flow-desc { font-weight: bold; overflow-wrap: anywhere; }
+        .flow-change { font-size: 0.92rem; font-weight: bold; white-space: nowrap; }
+        .flow-change.is-in { color: #2f7d4a; }
+        .flow-change.is-out { color: #b3392f; }
+        .flow-balance { flex: 0 0 auto; text-align: right; font-weight: bold; white-space: nowrap; }
+        .flow-row.is-low .flow-balance { color: #b3392f; }
+        .flow-right { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+        .flow-change-line { display: flex; align-items: baseline; gap: 8px; }
+        .flow-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .flow-add { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 2px solid var(--navy); border-radius: 50%; background: var(--olive); color: var(--cream); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; }
+        .flow-add[hidden] { display: none; }
+        .flow-add svg { width: 22px; height: 22px; }
+        .flow-add:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+        @media (hover: hover) { .flow-add:hover { background: var(--brown); transform: scale(1.06); } }
+        .tx-dialog .tx-kind { margin-bottom: 2px; }
+        /* Catch up (stale balance / past transactions) */
+        .flow-catchup { margin-top: 4px; padding: 24px 20px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; }
+        .flow-catchup-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
+        .flow-catchup-text { opacity: 0.8; margin-bottom: 16px; }
+        .catchup-dialog .cu-step { margin: 0 0 12px 6px; font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+        .catchup-dialog .cu-step:empty { display: none; }
+        .catchup-dialog .cu-q { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; margin: 0 0 4px 6px; }
+        .catchup-dialog .cu-help { margin: 0 0 16px 6px; font-size: 0.92rem; opacity: 0.75; }
+        .catchup-dialog .cu-tx { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 14px 16px; border-radius: 16px; background: #f7f4f0; }
+        .catchup-dialog .cu-note { margin: 10px 0 0 6px; font-size: 0.88rem; opacity: 0.8; }
+        .catchup-dialog .cu-when { margin-top: 16px; }
+        .catchup-dialog .form-actions .btn { min-width: 140px; }
+        .flow-edit { padding: 2px 4px; border: none; background: none; cursor: pointer; font-family: inherit; font-size: 0.8rem; font-weight: bold; color: var(--rust); text-decoration: underline; text-underline-offset: 3px; }
+        /* Edit pop-up (styled by the shared income pop-up styles) */
+        .tx-dialog { max-width: 480px; }
+        .tx-dialog .dialog-scroll { padding-top: 18px; padding-bottom: 18px; }
+        .tx-dialog .type-fields { grid-template-columns: 1fr; }
+        .tx-dialog .ie-q { font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .tx-dialog .form-actions .tx-delete { margin-right: auto; background: var(--white); color: #b3392f; border-color: #b3392f; }
+        @media (hover: hover) { .tx-dialog .form-actions .tx-delete:hover { background: #fdf2f2; } }
+        @media (max-width: 600px) { .tx-dialog .form-actions .tx-delete { margin-right: 0; } }
+        .tx-dialog [data-confirm-delete] { background: #b3392f; }
+        @media (hover: hover) { .tx-dialog [data-confirm-delete]:hover { background: #8f2c24; } }
+        /* One section per month */
+        .flow-month + .flow-month { margin-top: 18px; }
+        .flow-month-title { display: flex; align-items: center; padding: 0 2px 6px 2px; margin-top: 18px; border-bottom: 2px solid var(--navy); font-size: 0.82rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--olive); }
+        .flow-sub { font-size: 0.85rem; opacity: 0.7; }
+        .flow-amounts { flex: 0 0 auto; text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+        .flow-amount { font-weight: bold; white-space: nowrap; }
+        .flow-amount.is-in { color: #2f7d4a; }
+        .flow-amount.is-out { color: #b3392f; }
+        .flow-running { font-size: 0.82rem; opacity: 0.7; white-space: nowrap; }
+        .flow-row.is-low .flow-running { color: #b3392f; opacity: 1; font-weight: bold; }
+        /* The current balance: always the first line, set apart */
+        .flow-row.is-balance { margin: 4px 0 6px 0; padding: 16px 18px; border: none; border-radius: 16px; background: var(--brown); color: var(--cream); }
+        .flow-row.is-balance .flow-date .m { color: var(--gold); }
+        .flow-row.is-balance .flow-balance { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.5rem; color: var(--cream); }
+        .flow-row.is-balance .flow-sub { opacity: 0.8; }
+        .flow-row.is-balance .flow-update-balance { margin-top: 2px; padding-left: 0; color: var(--gold); }
+        .flow-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
+        .flow-message { text-align: center; padding: 10px 0; }
+        @media (max-width: 600px) {
+            .flow-row { gap: 10px; padding: 12px 0; }
+            .flow-date { width: 44px; }
+            .flow-date .d { font-size: 1.25rem; }
+            .flow-row.is-balance { padding: 14px; }
+            .flow-row.is-balance .flow-balance { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body class="is-checking">
+    <div class="page-loader" role="status">
+        <span class="loader-badge" aria-hidden="true"><svg class="loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg></span>
+        <span class="sr-only">Loading</span>
+        <span class="page-loader-text" aria-hidden="true">Nailing the boards...</span>
+        <span class="loader-bar" aria-hidden="true"></span>
+    </div>
+    <script src="/loader.js"></script>
+
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <div class="top-actions">
+                <a href="/" class="sign-out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                    Back
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow">Client Portal</span>
+            <h1>Cash Understanding Manager</h1>
+            <p class="hero-sub">Your balance and what’s coming up.</p>
+        </div>
+    </header>
+
+    <main>
+        <section class="main-card reveal">
+            <div class="flow-head">
+                <div>
+                    <span class="card-eyebrow">Projected</span>
+                    <h2>Transactions</h2>
+                </div>
+                <button type="button" class="flow-add" id="flow-add" aria-label="Add income or expense" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                </button>
+            </div>
+            <div id="flow"></div>
+        </section>
+    </main>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
+
+        const flowEl = document.getElementById('flow');
+        const signOutBtn = document.getElementById('sign-out');
+        // Whole dollars everywhere on this page
+        const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        // Sheet amounts can look like "1500", "-652" or "$1,500.00"
+        const amountOf = v => { const t = String(v == null ? '' : v).trim(); const n = parseFloat(t.replace(/[^0-9.-]/g, '')); return isFinite(n) ? (/^\(.*\)$/.test(t) ? -Math.abs(n) : n) : 0; };
+        // Dates as the sheet shows them ("11/5/2026"), as local days
+        function dateOf(value) {
+            const v = String(value || '').trim();
+            const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if (m) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), m[1] - 1, m[2]);
+            const t = Date.parse(v);
+            return isNaN(t) ? null : new Date(t);
+        }
+        const dayOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dateBox = d => d
+            ? '<span class="flow-date"><span class="m">' + d.toLocaleDateString('en-US', { month: 'short' }) + '</span><span class="d">' + d.getDate() + '</span><span class="y">' + d.getFullYear() + '</span></span>'
+            : '<span class="flow-date"><span class="m">—</span></span>';
+
+        function showMessage(text) {
+            flowEl.innerHTML = '<p class="flow-message">' + escapeHtml(text) + '</p>';
+        }
+
+        // The current balance first, then every transaction from the balance's date on, oldest to newest, grouped by
+        // month. Each row: the date, the description with the amount under it (green in, red out), and on the right the
+        // projected balance after it.
+        function render(data) {
+            transactions = data.transactions || [];
+            pendingSteps = catchUpSteps(data);
+            addBtn.hidden = pendingSteps.length > 0;
+            if (pendingSteps.length) {
+                showCatchUpPrompt(pendingSteps);
+                if (!catchUpDismissed) openCatchUp();
+                return;
+            }
+            const balance = data.balance;
+            const start = balance ? amountOf(balance.amount) : 0;
+            const asOf = balance ? dateOf(balance.date) : null;
+            const items = (data.transactions || [])
+                .map((t, order) => ({ ...t, order, when: dateOf(t.date), value: amountOf(t.amount) }))
+                .filter(t => t.when && (!asOf || dayOf(t.when) >= dayOf(asOf)))
+                .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || (a.order - b.order));
+            const balanceRow = '<ul class="flow-list"><li class="flow-row is-balance">' + dateBox(asOf)
+                + '<span class="flow-text"><span class="flow-desc">Current Balance</span>'
+                + '<span><button type="button" class="flow-edit flow-update-balance" data-update-balance>Update Balance</button></span></span>'
+                + '<span class="flow-balance">' + money.format(start) + '</span></li></ul>';
+            let running = start;
+            const months = [];
+            items.forEach(t => {
+                running += t.value;
+                const key = t.when.getFullYear() + '-' + t.when.getMonth();
+                let month = months[months.length - 1];
+                if (!month || month.key !== key) months.push(month = { key, title: t.when.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), rows: [] });
+                month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + '">' + dateBox(t.when)
+                    + '<span class="flow-text"><span class="flow-desc">' + escapeHtml(t.description || 'Transaction') + '</span>'
+                    + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
+                    + '<button type="button" class="flow-edit" data-edit-row="' + t.row + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button></span></span>'
+                    + '<span class="flow-balance">' + money.format(running) + '</span></li>');
+            });
+            flowEl.innerHTML = balanceRow
+                + months.map(m => '<div class="flow-month"><h3 class="flow-month-title">' + escapeHtml(m.title) + '</h3><ul class="flow-list">' + m.rows.join('') + '</ul></div>').join('')
+                + (items.length ? '' : '<p class="flow-empty">No upcoming transactions.</p>');
+        }
+
+        // --- Edit / delete a transaction ---
+        let transactions = [];
+        let currentUser = null;
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            return fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            }).then(r => r.json());
+        }
+        const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        const ERRORS = {
+            changed: 'This transaction was changed in the sheet. Refresh the page and try again.',
+            invalid_date: 'Please check the date and try again.',
+            not_found: 'This transaction is no longer in the sheet. Refresh the page.',
+        };
+        let editor = null;
+        function buildEditor() {
+            ensureDialogStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog tx-dialog';
+            dialog.setAttribute('aria-labelledby', 'tx-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="tx-title">Edit Transaction</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+                + '<div class="dialog-scroll"><div class="type-fields">'
+                + '<div class="tx-kind" hidden><p class="ie-q">Income or Expense?</p><div class="type-picker yes-no" role="radiogroup" aria-label="Income or expense">'
+                    + '<input type="radio" name="tx-kind" id="tx-income" value="income"><label for="tx-income">Income</label>'
+                    + '<input type="radio" name="tx-kind" id="tx-expense" value="expense"><label for="tx-expense">Expense</label></div></div>'
+                + '<div class="field"><label for="tx-date">Date</label><input id="tx-date" type="date" required></div>'
+                + '<div class="field"><label for="tx-amount">Amount</label><div class="money-wrap"><input class="money" id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>'
+                + '<div class="field"><label for="tx-desc">Description</label><input id="tx-desc" type="text" maxlength="100" autocomplete="off"></div>'
+                + '</div></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="button" class="btn btn-secondary tx-delete" data-delete>Delete</button>'
+                + '<button type="button" class="btn btn-secondary" data-close>Cancel</button>'
+                + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Changes</button></div></div>'
+                + '<div class="ie-confirm" hidden role="alertdialog" aria-labelledby="tx-confirm-title"><div class="ie-confirm-card"><h3 id="tx-confirm-title">Delete this transaction?</h3>'
+                    + '<p>It will be removed from your cash flow sheet. This can’t be undone here.</p>'
+                    + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-keep>Cancel</button>'
+                    + '<button type="button" class="btn" data-confirm-delete><span class="btn-spinner" aria-hidden="true"></span>Delete</button></div></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const $ = sel => dialog.querySelector(sel);
+            const form = $('form');
+            const message = $('.form-message');
+            const confirmBox = $('.ie-confirm');
+            let tx = null;
+            let adding = false;
+            let busy = false;
+            const setBusy = (on, btn) => {
+                busy = on;
+                form.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                if (btn) btn.classList.toggle('is-loading', on);
+            };
+            const close = () => { if (!busy) dialog.close(); };
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+            dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+            dialog.addEventListener('cancel', e => {
+                e.preventDefault();
+                if (!confirmBox.hidden) { if (!busy) confirmBox.hidden = true; return; }
+                close();
+            });
+            form.addEventListener('input', () => { message.textContent = ''; });
+            // Amounts are positive (whether it's money in or out comes from the sheet's TYPE): digits and one decimal point only
+            $('#tx-amount').addEventListener('input', e => {
+                const el = e.target;
+                const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                if (cleaned !== el.value) el.value = cleaned;
+            });
+            dialog.querySelectorAll('[name="tx-kind"]').forEach(r => r.addEventListener('change', () => {
+                $('#tx-title').textContent = 'Add ' + (r.value === 'income' ? 'Income' : 'Expense');
+            }));
+            const original = () => ({ date: tx.date, description: tx.description, amount: tx.amount });
+            const failed = (err, btn) => {
+                console.error(err);
+                message.textContent = ERRORS[err.message] || 'We couldn’t save that. Please try again.';
+                setBusy(false, btn);
+            };
+
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                const date = $('#tx-date').value;
+                const description = $('#tx-desc').value.trim();
+                const raw = $('#tx-amount').value.trim().replace(/[$,]/g, '');
+                const amount = Number(raw);
+                const kind = (dialog.querySelector('[name="tx-kind"]:checked') || {}).value;
+                if (adding && !kind) { message.textContent = 'Please choose Income or Expense.'; $('#tx-income').focus(); return; }
+                if (!date) { message.textContent = 'Please choose a date.'; $('#tx-date').focus(); return; }
+                if (!raw || !isFinite(amount) || amount <= 0) { message.textContent = 'Please enter an amount above $0.'; $('#tx-amount').focus(); return; }
+                if (!description) { message.textContent = 'Please enter a description.'; $('#tx-desc').focus(); return; }
+                const btn = $('[data-save]');
+                setBusy(true, btn);
+                try {
+                    const json = adding
+                        ? await api({ action: 'addTransaction', type: kind, date, description, amount })
+                        : await api({ action: 'updateTransaction', row: tx.row, original: original(), date, description, amount });
+                    if (!json.ok) throw new Error(json.error);
+                    await load(currentUser);
+                    setBusy(false, btn);
+                    dialog.close();
+                } catch (err) { failed(err, btn); }
+            });
+            $('[data-delete]').addEventListener('click', () => { confirmBox.hidden = false; $('[data-keep]').focus(); });
+            $('[data-keep]').addEventListener('click', () => { confirmBox.hidden = true; });
+            $('[data-confirm-delete]').addEventListener('click', async () => {
+                const btn = $('[data-confirm-delete]');
+                setBusy(true, btn);
+                try {
+                    const json = await api({ action: 'deleteTransaction', row: tx.row, original: original() });
+                    if (!json.ok) throw new Error(json.error);
+                    await load(currentUser);
+                    setBusy(false, btn);
+                    confirmBox.hidden = true;
+                    dialog.close();
+                } catch (err) { confirmBox.hidden = true; failed(err, btn); }
+            });
+
+            const show = () => {
+                $('.tx-kind').hidden = !adding;
+                $('[data-delete]').style.display = adding ? 'none' : '';
+                $('[data-save]').lastChild.textContent = adding ? 'Add' : 'Save Changes';
+                message.textContent = '';
+                confirmBox.hidden = true;
+                setBusy(false);
+                dialog.showModal();
+                lockPageScroll(dialog);
+            };
+            return {
+                add() {
+                    adding = true;
+                    tx = null;
+                    dialog.querySelectorAll('[name="tx-kind"]').forEach(r => { r.checked = false; });
+                    $('#tx-title').textContent = 'Add Transaction';
+                    $('#tx-date').value = '';
+                    $('#tx-amount').value = '';
+                    $('#tx-desc').value = '';
+                    show();
+                },
+                open(next) {
+                    adding = false;
+                    tx = next;
+                    const d = dateOf(tx.date);
+                    const pad = n => String(n).padStart(2, '0');
+                    $('#tx-date').value = d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : '';
+                    const value = amountOf(tx.amount);
+                    $('#tx-amount').value = value ? String(Math.abs(value)) : '';
+                    // "Edit Income" / "Edit Expense" from the sheet's TYPE
+                    const type = String(tx.type || '').trim();
+                    $('#tx-title').textContent = 'Edit ' + (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Transaction');
+                    $('#tx-desc').value = tx.description || '';
+                    show();
+                },
+            };
+        }
+        const addBtn = document.getElementById('flow-add');
+        addBtn.addEventListener('click', () => {
+            if (!editor) editor = buildEditor();
+            editor.add();
+        });
+        flowEl.addEventListener('click', e => {
+            if (e.target.closest('[data-catch-up]')) { openCatchUp(); return; }
+            // Just the balance question, any time
+            if (e.target.closest('[data-update-balance]')) {
+                if (!catchUp) catchUp = buildCatchUp();
+                catchUp.open([{ kind: 'balance' }]);
+                return;
+            }
+            const btn = e.target.closest('[data-edit-row]');
+            if (!btn) return;
+            const tx = transactions.find(t => String(t.row) === btn.dataset.editRow);
+            if (!tx) return;
+            if (!editor) editor = buildEditor();
+            editor.open(tx);
+        });
+
+        // --- Catch up: a balance older than today, or transactions whose date has passed ---
+        // The list stays hidden and a pop-up asks one question at a time: today's bank balance first, then each past
+        // transaction, oldest first. Happened → it's removed (the new balance already includes it); not yet → a new date.
+        let pendingSteps = [];
+        let catchUp = null;
+        let catchUpDismissed = false;
+        const isoDay = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        // Late nights count as the day before: until 6am, yesterday's balance and transactions are still current
+        function currentDay() {
+            const now = new Date();
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getHours() < 6 ? 1 : 0));
+        }
+        function catchUpSteps(data) {
+            const today = dayOf(currentDay());
+            const asOf = data.balance ? dateOf(data.balance.date) : null;
+            const steps = [];
+            if (!asOf || dayOf(asOf) < today) steps.push({ kind: 'balance' });
+            (data.transactions || [])
+                .map((t, order) => ({ ...t, order, when: dateOf(t.date) }))
+                .filter(t => t.when && dayOf(t.when) < today)
+                .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || (a.order - b.order))
+                .forEach(tx => steps.push({ kind: 'tx', tx }));
+            return steps;
+        }
+        function showCatchUpPrompt(steps) {
+            const balance = steps.some(st => st.kind === 'balance');
+            const past = steps.filter(st => st.kind === 'tx').length;
+            const parts = [];
+            if (balance) parts.push('enter today’s bank balance');
+            if (past) parts.push('check ' + (past === 1 ? '1 past transaction' : past + ' past transactions'));
+            const text = parts.join(' and ');
+            flowEl.innerHTML = '<div class="flow-catchup"><p class="flow-catchup-title">Let’s get you up to date</p>'
+                + '<p class="flow-catchup-text">' + escapeHtml(text.charAt(0).toUpperCase() + text.slice(1)) + ' to see your projections.</p>'
+                + '<button type="button" class="btn" data-catch-up>Update Now</button></div>';
+        }
+        function openCatchUp() {
+            if (!catchUp) catchUp = buildCatchUp();
+            catchUp.open(pendingSteps.map(st => st.kind === 'tx' ? { kind: 'tx', tx: { ...st.tx } } : { ...st }));
+        }
+        function buildCatchUp() {
+            ensureDialogStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog tx-dialog catchup-dialog';
+            dialog.setAttribute('aria-labelledby', 'cu-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="cu-title">Catch Up</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+                + '<div class="dialog-scroll"><p class="cu-step"></p><div class="cu-body"></div></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="submit" class="btn" data-next><span class="btn-spinner" aria-hidden="true"></span><span class="cu-next-label">Next</span></button></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const $ = sel => dialog.querySelector(sel);
+            const form = $('form');
+            const message = $('.form-message');
+            const body = $('.cu-body');
+            let steps = [];
+            let index = 0;
+            let saved = false;
+            let busy = false;
+            const setBusy = on => {
+                busy = on;
+                form.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                $('[data-next]').classList.toggle('is-loading', on);
+            };
+            const close = () => { if (!busy) dialog.close(); };
+            $('[data-close]').addEventListener('click', close);
+            dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+            dialog.addEventListener('close', () => {
+                if (index >= steps.length) return;
+                // Closed partway: keep the list hidden, and reload if something was already saved (rows may have moved)
+                catchUpDismissed = true;
+                if (saved) load(currentUser);
+            });
+            form.addEventListener('input', () => { message.textContent = ''; });
+            form.addEventListener('change', e => {
+                if (e.target.name !== 'cu-happened') return;
+                const happened = e.target.value === 'yes';
+                $('.cu-note').hidden = !happened;
+                $('.cu-when').style.display = happened ? 'none' : '';
+                if (!happened) $('#cu-date').focus();
+            });
+
+            function showStep() {
+                const step = steps[index];
+                $('.cu-step').textContent = steps.length > 1 ? 'Step ' + (index + 1) + ' of ' + steps.length : '';
+                $('.cu-next-label').textContent = index === steps.length - 1 ? 'Finish' : 'Next';
+                message.textContent = '';
+                if (step.kind === 'balance') {
+                    $('#cu-title').textContent = 'Current Balance';
+                    body.innerHTML = '<p class="cu-q">What’s your bank balance today?</p>'
+                        + '<p class="cu-help">Check your bank account and enter today’s balance.</p>'
+                        + '<div class="field"><label for="cu-balance">Bank Balance</label><div class="money-wrap"><input class="money" id="cu-balance" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>';
+                    // Digits, one decimal point and a leading minus (an overdrawn account)
+                    $('#cu-balance').addEventListener('input', e => {
+                        const el = e.target;
+                        const cleaned = el.value.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '').replace(/(\..*)\./g, '$1');
+                        if (cleaned !== el.value) el.value = cleaned;
+                    });
+                } else {
+                    const t = step.tx;
+                    const value = amountOf(t.amount);
+                    $('#cu-title').textContent = 'Past Transaction';
+                    body.innerHTML = '<div class="cu-tx">' + dateBox(t.when)
+                        + '<span class="flow-text"><span class="flow-desc">' + escapeHtml(t.description || 'Transaction') + '</span>'
+                        + '<span class="flow-change ' + (value < 0 ? 'is-out' : 'is-in') + '">' + (value > 0 ? '+' : '') + money.format(value) + '</span></span></div>'
+                        + '<div class="ie-yn"><p class="ie-q">Has this happened yet?</p><div class="type-picker yes-no" role="radiogroup" aria-label="Has this happened yet?">'
+                            + '<input type="radio" name="cu-happened" id="cu-yes" value="yes"><label for="cu-yes">Yes</label>'
+                            + '<input type="radio" name="cu-happened" id="cu-no" value="no"><label for="cu-no">No</label></div>'
+                            + '<p class="cu-note" hidden>It’ll come off your projections, since your bank balance already includes it.</p></div>'
+                        + '<div class="field cu-when" style="display: none"><label for="cu-date">When will it happen?</label><input id="cu-date" type="date" min="' + isoDay(currentDay()) + '"></div>';
+                }
+                setBusy(false);
+                const first = body.querySelector('input');
+                if (first) first.focus();
+            }
+
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (busy) return;
+                const step = steps[index];
+                let request;
+                if (step.kind === 'balance') {
+                    const raw = $('#cu-balance').value.trim().replace(/[$,]/g, '');
+                    const amount = Number(raw);
+                    if (!raw || raw === '-' || !isFinite(amount)) { message.textContent = 'Please enter your bank balance.'; $('#cu-balance').focus(); return; }
+                    request = { action: 'updateBalance', date: isoDay(new Date()), amount };
+                } else {
+                    const t = step.tx;
+                    const happened = (dialog.querySelector('[name="cu-happened"]:checked') || {}).value;
+                    if (!happened) { message.textContent = 'Please choose Yes or No.'; $('#cu-yes').focus(); return; }
+                    const original = { date: t.date, description: t.description, amount: t.amount };
+                    if (happened === 'yes') {
+                        request = { action: 'deleteTransaction', row: t.row, original };
+                    } else {
+                        const date = $('#cu-date').value;
+                        if (!date || date < isoDay(currentDay())) { message.textContent = 'Please choose today or a later date.'; $('#cu-date').focus(); return; }
+                        request = { action: 'updateTransaction', row: t.row, original, date, description: t.description || 'Transaction', amount: Math.abs(amountOf(t.amount)) };
+                    }
+                }
+                setBusy(true);
+                try {
+                    const json = await api(request);
+                    if (!json.ok) throw new Error(json.error);
+                    saved = true;
+                    // A deleted row moves every row under it up by one
+                    if (request.action === 'deleteTransaction') steps.forEach(st => { if (st.kind === 'tx' && st.tx.row > request.row) st.tx.row -= 1; });
+                    index += 1;
+                    if (index < steps.length) { showStep(); return; }
+                    // Close first, so the reload can open it again if anything is still out of date
+                    setBusy(false);
+                    dialog.close();
+                    catchUpDismissed = false;
+                    flowEl.innerHTML = '<p class="flow-message">Updating…</p>';
+                    await load(currentUser);
+                } catch (err) {
+                    console.error(err);
+                    message.textContent = ERRORS[err.message] || 'We couldn’t save that. Please try again.';
+                    setBusy(false);
+                }
+            });
+
+            return {
+                open(next) {
+                    if (dialog.open) return;
+                    steps = next;
+                    index = 0;
+                    saved = false;
+                    showStep();
+                    dialog.showModal();
+                    lockPageScroll(dialog);
+                },
+            };
+        }
+
+        async function load(user) {
+            currentUser = user;
+            if (!PORTAL_API_URL) { showMessage('Cash flow isn’t available yet.'); return; }
+            try {
+                const idToken = await user.getIdToken();
+                const data = await fetch(PORTAL_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ idToken, action: 'cashFlow' }),
+                }).then(r => r.json());
+                if (data.ok) render(data);
+                else if (data.error === 'not_allowed' || data.error === 'not_found') showMessage('This page isn’t available for your account.');
+                else throw new Error(data.error || 'Request failed');
+            } catch (err) {
+                console.error(err);
+                showMessage('We couldn’t load your cash flow. Please refresh to try again.');
+            }
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) { items.forEach(el => el.classList.add('is-visible')); return; }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page (and back here afterwards)
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                // Stay on the loading screen until the list is in, with a time limit
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([load(user), timeLimit]).then(() => {
+                    document.body.classList.remove('is-checking');
+                    initReveal();
+                });
+            });
+
+            signOutBtn.addEventListener('click', async () => {
+                signOutBtn.disabled = true;
+                await signOut(auth);
+            });
+        }
+    </script>
+</body>
+</html>

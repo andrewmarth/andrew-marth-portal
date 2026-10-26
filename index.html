@@ -667,6 +667,19 @@
             <h2>Links</h2>
             <div id="links-list"></div>
         </section>
+
+        <!-- 6. Accounts with CUM = TRUE: their cash flow page -->
+        <section class="main-card glow-card reveal" id="cash-flow-card" hidden>
+            <span class="card-eyebrow">Your Money</span>
+            <h2>C.U.M.</h2>
+            <ul class="page-links">
+                <li><a class="page-link" href="/cum">
+                    <span class="page-link-icon is-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
+                    <span class="page-link-text"><span class="page-link-street">View Cash Flow</span><br><span class="page-link-sub">Your balance and what’s coming up</span></span>
+                    <span class="page-link-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
+                </a></li>
+            </ul>
+        </section>
     </main>
 
     <footer>
@@ -967,6 +980,8 @@
                     document.getElementById('breakdowns-card').hidden = String((data.row || {}).BUYER || '').trim().toUpperCase() !== 'TRUE';
                     // Admins don't need the "call or text Andrew" card
                     document.getElementById('contact-card').hidden = String((data.row || {}).ADMIN || '').trim().toUpperCase() === 'TRUE';
+                    // The Cash Flow card is only for accounts with CUM = TRUE
+                    document.getElementById('cash-flow-card').hidden = String((data.row || {}).CUM || '').trim().toUpperCase() !== 'TRUE';
                 }
                 else if (data.error !== 'not_found') throw new Error(data.error || 'Request failed');
             } catch (err) {
@@ -1056,6 +1071,7 @@
             showPage();
             greet({ 'First Name': 'Jordan Sample' });
             document.getElementById('breakdowns-card').hidden = false;
+            document.getElementById('cash-flow-card').hidden = false;
             const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550123'] };
             renderPages([demoPage]);
             renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
