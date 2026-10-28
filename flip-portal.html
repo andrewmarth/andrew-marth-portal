@@ -730,6 +730,16 @@
         @media (hover: none), (max-width: 600px) { .lb-nav { display: none; } }
         @media (prefers-reduced-motion: reduce) { .lb-slide.is-waiting::before { animation: none; } }
         .prop-details { list-style: none; }
+        .sheet-admin { margin-top: 18px; padding: 16px 16px 6px 16px; border-radius: 16px; background: #f7f4f0; border: 1px solid rgba(78, 81, 62, 0.15); }
+        .sheet-admin[hidden] { display: none; }
+        .sheet-admin-title { margin: 0 0 6px 0; font-size: 1.1rem; }
+        .send-list { list-style: none; }
+        .send-list li { display: flex; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid rgba(78, 81, 62, 0.15); }
+        .send-who, .send-what { display: flex; flex-direction: column; min-width: 0; }
+        .send-what { flex: 0 0 auto; align-items: flex-end; text-align: right; }
+        .send-main { font-weight: bold; overflow-wrap: anywhere; }
+        .send-sub { font-size: 0.85rem; opacity: 0.7; overflow-wrap: anywhere; }
+        .send-main.is-unknown { font-weight: normal; font-style: italic; opacity: 0.6; }
         .prop-details li { display: flex; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
         .prop-details li:last-child { border-bottom: none; }
         .prop-details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
@@ -814,6 +824,12 @@
             <button type="button" class="photo-nav is-next" data-photo-step="1" aria-label="Next picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
         </div>
         <ul class="prop-details" id="sheet-details"></ul>
+        <!-- Admins only: every time this property was sent -->
+        <div class="sheet-admin" id="sheet-admin" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h3 class="sheet-admin-title">Sent By</h3>
+            <ul class="send-list" id="send-list"></ul>
+        </div>
     </section>
 
     <script type="module">
@@ -1070,6 +1086,7 @@
             // "3 bd • 2 ba • 1,500 sqft" (only the parts the sheet has; Unknown when it has none)
             const size = [known(p.bed) && known(p.bed) + ' bd', known(p.bath) && known(p.bath) + ' ba', known(p.sqft) && sqftText(p.sqft) + ' sqft'].filter(Boolean).join(' • ');
             document.getElementById('sheet-details').innerHTML = row('Price', price) + row('Size', size) + row('Property Type', p.type);
+            renderSends(p);
             sheet.scrollTop = 0;
             sheet.style.transform = '';
             sheet.classList.add('is-open');
@@ -1081,6 +1098,20 @@
             e.preventDefault();
             slide.click();
         });
+        // Admins: who sent this property and when, newest first (their price, before markup). Only admins get this data.
+        function renderSends(p) {
+            const box = document.getElementById('sheet-admin');
+            if (!Array.isArray(p.sends)) { box.hidden = true; return; }
+            const part = (v, cls, fallback) => '<span class="' + cls + (known(v) ? '' : ' is-unknown') + '">' + escapeHtml(known(v) || fallback) + '</span>';
+            document.getElementById('send-list').innerHTML = p.sends.map(x => {
+                const when = dateOf(x.date);
+                const date = when ? when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                const price = x.price === null || x.price === undefined ? '' : dollars.format(x.price);
+                return '<li><span class="send-who">' + part(x.company, 'send-main', 'Unknown') + part(x.individual, 'send-sub', 'Unknown') + '</span>'
+                    + '<span class="send-what">' + part(price, 'send-main', 'Unknown') + part(date, 'send-sub', 'Unknown') + '</span></li>';
+            }).join('');
+            box.hidden = false;
+        }
         function closeSheet() {
             if (!lightbox.hidden) closeLightbox();
             photoToken++;

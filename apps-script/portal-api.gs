@@ -564,6 +564,7 @@ function wholesaleProperties_(account) {
   const learned = {};
   var lookups = 0;
   var geoError = '';
+  const admin = isAdmin_(account);
   const properties = wholesaleGroups_().map(function (listings) {
     const newest = listings[0];
     const pick = function (field) {
@@ -594,7 +595,7 @@ function wholesaleProperties_(account) {
       if (spot) learned[geoKey] = spot;
     }
     const position = spot && spot !== 'none' ? JSON.parse(spot) : null;
-    return {
+    const property = {
       row: newest.row,
       address: address,
       date: newest.date,
@@ -609,6 +610,13 @@ function wholesaleProperties_(account) {
       lng: position ? position[1] : null,
       located: !!spot,
     };
+    // Admins only: every time the property was sent, newest first (the wholesaler's price, before markup)
+    if (admin) {
+      property.sends = listings.map(function (l) {
+        return { company: l.company, individual: l.individual, price: l.sentPrice, date: l.date };
+      });
+    }
+    return property;
   });
   if (Object.keys(learned).length) props.setProperties(learned);
   const result = { ok: true, properties: properties };
@@ -636,6 +644,7 @@ function wholesaleGroups_() {
     bed: col(['BED', 'BEDS', 'BEDROOMS']), bath: col(['BATH', 'BATHS', 'BATHROOMS']),
     sqft: col(['SQFT', 'SQ FT', 'SQUARE FEET']), type: col(['PROPERTY TYPE', 'TYPE']), date: col(['DATE SENT', 'DATE']),
     ready: col(['PRODUCTION READY']), pictures: col(['PICTURES LINK', 'PICTURES']),
+    company: col(['COMPANY']), individual: col(['INDIVIDUAL']),
   };
   if (c.street < 0) throw new Error('Wholesale sheet has no STREET ADDRESS column');
   if (c.ready < 0) throw new Error('Wholesale sheet has no PRODUCTION READY column');
@@ -674,6 +683,9 @@ function wholesaleGroups_() {
       sqft: text(row, c.sqft),
       type: text(row, c.type),
       pictures: text(row, c.pictures),
+      company: text(row, c.company),
+      individual: text(row, c.individual),
+      sentPrice: price,
       price: price === null ? null : price + (markup || 0),
     };
     const key = wholesaleKey_(listing);
