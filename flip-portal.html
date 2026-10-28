@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- A fullscreen map: pinching zooms the map, never the page -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Flip Portal | Andrew Marth Client Portal</title>
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#4e513e">
@@ -539,6 +540,7 @@
         .flip-header .sign-out { background: rgba(14, 42, 59, 0.2); backdrop-filter: none; -webkit-backdrop-filter: none; }
         .flip-menu-btn svg { width: 20px; height: 20px; }
         .flip-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+        .map-wrap { touch-action: none; }
         .map-wrap { position: relative; flex: 1 1 auto; min-width: 0; background: #ece6dc; }
         #map { position: absolute; inset: 0; }
         .map-message { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-weight: bold; opacity: 0.8; }
@@ -599,9 +601,14 @@
         .no-access-message { margin: auto; padding: 24px; text-align: center; font-size: 1.1rem; font-weight: bold; color: var(--navy); }
 
         /* Price pins: a rust pill with a point at the bottom, sitting on the property */
+        .pin-layer { position: absolute; left: 0; top: 0; }
+        /* Placed by the script with transforms (cheap to move every frame while zooming) */
         .price-pin {
             position: absolute;
-            transform: translate(-50%, calc(-100% - 7px));
+            left: 0;
+            top: 0;
+            will-change: transform;
+            touch-action: none;
             padding: 5px 10px;
             border: 2px solid var(--white);
             border-radius: 999px;
@@ -613,9 +620,10 @@
             line-height: 1.1;
             white-space: nowrap;
             cursor: pointer;
-            box-shadow: 0 3px 8px rgba(14, 42, 59, 0.35);
-            transition: background-color 0.15s ease, transform 0.15s ease;
+            box-shadow: 0 2px 5px rgba(14, 42, 59, 0.35);
+            transition: background-color 0.15s ease;
         }
+        .price-pin[hidden] { display: none; }
         .price-pin::after {
             content: '';
             position: absolute;
@@ -1097,7 +1105,9 @@
         const menuBtn = document.getElementById('menu-btn');
         const listEl = document.getElementById('prop-list');
         const isMobile = () => window.matchMedia('(max-width: 899px)').matches;
+        let menuOpened = false;
         function openMenu() {
+            if (!menuOpened) { menuOpened = true; setTimeout(pumpCovers, 300); }
             panel.classList.add('is-open');
             scrim.classList.add('is-open');
             menuBtn.setAttribute('aria-expanded', 'true');
@@ -1188,7 +1198,7 @@
             // so they're already there when the list is scrolled; the ones on screen always go first
             coverBackground.length = 0;
             coverBackground.push(...boxes);
-            setTimeout(pumpCovers, 300);
+            if (!isMobile() || menuOpened) setTimeout(pumpCovers, 300);
         }
         listEl.addEventListener('click', e => {
             const btn = e.target.closest('.prop-item');
@@ -1255,38 +1265,76 @@
                 ],
             });
             mapRef = map;
-            map.addListener('click', () => { if (sheet.classList.contains('is-open')) closeSheet(); });
 
-            // A price pill drawn on the map's top layer, so it stays a real, focusable button
-            class PricePin extends OverlayView {
-                constructor(p) {
+            // Every price pill in one layer on the map's top pane. They stay real, focusable buttons.
+            class PinLayer extends OverlayView {
+                constructor(items) {
                     super();
-                    this.position = new LatLng(p.lat, p.lng);
-                    this.el = document.createElement('button');
-                    this.el.type = 'button';
-                    this.el.className = 'price-pin';
-                    this.el.textContent = shortPrice(p.price);
-                    this.el.setAttribute('aria-label', (p.address || 'Property') + ', ' + (p.price === null ? 'price unknown' : dollars.format(p.price)));
-                    this.el.addEventListener('click', e => { e.stopPropagation(); openSheet(p, this.el); });
-                    // Presses and clicks belong to the pin, but the scroll wheel still zooms the map
-                    // (Google's preventMapHitsAndGesturesFrom would block the wheel too)
-                    ['pointerdown', 'mousedown', 'touchstart', 'dblclick', 'contextmenu'].forEach(type => {
-                        this.el.addEventListener(type, e => e.stopPropagation(), { passive: true });
-                    });
-                    p.pinEl = this.el;
+                    this.items = items;
+                    this.div = document.createElement('div');
+                    this.div.className = 'pin-layer';
+                    items.forEach(it => this.div.append(it.el));
                 }
-                onAdd() { this.getPanes().floatPane.append(this.el); }
+                onAdd() { this.getPanes().floatPane.append(this.div); }
                 draw() {
-                    const point = this.getProjection().fromLatLngToDivPixel(this.position);
-                    if (!point) return;
-                    this.el.style.left = point.x + 'px';
-                    this.el.style.top = point.y + 'px';
+                    const projection = this.getProjection();
+                    if (!projection) return;
+                    const width = mapEl.offsetWidth;
+                    const height = mapEl.offsetHeight;
+                    for (const it of this.items) {
+                        const point = projection.fromLatLngToDivPixel(it.position);
+                        const screen = projection.fromLatLngToContainerPixel(it.position);
+                        // Off-screen pins (with a margin) are hidden, so only the visible ones move each frame
+                        const off = !point || !screen || screen.x < -120 || screen.x > width + 120 || screen.y < -60 || screen.y > height + 80;
+                        if (it.el.hidden !== off) it.el.hidden = off;
+                        if (off) continue;
+                        it.el.style.transform = 'translate3d(' + Math.round(point.x) + 'px,' + Math.round(point.y) + 'px,0) translate(-50%, calc(-100% - 7px))';
+                    }
                 }
-                onRemove() { this.el.remove(); }
+                onRemove() { this.div.remove(); }
             }
+            const items = placed.map(p => {
+                const el = document.createElement('button');
+                el.type = 'button';
+                el.className = 'price-pin';
+                el.textContent = shortPrice(p.price);
+                el.setAttribute('aria-label', (p.address || 'Property') + ', ' + (p.price === null ? 'price unknown' : dollars.format(p.price)));
+                // Keyboard (Enter/Space); taps and clicks are detected below
+                el.addEventListener('click', e => { e.stopPropagation(); if (e.detail === 0) openSheet(p, el); });
+                el.dataset.row = p.row;
+                p.pinEl = el;
+                return { el, p, position: new LatLng(p.lat, p.lng) };
+            });
+            const layer = new PinLayer(items);
+            // Pin row -> property ("Map" here is Google's map class, so a plain object)
+            const byRow = {};
+            items.forEach(it => { byRow[it.p.row] = it.p; });
+            // Touches and clicks on a pin still reach the map (so pinching and dragging from a pin move the map);
+            // a short press that barely moves is a tap on that pin
+            let press = null;
+            let pinTapAt = 0;
+            layer.div.addEventListener('pointerdown', e => {
+                const el = e.target.closest('.price-pin');
+                press = el && e.isPrimary ? { el, x: e.clientX, y: e.clientY, at: Date.now() } : null;
+            });
+            document.addEventListener('pointerdown', e => { if (!e.isPrimary) press = null; }, true); // a second finger: a pinch
+            document.addEventListener('pointercancel', () => { press = null; }, true);
+            document.addEventListener('pointerup', e => {
+                if (!press || !e.isPrimary) return;
+                const { el, x, y, at } = press;
+                press = null;
+                if (Math.hypot(e.clientX - x, e.clientY - y) > 10 || Date.now() - at > 600) return;
+                const p = byRow[el.dataset.row];
+                if (!p) return;
+                pinTapAt = Date.now();
+                openSheet(p, el);
+            }, true);
+            // A tap on empty map closes the details (the map also sees taps on pins, so those are skipped)
+            map.addListener('click', () => { if (Date.now() - pinTapAt > 500 && sheet.classList.contains('is-open')) closeSheet(); });
 
             const bounds = new LatLngBounds();
-            placed.forEach(p => { new PricePin(p).setMap(map); bounds.extend({ lat: p.lat, lng: p.lng }); });
+            placed.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+            layer.setMap(map);
             if (placed.length === 1) { map.setCenter(bounds.getCenter()); map.setZoom(14); }
             else if (placed.length > 1) map.fitBounds(bounds, 48);
             messageEl.hidden = true;
