@@ -309,7 +309,7 @@
     </div>
 
     <script type="module">
-        import { firebaseConfig, isConfigured, FIREBASE_SDK } from '/firebase-config.js';
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
 
         const card = document.getElementById('card');
         const stepPhone = document.getElementById('step-phone');
@@ -389,6 +389,25 @@
             return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/';
         }
 
+        // After signing in: a phone number that isn't in the ACCOUNT LIST yet goes to sign-up; everyone else to nextPage()
+        async function goAfterSignIn(user) {
+            let isNew = false;
+            if (PORTAL_API_URL) {
+                try {
+                    const idToken = await user.getIdToken();
+                    const json = await fetch(PORTAL_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ idToken }),
+                    }).then(r => r.json());
+                    isNew = json && json.ok === false && json.error === 'not_found';
+                } catch (err) {
+                    console.error(err); // can't tell: the portal decides
+                }
+            }
+            location.replace(isNew ? '/signup' : nextPage());
+        }
+
         async function startSignIn() {
             const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
             const { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
@@ -397,7 +416,8 @@
             auth.useDeviceLanguage();
 
             // Already signed in? Go straight back to the page they came from (or the portal home page).
-            onAuthStateChanged(auth, user => { if (user) location.replace(nextPage()); });
+            let leaving = false;
+            onAuthStateChanged(auth, user => { if (user && !leaving) { leaving = true; goAfterSignIn(user); } });
 
             let verifier = null;
             let confirmation = null;
@@ -477,7 +497,7 @@
                 try {
                     await confirmation.confirm(code);
                     setMessage(stepCode, codeMsg, 'Signed in! Taking you to your portal...', 'info');
-                    location.replace(nextPage());
+                    // (onAuthStateChanged above takes it from here)
                 } catch (err) {
                     console.error(err);
                     setMessage(stepCode, codeMsg, friendlyError(err));

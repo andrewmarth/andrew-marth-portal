@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Create Your Account | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --error: #c0392b;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { background-color: var(--olive); }
+        body {
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.5;
+            color: var(--brown);
+            min-height: 100vh;
+            min-height: 100svh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        h1, h2 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Video background (same as the website) --- */
+        .bg-video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+        .bg-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.62) 0%, rgba(78, 81, 62, 0.88) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.4) 55%, rgba(79, 45, 44, 0.8) 100%);
+        }
+
+        .page {
+            min-height: 100vh;
+            min-height: 100svh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 26px;
+            padding: calc(env(safe-area-inset-top, 0px) + 28px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px) 20px;
+        }
+
+        .top-logo { display: block; line-height: 0; }
+        .top-logo img { height: 40px; width: auto; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35)); }
+
+        /* --- Sign-in card --- */
+        .card {
+            width: calc(100% - 6px);
+            max-width: 440px;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 36px 32px 30px 32px;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: rise 0.8s var(--ease) 0.1s forwards;
+        }
+        @keyframes rise { to { opacity: 1; transform: none; } }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 10px;
+        }
+        .eyebrow::before, .eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+
+        .card h1 { font-size: 2.1rem; line-height: 1.1; color: var(--brown); margin-bottom: 8px; }
+        .card .lead { font-size: 1.02rem; opacity: 0.85; margin-bottom: 24px; }
+
+        /* Steps slide between "phone" and "code" */
+        .step { display: none; }
+        .step.is-active { display: block; animation: stepIn 0.42s var(--ease) both; }
+        @keyframes stepIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+        .field-label { display: block; text-align: left; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+
+        .phone-field {
+            display: flex;
+            align-items: center;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .phone-field:focus-within { background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .phone-prefix { padding: 0 6px 0 22px; font-weight: bold; font-size: 1.1rem; color: var(--olive); }
+        .phone-field input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; }
+
+        .text-input {
+            width: 100%;
+            min-height: 56px;
+            padding: 14px 22px 14px 6px;
+            font-family: inherit;
+            font-size: 1.15rem;
+            color: var(--brown);
+        }
+        .code-input {
+            width: 100%;
+            min-height: 60px;
+            border: 2px solid var(--navy);
+            border-radius: 18px;
+            background: #f7f4f0;
+            text-align: center;
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: 0.45em;
+            padding: 10px 0 10px 0.45em;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .code-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .has-error .phone-field, .has-error .code-input { border-color: var(--error); background: #fdf2f2; }
+
+        .message { min-height: 1.4em; margin: 10px 4px 0 4px; font-size: 0.92rem; font-weight: bold; text-align: left; }
+        .message.is-error { color: var(--error); }
+        .message.is-info { color: var(--olive); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 52px;
+            margin-top: 16px;
+            padding: 12px 24px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 1.05rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(153, 114, 75, 0.2);
+            transition: background-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+        }
+        @media (hover: hover) {
+            .btn:not(:disabled):hover { background-color: var(--rust); transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.65; cursor: wait; }
+        .btn .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .spinner { display: inline-block; }
+        .btn.is-loading .btn-arrow { display: none; }
+        .btn-arrow { width: 18px; height: 18px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .link-row { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
+        .link-btn {
+            background: none;
+            border: none;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: var(--tan);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            cursor: pointer;
+            min-height: 44px;
+            padding: 0 4px;
+        }
+        .link-btn:disabled { color: var(--brown); opacity: 0.5; text-decoration: none; cursor: default; }
+
+        .fine-print { margin-top: 18px; font-size: 0.78rem; opacity: 0.65; line-height: 1.4; }
+
+        /* Setup notice (shown until Firebase is configured) */
+        .setup-notice {
+            display: none;
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #fdf6e9;
+            border: 1px solid rgba(192, 144, 80, 0.5);
+            font-size: 0.92rem;
+            text-align: left;
+        }
+        .not-configured .setup-notice { display: block; }
+
+        #recaptcha-container { position: absolute; }
+        .mini-footer { font-size: 0.75rem; text-align: center; color: var(--cream); opacity: 0.72; line-height: 1.4; }
+        .mini-footer a { color: var(--cream); text-decoration: none; }
+
+        /* --- Sign-up steps --- */
+        .card { text-align: left; max-width: 480px; }
+        .card-top { text-align: center; }
+        .step-count { display: block; margin-bottom: 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--olive); opacity: 0.75; text-align: center; }
+        .step h1 { text-align: center; }
+        .step .lead { text-align: center; }
+        .field { margin-bottom: 14px; }
+        .field-help { margin: 8px 6px 0 6px; font-size: 0.86rem; opacity: 0.75; line-height: 1.4; }
+        .name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .pill-input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            font-family: inherit;
+            font-size: 1.08rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .pill-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .pill-input.is-invalid { border-color: var(--error); background: #fdf2f2; }
+        .back-row { display: flex; justify-content: center; margin-top: 6px; }
+
+        /* Choice tiles (several can be picked) */
+        .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .choice { position: relative; }
+        .choice input { position: absolute; opacity: 0; pointer-events: none; }
+        .choice label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 132px;
+            height: 100%;
+            padding: 16px 12px;
+            border: 2px solid var(--navy);
+            border-radius: 18px;
+            background: #f7f4f0;
+            font-weight: bold;
+            line-height: 1.25;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .choice-icon { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: var(--white); color: var(--rust); transition: background-color 0.2s ease, color 0.2s ease; }
+        .choice-icon svg { width: 24px; height: 24px; }
+        .choice-check { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 2px solid var(--navy); border-radius: 7px; background: var(--white); color: var(--olive); }
+        .choice-check svg { width: 14px; height: 14px; opacity: 0; }
+        .choice input:checked + label { background: var(--olive); border-color: var(--olive); color: var(--cream); }
+        .choice input:checked + label .choice-icon { background: rgba(233, 226, 216, 0.18); color: var(--cream); }
+        .choice input:checked + label .choice-check { border-color: var(--cream); background: var(--cream); }
+        .choice input:checked + label .choice-check svg { opacity: 1; }
+        .choice input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 3px; }
+        @media (hover: hover) { .choice label:hover { transform: translateY(-2px); } }
+        .choices-help { margin: 10px 6px 0 6px; font-size: 0.86rem; opacity: 0.7; text-align: center; }
+
+        /* Address search */
+        .addr-wrap { position: relative; }
+        .addr-suggestions { display: none; margin-top: 8px; max-height: 260px; overflow-y: auto; padding: 6px; background: var(--white); border: 2px solid var(--navy); border-radius: 20px; box-shadow: 4px 4px 0 var(--navy); }
+        .addr-suggestions.is-open { display: block; }
+        .addr-option { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 14px; cursor: pointer; }
+        .addr-option svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .addr-option.is-active, .addr-option:active { background: #f4efe8; }
+        @media (hover: hover) { .addr-option:hover { background: #f4efe8; } }
+        .addr-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+        .addr-main { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .addr-secondary { font-size: 0.85rem; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .addr-credit { padding: 4px 12px 2px 12px; font-size: 0.7rem; opacity: 0.55; text-align: right; }
+        .addr-selected { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 8px; font-weight: bold; color: var(--olive); }
+        .addr-selected[hidden] { display: none; }
+        .addr-selected svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--tan); }
+        .addr-manual { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .addr-manual[hidden] { display: none; }
+        .addr-manual .span-2 { grid-column: 1 / -1; }
+        .addr-toggle { margin: 10px 0 0 6px; }
+
+        /* Done */
+        .done-icon { display: flex; justify-content: center; margin-bottom: 14px; color: var(--olive); }
+        .done-icon svg { width: 64px; height: 64px; }
+
+        @media (max-width: 480px) {
+            .name-grid, .addr-manual { grid-template-columns: 1fr; }
+            .choices { gap: 10px; }
+            .choice label { min-height: 120px; font-size: 0.95rem; }
+        }
+        @media (max-width: 480px) {
+            .card { padding: 30px 22px 24px 22px; }
+            .card h1 { font-size: 1.9rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card, .step.is-active { animation: none; opacity: 1; transform: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <video class="bg-video" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+        <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+    </video>
+    <div class="bg-overlay"></div>
+
+    <div class="page">
+        <a href="https://andrewmarth.com" class="top-logo" aria-label="Andrew Marth Real Estate">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+        </a>
+
+        <main class="card" id="card">
+            <div class="card-top"><span class="eyebrow">Client Portal</span></div>
+
+            <!-- 1. Name -->
+            <form class="step is-active" id="step-name" data-step="name" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Create Your Account</h1>
+                <p class="lead">A few quick questions to set up your portal.</p>
+                <div class="name-grid">
+                    <div class="field"><label class="field-label" for="first-name">First Name</label><input class="pill-input" id="first-name" type="text" autocomplete="given-name" autocapitalize="words" maxlength="50" required></div>
+                    <div class="field"><label class="field-label" for="last-name">Last Name</label><input class="pill-input" id="last-name" type="text" autocomplete="family-name" autocapitalize="words" maxlength="50" required></div>
+                </div>
+                <p class="field-help">Enter your legal name as it would appear on contracts</p>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="name-btn"><span class="spinner" aria-hidden="true"></span>Continue<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="back-row"><a class="link-btn" href="/login" style="display:inline-flex;align-items:center">Already have an account? Sign in</a></div>
+            </form>
+
+            <!-- 2. Phone (skipped when already signed in) -->
+            <form class="step" id="step-phone" data-step="phone" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Your Phone</h1>
+                <label class="field-label" for="phone">Mobile Number</label>
+                <div class="phone-field">
+                    <span class="phone-prefix">+1</span>
+                    <input class="text-input" id="phone" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="(480) 555-0123" enterkeyhint="send" required>
+                </div>
+                <p class="field-help">Your primary phone number. This will be used to log in and must be able to receive text.</p>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="send-btn"><span class="spinner" aria-hidden="true"></span>Text Me a Code<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <p class="fine-print" style="text-align:center">By continuing you agree to receive a one-time text message. Message and data rates may apply.</p>
+                <div class="back-row"><button type="button" class="link-btn" data-back>Back</button></div>
+            </form>
+
+            <!-- 3. Verification code -->
+            <form class="step" id="step-code" data-step="code" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Enter Your Code</h1>
+                <p class="lead" id="code-lead">We texted a 6-digit code to your phone.</p>
+                <label class="field-label" for="code">6-Digit Code</label>
+                <input class="code-input" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="••••••" enterkeyhint="done" required>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="verify-btn"><span class="spinner" aria-hidden="true"></span>Verify<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="link-row">
+                    <button type="button" class="link-btn" id="change-btn">Use a different number</button>
+                    <button type="button" class="link-btn" id="resend-btn" disabled>Resend code</button>
+                </div>
+            </form>
+
+            <!-- 4. Email -->
+            <form class="step" id="step-email" data-step="email" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Your Email</h1>
+                <div class="field"><label class="field-label" for="email">Email</label><input class="pill-input" id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="120" required></div>
+                <p class="field-help">This is just to have on file. I hate email just as much as you do, so do not expect me to email you much.</p>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="email-btn"><span class="spinner" aria-hidden="true"></span>Continue<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="back-row"><button type="button" class="link-btn" data-back>Back</button></div>
+            </form>
+
+            <!-- 5. What brings you here (several) -->
+            <form class="step" id="step-goals" data-step="goals" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>What Brings You Here?</h1>
+                <p class="lead">Choose all that apply.</p>
+                <div class="choices" role="group" aria-label="What brings you here">
+                    <div class="choice"><input type="checkbox" name="goal" id="goal-buy" value="buy"><label for="goal-buy"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg></span>Thinking Of Buying A Home</label></div>
+                    <div class="choice"><input type="checkbox" name="goal" id="goal-sell" value="sell"><label for="goal-sell"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span>Thinking Of Selling A Home</label></div>
+                    <div class="choice"><input type="checkbox" name="goal" id="goal-invest" value="invest"><label for="goal-invest"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>Investing In Real Estate</label></div>
+                    <div class="choice"><input type="checkbox" name="goal" id="goal-other" value="other"><label for="goal-other"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></span>Other</label></div>
+                </div>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="goals-btn"><span class="spinner" aria-hidden="true"></span>Continue<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="back-row"><button type="button" class="link-btn" data-back>Back</button></div>
+            </form>
+
+            <!-- 6. Roles (only after "Other") -->
+            <form class="step" id="step-roles" data-step="roles" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Which Of These Roles Are You?</h1>
+                <p class="lead">Choose all that apply.</p>
+                <div class="choices" role="group" aria-label="Your roles">
+                    <div class="choice"><input type="checkbox" name="role" id="role-mortgage" value="mortgage"><label for="role-mortgage"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/></svg></span>Mortgage Lender</label></div>
+                    <div class="choice"><input type="checkbox" name="role" id="role-hardmoney" value="hardmoney"><label for="role-hardmoney"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.6-3-1.6"/><path d="M12 6v2"/><path d="M12 16v2"/></svg></span>Hard Money Lender</label></div>
+                    <div class="choice"><input type="checkbox" name="role" id="role-wholesaler" value="wholesaler"><label for="role-wholesaler"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg></span>Wholesaler</label></div>
+                    <div class="choice"><input type="checkbox" name="role" id="role-other" value="other"><label for="role-other"><span class="choice-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="choice-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></span>Other</label></div>
+                </div>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="roles-btn"><span class="spinner" aria-hidden="true"></span>Continue<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="back-row"><button type="button" class="link-btn" data-back>Back</button></div>
+            </form>
+
+            <!-- 7. Home address (only after "Thinking Of Selling A Home") -->
+            <form class="step" id="step-address" data-step="address" novalidate>
+                <span class="step-count" data-count></span>
+                <h1>Your Home's Address</h1>
+                <p class="lead">The home you're thinking of selling.</p>
+                <div class="field">
+                    <label class="field-label" for="address">Address</label>
+                    <div class="addr-wrap" data-address-search>
+                        <input class="pill-input" id="address" type="text" placeholder="Start typing your address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="address-list">
+                        <div class="addr-suggestions" id="address-list" role="listbox"></div>
+                        <p class="addr-selected" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span></span></p>
+                    </div>
+                    <div class="addr-manual" hidden>
+                        <div class="span-2"><label class="field-label" for="addr-street">Street Address</label><input class="pill-input" id="addr-street" type="text" autocomplete="address-line1" placeholder="123 Main St"></div>
+                        <div class="span-2"><label class="field-label" for="addr-city">City</label><input class="pill-input" id="addr-city" type="text" autocomplete="address-level2"></div>
+                        <div><label class="field-label" for="addr-state">State</label><input class="pill-input" id="addr-state" type="text" autocomplete="address-level1" maxlength="20" placeholder="AZ"></div>
+                        <div><label class="field-label" for="addr-zip">Zip</label><input class="pill-input" id="addr-zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="10"></div>
+                    </div>
+                    <button type="button" class="link-btn addr-toggle" data-addr-toggle>Can’t find it? Enter the address manually</button>
+                </div>
+                <p class="message" role="alert"></p>
+                <button type="submit" class="btn" id="address-btn"><span class="spinner" aria-hidden="true"></span>Continue<svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                <div class="back-row"><button type="button" class="link-btn" data-back>Back</button></div>
+            </form>
+
+            <!-- Done -->
+            <div class="step" id="step-done" data-step="done" role="status">
+                <div class="done-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg></div>
+                <h1>You're All Set</h1>
+                <p class="lead">Taking you to your portal...</p>
+            </div>
+        </main>
+
+        <div id="recaptcha-container"></div>
+
+        <footer class="mini-footer">
+            Andrew Marth, agent affiliated with Compass &middot; AZ License SA711359000 &middot; <a href="tel:4806521330">480.652.1330</a>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+
+        // Same browser key as the New Property address search
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyB_huoPCD9Jls7QigYuoJdW7ut9rOuQgwM';
+        const PIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+        const $ = sel => document.querySelector(sel);
+        const steps = {};
+        document.querySelectorAll('[data-step]').forEach(el => { steps[el.dataset.step] = el; });
+        const digitsOnly = s => s.replace(/\D/g, '');
+        const formatUS = d => !d ? '' : d.length < 4 ? `(${d}` : d.length < 7 ? `(${d.slice(0, 3)}) ${d.slice(3)}` : `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const checked = name => [...document.querySelectorAll('input[name="' + name + '"]:checked')].map(i => i.value);
+
+        // --- Which steps apply (phone and code are skipped once the phone is verified) ---
+        let phoneVerified = false;
+        let currentUser = null;
+        function flow() {
+            const goals = checked('goal');
+            return ['name']
+                .concat(phoneVerified ? [] : ['phone', 'code'])
+                .concat(['email', 'goals'])
+                .concat(goals.includes('other') ? ['roles'] : [])
+                .concat(goals.includes('sell') ? ['address'] : []);
+        }
+        let current = 'name';
+        function show(name) {
+            current = name;
+            Object.entries(steps).forEach(([k, el]) => el.classList.toggle('is-active', k === name));
+            const list = flow();
+            const i = list.indexOf(name);
+            const counter = steps[name].querySelector('[data-count]');
+            if (counter) counter.textContent = i >= 0 ? 'Step ' + (i + 1) + ' of ' + list.length : '';
+            // The last step creates the account
+            const button = steps[name].querySelector('button[type="submit"]');
+            if (button && !['phone', 'code'].includes(name)) button.childNodes[1].textContent = i === list.length - 1 ? 'Create My Account' : 'Continue';
+            const first = steps[name].querySelector('input:not([type="checkbox"]), input[type="checkbox"]');
+            if (first && name !== 'goals' && name !== 'roles') setTimeout(() => first.focus({ preventScroll: true }), 50);
+        }
+        function next() {
+            const list = flow();
+            const i = list.indexOf(current);
+            if (i === list.length - 1) { submit(); return; }
+            show(list[i + 1]);
+        }
+        // Back skips the phone steps once verified (there's nothing to change there)
+        document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => {
+            const list = flow();
+            const i = list.indexOf(current);
+            if (i > 0) show(list[i - 1]);
+        }));
+        // The step count changes as choices change the questions that follow
+        document.querySelectorAll('input[name="goal"]').forEach(i => i.addEventListener('change', () => show(current)));
+
+        function setMessage(step, text, kind = 'error') {
+            const el = steps[step].querySelector('.message');
+            el.textContent = text;
+            el.className = 'message' + (text ? ' is-' + kind : '');
+            steps[step].classList.toggle('has-error', Boolean(text) && kind === 'error');
+        }
+        function setLoading(btn, loading) {
+            btn.disabled = loading;
+            btn.classList.toggle('is-loading', loading);
+        }
+        document.querySelectorAll('.pill-input').forEach(i => i.addEventListener('input', () => {
+            i.classList.remove('is-invalid');
+            const step = i.closest('[data-step]').dataset.step;
+            setMessage(step, '');
+        }));
+        document.querySelectorAll('.choice input').forEach(i => i.addEventListener('change', () => setMessage(i.closest('[data-step]').dataset.step, '')));
+        const problem = (step, el, text) => { if (el) { el.classList.add('is-invalid'); el.focus(); } setMessage(step, text); };
+
+        // --- 1. Name ---
+        steps.name.addEventListener('submit', e => {
+            e.preventDefault();
+            const first = $('#first-name'), last = $('#last-name');
+            if (!first.value.trim()) return problem('name', first, 'Please enter your first name.');
+            if (!last.value.trim()) return problem('name', last, 'Please enter your last name.');
+            next();
+        });
+
+        // --- 4. Email ---
+        steps.email.addEventListener('submit', e => {
+            e.preventDefault();
+            const input = $('#email');
+            const value = input.value.trim();
+            if (!value) return problem('email', input, 'Please enter your email.');
+            if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(value)) return problem('email', input, 'That email doesn’t look right. Please check it.');
+            next();
+        });
+
+        // --- 5 / 6. Choices ---
+        steps.goals.addEventListener('submit', e => {
+            e.preventDefault();
+            if (!checked('goal').length) return setMessage('goals', 'Please choose at least one.');
+            next();
+        });
+        steps.roles.addEventListener('submit', e => {
+            e.preventDefault();
+            if (!checked('role').length) return setMessage('roles', 'Please choose at least one.');
+            next();
+        });
+
+        // --- 7. Address: Google suggestions, or typed in by hand ---
+        const search = $('#address');
+        const suggestions = $('.addr-suggestions');
+        const selectedLine = $('.addr-selected');
+        const manual = $('.addr-manual');
+        const searchWrap = $('[data-address-search]');
+        const toggle = $('[data-addr-toggle]');
+        const parts = { street: $('#addr-street'), city: $('#addr-city'), state: $('#addr-state'), zip: $('#addr-zip') };
+        let picked = null;
+        let places = null;
+        let session = null;
+        let results = [];
+        let highlighted = -1;
+        let timer = null;
+        let requestId = 0;
+        let placesPromise = null;
+        function loadPlaces() {
+            if (placesPromise) return placesPromise;
+            placesPromise = new Promise((resolve, reject) => {
+                if (window.google && google.maps && google.maps.importLibrary) { google.maps.importLibrary('places').then(resolve, reject); return; }
+                window.__signupPlacesReady = () => google.maps.importLibrary('places').then(resolve, reject);
+                const script = document.createElement('script');
+                script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_API_KEY) + '&loading=async&v=weekly&callback=__signupPlacesReady';
+                script.async = true;
+                script.onerror = reject;
+                document.head.append(script);
+            }).catch(err => { placesPromise = null; throw err; });
+            return placesPromise;
+        }
+        const showManual = on => {
+            manual.hidden = !on;
+            searchWrap.hidden = on;
+            toggle.textContent = on ? 'Search for the address instead' : 'Can’t find it? Enter the address manually';
+            if (on && picked) Object.keys(parts).forEach(k => { parts[k].value = picked[k]; });
+        };
+        toggle.addEventListener('click', () => showManual(manual.hidden));
+        const closeSuggestions = () => { suggestions.classList.remove('is-open'); search.setAttribute('aria-expanded', 'false'); highlighted = -1; };
+        const drawSuggestions = () => {
+            if (!results.length) { closeSuggestions(); return; }
+            suggestions.innerHTML = results.map((s, i) => {
+                const p = s.placePrediction;
+                return '<div class="addr-option' + (i === highlighted ? ' is-active' : '') + '" role="option" data-i="' + i + '">' + PIN_ICON
+                    + '<span class="addr-text"><span class="addr-main">' + escapeHtml(p.mainText ? p.mainText.text : p.text.text) + '</span>'
+                    + '<span class="addr-secondary">' + escapeHtml(p.secondaryText ? p.secondaryText.text : '') + '</span></span></div>';
+            }).join('') + '<div class="addr-credit">Google Maps</div>';
+            suggestions.querySelectorAll('.addr-option').forEach(o => {
+                o.addEventListener('pointerdown', e => e.preventDefault());
+                o.addEventListener('click', () => choose(Number(o.dataset.i)));
+            });
+            suggestions.classList.add('is-open');
+            search.setAttribute('aria-expanded', 'true');
+        };
+        const fetchSuggestions = async text => {
+            const id = ++requestId;
+            try {
+                places = places || await loadPlaces();
+                session = session || new places.AutocompleteSessionToken();
+                const { suggestions: found } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+                    input: text,
+                    sessionToken: session,
+                    includedRegionCodes: ['us'],
+                    includedPrimaryTypes: ['street_address', 'premise', 'subpremise'],
+                    locationBias: { center: { lat: 33.4484, lng: -112.074 }, radius: 50000 },
+                });
+                if (id !== requestId) return;
+                results = (found || []).filter(s => s.placePrediction).slice(0, 4);
+                highlighted = -1;
+                drawSuggestions();
+            } catch (err) {
+                console.error('Google address suggestions unavailable:', err);
+                closeSuggestions();
+                // Google couldn't load or refused: type it in instead
+                showManual(true);
+                parts.street.value = parts.street.value || search.value.trim();
+            }
+        };
+        const choose = async i => {
+            const s = results[i];
+            if (!s) return;
+            closeSuggestions();
+            const p = s.placePrediction;
+            search.value = p.mainText ? p.mainText.text : p.text.text;
+            try {
+                const place = p.toPlace();
+                await place.fetchFields({ fields: ['addressComponents'] });
+                const get = (type, short) => {
+                    const c = (place.addressComponents || []).find(c => c.types.includes(type));
+                    return c ? (short ? c.shortText : c.longText) : '';
+                };
+                const line1 = [get('street_number'), get('route', true)].filter(Boolean).join(' ');
+                const unit = get('subpremise');
+                picked = {
+                    street: line1 ? (unit ? line1 + ' #' + unit : line1) : search.value,
+                    city: get('locality') || get('postal_town') || get('sublocality') || get('administrative_area_level_3'),
+                    state: get('administrative_area_level_1', true),
+                    zip: get('postal_code'),
+                };
+                search.value = picked.street;
+                selectedLine.querySelector('span').textContent = [picked.city, (picked.state + ' ' + picked.zip).trim()].filter(Boolean).join(', ');
+                selectedLine.hidden = false;
+                search.classList.remove('is-invalid');
+            } catch (err) {
+                console.error('Could not load address details:', err);
+                picked = null;
+            }
+            session = null; // a choice ends Google's billing session
+        };
+        search.addEventListener('input', () => {
+            clearTimeout(timer);
+            if (picked) { picked = null; selectedLine.hidden = true; }
+            const text = search.value.trim();
+            if (text.length < 3) { results = []; closeSuggestions(); return; }
+            timer = setTimeout(() => fetchSuggestions(text), 220);
+        });
+        search.addEventListener('keydown', e => {
+            if (!suggestions.classList.contains('is-open')) return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlighted = (highlighted + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
+                drawSuggestions();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                choose(highlighted >= 0 ? highlighted : 0);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeSuggestions();
+            }
+        });
+        search.addEventListener('blur', () => setTimeout(closeSuggestions, 150));
+        const address = () => manual.hidden ? picked
+            : { street: parts.street.value.trim(), city: parts.city.value.trim(), state: parts.state.value.trim(), zip: parts.zip.value.trim() };
+        steps.address.addEventListener('submit', e => {
+            e.preventDefault();
+            if (suggestions.classList.contains('is-open')) return;
+            const a = address();
+            if (!a) return problem('address', search, 'Please choose your address from the suggestions, or enter it manually.');
+            const missing = ['street', 'city', 'state', 'zip'].find(k => !a[k]);
+            if (missing) return problem('address', manual.hidden ? search : parts[missing], 'Please fill in the full address (street, city, state and zip).');
+            next();
+        });
+
+        // --- Create the account ---
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            return fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            }).then(r => r.json());
+        }
+        // Whether this phone number already has an account (if we can't tell, assume it does and let the portal decide)
+        async function hasAccount() {
+            try {
+                const json = await api({});
+                return !(json && json.ok === false && json.error === 'not_found');
+            } catch (err) {
+                console.error(err);
+                return true;
+            }
+        }
+        const ERRORS = {
+            invalid_name: 'Please check your name and try again.',
+            invalid_email: 'Please check your email and try again.',
+            invalid_goals: 'Please choose what brings you here.',
+            invalid_roles: 'Please choose your role.',
+            missing_address: 'Please fill in your full home address.',
+        };
+        async function submit() {
+            const step = current;
+            const button = steps[step].querySelector('button[type="submit"]');
+            setLoading(button, true);
+            try {
+                const goals = checked('goal');
+                const json = await api({
+                    action: 'signup',
+                    firstName: $('#first-name').value.trim(),
+                    lastName: $('#last-name').value.trim(),
+                    email: $('#email').value.trim(),
+                    goals,
+                    roles: goals.includes('other') ? checked('role') : [],
+                    address: goals.includes('sell') ? address() : null,
+                });
+                if (!json.ok && json.error !== 'exists') throw new Error(json.error || 'Request failed');
+                show('done');
+                setTimeout(() => location.replace('/'), 1400);
+            } catch (err) {
+                console.error(err);
+                setMessage(step, ERRORS[err.message] || 'We couldn’t create your account. Please try again.');
+                setLoading(button, false);
+            }
+        }
+
+        // --- 2 / 3. Phone and code (Firebase, the same way the sign-in page does it) ---
+        function friendlyError(err) {
+            const code = (err && err.code) || '';
+            const map = {
+                'auth/invalid-phone-number': 'That phone number doesn\'t look right. Please check it and try again.',
+                'auth/missing-phone-number': 'Please enter your mobile number.',
+                'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
+                'auth/quota-exceeded': 'We can\'t send texts right now. Please try again later.',
+                'auth/invalid-verification-code': 'That code isn\'t right. Please check the text and try again.',
+                'auth/code-expired': 'That code has expired. Tap "Resend code" for a new one.',
+                'auth/captcha-check-failed': 'We couldn\'t verify this browser. Please refresh and try again.',
+                'auth/invalid-app-credential': 'We couldn\'t verify this browser. Please refresh and try again.',
+                'auth/network-request-failed': 'No connection. Please check your internet and try again.',
+                'auth/operation-not-allowed': 'Phone sign-in isn\'t switched on yet.',
+            };
+            return map[code] || 'Something went wrong. Please try again.';
+        }
+        const phoneInput = $('#phone');
+        const codeInput = $('#code');
+        phoneInput.addEventListener('input', () => {
+            let d = digitsOnly(phoneInput.value);
+            if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+            phoneInput.value = formatUS(d.slice(0, 10));
+            setMessage('phone', '');
+        });
+        codeInput.addEventListener('input', () => {
+            codeInput.value = digitsOnly(codeInput.value).slice(0, 6);
+            setMessage('code', '');
+            if (codeInput.value.length === 6) steps.code.requestSubmit();
+        });
+
+        if (!isConfigured) {
+            setMessage('name', 'Sign-up isn\'t switched on yet.');
+            $('#name-btn').disabled = true;
+        } else {
+            start().catch(err => {
+                console.error(err);
+                setMessage('name', 'Sign-up couldn\'t load. Please refresh the page.');
+            });
+        }
+
+        async function start() {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+            auth.useDeviceLanguage();
+
+            // Already signed in (sent here from the sign-in page): no need to verify the phone again.
+            // Someone who already has an account goes to the portal instead.
+            let firstCheck = true;
+            onAuthStateChanged(auth, async user => {
+                if (!firstCheck) return;
+                firstCheck = false;
+                if (!user) return;
+                currentUser = user;
+                if (await hasAccount()) { location.replace('/'); return; }
+                phoneVerified = true;
+                show(current);
+            });
+
+            const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+            let confirmation = null;
+            let resendTimer = null;
+            let lastNumber = '';
+            const resendBtn = $('#resend-btn');
+            async function resetVerifier() {
+                try { const widgetId = await verifier.render(); window.grecaptcha.reset(widgetId); } catch (e) { console.error(e); }
+            }
+            function startResendCountdown() {
+                let s = 30;
+                resendBtn.disabled = true;
+                resendBtn.textContent = `Resend code (${s}s)`;
+                clearInterval(resendTimer);
+                resendTimer = setInterval(() => {
+                    s -= 1;
+                    if (s <= 0) { clearInterval(resendTimer); resendBtn.disabled = false; resendBtn.textContent = 'Resend code'; }
+                    else resendBtn.textContent = `Resend code (${s}s)`;
+                }, 1000);
+            }
+            async function sendCode(number) {
+                confirmation = await signInWithPhoneNumber(auth, `+1${number}`, verifier);
+                lastNumber = number;
+                $('#code-lead').textContent = `We texted a 6-digit code to ${formatUS(number)}.`;
+                startResendCountdown();
+            }
+
+            steps.phone.addEventListener('submit', async e => {
+                e.preventDefault();
+                const number = digitsOnly(phoneInput.value);
+                if (number.length !== 10) { setMessage('phone', 'Please enter your 10-digit mobile number.'); phoneInput.focus(); return; }
+                const button = $('#send-btn');
+                setLoading(button, true);
+                try {
+                    await sendCode(number);
+                    codeInput.value = '';
+                    show('code');
+                } catch (err) {
+                    console.error(err);
+                    setMessage('phone', friendlyError(err));
+                    resetVerifier();
+                } finally {
+                    setLoading(button, false);
+                }
+            });
+
+            steps.code.addEventListener('submit', async e => {
+                e.preventDefault();
+                const code = digitsOnly(codeInput.value);
+                if (code.length !== 6) { setMessage('code', 'Please enter the 6-digit code from the text.'); codeInput.focus(); return; }
+                const button = $('#verify-btn');
+                if (button.disabled) return;
+                setLoading(button, true);
+                try {
+                    const result = await confirmation.confirm(code);
+                    currentUser = result.user;
+                    // This number already has an account: just sign them in
+                    if (await hasAccount()) {
+                        setMessage('code', 'You already have an account. Taking you to your portal...', 'info');
+                        location.replace('/');
+                        return;
+                    }
+                    phoneVerified = true;
+                    clearInterval(resendTimer);
+                    setLoading(button, false);
+                    show('email');
+                } catch (err) {
+                    console.error(err);
+                    setMessage('code', friendlyError(err));
+                    codeInput.select();
+                    setLoading(button, false);
+                }
+            });
+
+            resendBtn.addEventListener('click', async () => {
+                resendBtn.disabled = true;
+                try {
+                    await resetVerifier();
+                    await sendCode(lastNumber);
+                    setMessage('code', 'A new code is on its way.', 'info');
+                } catch (err) {
+                    console.error(err);
+                    setMessage('code', friendlyError(err));
+                    resendBtn.disabled = false;
+                }
+            });
+            $('#change-btn').addEventListener('click', () => {
+                clearInterval(resendTimer);
+                confirmation = null;
+                setMessage('code', '');
+                resetVerifier();
+                show('phone');
+            });
+        }
+
+        show('name');
+    </script>
+</body>
+</html>

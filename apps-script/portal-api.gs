@@ -111,6 +111,8 @@ function doPost(e) {
 
     const id = phoneToId_(phone);
     const found = findRow_(SHEET_ID, SHEET_NAME, id);
+    // signup.html: a new phone number adds its own row (before the "must have an account" check below)
+    if (body.action === 'signup') return json_(signup_(id, found, body));
     if (!found) return json_({ ok: false, error: 'not_found' });
 
     // Settings page: save a new first and last name to this client's own row
@@ -825,6 +827,97 @@ function wholesaleImage_(id, width) {
   const text = JSON.stringify(result);
   if (text.length < 95000) cache.put(cacheKey, text, 21600);
   return result;
+}
+
+// A new ACCOUNT LIST row for the signed-in phone number. Role columns are TRUE/FALSE from the answers; ADMIN and CUM
+// are always FALSE. Thinking of selling adds a "Seller Net" page for their home (price left blank).
+const SIGNUP_GOALS = ['buy', 'sell', 'invest', 'other'];
+const SIGNUP_ROLES = { mortgage: 'LENDER', hardmoney: 'HARD MONEY LENDER', wholesaler: 'WHOLESALER', other: '' };
+function signup_(id, found, body) {
+  if (found) return { ok: false, error: 'exists' };
+  const firstName = cleanText_(body.firstName, 50);
+  const lastName = cleanText_(body.lastName, 50);
+  if (!firstName || !lastName) return { ok: false, error: 'invalid_name' };
+  const email = String(body.email || '').trim().toLowerCase().slice(0, 120);
+  if (!/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
+  const goals = (Array.isArray(body.goals) ? body.goals : []).filter(function (g) { return SIGNUP_GOALS.indexOf(g) >= 0; });
+  if (!goals.length) return { ok: false, error: 'invalid_goals' };
+  const has = function (g) { return goals.indexOf(g) >= 0; };
+  // Roles only count when "Other" was chosen (that's the only time the question is asked)
+  const roles = has('other') ? (Array.isArray(body.roles) ? body.roles : []).filter(function (r) { return r in SIGNUP_ROLES; }) : [];
+  if (has('other') && !roles.length) return { ok: false, error: 'invalid_roles' };
+  var address = null;
+  if (has('sell')) {
+    const a = body.address || {};
+    address = { street: cleanText_(a.street, 120), city: cleanText_(a.city, 80), state: cleanText_(a.state, 20), zip: cleanText_(a.zip, 10) };
+    if (!address.street || !address.city || !address.state || !address.zip) return { ok: false, error: 'missing_address' };
+  }
+
+  const values = {
+    'ACCOUNT ID': id,
+    'FIRST NAME': firstName,
+    'LAST NAME': lastName,
+    'EMAIL': email,
+    'BUYER': has('buy'),
+    'SELLER': has('sell'),
+    // Investors start as PREFLIPPER; the flipper and landlord roles stay off for now
+    'PREFLIPPER': has('invest'),
+    'FLIPPER BUYER': false,
+    'FLIPPER SELLER': false,
+    'LANDLORD': false,
+    'LENDER': roles.indexOf('mortgage') >= 0,
+    'HARD MONEY LENDER': roles.indexOf('hardmoney') >= 0,
+    'WHOLESALER': roles.indexOf('wholesaler') >= 0,
+    'ADMIN': false,
+    'CUM': false,
+  };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    // Checked again inside the lock, so a double tap can't add two rows
+    if (findRow_(SHEET_ID, SHEET_NAME, id)) return { ok: false, error: 'exists' };
+    appendRow_(getSheet_(SHEET_ID, SHEET_NAME), values);
+    if (address) {
+      const today = new Date();
+      const page = {
+        'PAGE TYPE': 'Seller Net',
+        'STREET ADDRESS': address.street, 'CITY': address.city, 'STATE': address.state, 'ZIP': address.zip,
+        'VERSION TITLE': 'Initial Version',
+        'VERSION DATE': new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      };
+      page[PAGE_PEOPLE_COLUMNS[0]] = id;
+      page[PAGE_ROLE_COLUMNS[0]] = 'Seller';
+      const pages = getSheet_(PAGES_SHEET_ID, PAGES_SHEET_NAME);
+      const headers = pages.getRange(1, 1, 1, pages.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim(); });
+      page['PAGE ID'] = nextPageId_(pages, colFor_(headers, 'page id'));
+      appendRow_(pages, page);
+    }
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+// Adds a row under the last one, matching values to headers without regard to case (columns not given stay blank).
+// The new row takes the formatting and checkboxes of the row above it.
+function appendRow_(sheet, values) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim(); });
+  const keys = Object.keys(values);
+  const row = headers.map(function (h) {
+    const key = keys.filter(function (k) { return k.toUpperCase() === h.toUpperCase(); })[0];
+    return key === undefined ? '' : values[key];
+  });
+  const lastRow = sheet.getLastRow();
+  sheet.insertRowAfter(lastRow);
+  const target = sheet.getRange(lastRow + 1, 1, 1, headers.length);
+  if (lastRow >= 2) {
+    const above = sheet.getRange(lastRow, 1, 1, headers.length);
+    above.copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    above.copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+  }
+  target.setValues([row]);
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)

@@ -1094,7 +1094,9 @@
                     // The Cash Flow card is only for accounts with CUM = TRUE
                     document.getElementById('cash-flow-card').hidden = String((data.row || {}).CUM || '').trim().toUpperCase() !== 'TRUE';
                 }
-                else if (data.error !== 'not_found') throw new Error(data.error || 'Request failed');
+                // Signed in, but not in the ACCOUNT LIST yet: set up an account first
+                else if (data.error === 'not_found') { location.replace('/signup'); return; }
+                else throw new Error(data.error || 'Request failed');
             } catch (err) {
                 // The greeting just stays "Welcome"
                 console.error(err);
