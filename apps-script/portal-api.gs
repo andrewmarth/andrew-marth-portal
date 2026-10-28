@@ -983,11 +983,15 @@ function pageData_(id, account, pageId) {
 // Admins also get every BUYER account and every Buyer Breakdown page (with who is on it) for the "My Buyers" card.
 // Newest rows come first.
 function myPagesData_(id, account) {
-  const pages = allRows_(PAGES_SHEET_ID, PAGES_SHEET_NAME)
-    .filter(function (p) {
-      return String(p['PAGE ID'] || '').trim() && String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'buyer breakdown';
-    })
-    .reverse();
+  // Newest rows first
+  const pagesOfType = function (type) {
+    return allRows_(PAGES_SHEET_ID, PAGES_SHEET_NAME)
+      .filter(function (p) {
+        return String(p['PAGE ID'] || '').trim() && String(p['PAGE TYPE'] || '').trim().toLowerCase() === type;
+      })
+      .reverse();
+  };
+  const pages = pagesOfType('buyer breakdown');
   const summary = function (p) {
     return {
       id: String(p['PAGE ID']).trim(),
@@ -999,27 +1003,38 @@ function myPagesData_(id, account) {
     };
   };
   const result = { ok: true, pages: pages.filter(function (p) { return isOnPage_(p, id); }).map(summary) };
+  // The Flips card: this account's "Flip" pages (the card itself is only shown to FLIPPER BUYER accounts)
+  result.flipPages = pagesOfType('flip').filter(function (p) { return isOnPage_(p, id); }).map(summary);
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
     result.accounts = accountChoices_().map(function (a) { return { id: a.id, name: a.name }; });
     result.loanProducts = allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME).map(function (p, i) {
       return { index: i, name: String(p['LOAN PRODUCT NAME'] || '').trim(), lender: String(p['LENDER NAME'] || '').trim() };
     });
-    result.buyers = allRows_(SHEET_ID, SHEET_NAME)
-      .filter(function (r) { return hasRole_(r, 'BUYER'); })
-      .map(function (r) {
-        return {
-          id: phoneToId_(r['ACCOUNT ID']),
-          name: [r['FIRST NAME'], r['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' '),
-        };
-      })
-      .filter(function (b) { return b.id; })
-      .sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); });
-    result.buyerPages = pages.map(function (p) {
+    // Every account with a role, by name
+    const withRole = function (role) {
+      return allRows_(SHEET_ID, SHEET_NAME)
+        .filter(function (r) { return hasRole_(r, role); })
+        .map(function (r) {
+          return {
+            id: phoneToId_(r['ACCOUNT ID']),
+            name: [r['FIRST NAME'], r['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' '),
+          };
+        })
+        .filter(function (b) { return b.id; })
+        .sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); });
+    };
+    // Pages with who is on them
+    const withPeople = function (p) {
       const page = summary(p);
       page.people = PAGE_ACCESS_COLUMNS.map(function (c) { return phoneToId_(p[c]); }).filter(String);
       return page;
-    });
+    };
+    result.buyers = withRole('BUYER');
+    result.buyerPages = pages.map(withPeople);
+    // "My Flippers": every FLIPPER BUYER account and every Flip page
+    result.flippers = withRole('FLIPPER BUYER');
+    result.flipperPages = pagesOfType('flip').map(withPeople);
     // Links are extra: if that sheet can't be read, the page lists still load
     try {
       result.links = adminLinks_();

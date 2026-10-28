@@ -376,6 +376,36 @@
         /* "View Older": pages 21+ days old, tucked away at the bottom of the card */
         .older-pages { margin-top: 12px; }
         .older-pages .page-link { opacity: 0.85; }
+
+        /* Flips: a picture that opens the flip portal, then the proformas */
+        .flip-portal-link {
+            position: relative;
+            display: block;
+            height: 190px;
+            margin-bottom: 22px;
+            border: 2px solid var(--navy);
+            border-radius: 18px;
+            overflow: hidden;
+            color: var(--white);
+            text-decoration: none;
+            background: var(--olive);
+        }
+        .flip-portal-link img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.78) saturate(0.9); transition: transform 0.5s var(--ease); }
+        /* Darker, with a light navy wash over the whole picture, so the white text stands out */
+        .flip-portal-link::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14, 42, 59, 0.28) 0%, rgba(14, 42, 59, 0.42) 45%, rgba(14, 42, 59, 0.9) 100%), rgba(30, 70, 110, 0.18); }
+        .flip-portal-label { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+        .flip-portal-title { display: block; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; line-height: 1.15; }
+        .flip-portal-sub { display: block; margin-top: 2px; font-size: 0.9rem; opacity: 0.9; }
+        .flip-portal-go { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--rust); color: var(--white); }
+        .flip-portal-go svg { width: 20px; height: 20px; transition: transform 0.25s ease; }
+        @media (hover: hover) {
+            .flip-portal-link:hover img { transform: scale(1.04); }
+            .flip-portal-link:hover .flip-portal-go svg { transform: translateX(3px); }
+        }
+        .flip-portal-link:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+        .glow-card .flip-portal-link { border-color: rgba(233, 226, 216, 0.55); }
+        .flips-list-title { margin-bottom: 12px; font-size: 0.82rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--olive); }
+        @media (max-width: 600px) { .flip-portal-link { height: 160px; } }
         .view-older {
             display: flex;
             align-items: center;
@@ -635,6 +665,27 @@
             </div>
         </section>
 
+        <!-- 2b. FLIPPER BUYER accounts only: the flip portal and this account's Flip proformas -->
+        <section class="main-card reveal" id="flips-card" hidden>
+            <span class="card-eyebrow">Properties &amp; Proformas</span>
+            <h2>Flips</h2>
+            <a class="flip-portal-link" href="/flip-portal">
+                <img src="https://andrewmarth.com/images/map_background.jpg" alt="" loading="lazy">
+                <span class="flip-portal-label">
+                    <span>
+                        <span class="flip-portal-title">Wholesale Properties</span>
+                        <span class="flip-portal-sub">Browse every available flip on the map</span>
+                    </span>
+                    <span class="flip-portal-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
+                </span>
+            </a>
+            <h3 class="flips-list-title">Your Proformas</h3>
+            <div id="flip-list">
+                <span class="spinner" aria-hidden="true"></span>
+                <p class="status-text">Loading your proformas...</p>
+            </div>
+        </section>
+
         <!-- 3. Admins only: any buyer's Buyer Breakdowns -->
         <section class="main-card glow-card reveal" id="buyers-card" hidden>
             <span class="card-eyebrow">Admin</span>
@@ -642,6 +693,25 @@
             <span class="sr-only" id="buyer-picker-label">Buyer</span>
             <div id="buyer-picker"></div>
             <div id="buyer-page-list" class="buyer-page-list"></div>
+        </section>
+
+        <!-- 3b. Admins only: any flipper's Flip proformas -->
+        <section class="main-card glow-card reveal" id="flippers-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>My Flippers</h2>
+            <a class="flip-portal-link" href="/flip-portal">
+                <img src="https://andrewmarth.com/images/map_background.jpg" alt="" loading="lazy">
+                <span class="flip-portal-label">
+                    <span>
+                        <span class="flip-portal-title">Wholesale Properties</span>
+                        <span class="flip-portal-sub">Browse every available flip on the map</span>
+                    </span>
+                    <span class="flip-portal-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
+                </span>
+            </a>
+            <span class="sr-only" id="flipper-picker-label">Flipper</span>
+            <div id="flipper-picker"></div>
+            <div id="flipper-page-list" class="buyer-page-list"></div>
         </section>
 
         <!-- 4. Contact -->
@@ -711,6 +781,10 @@
         // One linked row per page: street on top, then "City, ST 85000"
         function renderPages(pages) {
             renderPageList(pageListEl, pages, 'No buyer breakdowns yet. They’ll show up here once Andrew makes one for you.');
+        }
+        const flipListEl = document.getElementById('flip-list');
+        function renderFlips(pages) {
+            renderPageList(flipListEl, pages, 'No proformas yet. They’ll show up here once Andrew makes one for you.');
         }
         const RECENT_DAYS = 21;
         const CHEVRON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
@@ -808,24 +882,17 @@
             await loadPages(currentUser);
         }
 
-        function renderBuyers(buyers, buyerPages) {
-            const card = document.getElementById('buyers-card');
-            const mount = document.getElementById('buyer-picker');
-            const listEl = document.getElementById('buyer-page-list');
-            card.hidden = false;
-            if (!buyers.length) {
-                mount.innerHTML = '<p class="pages-empty">No accounts are marked as buyers yet.</p>';
-                return;
-            }
-            let chosen = buyers.findIndex(b => b.id === selectedBuyerId);
+        // A dropdown of clients (name and phone number). onPick(client or null) runs on every change, and once at the start.
+        function mountClientPicker(mount, clients, { idPrefix, labelId, placeholder, selectedId, onPick }) {
+            let chosen = clients.findIndex(c => c.id === selectedId);
             if (chosen < 0) chosen = null;
             let highlighted = -1;
             mount.innerHTML = '<div class="client-picker">'
-                + '<button type="button" class="client-picker-btn" id="buyer-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="buyer-picker-list" aria-labelledby="buyer-picker-label buyer-picker-btn"><span></span></button>'
-                + '<div class="client-picker-list" id="buyer-picker-list" role="listbox" aria-labelledby="buyer-picker-label">'
-                + buyers.map((b, i) => '<div class="client-picker-option" role="option" id="buyer-opt-' + i + '" aria-selected="false">' + PERSON_ICON
-                    + '<span class="cp-text"><span class="cp-main">' + escapeHtml(b.name || formatPhone(b.id)) + '</span>'
-                    + (b.name ? '<span class="cp-sub">' + escapeHtml(formatPhone(b.id)) + '</span>' : '') + '</span>' + CHECK_ICON + '</div>').join('')
+                + '<button type="button" class="client-picker-btn" id="' + idPrefix + '-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + idPrefix + '-list" aria-labelledby="' + labelId + ' ' + idPrefix + '-btn"><span></span></button>'
+                + '<div class="client-picker-list" id="' + idPrefix + '-list" role="listbox" aria-labelledby="' + labelId + '">'
+                + clients.map((c, i) => '<div class="client-picker-option" role="option" id="' + idPrefix + '-opt-' + i + '" aria-selected="false">' + PERSON_ICON
+                    + '<span class="cp-text"><span class="cp-main">' + escapeHtml(c.name || formatPhone(c.id)) + '</span>'
+                    + (c.name ? '<span class="cp-sub">' + escapeHtml(formatPhone(c.id)) + '</span>' : '') + '</span>' + CHECK_ICON + '</div>').join('')
                 + '</div></div>';
             const picker = mount.firstElementChild;
             const button = picker.querySelector('.client-picker-btn');
@@ -834,31 +901,9 @@
 
             function render() {
                 options.forEach((o, i) => o.setAttribute('aria-selected', String(chosen === i)));
-                label.textContent = chosen === null ? 'Choose a buyer...' : (buyers[chosen].name || formatPhone(buyers[chosen].id));
+                label.textContent = chosen === null ? placeholder : (clients[chosen].name || formatPhone(clients[chosen].id));
                 label.classList.toggle('is-placeholder', chosen === null);
-                if (chosen === null) { listEl.innerHTML = ''; return; }
-                const buyer = buyers[chosen];
-                renderPageList(listEl, buyerPages.filter(p => (p.people || []).includes(buyer.id)),
-                    'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
-                // "New Property" is always the last property row (above the View Older toggle)
-                const add = document.createElement('button');
-                add.type = 'button';
-                add.className = 'page-link page-link-add';
-                add.innerHTML = '<span class="page-link-icon">' + PLUS_ICON + '</span>'
-                    + '<span class="page-link-text"><span class="page-link-street">New Property</span><br><span class="page-link-sub"></span></span>';
-                add.querySelector('.page-link-sub').textContent = 'For ' + (buyer.name || formatPhone(buyer.id));
-                add.addEventListener('click', () => {
-                    if (!adminData) return;
-                    openNewPropertyForm({
-                        client: buyer,
-                        buyers: adminData.buyers,
-                        accounts: adminData.accounts,
-                        loanProducts: adminData.loanProducts,
-                        submit: createProperty,
-                    });
-                });
-                const toggle = listEl.querySelector('.view-older');
-                if (toggle) listEl.insertBefore(add, toggle); else listEl.append(add);
+                onPick(chosen === null ? null : clients[chosen]);
             }
             function highlight(i) {
                 highlighted = i;
@@ -869,7 +914,7 @@
             const isOpen = () => picker.classList.contains('is-open');
             function open() { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(chosen === null ? 0 : chosen); }
             function close() { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); }
-            function pick(i) { close(); chosen = i; selectedBuyerId = buyers[i].id; render(); }
+            function pick(i) { close(); chosen = i; render(); }
 
             button.addEventListener('click', () => isOpen() ? close() : open());
             options.forEach((o, i) => {
@@ -892,6 +937,67 @@
             document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
             button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
             render();
+        }
+
+        function renderBuyers(buyers, buyerPages) {
+            const card = document.getElementById('buyers-card');
+            const mount = document.getElementById('buyer-picker');
+            const listEl = document.getElementById('buyer-page-list');
+            card.hidden = false;
+            if (!buyers.length) {
+                mount.innerHTML = '<p class="pages-empty">No accounts are marked as buyers yet.</p>';
+                return;
+            }
+            mountClientPicker(mount, buyers, {
+                idPrefix: 'buyer-picker', labelId: 'buyer-picker-label', placeholder: 'Choose a buyer...', selectedId: selectedBuyerId,
+                onPick(buyer) {
+                    if (!buyer) { listEl.innerHTML = ''; return; }
+                    selectedBuyerId = buyer.id;
+                    renderPageList(listEl, buyerPages.filter(p => (p.people || []).includes(buyer.id)),
+                        'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
+                    // "New Property" is always the last property row (above the View Older toggle)
+                    const add = document.createElement('button');
+                    add.type = 'button';
+                    add.className = 'page-link page-link-add';
+                    add.innerHTML = '<span class="page-link-icon">' + PLUS_ICON + '</span>'
+                        + '<span class="page-link-text"><span class="page-link-street">New Property</span><br><span class="page-link-sub"></span></span>';
+                    add.querySelector('.page-link-sub').textContent = 'For ' + (buyer.name || formatPhone(buyer.id));
+                    add.addEventListener('click', () => {
+                        if (!adminData) return;
+                        openNewPropertyForm({
+                            client: buyer,
+                            buyers: adminData.buyers,
+                            accounts: adminData.accounts,
+                            loanProducts: adminData.loanProducts,
+                            submit: createProperty,
+                        });
+                    });
+                    const toggle = listEl.querySelector('.view-older');
+                    if (toggle) listEl.insertBefore(add, toggle); else listEl.append(add);
+                },
+            });
+        }
+
+        // --- My Flippers (admins): a FLIPPER BUYER account's Flip proformas ---
+        let selectedFlipperId = null;
+        function renderFlippers(flippers, flipperPages) {
+            const card = document.getElementById('flippers-card');
+            const mount = document.getElementById('flipper-picker');
+            const listEl = document.getElementById('flipper-page-list');
+            card.hidden = false;
+            if (!flippers.length) {
+                mount.innerHTML = '<p class="pages-empty">No accounts are marked as flipper buyers yet.</p>';
+                return;
+            }
+            mountClientPicker(mount, flippers, {
+                idPrefix: 'flipper-picker', labelId: 'flipper-picker-label', placeholder: 'Choose a flipper...', selectedId: selectedFlipperId,
+                onPick(flipper) {
+                    if (!flipper) { listEl.innerHTML = ''; return; }
+                    selectedFlipperId = flipper.id;
+                    renderPageList(listEl, flipperPages.filter(p => (p.people || []).includes(flipper.id)),
+                        'No proformas for ' + (flipper.name || formatPhone(flipper.id)) + ' yet.');
+                },
+            });
         }
 
         // --- Links (admins) ---
@@ -929,7 +1035,7 @@
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
         async function loadPages(user) {
             currentUser = user;
-            if (!PORTAL_API_URL) { renderPages([]); return; }
+            if (!PORTAL_API_URL) { renderPages([]); renderFlips([]); return; }
             try {
                 const idToken = await user.getIdToken();
                 const res = await fetch(PORTAL_API_URL, {
@@ -940,18 +1046,21 @@
                 const data = await res.json();
                 if (data.ok) {
                     renderPages(data.pages || []);
+                    renderFlips(data.flipPages || []);
                     // Only admins get the buyer list
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
                         renderBuyers(data.buyers, data.buyerPages || []);
+                        renderFlippers(data.flippers || [], data.flipperPages || []);
                         renderLinks(data.links);
                     }
                 }
-                else if (data.error === 'not_found') renderPages([]);
+                else if (data.error === 'not_found') { renderPages([]); renderFlips([]); }
                 else throw new Error(data.error || 'Request failed');
             } catch (err) {
                 console.error(err);
                 pageListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your pages. Please refresh to try again.</p>';
+                flipListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your proformas. Please refresh to try again.</p>';
             }
         }
 
@@ -978,6 +1087,8 @@
                     greet(data.row);
                     // The Buying A Property card is only for buyers
                     document.getElementById('breakdowns-card').hidden = String((data.row || {}).BUYER || '').trim().toUpperCase() !== 'TRUE';
+                    // The Flips card is only for accounts with FLIPPER BUYER = TRUE
+                    document.getElementById('flips-card').hidden = String((data.row || {})['FLIPPER BUYER'] || '').trim().toUpperCase() !== 'TRUE';
                     // Admins don't need the "call or text Andrew" card
                     document.getElementById('contact-card').hidden = String((data.row || {}).ADMIN || '').trim().toUpperCase() === 'TRUE';
                     // The Cash Flow card is only for accounts with CUM = TRUE
@@ -1074,7 +1185,10 @@
             document.getElementById('cash-flow-card').hidden = false;
             const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550123'] };
             renderPages([demoPage]);
+            document.getElementById('flips-card').hidden = false;
+            renderFlips([{ id: 'DEMO2', street: '4321 W Example Ave', city: 'Phoenix', state: 'AZ', zip: '85031' }]);
             renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
+            renderFlippers([{ id: '4805550789', name: 'Riley Flipper' }], [{ id: 'DEMO3', street: '987 E Proforma Rd', city: 'Mesa', state: 'AZ', zip: '85201', people: ['4805550789'] }]);
             renderLinks([{ title: 'Sample Link', description: 'A service you use', section: 'Tools', link: 'https://example.com' }]);
             signOutBtn.addEventListener('click', () => location.replace('/login'));
         } else if (!isConfigured) {
