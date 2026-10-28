@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Flip Portal | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
+        html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
+        .page-loader { touch-action: none; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* Morphing icon (loader.js): sits on the background and pops with a twist each time it changes */
+        .loader-badge {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 14px;
+            color: var(--brown);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-icon { width: 92px; height: 92px; overflow: visible; }
+        .loader-badge.is-morphing .loader-icon { animation: iconMorph 0.65s cubic-bezier(0.34, 1.4, 0.64, 1); }
+        @keyframes iconMorph {
+            0% { transform: rotate(0deg) scale(1); }
+            40% { transform: rotate(-12deg) scale(0.84); }
+            75% { transform: rotate(4deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .page-loader-text {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            opacity: 0.85;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+        .page-loader-text.is-leaving { opacity: 0; transform: translateY(-8px); }
+        .page-loader-text.is-entering { animation: phraseIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1); }
+        @keyframes phraseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 0.85; transform: none; } }
+        /* Loading bar: a gold segment that sweeps across the track, over and over */
+        .loader-bar {
+            position: relative;
+            width: 180px;
+            height: 6px;
+            margin-top: 16px;
+            border-radius: 999px;
+            background: rgba(78, 81, 62, 0.15);
+            overflow: hidden;
+        }
+        .loader-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--gold), var(--rust));
+            animation: loaderBar 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes loaderBar {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(250%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .loader-bar::before { animation-duration: 3s; }
+            .loader-badge.is-morphing .loader-icon, .page-loader-text.is-entering { animation: none; }
+        }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
+        }
+
+        /* --- Settings rows --- */
+        .setting-list { list-style: none; margin-top: 6px; }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 4px;
+            border-top: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        /* (the line under the last row is on the list, so it stays put when a row is hidden) */
+        .setting-list { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .setting-value .sv-line { display: block; white-space: nowrap; }
+        .setting-value .sv-line + .sv-line { opacity: 0.75; font-size: 0.92em; }
+        .setting-row[hidden] { display: none; }
+        .setting-label { font-weight: bold; flex: 0 1 auto; }
+        .setting-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .setting-value.is-empty { font-style: italic; opacity: 0.6; }
+        .edit-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--olive);
+            cursor: pointer;
+            transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+        }
+        .edit-btn svg { width: 17px; height: 17px; }
+        .edit-btn:disabled { opacity: 0.4; cursor: default; }
+        @media (hover: hover) { .edit-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+        /* Nothing on file yet: the pencil becomes a "Start" pill */
+        .edit-btn.is-start {
+            width: auto;
+            gap: 6px;
+            padding: 0 14px 0 16px;
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .edit-btn.is-start svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
+        .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
+        .page-message:empty { min-height: 0; margin: 0; }
+        .page-message.is-error { color: var(--rust); }
+        .page-message.is-success { color: var(--olive); }
+
+        /* --- Edit pop-up (centered card on desktop, slides up from the bottom on phones) --- */
+        .edit-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 480px;
+            padding: 0;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+            overflow: visible;
+        }
+        .edit-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .edit-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .edit-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .dialog-inner { padding: 28px 28px 24px 28px; }
+        .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .dialog-head h2 { font-size: 1.6rem; line-height: 1.15; }
+        .close-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            margin: -4px -6px 0 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: #f2ede6;
+            color: var(--brown);
+            cursor: pointer;
+        }
+        .close-btn svg { width: 18px; height: 18px; }
+        .muted { opacity: 0.75; font-size: 0.95rem; margin-bottom: 18px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .field input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .form-message { min-height: 1.4em; margin: 12px 4px 0 4px; font-size: 0.92rem; font-weight: bold; color: var(--rust); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+        button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        button.btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .btn-secondary:hover { background: #f2ede6; } }
+        .btn .btn-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+
+        @media (max-width: 600px) {
+            /* Phones: label on top, value(s) underneath, pencil on the right */
+            .setting-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 14px 0; }
+            .setting-label { grid-column: 1; }
+            .setting-value { grid-column: 1; text-align: left; opacity: 0.85; }
+            .setting-row .edit-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            .setting-label { font-size: 0.95rem; }
+            .edit-btn { width: 36px; height: 36px; }
+            /* The Start button already says nothing is on file, so skip the "Not added yet" text on phones */
+            .setting-value.is-empty { visibility: hidden; }
+            .edit-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .edit-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .dialog-inner { padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column-reverse; }
+            .form-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .edit-dialog[open], .edit-dialog[open]::backdrop { animation: none; }
+        }
+
+        /* --- Flip portal: fullscreen map, no page scrolling --- */
+        html:has(body.flip-page), body.flip-page { height: 100%; overflow: hidden; overscroll-behavior: none; }
+        body.flip-page { display: flex; flex-direction: column; height: 100dvh; background: var(--cream); }
+        .flip-header {
+            position: relative;
+            z-index: 45;
+            flex: 0 0 auto;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px 16px;
+            overflow: visible;
+            background: var(--olive);
+            color: var(--cream);
+            text-align: left;
+        }
+        .flip-header .flip-back { justify-self: start; }
+        .flip-logo { justify-self: center; display: block; }
+        .flip-logo img { display: block; height: 32px; width: auto; }
+        .flip-menu-btn { justify-self: end; display: none; }
+        .flip-header .sign-out { background: rgba(14, 42, 59, 0.2); backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .flip-menu-btn svg { width: 20px; height: 20px; }
+        .flip-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+        .map-wrap { position: relative; flex: 1 1 auto; min-width: 0; background: #ece6dc; }
+        #map { position: absolute; inset: 0; }
+        .map-message { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-weight: bold; opacity: 0.8; }
+        .map-message[hidden] { display: none; }
+
+        /* Properties list: always open on the right on desktop */
+        .prop-panel { flex: 0 0 380px; display: flex; flex-direction: column; min-height: 0; border-left: 2px solid var(--navy); background: var(--white); }
+        .panel-head { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px 20px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .panel-head h2 { font-size: 1.35rem; line-height: 1.15; }
+        .panel-count { margin-top: 2px; font-size: 0.85rem; font-weight: bold; opacity: 0.65; }
+        .panel-close { display: none; }
+        .map-note { margin: 10px 20px 0 20px; padding: 10px 12px; border-radius: 12px; background: #f7f4f0; font-size: 0.85rem; opacity: 0.85; }
+        .map-note:empty { display: none; }
+        .prop-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; padding: 8px 12px 16px 12px; }
+        .prop-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px; border: none; border-bottom: 1px solid rgba(78, 81, 62, 0.12); border-radius: 12px; background: none; color: var(--navy); font-family: inherit; text-align: left; cursor: pointer; transition: background-color 0.15s ease; }
+        .prop-list li:last-child .prop-item { border-bottom: none; }
+        @media (hover: hover) { .prop-item:hover { background: #f7f4f0; } }
+        .prop-item.is-active { background: #f2ede6; box-shadow: inset 3px 0 0 var(--rust); }
+        .prop-cover { position: relative; flex: 0 0 auto; width: 76px; height: 76px; border-radius: 12px; overflow: hidden; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.5) 50%, transparent 70%) #ece6dc; background-size: 250% 100%; animation: photoShine 1.3s linear infinite; }
+        .prop-cover img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.25s ease; }
+        .prop-cover.is-loaded { animation: none; }
+        .prop-cover.is-loaded img { opacity: 1; }
+        .prop-cover.is-empty { display: flex; align-items: center; justify-content: center; animation: none; background: #f7f4f0; border: 2px dashed rgba(78, 81, 62, 0.22); color: var(--olive); }
+        .prop-cover.is-empty img { display: none; }
+        .prop-cover.is-empty svg { width: 26px; height: 26px; opacity: 0.45; }
+        .prop-item-body { flex: 1 1 auto; min-width: 0; }
+        @media (prefers-reduced-motion: reduce) { .prop-cover { animation: none; } }
+        .prop-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+        .prop-item-price { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 700; color: var(--rust); }
+        .prop-item-price.is-unknown { font-family: inherit; font-size: 0.95rem; font-style: italic; color: var(--navy); opacity: 0.6; }
+        .prop-item-date { flex: 0 0 auto; font-size: 0.78rem; font-weight: bold; opacity: 0.6; }
+        .prop-item-address { display: block; margin-top: 2px; font-weight: bold; overflow-wrap: anywhere; }
+        /* City, state and zip on their own line under the street */
+        .address-place { display: block; }
+        .prop-item-address .address-place { font-weight: normal; font-size: 0.88rem; opacity: 0.8; }
+        .sheet-head h2 .address-place { margin-top: 2px; font-family: 'Familjen Grotesk', sans-serif; font-size: 1rem; font-weight: 600; opacity: 0.75; }
+        .prop-item-meta { display: block; margin-top: 2px; font-size: 0.85rem; opacity: 0.7; }
+        .prop-empty { padding: 24px 12px; text-align: center; opacity: 0.7; }
+        .panel-scrim { display: none; }
+
+        /* Mobile: the list lives in the menu */
+        @media (max-width: 899px) {
+            .flip-menu-btn { display: inline-flex; }
+            .flip-logo img { height: 28px; }
+            .prop-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(380px, 90vw); border-left: 2px solid var(--navy); transform: translateX(105%); visibility: hidden; transition: transform 0.3s var(--ease), visibility 0.3s; }
+            .prop-panel.is-open { transform: none; visibility: visible; }
+            .panel-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; background: #f2ede6; color: var(--navy); cursor: pointer; }
+            .panel-close svg { width: 17px; height: 17px; }
+            .panel-scrim { display: block; position: absolute; inset: 0; z-index: 39; background: rgba(14, 42, 59, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+            .panel-scrim.is-open { opacity: 1; pointer-events: auto; }
+        }
+        @media (max-width: 420px) {
+            .flip-header .flip-back { padding: 8px 13px; font-size: 0.85rem; }
+        }
+        @media (prefers-reduced-motion: reduce) { .prop-panel, .panel-scrim { transition: none; } }
+
+        body.no-access > *:not(.no-access-message):not(.page-loader):not(script) { display: none !important; }
+        .no-access-message { margin: auto; padding: 24px; text-align: center; font-size: 1.1rem; font-weight: bold; color: var(--navy); }
+
+        /* Price pins: a rust pill with a point at the bottom, sitting on the property */
+        .price-pin {
+            position: absolute;
+            transform: translate(-50%, calc(-100% - 7px));
+            padding: 5px 10px;
+            border: 2px solid var(--white);
+            border-radius: 999px;
+            background: var(--rust);
+            color: var(--white);
+            font-family: 'Familjen Grotesk', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+            cursor: pointer;
+            box-shadow: 0 3px 8px rgba(14, 42, 59, 0.35);
+            transition: background-color 0.15s ease, transform 0.15s ease;
+        }
+        .price-pin::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -8px;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--rust);
+            border-bottom: 0;
+            transition: border-color 0.15s ease;
+        }
+        .price-pin:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+        .price-pin.is-active { background: var(--navy); z-index: 2; }
+        .price-pin.is-active::after { border-top-color: var(--navy); }
+        @media (hover: hover) { .price-pin:hover { background: var(--brown); } .price-pin:hover::after { border-top-color: var(--brown); } }
+
+        /* Swipe-up property details */
+        .prop-sheet {
+            position: fixed;
+            left: 50%;
+            bottom: 0;
+            z-index: 50;
+            width: min(560px, 100%);
+            max-height: 85vh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: 10px 24px calc(env(safe-area-inset-bottom, 0px) + 22px) 24px;
+            border: 2px solid var(--navy);
+            border-bottom: none;
+            border-radius: 24px 24px 0 0;
+            background: var(--white);
+            box-shadow: 0 -8px 30px rgba(14, 42, 59, 0.25);
+            transform: translate(-50%, 110%);
+            transition: transform 0.35s var(--ease);
+            visibility: hidden;
+        }
+        .prop-sheet.is-open { transform: translate(-50%, 0); visibility: visible; }
+        /* Still scrolls when it's tall, just without a visible scroll bar */
+        .prop-sheet { scrollbar-width: none; -ms-overflow-style: none; }
+        .prop-sheet::-webkit-scrollbar { display: none; }
+        @media (min-width: 900px) { .prop-sheet { left: calc((100% - 380px) / 2); width: min(560px, calc(100% - 420px)); } }
+        .prop-sheet.is-dragging { transition: none; }
+        .sheet-grab { display: flex; justify-content: center; padding: 4px 0 12px 0; cursor: grab; touch-action: none; }
+        .sheet-grab span { width: 44px; height: 5px; border-radius: 999px; background: rgba(78, 81, 62, 0.3); }
+        .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; touch-action: none; }
+        .sheet-head h2 { font-size: 1.5rem; line-height: 1.15; margin: 2px 0 4px 0; }
+        .sheet-price { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.6rem; font-weight: 700; color: var(--rust); margin-bottom: 10px; }
+        .sheet-close { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; border: none; border-radius: 50%; background: #f2ede6; color: var(--navy); cursor: pointer; }
+        .sheet-close svg { width: 18px; height: 18px; }
+        /* Pictures: a strip that scrolls sideways, one picture per stop */
+        .sheet-photos { position: relative; margin: 0 -24px 14px -24px; }
+        .sheet-photos[hidden] { display: none; }
+        .photo-strip { display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 24px; padding: 0 24px; scrollbar-width: none; }
+        .photo-strip::-webkit-scrollbar { display: none; }
+        .photo-slide { position: relative; flex: 0 0 calc(100% - 36px); height: 240px; border-radius: 16px; overflow: hidden; background: #ece6dc; scroll-snap-align: start; }
+        .photo-slide:only-child { flex-basis: 100%; }
+        .photo-slide img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.25s ease; }
+        .photo-slide img.is-loaded { opacity: 1; }
+        .photo-slide::before { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%) #ece6dc; background-size: 250% 100%; animation: photoShine 1.3s linear infinite; }
+        .photo-slide.is-loaded::before { display: none; }
+        .photo-slide.is-failed::before { animation: none; background: #ece6dc; }
+        .photo-slide.is-failed::after { content: 'Picture unavailable'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; opacity: 0.6; }
+        .photo-slide.is-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; flex-basis: 100%; border: 2px dashed rgba(78, 81, 62, 0.25); background: #f7f4f0; color: var(--olive); font-weight: bold; text-align: center; scroll-snap-align: none; }
+        .photo-slide.is-empty::before { display: none; }
+        .photo-slide.is-empty svg { width: 34px; height: 34px; opacity: 0.55; }
+        .photo-slide.is-empty span { font-size: 0.95rem; opacity: 0.75; }
+        @keyframes photoShine { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+        .photo-count { position: absolute; right: 34px; bottom: 10px; z-index: 1; padding: 3px 9px; border-radius: 999px; background: rgba(14, 42, 59, 0.7); color: var(--white); font-size: 0.78rem; font-weight: bold; pointer-events: none; }
+        .photo-count:empty { display: none; }
+        .photo-nav { position: absolute; top: 50%; z-index: 1; display: none; align-items: center; justify-content: center; width: 36px; height: 36px; margin-top: -18px; padding: 0; border: none; border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: var(--navy); box-shadow: 0 2px 8px rgba(14, 42, 59, 0.25); cursor: pointer; }
+        .photo-nav svg { width: 18px; height: 18px; }
+        .photo-nav.is-prev { left: 32px; }
+        .photo-nav.is-next { right: 32px; }
+        @media (hover: hover) { .sheet-photos.has-many:hover .photo-nav { display: inline-flex; } }
+        .photo-nav[disabled] { opacity: 0; pointer-events: none; }
+        @media (max-width: 600px) {
+            .sheet-photos { margin-left: -20px; margin-right: -20px; }
+            .photo-strip { padding: 0 20px; scroll-padding: 0 20px; }
+            .photo-slide { height: 210px; }
+            .photo-count { right: 30px; }
+        }
+        @media (prefers-reduced-motion: reduce) { .photo-slide::before { animation: none; } }
+        .photo-slide[data-id] { cursor: zoom-in; }
+        /* Fullscreen pictures */
+        .lightbox { position: fixed; inset: 0; z-index: 100; background: #080c10; }
+        .lightbox[hidden] { display: none; }
+        .lb-strip { display: flex; height: 100%; overflow-x: auto; overscroll-behavior: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+        .lb-strip::-webkit-scrollbar { display: none; }
+        .lb-slide { position: relative; flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 64px) 16px calc(env(safe-area-inset-bottom, 0px) + 56px) 16px; scroll-snap-align: center; scroll-snap-stop: always; }
+        .lb-slide img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; opacity: 0; transition: opacity 0.2s ease; }
+        .lb-slide img.is-loaded { opacity: 1; }
+        .lb-slide.is-waiting::before { content: ''; position: absolute; width: 34px; height: 34px; border: 3px solid rgba(255, 255, 255, 0.25); border-top-color: var(--white); border-radius: 50%; animation: lbSpin 0.8s linear infinite; }
+        .lb-slide.is-failed::before { content: 'Picture unavailable'; color: var(--white); opacity: 0.7; font-weight: bold; }
+        @keyframes lbSpin { to { transform: rotate(360deg); } }
+        .lb-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 14px; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: none; border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: var(--white); cursor: pointer; }
+        .lb-close svg { width: 20px; height: 20px; }
+        .lb-count { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 24px); left: 50%; transform: translateX(-50%); color: var(--white); font-size: 0.9rem; font-weight: bold; opacity: 0.85; pointer-events: none; }
+        .lb-nav { position: absolute; top: 50%; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; margin-top: -24px; padding: 0; border: none; border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: var(--white); cursor: pointer; }
+        .lb-nav svg { width: 24px; height: 24px; }
+        .lb-nav.is-prev { left: 18px; }
+        .lb-nav.is-next { right: 18px; }
+        .lb-nav[disabled] { opacity: 0; pointer-events: none; }
+        @media (hover: hover) { .lb-close:hover, .lb-nav:hover { background: rgba(255, 255, 255, 0.26); } }
+        @media (hover: none), (max-width: 600px) { .lb-nav { display: none; } }
+        @media (prefers-reduced-motion: reduce) { .lb-slide.is-waiting::before { animation: none; } }
+        .prop-details { list-style: none; }
+        .prop-details li { display: flex; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .prop-details li:last-child { border-bottom: none; }
+        .prop-details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .prop-details .v { font-weight: bold; text-align: right; overflow-wrap: anywhere; }
+        .prop-details .v.is-unknown { font-weight: normal; font-style: italic; opacity: 0.6; }
+        @media (max-width: 600px) { .prop-sheet { padding-left: 20px; padding-right: 20px; } }
+        @media (prefers-reduced-motion: reduce) { .prop-sheet { transition: none; } }
+    </style>
+</head>
+<body class="is-checking flip-page">
+    <div class="page-loader" role="status">
+        <span class="loader-badge" aria-hidden="true"><svg class="loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg></span>
+        <span class="sr-only">Loading</span>
+        <span class="page-loader-text" aria-hidden="true">Nailing the boards...</span>
+        <span class="loader-bar" aria-hidden="true"></span>
+    </div>
+    <script src="/loader.js"></script>
+
+    <header class="flip-header">
+        <a href="/" class="sign-out flip-back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            Back
+        </a>
+        <a class="flip-logo" href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+            <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+        </a>
+        <button type="button" class="sign-out icon-only flip-menu-btn" id="menu-btn" aria-label="Show the property list" aria-expanded="false" aria-controls="prop-panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>
+        </button>
+    </header>
+
+    <div class="flip-body">
+        <div class="map-wrap">
+            <div id="map" aria-label="Map of wholesale properties"></div>
+            <p class="map-message" id="map-message">Loading the map...</p>
+        </div>
+        <div class="panel-scrim" id="panel-scrim"></div>
+        <aside class="prop-panel" id="prop-panel" aria-labelledby="panel-title">
+            <div class="panel-head">
+                <div>
+                    <span class="card-eyebrow">Flip Portal</span>
+                    <h2 id="panel-title">Wholesale Properties</h2>
+                    <p class="panel-count" id="map-count"></p>
+                </div>
+                <button type="button" class="panel-close" id="panel-close" aria-label="Close the property list">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="map-note" id="map-note"></p>
+            <ul class="prop-list" id="prop-list"></ul>
+        </aside>
+    </div>
+
+    <!-- Fullscreen pictures -->
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Pictures" hidden>
+        <div class="lb-strip" id="lb-strip"></div>
+        <span class="lb-count" id="lb-count"></span>
+        <button type="button" class="lb-close" id="lb-close" aria-label="Close pictures">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        <button type="button" class="lb-nav is-prev" data-lb-step="-1" aria-label="Previous picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button type="button" class="lb-nav is-next" data-lb-step="1" aria-label="Next picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+
+    <!-- Swipe-up details for the tapped pin -->
+    <section class="prop-sheet" id="prop-sheet" role="dialog" aria-labelledby="sheet-title" aria-hidden="true">
+        <div class="sheet-grab" aria-hidden="true"><span></span></div>
+        <div class="sheet-head">
+            <div>
+                <span class="card-eyebrow">Wholesale Property</span>
+                <h2 id="sheet-title"></h2>
+            </div>
+            <button type="button" class="sheet-close" id="sheet-close" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+        </div>
+        <p class="sheet-price" id="sheet-price"></p>
+        <div class="sheet-photos" id="sheet-photos" hidden>
+            <div class="photo-strip" id="photo-strip" aria-label="Pictures"></div>
+            <span class="photo-count" id="photo-count"></span>
+            <button type="button" class="photo-nav is-prev" data-photo-step="-1" aria-label="Previous picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button type="button" class="photo-nav is-next" data-photo-step="1" aria-label="Next picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <ul class="prop-details" id="sheet-details"></ul>
+    </section>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+
+        // Same browser key as the New Property address search
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyB_huoPCD9Jls7QigYuoJdW7ut9rOuQgwM';
+        const mapEl = document.getElementById('map');
+        const messageEl = document.getElementById('map-message');
+        const noteEl = document.getElementById('map-note');
+        const countEl = document.getElementById('map-count');
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+        // Pin labels: "$195k" under a million, "$1.25m" from a million up (always two decimals)
+        function shortPrice(price) {
+            if (price === null || price === undefined || !isFinite(price)) return 'Unknown';
+            const k = Math.round(price / 1000);
+            if (price < 1000000 && k < 1000) return '$' + k + 'k';
+            return '$' + (price / 1000000).toFixed(2) + 'm';
+        }
+        const known = v => String(v == null ? '' : v).trim();
+        // Square feet with commas when it's a plain number ("1450" -> "1,450")
+        const sqftText = v => { const t = known(v); const n = Number(t.replace(/,/g, '')); return t && isFinite(n) ? n.toLocaleString('en-US') : t; };
+
+        // Sheet dates look like "10/23/2026"
+        function dateOf(value) {
+            const m = known(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if (m) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), m[1] - 1, m[2]);
+            const t = Date.parse(known(value));
+            return isNaN(t) ? null : new Date(t);
+        }
+
+        // "123 Main St #4, Mesa, AZ 85201" as two lines: the street, then the city, state and zip
+        function addressLines(address) {
+            const parts = known(address).split(', ');
+            if (parts.length < 2) return [parts[0] || '', ''];
+            const keep = parts.length >= 3 ? 2 : 1;
+            return [parts.slice(0, -keep).join(', '), parts.slice(-keep).join(', ')];
+        }
+        const addressHtml = address => {
+            const [street, place] = addressLines(address);
+            if (!street && !place) return 'Unknown';
+            return escapeHtml(street) + (place ? '<span class="address-place">' + escapeHtml(place) + '</span>' : '');
+        };
+
+        // Accounts without FLIPPER BUYER (the server decides) get a blank page with just this line
+        function showNoAccess() {
+            const note = document.createElement('p');
+            note.className = 'no-access-message';
+            note.textContent = 'You do not have access to this page.';
+            document.body.append(note);
+            document.body.classList.add('no-access');
+        }
+
+        function showMessage(text) {
+            messageEl.textContent = text;
+            messageEl.hidden = false;
+        }
+
+        // --- Google Maps (loaded once) ---
+        function loadMaps() {
+            return new Promise((resolve, reject) => {
+                if (window.google && google.maps && google.maps.importLibrary) { resolve(); return; }
+                window.__flipMapsReady = () => resolve();
+                const script = document.createElement('script');
+                script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_API_KEY) + '&loading=async&v=weekly&callback=__flipMapsReady';
+                script.async = true;
+                script.onerror = () => reject(new Error('maps_failed'));
+                document.head.append(script);
+            });
+        }
+
+        let currentUser = null;
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            return fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            }).then(r => r.json());
+        }
+
+        // --- Pictures ---
+        const photosEl = document.getElementById('sheet-photos');
+        const stripEl = document.getElementById('photo-strip');
+        const photoCountEl = document.getElementById('photo-count');
+        const photoLists = {};   // row -> promise of [{ id }]
+        const photoData = {};    // id -> promise of a data URL
+        let photoToken = 0;
+        let photoObserver = null;
+        const listPhotos = row => photoLists[row] || (photoLists[row] = api({ action: 'wholesalePhotos', row })
+            .then(j => { if (!j.ok) throw new Error(j.error); return j.photos || []; })
+            .catch(err => { delete photoLists[row]; throw err; }));
+        const photoUrl = (row, id) => photoData[id] || (photoData[id] = api({ action: 'wholesalePhoto', row, id })
+            .then(j => { if (!j.ok) throw new Error(j.error); return 'data:' + j.type + ';base64,' + j.data; })
+            .catch(err => { delete photoData[id]; throw err; }));
+        function loadSlide(slide) {
+            if (!slide.loading) {
+                slide.loading = photoUrl(slide.dataset.row, slide.dataset.id).then(url => {
+                    const img = slide.querySelector('img');
+                    img.onload = () => { img.classList.add('is-loaded'); slide.classList.add('is-loaded'); };
+                    img.src = url;
+                }).catch(err => { console.error(err); slide.classList.add('is-failed'); });
+            }
+            return slide.loading;
+        }
+        // The rest of an open property's pictures, in order, two at a time (stops when another property opens)
+        function preloadSlides(token) {
+            const slides = [...stripEl.children].filter(el => el.dataset.id);
+            let next = 0;
+            const worker = async () => {
+                while (token === photoToken && next < slides.length) await loadSlide(slides[next++]);
+            };
+            worker();
+            worker();
+        }
+        function updatePhotoCount() {
+            const slides = stripEl.children;
+            if (slides.length < 2) { photoCountEl.textContent = ''; return; }
+            const index = Math.round(stripEl.scrollLeft / (slides[0].offsetWidth + 8));
+            photoCountEl.textContent = Math.min(index + 1, slides.length) + ' / ' + slides.length;
+            photosEl.querySelector('.is-prev').disabled = index <= 0;
+            photosEl.querySelector('.is-next').disabled = index >= slides.length - 1;
+        }
+        stripEl.addEventListener('scroll', updatePhotoCount, { passive: true });
+        photosEl.querySelectorAll('[data-photo-step]').forEach(btn => btn.addEventListener('click', () => {
+            const first = stripEl.children[0];
+            if (first) stripEl.scrollBy({ left: Number(btn.dataset.photoStep) * (first.offsetWidth + 8), behavior: 'smooth' });
+        }));
+        const PHOTO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>';
+        function showNoPhotos() {
+            stripEl.innerHTML = '<div class="photo-slide is-empty">' + PHOTO_ICON + '<span>Photos not yet available.</span></div>';
+            photosEl.classList.remove('has-many');
+            photoCountEl.textContent = '';
+        }
+        async function showPhotos(p) {
+            const token = ++photoToken;
+            if (photoObserver) photoObserver.disconnect();
+            stripEl.innerHTML = '';
+            stripEl.scrollLeft = 0;
+            photoCountEl.textContent = '';
+            photosEl.classList.remove('has-many');
+            photosEl.hidden = false;
+            if (!p.photos) { showNoPhotos(); return; }
+            // A placeholder while the list loads
+            photosEl.hidden = false;
+            stripEl.innerHTML = '<div class="photo-slide"></div>';
+            let photos;
+            try { photos = await listPhotos(p.row); } catch (err) { console.error(err); photos = []; }
+            if (token !== photoToken) return;
+            if (!photos.length) { showNoPhotos(); return; }
+            stripEl.innerHTML = photos.map((ph, i) => '<div class="photo-slide" data-row="' + p.row + '" data-id="' + escapeHtml(ph.id) + '" role="button" tabindex="0" aria-label="Open picture ' + (i + 1) + ' fullscreen">'
+                + '<img alt="Picture ' + (i + 1) + ' of ' + photos.length + '" decoding="async"></div>').join('');
+            photosEl.classList.toggle('has-many', photos.length > 1);
+            // Each picture loads as it scrolls into view, along with the one after it
+            photoObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                loadSlide(entry.target);
+                if (entry.target.nextElementSibling) loadSlide(entry.target.nextElementSibling);
+            }), { root: stripEl, threshold: 0.1 });
+            [...stripEl.children].forEach(slide => photoObserver.observe(slide));
+            updatePhotoCount();
+            preloadSlides(token);
+        }
+
+        // --- Fullscreen pictures ---
+        const lightbox = document.getElementById('lightbox');
+        const lbStrip = document.getElementById('lb-strip');
+        const lbCount = document.getElementById('lb-count');
+        let lbOpener = null;
+        const lbIndex = () => Math.round(lbStrip.scrollLeft / Math.max(1, lbStrip.clientWidth));
+        function updateLbCount() {
+            const total = lbStrip.children.length;
+            const index = Math.min(lbIndex(), total - 1);
+            lbCount.textContent = total > 1 ? (index + 1) + ' / ' + total : '';
+            lightbox.querySelector('.is-prev').disabled = index <= 0;
+            lightbox.querySelector('.is-next').disabled = index >= total - 1;
+        }
+        function openLightbox(startIndex, opener) {
+            const slides = [...stripEl.children].filter(el => el.dataset.id);
+            if (!slides.length) return;
+            lbOpener = opener || null;
+            lbStrip.innerHTML = slides.map((sl, i) => '<div class="lb-slide is-waiting"><img alt="Picture ' + (i + 1) + ' of ' + slides.length + '"></div>').join('');
+            // The same pictures the swipe-up loaded (still-loading ones fill in when they arrive)
+            slides.forEach((sl, i) => {
+                const target = lbStrip.children[i];
+                const show = () => {
+                    const src = sl.querySelector('img').src;
+                    if (!src) { target.classList.remove('is-waiting'); target.classList.add('is-failed'); return; }
+                    const img = target.querySelector('img');
+                    img.onload = () => { img.classList.add('is-loaded'); target.classList.remove('is-waiting'); };
+                    img.src = src;
+                };
+                loadSlide(sl).then(show);
+            });
+            lightbox.hidden = false;
+            requestAnimationFrame(() => {
+                lbStrip.scrollTo({ left: startIndex * lbStrip.clientWidth, behavior: 'instant' });
+                updateLbCount();
+                document.getElementById('lb-close').focus({ preventScroll: true });
+            });
+        }
+        function closeLightbox() {
+            const index = lbIndex();
+            lightbox.hidden = true;
+            lbStrip.innerHTML = '';
+            // The swipe-up's strip follows to the picture that was last open
+            const first = stripEl.children[0];
+            if (first) stripEl.scrollTo({ left: index * (first.offsetWidth + 8), behavior: 'instant' });
+            if (lbOpener) lbOpener.focus({ preventScroll: true });
+        }
+        lbStrip.addEventListener('scroll', updateLbCount, { passive: true });
+        document.getElementById('lb-close').addEventListener('click', closeLightbox);
+        lightbox.querySelectorAll('[data-lb-step]').forEach(btn => btn.addEventListener('click', () => {
+            lbStrip.scrollBy({ left: Number(btn.dataset.lbStep) * lbStrip.clientWidth, behavior: 'smooth' });
+        }));
+        // Tapping the dark area around a picture closes it
+        lbStrip.addEventListener('click', e => { if (e.target.classList.contains('lb-slide')) closeLightbox(); });
+        // While it's open, the keyboard belongs to it
+        window.addEventListener('keydown', e => {
+            if (lightbox.hidden) return;
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') lbStrip.scrollBy({ left: (e.key === 'ArrowRight' ? 1 : -1) * lbStrip.clientWidth, behavior: 'smooth' });
+            else return;
+            e.preventDefault();
+            e.stopPropagation();
+        }, true);
+        stripEl.addEventListener('click', e => {
+            const slide = e.target.closest('.photo-slide[data-id]');
+            if (!slide) return;
+            const slides = [...stripEl.children].filter(el => el.dataset.id);
+            openLightbox(slides.indexOf(slide), slide);
+        });
+
+        // --- Swipe-up details ---
+        const sheet = document.getElementById('prop-sheet');
+        let activePin = null;
+        function openSheet(p, pin) {
+            if (activePin) activePin.classList.remove('is-active');
+            activePin = pin;
+            if (pin) pin.classList.add('is-active');
+            document.querySelectorAll('.prop-item.is-active').forEach(el => el.classList.remove('is-active'));
+            const item = document.querySelector('.prop-item[data-row="' + p.row + '"]');
+            if (item) item.classList.add('is-active');
+            const row = (label, value, html) => {
+                const v = known(value);
+                return '<li><span class="k">' + label + '</span><span class="v' + (v ? '' : ' is-unknown') + '">' + (v && html ? html : escapeHtml(v || 'Unknown')) + '</span></li>';
+            };
+            const price = p.price === null || p.price === undefined ? '' : dollars.format(p.price);
+            document.getElementById('sheet-title').innerHTML = addressHtml(p.address);
+            document.getElementById('sheet-price').textContent = price || 'Price Unknown';
+            showPhotos(p);
+            // "3 bd • 2 ba • 1,500 sqft" (only the parts the sheet has; Unknown when it has none)
+            const size = [known(p.bed) && known(p.bed) + ' bd', known(p.bath) && known(p.bath) + ' ba', known(p.sqft) && sqftText(p.sqft) + ' sqft'].filter(Boolean).join(' • ');
+            document.getElementById('sheet-details').innerHTML = row('Price', price) + row('Size', size) + row('Property Type', p.type);
+            sheet.scrollTop = 0;
+            sheet.style.transform = '';
+            sheet.classList.add('is-open');
+            sheet.setAttribute('aria-hidden', 'false');
+        }
+        stripEl.addEventListener('keydown', e => {
+            const slide = e.target.closest('.photo-slide[data-id]');
+            if (!slide || (e.key !== 'Enter' && e.key !== ' ')) return;
+            e.preventDefault();
+            slide.click();
+        });
+        function closeSheet() {
+            if (!lightbox.hidden) closeLightbox();
+            photoToken++;
+            if (photoObserver) photoObserver.disconnect();
+            sheet.classList.remove('is-open');
+            sheet.style.transform = '';
+            sheet.setAttribute('aria-hidden', 'true');
+            if (activePin) { activePin.classList.remove('is-active'); activePin.focus({ preventScroll: true }); }
+            activePin = null;
+            document.querySelectorAll('.prop-item.is-active').forEach(el => el.classList.remove('is-active'));
+        }
+        document.getElementById('sheet-close').addEventListener('click', closeSheet);
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            if (sheet.classList.contains('is-open')) closeSheet();
+            else if (panel.classList.contains('is-open')) closeMenu();
+        });
+
+        // --- Properties list (desktop panel / mobile menu) ---
+        const panel = document.getElementById('prop-panel');
+        const scrim = document.getElementById('panel-scrim');
+        const menuBtn = document.getElementById('menu-btn');
+        const listEl = document.getElementById('prop-list');
+        const isMobile = () => window.matchMedia('(max-width: 899px)').matches;
+        function openMenu() {
+            panel.classList.add('is-open');
+            scrim.classList.add('is-open');
+            menuBtn.setAttribute('aria-expanded', 'true');
+            if (sheet.classList.contains('is-open')) closeSheet();
+            const first = panel.querySelector('.prop-item.is-active, .prop-item');
+            if (first) first.focus({ preventScroll: true });
+        }
+        function closeMenu() {
+            panel.classList.remove('is-open');
+            scrim.classList.remove('is-open');
+            menuBtn.setAttribute('aria-expanded', 'false');
+        }
+        menuBtn.addEventListener('click', () => (panel.classList.contains('is-open') ? closeMenu() : openMenu()));
+        document.getElementById('panel-close').addEventListener('click', () => { closeMenu(); menuBtn.focus(); });
+        scrim.addEventListener('click', closeMenu);
+
+        let listed = [];
+        let mapRef = null;
+        // Newest DATE SENT first (rows without a date last; on the same date, the lower row is newer)
+        function renderList(properties) {
+            listed = properties
+                .map(p => ({ p, when: dateOf(p.date) }))
+                .sort((a, b) => ((b.when ? b.when.getTime() : -Infinity) - (a.when ? a.when.getTime() : -Infinity)) || (b.p.row - a.p.row))
+                .map(x => x.p);
+            if (!listed.length) { listEl.innerHTML = '<li class="prop-empty">No wholesale properties right now.</li>'; return; }
+            listEl.innerHTML = listed.map(p => {
+                const when = dateOf(p.date);
+                const meta = [known(p.bed) && known(p.bed) + ' bd', known(p.bath) && known(p.bath) + ' ba', known(p.sqft) && sqftText(p.sqft) + ' sqft', known(p.type)].filter(Boolean).join(' · ');
+                const hasPrice = p.price !== null && p.price !== undefined;
+                return '<li><button type="button" class="prop-item" data-row="' + p.row + '">'
+                    + '<span class="prop-cover' + (p.photos ? '' : ' is-empty') + '" data-cover="' + p.row + '">' + (p.photos ? '<img alt="">' : PHOTO_ICON) + '</span>'
+                    + '<span class="prop-item-body"><span class="prop-item-top"><span class="prop-item-price' + (hasPrice ? '' : ' is-unknown') + '">' + (hasPrice ? dollars.format(p.price) : 'Price Unknown') + '</span>'
+                    + (when ? '<span class="prop-item-date">' + when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span>' : '') + '</span>'
+                    + '<span class="prop-item-address">' + addressHtml(p.address) + '</span>'
+                    + (meta ? '<span class="prop-item-meta">' + escapeHtml(meta) + '</span>' : '')
+                    + '</span></button></li>';
+            }).join('');
+            watchCovers();
+        }
+
+        // Covers load in batches of 8: the rows on screen first, then every other row in the background
+        const coverQueue = [];
+        const coverBackground = [];
+        let batchesLoading = 0;
+        let coverObserver = null;
+        function emptyCover(box) {
+            box.classList.add('is-empty');
+            box.innerHTML = PHOTO_ICON;
+        }
+        function showCover(box, cover) {
+            if (!cover || cover.none || cover.error) { emptyCover(box); return; }
+            const img = box.querySelector('img');
+            img.onload = () => box.classList.add('is-loaded');
+            img.src = 'data:' + cover.type + ';base64,' + cover.data;
+        }
+        function nextCovers() {
+            const batch = [];
+            while (batch.length < 8 && (coverQueue.length || coverBackground.length)) {
+                const box = coverQueue.length ? coverQueue.shift() : coverBackground.shift();
+                if (box.dataset.started || !box.isConnected) continue;
+                box.dataset.started = '1';
+                batch.push(box);
+            }
+            return batch;
+        }
+        function pumpCovers() {
+            while (batchesLoading < 3) {
+                const batch = nextCovers();
+                if (!batch.length) return;
+                batchesLoading++;
+                api({ action: 'wholesaleCovers', rows: batch.map(box => Number(box.dataset.cover)) })
+                    .then(j => { if (!j.ok) throw new Error(j.error); batch.forEach(box => showCover(box, j.covers[box.dataset.cover])); })
+                    .catch(err => { console.error(err); batch.forEach(emptyCover); })
+                    .finally(() => { batchesLoading--; pumpCovers(); });
+            }
+        }
+        function watchCovers() {
+            if (coverObserver) coverObserver.disconnect();
+            coverObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                coverObserver.unobserve(entry.target);
+                coverQueue.push(entry.target);
+                pumpCovers();
+            }), { root: listEl, rootMargin: '200px 0px' });
+            const boxes = [...listEl.querySelectorAll('.prop-cover:not(.is-empty)')];
+            boxes.forEach(box => coverObserver.observe(box));
+            // Every other cover loads in the background too (they're small, and the server keeps them for hours),
+            // so they're already there when the list is scrolled; the ones on screen always go first
+            coverBackground.length = 0;
+            coverBackground.push(...boxes);
+            setTimeout(pumpCovers, 300);
+        }
+        listEl.addEventListener('click', e => {
+            const btn = e.target.closest('.prop-item');
+            if (!btn) return;
+            const p = listed.find(x => String(x.row) === btn.dataset.row);
+            if (!p) return;
+            if (isMobile()) closeMenu();
+            openSheet(p, p.pinEl || null);
+            if (mapRef && p.lat !== null && p.lng !== null) {
+                if (mapRef.getZoom() < 13) mapRef.setZoom(13);
+                mapRef.setCenter({ lat: p.lat, lng: p.lng });
+                // Nudge the pin up into the open space above the swipe-up
+                const mapHeight = document.querySelector('.map-wrap').offsetHeight;
+                mapRef.panBy(0, Math.max(0, Math.round(Math.min(sheet.offsetHeight, mapHeight * 0.75) / 2)));
+            }
+        });
+        // Drag the top of the sheet down to close it
+        (() => {
+            let startY = null;
+            let moved = 0;
+            const grab = e => {
+                if (e.target.closest('button')) return;
+                startY = e.clientY;
+                moved = 0;
+                sheet.classList.add('is-dragging');
+                try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* already released */ }
+            };
+            const move = e => {
+                if (startY === null) return;
+                moved = Math.max(0, e.clientY - startY);
+                sheet.style.transform = 'translate(-50%, ' + moved + 'px)';
+            };
+            const drop = () => {
+                if (startY === null) return;
+                startY = null;
+                sheet.classList.remove('is-dragging');
+                if (moved > 80) closeSheet(); else sheet.style.transform = '';
+            };
+            sheet.querySelectorAll('.sheet-grab, .sheet-head').forEach(el => {
+                el.addEventListener('pointerdown', grab);
+                el.addEventListener('pointermove', move);
+                el.addEventListener('pointerup', drop);
+                el.addEventListener('pointercancel', drop);
+            });
+        })();
+
+        // --- Map and pins ---
+        async function drawMap(properties) {
+            await loadMaps();
+            const { Map, OverlayView } = await google.maps.importLibrary('maps');
+            const { LatLng, LatLngBounds } = await google.maps.importLibrary('core');
+            const placed = properties.filter(p => p.lat !== null && p.lng !== null);
+            const map = new Map(mapEl, {
+                center: { lat: 33.4484, lng: -112.074 },
+                zoom: 10,
+                clickableIcons: false,
+                streetViewControl: false,
+                mapTypeControl: false,
+                fullscreenControl: false,
+                gestureHandling: 'greedy',
+                styles: [
+                    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+                    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+                ],
+            });
+            mapRef = map;
+            map.addListener('click', () => { if (sheet.classList.contains('is-open')) closeSheet(); });
+
+            // A price pill drawn on the map's top layer, so it stays a real, focusable button
+            class PricePin extends OverlayView {
+                constructor(p) {
+                    super();
+                    this.position = new LatLng(p.lat, p.lng);
+                    this.el = document.createElement('button');
+                    this.el.type = 'button';
+                    this.el.className = 'price-pin';
+                    this.el.textContent = shortPrice(p.price);
+                    this.el.setAttribute('aria-label', (p.address || 'Property') + ', ' + (p.price === null ? 'price unknown' : dollars.format(p.price)));
+                    this.el.addEventListener('click', e => { e.stopPropagation(); openSheet(p, this.el); });
+                    // Presses and clicks belong to the pin, but the scroll wheel still zooms the map
+                    // (Google's preventMapHitsAndGesturesFrom would block the wheel too)
+                    ['pointerdown', 'mousedown', 'touchstart', 'dblclick', 'contextmenu'].forEach(type => {
+                        this.el.addEventListener(type, e => e.stopPropagation(), { passive: true });
+                    });
+                    p.pinEl = this.el;
+                }
+                onAdd() { this.getPanes().floatPane.append(this.el); }
+                draw() {
+                    const point = this.getProjection().fromLatLngToDivPixel(this.position);
+                    if (!point) return;
+                    this.el.style.left = point.x + 'px';
+                    this.el.style.top = point.y + 'px';
+                }
+                onRemove() { this.el.remove(); }
+            }
+
+            const bounds = new LatLngBounds();
+            placed.forEach(p => { new PricePin(p).setMap(map); bounds.extend({ lat: p.lat, lng: p.lng }); });
+            if (placed.length === 1) { map.setCenter(bounds.getCenter()); map.setZoom(14); }
+            else if (placed.length > 1) map.fitBounds(bounds, 48);
+            messageEl.hidden = true;
+            if (!properties.length) showMessage('No wholesale properties right now. Check back soon.');
+        }
+
+        async function load(user) {
+            currentUser = user;
+            if (!PORTAL_API_URL) { showMessage('The map isn’t available yet.'); return; }
+            try {
+                const data = await api({ action: 'wholesaleProperties' });
+                if (!data.ok) {
+                    if (data.error === 'not_allowed' || data.error === 'not_found') { showNoAccess(); return; }
+                    throw new Error(data.error || 'Request failed');
+                }
+                const properties = data.properties || [];
+                if (data.geoError) console.warn('Map positions: the geocoder said', data.geoError);
+                countEl.textContent = properties.length === 1 ? '1 property' : properties.length + ' properties';
+                renderList(properties);
+                const waiting = properties.filter(p => p.lat === null && !p.located).length;
+                const missing = properties.filter(p => p.lat === null && p.located).length;
+                const notes = [];
+                if (waiting) notes.push(waiting + (waiting === 1 ? ' property is' : ' properties are') + ' still being placed on the map. Refresh in a minute to see ' + (waiting === 1 ? 'it' : 'them') + '.');
+                if (missing) notes.push(missing + (missing === 1 ? ' address' : ' addresses') + ' couldn’t be found on the map.');
+                noteEl.textContent = notes.join(' ');
+                try {
+                    await drawMap(properties);
+                } catch (err) {
+                    console.error(err);
+                    showMessage('We couldn’t load the map. Please refresh to try again.');
+                }
+            } catch (err) {
+                console.error(err);
+                showMessage('We couldn’t load the properties. Please refresh to try again.');
+            }
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) { items.forEach(el => el.classList.add('is-visible')); return; }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page (and back here afterwards)
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                // Stay on the loading screen until the map is in, with a time limit
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([load(user), timeLimit]).then(() => {
+                    document.body.classList.remove('is-checking');
+                    initReveal();
+                });
+            });
+
+        }
+    </script>
+</body>
+</html>

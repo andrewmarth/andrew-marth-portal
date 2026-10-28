@@ -43,6 +43,8 @@ const CUM_TRANSACTIONS_SHEET_ID = '1cAi5-nh5V7YX88jFcr2ZQhRpx6K9z2UOEeF2JhWFnA4'
 const CUM_TRANSACTIONS_SHEET_NAME = 'TRANSACTIONS';
 const CUM_BALANCE_SHEET_ID = '1HZv-RQaWEawyiHs2Nrj-o_Nk3ad4L5-c3aW4TGtASAM';
 const CUM_BALANCE_SHEET_NAME = 'RECURRING';
+// Flip portal map (first tab)
+const WHOLESALE_SHEET_ID = '12aIo0maV2qzEylH6nOfJYR-8O9aEUqlE-BywcDZcOlQ';
 // Admins only: links to other services for the home page's Links card (first tab: TITLE, DESCRIPTION, SECTION, LINK)
 const LINKS_SHEET_ID = '16ZhBm5WgywQx8dZlE_7tksz6te26AZC2P8fq8U7A6E8';
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
@@ -131,6 +133,12 @@ function doPost(e) {
     if (body.action === 'deleteTransaction') return json_(changeTransaction_(id, found.row, body, true));
     if (body.action === 'addTransaction') return json_(addTransaction_(id, found.row, body));
     if (body.action === 'updateBalance') return json_(updateBalance_(id, found.row, body));
+    // flip-portal.html: wholesale properties with map positions (admins and FLIPPER BUYER accounts)
+    if (body.action === 'wholesaleProperties') return json_(wholesaleProperties_(found.row));
+    if (body.action === 'wholesalePhotos') return json_(wholesalePhotos_(found.row, body));
+    if (body.action === 'wholesalePhoto') return json_(wholesalePhoto_(found.row, body));
+    if (body.action === 'wholesaleCover') return json_(wholesaleCover_(found.row, body));
+    if (body.action === 'wholesaleCovers') return json_(wholesaleCovers_(found.row, body));
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return json_(createProperty_(found.row, body));
     // pages.html (admins): copy the page into a new version
@@ -542,6 +550,269 @@ function updateBalance_(id, account, body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// The WHOLESALE PROPERTIES sheet as map pins: only rows with PRODUCTION READY = TRUE and an address. Column names are
+// matched without regard to case. The same property listed more than once shows once, with its newest DATE SENT and
+// its lowest price (the newest row's other details, filled in from the older rows where it's blank).
+// Positions come from Google's geocoder and are remembered in the script properties, so each address is only
+// looked up once (new ones are looked up a batch at a time; the rest arrive on the next load).
+function wholesaleProperties_(account) {
+  if (!canSeeWholesale_(account)) return { ok: false, error: 'not_allowed' };
+  const props = PropertiesService.getScriptProperties();
+  const known = props.getProperties();
+  const learned = {};
+  var lookups = 0;
+  var geoError = '';
+  const properties = wholesaleGroups_().map(function (listings) {
+    const newest = listings[0];
+    const pick = function (field) {
+      for (var i = 0; i < listings.length; i++) if (listings[i][field]) return listings[i][field];
+      return '';
+    };
+    const prices = listings.map(function (l) { return l.price; }).filter(function (p) { return p !== null; });
+    const unit = newest.unit;
+    const line1 = newest.street + (unit ? ' ' + (/^(#|unit|apt|ste|suite)/i.test(unit) ? unit : '#' + unit) : '');
+    const place = [newest.city, [newest.state, newest.zip].filter(String).join(' ')].filter(String);
+    const address = [line1].concat(place).join(', ');
+    // The position is found from the street address (units share one spot)
+    const geoAddress = [newest.street].concat(place).join(', ');
+    const geoKey = 'GEO|' + geoAddress.toUpperCase().replace(/\s+/g, ' ');
+    var spot = known[geoKey] || learned[geoKey];
+    if (!spot && !geoError && lookups < 60) {
+      // Paced, since the geocoder refuses bursts; after an error the rest wait for the next load
+      if (lookups++) Utilities.sleep(120);
+      try {
+        const res = Maps.newGeocoder().geocode(geoAddress);
+        const hit = res && res.status === 'OK' && res.results && res.results[0];
+        if (hit) spot = JSON.stringify([hit.geometry.location.lat, hit.geometry.location.lng]);
+        else if (res && res.status === 'ZERO_RESULTS') spot = 'none';
+        else geoError = String(res && res.status);
+      } catch (err) {
+        geoError = String(err && err.message || err);
+      }
+      if (spot) learned[geoKey] = spot;
+    }
+    const position = spot && spot !== 'none' ? JSON.parse(spot) : null;
+    return {
+      row: newest.row,
+      address: address,
+      date: newest.date,
+      price: prices.length ? Math.min.apply(null, prices) : null,
+      bed: pick('bed'),
+      bath: pick('bath'),
+      sqft: pick('sqft'),
+      type: pick('type'),
+      // Whether any of its rows links a Google Drive folder of pictures (the folders themselves stay on the server)
+      photos: wholesaleFolders_(listings).length > 0,
+      lat: position ? position[0] : null,
+      lng: position ? position[1] : null,
+      located: !!spot,
+    };
+  });
+  if (Object.keys(learned).length) props.setProperties(learned);
+  const result = { ok: true, properties: properties };
+  if (geoError && isAdmin_(account)) result.geoError = geoError;
+  return result;
+}
+
+function canSeeWholesale_(account) {
+  return isAdmin_(account) || hasRole_(account, 'FLIPPER BUYER');
+}
+
+// The ready rows of the WHOLESALE PROPERTIES sheet, one list per property (same street, unit, city, state and zip,
+// however they're spelled), each list newest first (on the same date, the lower row is newer)
+function wholesaleGroups_() {
+  const sheet = SpreadsheetApp.openById(WHOLESALE_SHEET_ID).getSheets()[0];
+  const values = sheet.getDataRange().getDisplayValues();
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase().replace(/\s+/g, ' '); });
+  const col = function (names) {
+    for (var i = 0; i < names.length; i++) { const c = headers.indexOf(names[i]); if (c >= 0) return c; }
+    return -1;
+  };
+  const c = {
+    street: col(['STREET ADDRESS', 'STREET']), unit: col(['UNIT NUMBER', 'UNIT']), city: col(['CITY']), state: col(['STATE']),
+    zip: col(['ZIP', 'ZIP CODE']), price: col(['PRICE']), markup: col(['MARKUP']),
+    bed: col(['BED', 'BEDS', 'BEDROOMS']), bath: col(['BATH', 'BATHS', 'BATHROOMS']),
+    sqft: col(['SQFT', 'SQ FT', 'SQUARE FEET']), type: col(['PROPERTY TYPE', 'TYPE']), date: col(['DATE SENT', 'DATE']),
+    ready: col(['PRODUCTION READY']), pictures: col(['PICTURES LINK', 'PICTURES']),
+  };
+  if (c.street < 0) throw new Error('Wholesale sheet has no STREET ADDRESS column');
+  if (c.ready < 0) throw new Error('Wholesale sheet has no PRODUCTION READY column');
+  const text = function (row, i) { return i < 0 ? '' : String(row[i]).trim(); };
+  const number = function (value) {
+    const t = String(value || '').replace(/[$,\s]/g, '');
+    const n = Number(t);
+    return t !== '' && isFinite(n) ? n : null;
+  };
+  const time = function (value) {
+    const m = String(value || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[1]) - 1, Number(m[2])).getTime();
+    const t = new Date(value).getTime();
+    return isNaN(t) ? -Infinity : t;
+  };
+  const groups = {};
+  const order = [];
+  for (var r = 1; r < values.length; r++) {
+    const row = values[r];
+    if (text(row, c.ready).toUpperCase() !== 'TRUE') continue;
+    const street = text(row, c.street);
+    if (!street) continue;
+    const price = number(text(row, c.price));
+    const markup = number(text(row, c.markup));
+    const listing = {
+      row: r + 1,
+      street: street,
+      unit: text(row, c.unit),
+      city: text(row, c.city),
+      state: text(row, c.state),
+      zip: text(row, c.zip),
+      date: text(row, c.date),
+      when: time(text(row, c.date)),
+      bed: text(row, c.bed),
+      bath: text(row, c.bath),
+      sqft: text(row, c.sqft),
+      type: text(row, c.type),
+      pictures: text(row, c.pictures),
+      price: price === null ? null : price + (markup || 0),
+    };
+    const key = wholesaleKey_(listing);
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(listing);
+  }
+  return order.map(function (key) {
+    return groups[key].sort(function (a, b) { return (b.when - a.when) || (b.row - a.row); });
+  });
+}
+
+// Matching key for one property: "123 North Main Street, Unit 4" and "123 N Main St #4" are the same place
+function wholesaleKey_(l) {
+  const WORDS = { NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W', NORTHEAST: 'NE', NORTHWEST: 'NW', SOUTHEAST: 'SE', SOUTHWEST: 'SW',
+    STREET: 'ST', AVENUE: 'AVE', AV: 'AVE', ROAD: 'RD', DRIVE: 'DR', LANE: 'LN', PLACE: 'PL', COURT: 'CT', BOULEVARD: 'BLVD',
+    CIRCLE: 'CIR', TRAIL: 'TRL', PARKWAY: 'PKWY', TERRACE: 'TER', HIGHWAY: 'HWY', WAY: 'WAY', LOOP: 'LOOP' };
+  const clean = function (s) {
+    return String(s || '').toUpperCase().replace(/[.,#]/g, ' ').split(/\s+/).filter(String)
+      .map(function (w) { return WORDS[w] || w; }).join(' ');
+  };
+  const unit = clean(l.unit).replace(/^(UNIT|APT|APARTMENT|STE|SUITE|NO)\s+/, '');
+  return [clean(l.street), unit, clean(l.city), clean(l.state), String(l.zip || '').replace(/\D/g, '').slice(0, 5)].join('|');
+}
+
+// The unique Google Drive folder IDs in a property's PICTURES LINK cells (other kinds of links are left alone)
+function wholesaleFolders_(listings) {
+  const ids = [];
+  listings.forEach(function (l) {
+    const m = String(l.pictures || '').match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([\w-]{10,})/);
+    if (m && ids.indexOf(m[1]) < 0) ids.push(m[1]);
+  });
+  return ids;
+}
+
+// The property whose newest row is body.row, if it's still on the map
+function wholesaleGroupFor_(row) {
+  return wholesaleGroups_().filter(function (listings) { return listings[0].row === Number(row); })[0] || null;
+}
+
+// The pictures in a property's Drive folders: [{ id, name }], newest row's folder first, by name within a folder.
+// Remembered for 6 hours so paging through them doesn't list the folders again.
+function wholesalePhotoList_(listings) {
+  const folders = wholesaleFolders_(listings);
+  const cacheKey = 'PHOTOS|' + folders.join('|');
+  const cache = CacheService.getScriptCache();
+  const hit = folders.length && cache.get(cacheKey);
+  if (hit) return JSON.parse(hit);
+  const photos = [];
+  const seen = {};
+  folders.forEach(function (folderId) {
+    var files;
+    try { files = DriveApp.getFolderById(folderId).getFiles(); } catch (err) { return; } // not shared with us, or gone
+    const inFolder = [];
+    while (files.hasNext() && inFolder.length < 80) {
+      const file = files.next();
+      if (String(file.getMimeType()).indexOf('image/') !== 0 || seen[file.getId()]) continue;
+      seen[file.getId()] = true;
+      inFolder.push({ id: file.getId(), name: file.getName() });
+    }
+    inFolder.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); });
+    Array.prototype.push.apply(photos, inFolder);
+  });
+  if (folders.length) cache.put(cacheKey, JSON.stringify(photos), 21600);
+  return photos;
+}
+
+// flip-portal.html: the list of a property's pictures
+function wholesalePhotos_(account, body) {
+  if (!canSeeWholesale_(account)) return { ok: false, error: 'not_allowed' };
+  const listings = wholesaleGroupFor_(body.row);
+  if (!listings) return { ok: false, error: 'not_found' };
+  return { ok: true, photos: wholesalePhotoList_(listings).map(function (p) { return { id: p.id }; }) };
+}
+
+// flip-portal.html: one picture (only one from that property's own folders), as a web-sized image
+function wholesalePhoto_(account, body) {
+  if (!canSeeWholesale_(account)) return { ok: false, error: 'not_allowed' };
+  const listings = wholesaleGroupFor_(body.row);
+  if (!listings) return { ok: false, error: 'not_found' };
+  const id = String(body.id || '');
+  if (!wholesalePhotoList_(listings).some(function (p) { return p.id === id; })) return { ok: false, error: 'not_found' };
+  return wholesaleImage_(id, 1280);
+}
+
+// flip-portal.html list: a small copy of a property's first picture ({ ok, none: true } when it has none)
+function wholesaleCover_(account, body) {
+  if (!canSeeWholesale_(account)) return { ok: false, error: 'not_allowed' };
+  const listings = wholesaleGroupFor_(body.row);
+  if (!listings) return { ok: false, error: 'not_found' };
+  const photos = wholesaleFolders_(listings).length ? wholesalePhotoList_(listings) : [];
+  if (!photos.length) return { ok: true, none: true };
+  return wholesaleImage_(photos[0].id, 320);
+}
+
+// flip-portal.html list: covers for up to 8 properties at once ({ covers: { row: { none } or { type, data } or { error } } })
+function wholesaleCovers_(account, body) {
+  if (!canSeeWholesale_(account)) return { ok: false, error: 'not_allowed' };
+  const rows = (Array.isArray(body.rows) ? body.rows : []).slice(0, 8).map(Number);
+  const byRow = {};
+  wholesaleGroups_().forEach(function (listings) { byRow[listings[0].row] = listings; });
+  const covers = {};
+  rows.forEach(function (row) {
+    const listings = byRow[row];
+    if (!listings) { covers[row] = { error: 'not_found' }; return; }
+    try {
+      const photos = wholesaleFolders_(listings).length ? wholesalePhotoList_(listings) : [];
+      if (!photos.length) { covers[row] = { none: true }; return; }
+      const image = wholesaleImage_(photos[0].id, 320);
+      covers[row] = image.ok ? { type: image.type, data: image.data } : { error: image.error };
+    } catch (err) {
+      covers[row] = { error: 'failed' };
+    }
+  });
+  return { ok: true, covers: covers };
+}
+
+// One Drive picture, resized to the given width by Google (the original only if that fails and it's small enough),
+// as base64. Small results are remembered for 6 hours.
+function wholesaleImage_(id, width) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'PHOTO|' + width + '|' + id;
+  const cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  var blob = null;
+  try {
+    const res = UrlFetchApp.fetch('https://drive.google.com/thumbnail?sz=w' + width + '&id=' + encodeURIComponent(id), {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true, followRedirects: true,
+    });
+    if (res.getResponseCode() === 200 && /^image\//.test(String(res.getHeaders()['Content-Type'] || ''))) blob = res.getBlob();
+  } catch (err) { /* fall back below */ }
+  if (!blob) {
+    const file = DriveApp.getFileById(id);
+    blob = file.getSize() <= 3000000 ? file.getBlob() : file.getThumbnail();
+  }
+  if (!blob) return { ok: false, error: 'no_photo' };
+  const result = { ok: true, type: blob.getContentType() || 'image/jpeg', data: Utilities.base64Encode(blob.getBytes()) };
+  const text = JSON.stringify(result);
+  if (text.length < 95000) cache.put(cacheKey, text, 21600);
+  return result;
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)
