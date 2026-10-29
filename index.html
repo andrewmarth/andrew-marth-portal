@@ -465,6 +465,9 @@
             box-shadow: 6px 6px 0px var(--navy);
             padding: 6px;
         }
+        /* Still scrolls, just without a visible scroll bar */
+        .client-picker-list { scrollbar-width: none; -ms-overflow-style: none; }
+        .client-picker-list::-webkit-scrollbar { display: none; }
         .client-picker.is-open .client-picker-list { display: block; animation: clientPickerIn 0.18s ease both; }
         @keyframes clientPickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
         .client-picker-option {
@@ -1064,11 +1067,13 @@
             }
         }
 
-        // "Welcome, Jordan" from the account's first name
+        // "Welcome, Jordan" from the account's preferred name (Settings), or else its first name
         function greet(row) {
             const find = name => (Object.entries(row || {}).find(([k]) => k.toLowerCase() === name) || [])[1] || '';
+            const preferred = String(find('preferred name') || '').trim();
             const firstName = find('first name') || find('name');
-            if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
+            if (preferred) greetingEl.textContent = `Welcome, ${preferred}`;
+            else if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
         }
 
         // Ask the private Google Sheet script for this client's row only

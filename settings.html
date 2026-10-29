@@ -331,6 +331,152 @@
         }
         @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
 
+        /* --- Admin cards (same as the home page): brown with soft gold and rust glows --- */
+        main > .main-card + .main-card { margin-top: 0; }
+        .glow-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        .glow-card::before,
+        .glow-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        .glow-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        .glow-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        .glow-card > *:not(.sr-only) { position: relative; z-index: 1; }
+        .glow-card .card-eyebrow { color: var(--gold); }
+        .glow-card h2 { color: var(--cream); }
+
+        /* Client dropdown (same as the home page's My Buyers) */
+        .client-picker { position: relative; }
+        .client-picker-btn {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            padding: 9px 46px 9px 22px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--brown);
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .client-picker-btn .is-placeholder { font-weight: normal; opacity: 0.55; }
+        .client-picker-btn > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-btn:focus-visible, .client-picker.is-open .client-picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        /* Opens in the page flow, pushing the card taller (the card clips anything that floats past its edges) */
+        .client-picker-list {
+            display: none;
+            margin-top: 8px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--white);
+            color: var(--brown);
+            border: 2px solid var(--navy);
+            border-radius: 20px;
+            box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.35);
+            padding: 6px;
+        }
+        /* Still scrolls, just without a visible scroll bar */
+        .client-picker-list { scrollbar-width: none; -ms-overflow-style: none; }
+        .client-picker-list::-webkit-scrollbar { display: none; }
+        .client-picker.is-open .client-picker-list { display: block; }
+        .client-picker-option { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 9px 14px; border-radius: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .client-picker-option > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .client-picker-option .cp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .client-picker-option .cp-main { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .client-picker-option .cp-sub { font-size: 0.85rem; opacity: 0.7; }
+        .client-picker-option .cp-check { width: 18px; height: 18px; flex-shrink: 0; color: var(--olive); visibility: hidden; }
+        .client-picker-option[aria-selected="true"] .cp-check { visibility: visible; }
+        .client-picker-option.is-active, .client-picker-option:active { background-color: #f4efe8; }
+        @media (hover: hover) { .client-picker-option:hover { background-color: #f4efe8; } }
+
+        /* Edit Clients: one line per detail, edited one at a time */
+        .client-list[hidden] { display: none; }
+        .client-list { margin-top: 18px; }
+        .cf-group-title { margin: 20px 0 4px 2px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--gold); }
+        .cf-group-title:first-child { margin-top: 0; }
+        .cf-row { display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 10px 0; border-bottom: 1px solid rgba(233, 226, 216, 0.18); }
+        /* (the phone layouts below set display on these rows, so hidden has to win outright) */
+        .cf-row[hidden] { display: none !important; }
+        .cf-label { flex: 0 0 auto; font-weight: bold; }
+        .cf-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; opacity: 0.92; }
+        .cf-value.is-empty { font-style: italic; opacity: 0.55; }
+        .cf-value.is-yes { color: #cfe3b5; font-weight: bold; opacity: 1; }
+        .cf-value.is-no { opacity: 0.6; }
+        /* The pencil, light on the brown card */
+        .cf-edit { flex: 0 0 auto; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 2px solid rgba(233, 226, 216, 0.75); border-radius: 50%; background: transparent; color: var(--cream); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease; }
+        .cf-edit svg { width: 16px; height: 16px; }
+        .cf-edit:disabled { opacity: 0.3; cursor: default; }
+        @media (hover: hover) { .cf-edit:not(:disabled):hover { background: var(--cream); color: var(--brown); } }
+        /* The line being edited */
+        .cf-row.is-editing { flex-wrap: wrap; align-items: center; }
+        .cf-row.is-editing .cf-label { color: var(--gold); }
+        .cf-editor { flex: 1 1 260px; display: flex; justify-content: flex-end; gap: 8px; min-width: 0; }
+        .cf-input { width: 100%; max-width: 360px; min-height: 44px; padding: 8px 16px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
+        .cf-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.3); }
+        .cf-input.is-invalid { border-color: #f2b8a8; background: #fdf2f2; }
+        .cf-editor .cf-input + .cf-input { max-width: 175px; }
+        .cf-editor.is-names .cf-input { max-width: 175px; }
+        .cf-actions { flex: 1 0 100%; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+        .cf-actions .cf-error { flex: 1; font-size: 0.9rem; font-weight: bold; color: #f2b8a8; }
+        .cf-actions .btn { min-height: 40px; padding: 8px 20px; font-size: 0.95rem; }
+        .cf-actions .btn-secondary { background: transparent; color: var(--cream); border-color: rgba(233, 226, 216, 0.75); }
+        @media (hover: hover) { .cf-actions .btn-secondary:hover { background: rgba(233, 226, 216, 0.12); } }
+        /* Yes / No */
+        .yn { display: inline-flex; flex: 0 0 auto; padding: 3px; border-radius: 999px; background: rgba(233, 226, 216, 0.16); }
+        .yn input { position: absolute; opacity: 0; pointer-events: none; }
+        .yn label { min-width: 58px; padding: 7px 14px; border-radius: 999px; text-align: center; font-size: 0.9rem; font-weight: bold; color: var(--cream); cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease; }
+        .yn input:checked + label { background: var(--cream); color: var(--brown); }
+        .yn input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
+        .cf-saved { margin-top: 12px; min-height: 1.4em; font-weight: bold; color: #cfe3b5; }
+        .client-empty { margin-top: 14px; opacity: 0.85; }
+        /* "Add New Client" (first in the dropdown) and its form */
+        .client-picker-option.is-add .cp-main { color: var(--rust); }
+        .client-picker-option.is-add > svg { color: var(--rust); }
+        .client-picker-option.is-add { border-bottom: 1px solid rgba(78, 81, 62, 0.12); border-radius: 14px 14px 6px 6px; margin-bottom: 4px; }
+        .nc-form .cf-row { flex-wrap: wrap; }
+        .nc-form .cf-label { min-width: 140px; }
+        .nc-form .cf-optional { margin-left: 6px; font-size: 0.8rem; font-weight: normal; opacity: 0.7; }
+        /* Role tiles (selected = filled), like the sign-up form */
+        .nc-form .cf-row.nc-tile-row { display: block; min-height: 0; padding: 5px 0; border-bottom: none; }
+        .nc-tile { position: relative; }
+        .nc-tile input { position: absolute; opacity: 0; pointer-events: none; }
+        .nc-tile label { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 18px 8px 10px; border: 2px solid rgba(233, 226, 216, 0.55); border-radius: 18px; background: rgba(233, 226, 216, 0.08); color: var(--cream); font-weight: bold; cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        .nc-tile-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: rgba(233, 226, 216, 0.14); color: var(--gold); transition: background-color 0.2s ease, color 0.2s ease; }
+        .nc-tile-icon svg { width: 21px; height: 21px; }
+        .nc-tile input:checked + label { background: var(--cream); border-color: var(--cream); color: var(--brown); }
+        .nc-tile input:checked + label .nc-tile-icon { background: var(--white); color: var(--rust); }
+        .nc-tile input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 3px; }
+        @media (hover: hover) { .nc-tile label:hover { transform: translateX(3px); } }
+        .nc-tiles-help { margin: -2px 0 6px 2px; font-size: 0.86rem; opacity: 0.75; }
+        .nc-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+        .nc-foot .cf-error { flex: 1 1 100%; text-align: right; font-weight: bold; color: #f2b8a8; }
+        .nc-foot .cf-error:empty { display: none; }
+        .nc-foot .btn { white-space: nowrap; padding-left: 18px; padding-right: 18px; }
+        .nc-foot .btn-secondary { background: transparent; color: var(--cream); border-color: rgba(233, 226, 216, 0.75); }
+        @media (max-width: 600px) {
+            .nc-form .cf-row:not(.nc-tile-row) { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+            /* Stacked: the editor takes its own height (its 260px width basis would otherwise become a height) */
+            .nc-form .cf-editor { flex: 0 0 auto; justify-content: stretch; align-items: center; }
+            .nc-foot .btn { flex: 1; }
+            .nc-foot .cf-error { text-align: left; }
+        }
+        @media (max-width: 600px) {
+            .cf-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; }
+            .cf-label { grid-column: 1; }
+            .cf-value { grid-column: 1; text-align: left; }
+            .cf-row .cf-edit { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            .cf-row.is-editing { grid-template-columns: 1fr; row-gap: 10px; }
+            .cf-editor { grid-column: 1; justify-content: stretch; }
+            .cf-input, .cf-editor .cf-input + .cf-input, .cf-editor.is-names .cf-input { max-width: none; }
+            .cf-editor .yn { width: 100%; }
+            .cf-editor .yn label { flex: 1; }
+            .cf-actions { grid-column: 1; }
+            .cf-actions .btn { flex: 1; }
+            .client-picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
+        }
+
         /* --- Scroll Reveal --- */
         .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
         .reveal.is-visible { opacity: 1; transform: none; }
@@ -397,11 +543,11 @@
         .edit-btn svg { width: 17px; height: 17px; }
         .edit-btn:disabled { opacity: 0.4; cursor: default; }
         @media (hover: hover) { .edit-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
-        /* Nothing on file yet: the pencil becomes a "Start" pill */
+        /* Nothing on file yet: the pencil becomes an "Add" pill */
         .edit-btn.is-start {
             width: auto;
             gap: 6px;
-            padding: 0 14px 0 16px;
+            padding: 0 13px 0 16px;
             border-radius: 999px;
             background: var(--tan);
             color: var(--cream);
@@ -409,8 +555,13 @@
             font-size: 0.9rem;
             font-weight: bold;
         }
-        .edit-btn.is-start svg { width: 15px; height: 15px; }
+        .edit-btn.is-start svg { width: 17px; height: 17px; }
+        /* This font sits its capitals low in the line, so the word is lifted a touch to look centered beside the icon */
+        .edit-btn.is-start .start-text { display: block; line-height: 1; position: relative; top: -1.5px; }
         @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
+        /* Income & Debt with nothing on file: a yellow note (shown on phones too) */
+        .missing-note { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fdf3d6; border: 1px solid #e8c766; color: #7a5a0c; font-size: 0.86rem; font-weight: bold; font-style: normal; white-space: nowrap; }
+        .missing-note svg { width: 15px; height: 15px; flex-shrink: 0; }
         .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
         .page-message:empty { min-height: 0; margin: 0; }
         .page-message.is-error { color: var(--rust); }
@@ -558,9 +709,19 @@
             <h2>Edit Your Information</h2>
             <ul class="setting-list">
                 <li class="setting-row">
-                    <span class="setting-label">Your Legal Name</span>
+                    <span class="setting-label">Legal Name</span>
                     <span class="setting-value" id="name-value">Loading...</span>
                     <button type="button" class="edit-btn" id="edit-name" aria-label="Edit your legal name" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                </li>
+                <li class="setting-row">
+                    <span class="setting-label">Preferred Name</span>
+                    <span class="setting-value" id="preferred-value">Loading...</span>
+                    <button type="button" class="edit-btn" id="edit-preferred" aria-label="Edit your preferred name" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                </li>
+                <li class="setting-row">
+                    <span class="setting-label">Email</span>
+                    <span class="setting-value" id="email-value">Loading...</span>
+                    <button type="button" class="edit-btn" id="edit-email" aria-label="Edit your email" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
                 </li>
                 <!-- Only for buyers (BUYER = TRUE in ACCOUNT LIST) -->
                 <li class="setting-row" id="income-row" hidden>
@@ -571,13 +732,23 @@
             </ul>
             <p class="page-message" id="page-message" role="status"></p>
         </section>
+
+        <!-- Admins only: edit any client's details -->
+        <section class="main-card glow-card reveal" id="clients-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Edit Clients</h2>
+            <span class="sr-only" id="client-picker-label">Client</span>
+            <div id="client-picker"></div>
+            <div class="client-list" id="client-list" hidden></div>
+            <p class="cf-saved" id="cf-saved" role="status"></p>
+        </section>
     </main>
 
     <!-- Edit name pop-up -->
     <dialog class="edit-dialog" id="name-dialog" aria-labelledby="name-dialog-title">
         <form class="dialog-inner" id="name-form" novalidate>
             <div class="dialog-head">
-                <h2 id="name-dialog-title">Your Legal Name</h2>
+                <h2 id="name-dialog-title">Legal Name</h2>
                 <button type="button" class="close-btn" id="close-dialog" aria-label="Close">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
@@ -597,6 +768,56 @@
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
                 <button type="submit" class="btn" id="save-btn">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Edit preferred name pop-up -->
+    <dialog class="edit-dialog" id="preferred-dialog" aria-labelledby="preferred-dialog-title">
+        <form class="dialog-inner" id="preferred-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="preferred-dialog-title">Preferred Name</h2>
+                <button type="button" class="close-btn" data-close-preferred aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted">The name you go by. Leave it blank to use your first name.</p>
+            <div class="field">
+                <label for="preferred-name">Preferred Name</label>
+                <input id="preferred-name" name="preferredName" type="text" autocomplete="nickname" autocapitalize="words" maxlength="50">
+            </div>
+            <p class="form-message" id="preferred-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" data-close-preferred>Cancel</button>
+                <button type="submit" class="btn" id="preferred-save">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Edit email pop-up -->
+    <dialog class="edit-dialog" id="email-dialog" aria-labelledby="email-dialog-title">
+        <form class="dialog-inner" id="email-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="email-dialog-title">Email</h2>
+                <button type="button" class="close-btn" data-close-email aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted">This is just to have on file.</p>
+            <div class="field">
+                <label for="email-input">Email</label>
+                <input id="email-input" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="120">
+            </div>
+            <p class="form-message" id="email-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" data-close-email>Cancel</button>
+                <button type="submit" class="btn" id="email-save">
                     <span class="btn-spinner" aria-hidden="true"></span>
                     Save Changes
                 </button>
@@ -629,7 +850,11 @@
         const signOutBtn = document.getElementById('sign-out');
 
         const findValue = (row, name) => (Object.entries(row || {}).find(([k]) => k.toLowerCase() === name) || [])[1] || '';
-        let profile = { firstName: '', lastName: '' };
+        let profile = { firstName: '', lastName: '', preferred: '', email: '' };
+        const emailValue = document.getElementById('email-value');
+        const emailBtn = document.getElementById('edit-email');
+        const preferredValue = document.getElementById('preferred-value');
+        const preferredBtn = document.getElementById('edit-preferred');
 
         function setPageMessage(text, kind = 'error') {
             pageMsg.textContent = text;
@@ -641,23 +866,30 @@
             saveBtn.classList.toggle('is-loading', saving);
         }
 
-        // A line with information on file gets the pencil; an empty line gets a "Start" button instead
+        // A line with information on file gets the pencil; an empty line gets an "Add" button instead
         const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
-        const START_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+        const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>';
+        const WARN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
         function setLineButton(btn, hasData, what) {
             btn.classList.toggle('is-start', !hasData);
-            btn.innerHTML = hasData ? PENCIL_ICON : 'Start' + START_ICON;
+            btn.innerHTML = hasData ? PENCIL_ICON : '<span class="start-text">Add</span>' + PLUS_ICON;
             btn.setAttribute('aria-label', (hasData ? 'Edit ' : 'Add ') + what);
-            btn.title = hasData ? 'Edit' : 'Start';
+            btn.title = hasData ? 'Edit' : 'Add';
             btn.disabled = false;
         }
 
         function showProfile(row) {
-            profile = { firstName: findValue(row, 'first name'), lastName: findValue(row, 'last name') };
+            profile = { firstName: findValue(row, 'first name'), lastName: findValue(row, 'last name'), preferred: String(findValue(row, 'preferred name')).trim(), email: String(findValue(row, 'email')).trim() };
             const full = `${profile.firstName} ${profile.lastName}`.trim();
             nameValue.textContent = full || 'Not added yet';
             nameValue.classList.toggle('is-empty', !full);
             setLineButton(editBtn, Boolean(full), 'your legal name');
+            preferredValue.textContent = profile.preferred || 'Not added yet';
+            preferredValue.classList.toggle('is-empty', !profile.preferred);
+            setLineButton(preferredBtn, Boolean(profile.preferred), 'your preferred name');
+            emailValue.textContent = profile.email || 'Not added yet';
+            emailValue.classList.toggle('is-empty', !profile.email);
+            setLineButton(emailBtn, Boolean(profile.email), 'your email');
         }
 
         // Talks to the private Google Sheet script (it only ever touches this person's own row)
@@ -678,14 +910,18 @@
                 if (data.ok) {
                     showProfile(data.row);
                     showIncome(data.income);
+                    // Admins also get the Edit Clients card
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') await loadClients(user);
                     // Income & Debt is only for buyers
                     document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
                 }
-                else if (data.error === 'not_found') { nameValue.textContent = ''; incomeValue.textContent = ''; setPageMessage('We don\'t have your details on file yet. Andrew will add them soon!'); }
+                else if (data.error === 'not_found') { nameValue.textContent = ''; preferredValue.textContent = ''; emailValue.textContent = ''; incomeValue.textContent = ''; setPageMessage('We don\'t have your details on file yet. Andrew will add them soon!'); }
                 else throw new Error(data.error);
             } catch (err) {
                 console.error(err);
                 nameValue.textContent = '';
+                preferredValue.textContent = '';
+                emailValue.textContent = '';
                 incomeValue.textContent = '';
                 setPageMessage('We couldn\'t load your information. Please refresh to try again.');
             }
@@ -710,6 +946,481 @@
         dialog.addEventListener('cancel', e => { if (saveBtn.disabled) e.preventDefault(); });
         [firstInput, lastInput].forEach(input => input.addEventListener('input', () => { formMsg.textContent = ''; }));
 
+        // --- Preferred name ---
+        const preferredDialog = document.getElementById('preferred-dialog');
+        const preferredForm = document.getElementById('preferred-form');
+        const preferredInput = document.getElementById('preferred-name');
+        const preferredSave = document.getElementById('preferred-save');
+        const preferredMsg = document.getElementById('preferred-message');
+        let savePreferred = null;
+        const closePreferred = () => { if (!preferredSave.disabled) preferredDialog.close(); };
+        preferredBtn.addEventListener('click', () => {
+            preferredInput.value = profile.preferred;
+            preferredMsg.textContent = '';
+            setPageMessage('');
+            preferredDialog.showModal();
+            preferredInput.focus();
+        });
+        preferredDialog.querySelectorAll('[data-close-preferred]').forEach(b => b.addEventListener('click', closePreferred));
+        preferredDialog.addEventListener('click', e => { if (e.target === preferredDialog) closePreferred(); });
+        preferredDialog.addEventListener('cancel', e => { if (preferredSave.disabled) e.preventDefault(); });
+        preferredInput.addEventListener('input', () => { preferredMsg.textContent = ''; });
+        preferredForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!savePreferred) return;
+            const busy = on => {
+                preferredForm.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                preferredSave.classList.toggle('is-loading', on);
+            };
+            busy(true);
+            try {
+                const row = await savePreferred(preferredInput.value.trim());
+                showProfile(row);
+                busy(false);
+                preferredDialog.close();
+                setPageMessage('Saved! Your preferred name has been updated.', 'success');
+            } catch (err) {
+                console.error(err);
+                preferredMsg.textContent = 'We couldn\'t save your changes. Please try again.';
+                busy(false);
+            }
+        });
+
+        // --- Email ---
+        const emailDialog = document.getElementById('email-dialog');
+        const emailForm = document.getElementById('email-form');
+        const emailInput = document.getElementById('email-input');
+        const emailSave = document.getElementById('email-save');
+        const emailMsg = document.getElementById('email-message');
+        let saveEmail = null;
+        const closeEmail = () => { if (!emailSave.disabled) emailDialog.close(); };
+        emailBtn.addEventListener('click', () => {
+            emailInput.value = profile.email;
+            emailMsg.textContent = '';
+            setPageMessage('');
+            emailDialog.showModal();
+            emailInput.focus();
+        });
+        emailDialog.querySelectorAll('[data-close-email]').forEach(b => b.addEventListener('click', closeEmail));
+        emailDialog.addEventListener('click', e => { if (e.target === emailDialog) closeEmail(); });
+        emailDialog.addEventListener('cancel', e => { if (emailSave.disabled) e.preventDefault(); });
+        emailInput.addEventListener('input', () => { emailMsg.textContent = ''; });
+        emailForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!saveEmail) return;
+            const email = emailInput.value.trim();
+            if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) {
+                emailMsg.textContent = email ? 'That email doesn\'t look right. Please check it.' : 'Please enter your email.';
+                emailInput.focus();
+                return;
+            }
+            const busy = on => {
+                emailForm.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                emailSave.classList.toggle('is-loading', on);
+            };
+            busy(true);
+            try {
+                const row = await saveEmail(email);
+                showProfile(row);
+                busy(false);
+                emailDialog.close();
+                setPageMessage('Saved! Your email has been updated.', 'success');
+            } catch (err) {
+                console.error(err);
+                emailMsg.textContent = err.message === 'invalid_email' ? 'That email doesn\'t look right. Please check it.' : 'We couldn\'t save your changes. Please try again.';
+                busy(false);
+            }
+        });
+
+        // --- Edit Clients (admins) ---
+        const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+        const CHECK_ICON = '<svg class="cp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        const formatPhone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        // Each line: its label, the ACCOUNT LIST column(s) it edits, the kind of control, and when it shows
+        const CLIENT_LINES = [
+            { group: 'Details' },
+            { key: 'legal', label: 'Legal Name', cols: ['FIRST NAME', 'LAST NAME'], kind: 'name' },
+            { key: 'preferred', label: 'Preferred Name', cols: ['PREFERRED NAME'], kind: 'text' },
+            { key: 'email', label: 'Email', cols: ['EMAIL'], kind: 'email' },
+            { group: 'Roles' },
+            { key: 'buyer', label: 'Buyer', cols: ['BUYER'], kind: 'bool' },
+            { key: 'seller', label: 'Seller', cols: ['SELLER'], kind: 'bool' },
+            { key: 'landlord', label: 'Landlord', cols: ['LANDLORD'], kind: 'bool' },
+            { key: 'flipper-buyer', label: 'Flipper Buyer', cols: ['FLIPPER BUYER'], kind: 'bool' },
+            { key: 'flipper-seller', label: 'Flipper Seller', cols: ['FLIPPER SELLER'], kind: 'bool' },
+            { key: 'lender', label: 'Lender', cols: ['LENDER'], kind: 'bool' },
+            { key: 'lender-bank', label: 'Lender Bank', cols: ['LENDER BANK'], kind: 'text', when: v => v['LENDER'] },
+            { key: 'wholesaler', label: 'Wholesaler', cols: ['WHOLESALER'], kind: 'bool' },
+            { key: 'flipper-llc', label: 'Flipper LLC', cols: ['FLIPPER LLC'], kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
+            { key: 'flipper-title', label: 'Flipper Title', cols: ['FLIPPER TITLE'], kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
+            { key: 'hard-money', label: 'Hard Money Lender', cols: ['HARD MONEY LENDER'], kind: 'bool' },
+            { key: 'preflipper', label: 'Preflipper', cols: ['PREFLIPPER'], kind: 'bool' },
+        ];
+        const CF_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
+        const clientList = document.getElementById('client-list');
+        const cfSaved = document.getElementById('cf-saved');
+        let clients = [];
+        let client = null;       // the one shown
+        let editing = null;      // the key of the line open for editing
+        let cfBusy = false;
+        let clientUser = null;
+
+        function lineValue(line, v) {
+            if (line.kind === 'bool') return v[line.cols[0]] ? 'Yes' : 'No';
+            if (line.kind === 'name') return [v['FIRST NAME'], v['LAST NAME']].filter(Boolean).join(' ');
+            return v[line.cols[0]] || '';
+        }
+        function editorHtml(line, v) {
+            if (line.kind === 'bool') {
+                const on = v[line.cols[0]];
+                return '<div class="yn" role="radiogroup" aria-label="' + escapeHtml(line.label) + '">'
+                    + '<input type="radio" name="cf-yn" id="cf-yn-yes" value="yes"' + (on ? ' checked' : '') + '><label for="cf-yn-yes">Yes</label>'
+                    + '<input type="radio" name="cf-yn" id="cf-yn-no" value="no"' + (on ? '' : ' checked') + '><label for="cf-yn-no">No</label></div>';
+            }
+            if (line.kind === 'name') {
+                return '<input class="cf-input" data-col="FIRST NAME" type="text" maxlength="50" placeholder="First" aria-label="Legal first name" autocomplete="off" value="' + escapeHtml(v['FIRST NAME'] || '') + '">'
+                    + '<input class="cf-input" data-col="LAST NAME" type="text" maxlength="50" placeholder="Last" aria-label="Legal last name" autocomplete="off" value="' + escapeHtml(v['LAST NAME'] || '') + '">';
+            }
+            const email = line.kind === 'email';
+            return '<input class="cf-input" data-col="' + line.cols[0] + '" type="' + (email ? 'email' : 'text') + '"' + (email ? ' inputmode="email" autocapitalize="off" spellcheck="false" maxlength="120"' : ' maxlength="100"')
+                + ' aria-label="' + escapeHtml(line.label) + '" autocomplete="off" value="' + escapeHtml(v[line.cols[0]] || '') + '">';
+        }
+        function renderClient() {
+            if (!client) { clientList.hidden = true; return; }
+            const v = client.values;
+            clientList.innerHTML = CLIENT_LINES.map(line => {
+                if (line.group) return '<h3 class="cf-group-title">' + line.group + '</h3>';
+                const hidden = line.when && !line.when(v) ? ' hidden' : '';
+                if (line.key === editing) {
+                    return '<form class="cf-row is-editing" data-line="' + line.key + '" novalidate><span class="cf-label">' + escapeHtml(line.label) + '</span>'
+                        + '<div class="cf-editor' + (line.kind === 'name' ? ' is-names' : '') + '">' + editorHtml(line, v) + '</div>'
+                        + '<div class="cf-actions"><span class="cf-error" role="alert"></span>'
+                        + '<button type="button" class="btn btn-secondary" data-cancel>Cancel</button>'
+                        + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save</button></div></form>';
+                }
+                const value = lineValue(line, v);
+                const cls = line.kind === 'bool' ? (v[line.cols[0]] ? ' is-yes' : ' is-no') : (value ? '' : ' is-empty');
+                return '<div class="cf-row" data-line="' + line.key + '"' + hidden + '><span class="cf-label">' + escapeHtml(line.label) + '</span>'
+                    + '<span class="cf-value' + cls + '">' + escapeHtml(value || 'Not added') + '</span>'
+                    + '<button type="button" class="cf-edit" data-edit="' + line.key + '" aria-label="Edit ' + escapeHtml(line.label) + '" title="Edit"' + (editing || cfBusy ? ' disabled' : '') + '>' + CF_PENCIL + '</button></div>';
+            }).join('');
+            clientList.hidden = false;
+            const open = clientList.querySelector('.is-editing');
+            if (open) {
+                const first = open.querySelector('input:checked, input');
+                if (first) first.focus();
+            }
+        }
+        function showClient(c) {
+            client = c;
+            editing = null;
+            cfSaved.textContent = '';
+            renderClient();
+        }
+        clientList.addEventListener('click', e => {
+            const edit = e.target.closest('[data-edit]');
+            if (edit && !editing) { editing = edit.dataset.edit; cfSaved.textContent = ''; renderClient(); return; }
+            if (e.target.closest('[data-cancel]') && !cfBusy) { editing = null; renderClient(); }
+        });
+        clientList.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && editing && !cfBusy) { e.preventDefault(); const key = editing; editing = null; renderClient(); const b = clientList.querySelector('[data-edit="' + key + '"]'); if (b) b.focus(); }
+        });
+        clientList.addEventListener('input', e => {
+            e.target.classList.remove('is-invalid');
+            const err = clientList.querySelector('.cf-error');
+            if (err) err.textContent = '';
+        });
+        const CLIENT_ERRORS = {
+            missing_first_name: 'Please enter the legal first name.',
+            missing_last_name: 'Please enter the legal last name.',
+            invalid_email: 'That email doesn’t look right.',
+        };
+        clientList.addEventListener('submit', async e => {
+            e.preventDefault();
+            const form = e.target.closest('.cf-row.is-editing');
+            if (!form || cfBusy || !client) return;
+            const line = CLIENT_LINES.find(l => l.key === form.dataset.line);
+            const errorEl = form.querySelector('.cf-error');
+            const fail = (input, text) => { if (input) { input.classList.add('is-invalid'); input.focus(); } errorEl.textContent = text; };
+            const values = {};
+            if (line.kind === 'bool') {
+                values[line.cols[0]] = (form.querySelector('input[name="cf-yn"]:checked') || {}).value === 'yes';
+            } else {
+                for (const input of form.querySelectorAll('.cf-input')) values[input.dataset.col] = input.value.trim();
+                if (line.kind === 'name') {
+                    const [first, last] = form.querySelectorAll('.cf-input');
+                    if (!values['FIRST NAME']) return fail(first, CLIENT_ERRORS.missing_first_name);
+                    if (!values['LAST NAME']) return fail(last, CLIENT_ERRORS.missing_last_name);
+                }
+                if (line.kind === 'email' && values['EMAIL'] && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(values['EMAIL'])) return fail(form.querySelector('.cf-input'), CLIENT_ERRORS.invalid_email);
+            }
+            // Nothing changed: just close the line
+            if (line.cols.every(col => values[col] === client.values[col])) { editing = null; renderClient(); return; }
+            const save = form.querySelector('[data-save]');
+            cfBusy = true;
+            form.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+            save.classList.add('is-loading');
+            try {
+                const data = await callApi(clientUser, { action: 'adminUpdateClient', clientId: client.id, values });
+                if (!data.ok) throw new Error(data.error);
+                client.values = data.client.values;
+                if (line.kind === 'name') {
+                    client.name = [client.values['FIRST NAME'], client.values['LAST NAME']].filter(Boolean).join(' ');
+                    if (picker && picker.index() !== null) picker.rename(picker.index(), client.name);
+                }
+                cfBusy = false;
+                editing = null;
+                renderClient();
+                cfSaved.textContent = 'Saved ' + line.label + '.';
+                const b = clientList.querySelector('[data-edit="' + line.key + '"]');
+                if (b) b.focus();
+            } catch (err) {
+                console.error(err);
+                cfBusy = false;
+                form.querySelectorAll('input, button').forEach(el => { el.disabled = false; });
+                save.classList.remove('is-loading');
+                errorEl.textContent = CLIENT_ERRORS[err.message] || 'We couldn’t save that. Please try again.';
+            }
+        });
+        // Leaving or switching with a line still open asks first
+        const isDirty = () => Boolean(editing);
+        window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+        // A dropdown of clients (name and phone number), like the home page's, with "Add New Client" first.
+        // canPick() can stop a switch.
+        const ADD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>';
+        function mountClientPicker(mount, list, { placeholder, onPick, onAdd, canPick, selectedId }) {
+            // Position 0 is "Add New Client"; clients follow
+            let chosen = null; // 'add', a client index, or null
+            const found = list.findIndex(c => c.id === selectedId);
+            if (found >= 0) chosen = found;
+            let highlighted = -1;
+            mount.innerHTML = '<div class="client-picker">'
+                + '<button type="button" class="client-picker-btn" id="client-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="client-picker-list" aria-labelledby="client-picker-label client-picker-btn"><span></span></button>'
+                + '<div class="client-picker-list" id="client-picker-list" role="listbox" aria-labelledby="client-picker-label">'
+                + '<div class="client-picker-option is-add" role="option" id="client-opt-add" aria-selected="false">' + ADD_ICON
+                    + '<span class="cp-text"><span class="cp-main">Add New Client</span></span>' + CHECK_ICON + '</div>'
+                + list.map((c, i) => '<div class="client-picker-option" role="option" id="client-opt-' + i + '" aria-selected="false">' + PERSON_ICON
+                    + '<span class="cp-text"><span class="cp-main">' + escapeHtml(c.name || formatPhone(c.id)) + '</span>'
+                    + (c.name ? '<span class="cp-sub">' + escapeHtml(formatPhone(c.id)) + '</span>' : '') + '</span>' + CHECK_ICON + '</div>').join('')
+                + '</div></div>';
+            const picker = mount.firstElementChild;
+            const button = picker.querySelector('.client-picker-btn');
+            const label = button.firstElementChild;
+            const options = [...picker.querySelectorAll('.client-picker-option')];
+            const posOf = c => c === null ? -1 : c === 'add' ? 0 : c + 1;
+            const render = () => {
+                options.forEach((o, i) => o.setAttribute('aria-selected', String(posOf(chosen) === i)));
+                label.textContent = chosen === null ? placeholder : chosen === 'add' ? 'New Client' : (list[chosen].name || formatPhone(list[chosen].id));
+                label.classList.toggle('is-placeholder', chosen === null);
+            };
+            const highlight = i => {
+                highlighted = i;
+                options.forEach((o, j) => o.classList.toggle('is-active', j === i));
+                if (i >= 0) { button.setAttribute('aria-activedescendant', options[i].id); options[i].scrollIntoView({ block: 'nearest' }); }
+                else button.removeAttribute('aria-activedescendant');
+            };
+            const isOpen = () => picker.classList.contains('is-open');
+            const open = () => { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(Math.max(0, posOf(chosen))); };
+            const close = () => { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); };
+            const pick = pos => {
+                close();
+                const next = pos === 0 ? 'add' : pos - 1;
+                if (next === chosen) return;
+                if (canPick && !canPick()) return;
+                chosen = next;
+                render();
+                if (next === 'add') onAdd(); else onPick(list[next]);
+            };
+            button.addEventListener('click', () => isOpen() ? close() : open());
+            options.forEach((o, i) => {
+                o.addEventListener('pointerdown', e => e.preventDefault());
+                o.addEventListener('click', () => { pick(i); button.focus(); });
+            });
+            button.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!isOpen()) { open(); return; }
+                    highlight((highlighted + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+                } else if ((e.key === 'Enter' || e.key === ' ') && isOpen()) {
+                    e.preventDefault();
+                    if (highlighted >= 0) pick(highlighted); else close();
+                } else if (e.key === 'Escape' && isOpen()) {
+                    e.preventDefault();
+                    close();
+                }
+            });
+            document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
+            button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
+            render();
+            return {
+                // Keep the button's name current after a save
+                rename(i, name) { list[i].name = name; options[i + 1].querySelector('.cp-main').textContent = name || formatPhone(list[i].id); render(); },
+                index: () => (typeof chosen === 'number' ? chosen : null),
+                clear() { chosen = null; render(); },
+            };
+        }
+
+        let picker = null;
+        function mountClients(selectedId) {
+            const mount = document.getElementById('client-picker');
+            picker = mountClientPicker(mount, clients, {
+                placeholder: 'Choose a client...',
+                selectedId,
+                // Switching away from unsaved changes asks first
+                canPick: () => !cfBusy && (!isDirty() || window.confirm('Discard your unsaved changes?')),
+                onPick: showClient,
+                onAdd: showNewClient,
+            });
+        }
+        async function loadClients(user) {
+            clientUser = user;
+            const card = document.getElementById('clients-card');
+            const mount = document.getElementById('client-picker');
+            card.hidden = false;
+            try {
+                const data = await callApi(user, { action: 'adminClients' });
+                if (!data.ok) throw new Error(data.error);
+                clients = data.clients || [];
+                mountClients(null);
+            } catch (err) {
+                console.error(err);
+                mount.innerHTML = '<p class="client-empty">We couldn’t load the clients. Please refresh to try again.</p>';
+            }
+        }
+
+        // --- New client: every question open at once ---
+        const digitsOnly = v => String(v || '').replace(/\D/g, '');
+        const formatTyped = d => !d ? '' : d.length < 4 ? '(' + d : d.length < 7 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
+        const NEW_LINES = CLIENT_LINES.flatMap(line => line.key === 'legal'
+            ? [line, { key: 'phone', label: 'Phone', kind: 'phone' }]
+            : [line]);
+        const TILE_ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+        const ROLE_ICONS = {
+            'buyer': TILE_ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>'),
+            'seller': TILE_ICON('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/>'),
+            'landlord': TILE_ICON('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3"/><path d="m16 7 3 3"/><path d="m14 9 2 2"/>'),
+            'flipper-buyer': TILE_ICON('<path d="m15 12-8.5 8.5a2.1 2.1 0 0 1-3-3L12 9"/><path d="M17.6 15 22 10.6"/><path d="m20.9 11.7-1.3-1.3a2.4 2.4 0 0 1-.7-1.7V7.5l-2.2-2.3A6 6 0 0 0 12.6 3.6l-1 .1 1.5 1.5a2.4 2.4 0 0 1 .7 1.7v1.4l2.3 2.3h1.3a2.4 2.4 0 0 1 1.7.7l1.2 1.1"/>'),
+            'flipper-seller': TILE_ICON('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
+            'lender': TILE_ICON('<path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/>'),
+            'wholesaler': TILE_ICON('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>'),
+            'hard-money': TILE_ICON('<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.6-3-1.6"/><path d="M12 6v2"/><path d="M12 16v2"/>'),
+            'preflipper': TILE_ICON('<path d="M12 3v3"/><path d="M18.4 5.6 16.3 7.7"/><path d="M21 12h-3"/><path d="M6 12H3"/><path d="M7.7 7.7 5.6 5.6"/><circle cx="12" cy="14" r="4"/><path d="M12 18v3"/>'),
+        };
+        function showNewClient() {
+            client = null;
+            editing = 'new';
+            cfSaved.textContent = '';
+            clientList.innerHTML = '<form class="nc-form" id="nc-form" novalidate>' + NEW_LINES.map(line => {
+                if (line.group) return '<h3 class="cf-group-title">' + line.group + '</h3>'
+                    + (line.group === 'Roles' ? '<p class="nc-tiles-help">Select all that apply.</p>' : '');
+                let editor;
+                // Yes/no questions are tiles here: selected is Yes, left alone is No
+                if (line.kind === 'bool') {
+                    const n = 'nc-' + line.key;
+                    return '<div class="cf-row nc-tile-row" data-line="' + line.key + '"><div class="nc-tile">'
+                        + '<input type="checkbox" id="' + n + '" data-col="' + line.cols[0] + '">'
+                        + '<label for="' + n + '"><span class="nc-tile-icon">' + (ROLE_ICONS[line.key] || '') + '</span>' + escapeHtml(line.label) + '</label></div></div>';
+                } else if (line.kind === 'phone') {
+                    editor = '<input class="cf-input" id="nc-phone" type="tel" inputmode="tel" autocomplete="off" placeholder="(480) 555-0123" aria-label="Phone">';
+                } else {
+                    editor = editorHtml(line, {}).replace(/data-col=/g, 'data-new-col=');
+                }
+                const optional = line.kind === 'email' ? '<span class="cf-optional">(optional)</span>' : '';
+                return '<div class="cf-row is-editing" data-line="' + line.key + '"' + (line.when ? ' hidden' : '') + '><span class="cf-label">' + escapeHtml(line.label) + optional + '</span>'
+                    + '<div class="cf-editor' + (line.kind === 'name' ? ' is-names' : '') + '">' + editor + '</div></div>';
+            }).join('')
+                + '<div class="nc-foot"><span class="cf-error" role="alert"></span>'
+                + '<button type="button" class="btn btn-secondary" data-nc-cancel>Cancel</button>'
+                + '<button type="submit" class="btn" data-nc-save><span class="btn-spinner" aria-hidden="true"></span>Create Client</button></div></form>';
+            clientList.hidden = false;
+            const form = document.getElementById('nc-form');
+            const phone = document.getElementById('nc-phone');
+            phone.addEventListener('input', () => {
+                let d = digitsOnly(phone.value);
+                if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+                phone.value = formatTyped(d.slice(0, 10));
+            });
+            const answers = () => {
+                const v = {};
+                form.querySelectorAll('[data-new-col]').forEach(input => { v[input.dataset.newCol] = input.value.trim(); });
+                form.querySelectorAll('.nc-tile input').forEach(box => { v[box.dataset.col] = box.checked; });
+                return v;
+            };
+            // Lender Bank / Flipper LLC / Flipper Title follow the answers above them
+            const refresh = () => {
+                const v = answers();
+                NEW_LINES.forEach(line => {
+                    if (!line.when) return;
+                    const row = form.querySelector('[data-line="' + line.key + '"]');
+                    if (row) row.hidden = !line.when(v);
+                });
+            };
+            form.addEventListener('change', refresh);
+            form.addEventListener('input', e => {
+                e.target.classList.remove('is-invalid');
+                const yn = e.target.closest('.yn');
+                if (yn) yn.classList.remove('is-invalid');
+                form.querySelector('.nc-foot .cf-error').textContent = '';
+            });
+            form.addEventListener('change', e => { const yn = e.target.closest('.yn'); if (yn) yn.classList.remove('is-invalid'); });
+            form.querySelector('[data-nc-cancel]').addEventListener('click', () => {
+                if (cfBusy) return;
+                editing = null;
+                clientList.hidden = true;
+                clientList.innerHTML = '';
+                if (picker) picker.clear();
+            });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (cfBusy) return;
+                const errorEl = form.querySelector('.nc-foot .cf-error');
+                const v = answers();
+                const fail = (el, text) => { if (el) { el.classList.add('is-invalid'); (el.querySelector ? el.querySelector('input') || el : el).focus(); } errorEl.textContent = text; };
+                // Every shown line is required, except email
+                for (const line of NEW_LINES) {
+                    if (line.group) continue;
+                    const row = form.querySelector('[data-line="' + line.key + '"]');
+                    if (!row || row.hidden) continue;
+                    if (line.kind === 'phone') {
+                        if (digitsOnly(phone.value).length !== 10) return fail(phone, 'Please enter their 10-digit phone number.');
+                    } else if (line.kind === 'bool') {
+                        continue; // a tile left alone is No
+                    } else if (line.kind === 'email') {
+                        if (v['EMAIL'] && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v['EMAIL'])) return fail(row.querySelector('.cf-input'), 'That email doesn’t look right.');
+                    } else {
+                        const inputs = [...row.querySelectorAll('.cf-input')];
+                        const empty = inputs.find(i => !i.value.trim());
+                        if (empty) return fail(empty, 'Please fill in ' + line.label + '.');
+                    }
+                }
+                const save = form.querySelector('[data-nc-save]');
+                cfBusy = true;
+                form.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+                save.classList.add('is-loading');
+                try {
+                    const data = await callApi(clientUser, { action: 'adminCreateClient', phone: digitsOnly(phone.value), values: v });
+                    if (!data.ok) throw new Error(data.error);
+                    cfBusy = false;
+                    editing = null;
+                    clients.push(data.client);
+                    clients.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+                    mountClients(data.client.id);
+                    showClient(clients.find(c => c.id === data.client.id));
+                    cfSaved.textContent = 'Added ' + (data.client.name || formatPhone(data.client.id)) + '.';
+                } catch (err) {
+                    console.error(err);
+                    cfBusy = false;
+                    form.querySelectorAll('input, button').forEach(el => { el.disabled = false; });
+                    save.classList.remove('is-loading');
+                    const known = { exists: 'That phone number already has an account.', invalid_phone: 'Please enter their 10-digit phone number.', invalid_email: 'That email doesn’t look right.' };
+                    errorEl.textContent = known[err.message] || (String(err.message).startsWith('missing_') ? 'Please answer every question.' : 'We couldn’t add the client. Please try again.');
+                }
+            });
+            form.querySelector('[data-new-col]').focus();
+        }
+
         // --- Income (the edit pop-up lives in /income-editor.js, shared with pages.html) ---
         const incomeValue = document.getElementById('income-value');
         const incomeBtn = document.getElementById('edit-income');
@@ -728,9 +1439,8 @@
                 inc.textContent = wholeMoney.format(monthly) + ' / mo income';
                 debt.textContent = wholeMoney.format(monthlyDebts(incomeRow)) + ' / mo debt';
             } else {
-                incomeValue.textContent = 'Not added yet';
+                incomeValue.innerHTML = '<span class="missing-note">' + WARN_ICON + 'Missing</span>';
             }
-            incomeValue.classList.toggle('is-empty', !(monthly > 0));
             setLineButton(incomeBtn, monthly > 0, 'your income');
         }
         incomeBtn.addEventListener('click', () => {
@@ -800,6 +1510,18 @@
                     setSaving(false);
                 }
             });
+
+            savePreferred = async preferredName => {
+                const data = await callApi(currentUser, { action: 'updatePreferredName', preferredName });
+                if (!data.ok) throw new Error(data.error);
+                return data.row;
+            };
+
+            saveEmail = async email => {
+                const data = await callApi(currentUser, { action: 'updateEmail', email });
+                if (!data.ok) throw new Error(data.error);
+                return data.row;
+            };
 
             incomeEditor = createIncomeEditor({
                 save: async income => {

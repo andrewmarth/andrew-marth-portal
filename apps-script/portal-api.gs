@@ -125,6 +125,28 @@ function doPost(e) {
       return json_({ ok: true, id: id, row: findRow_(SHEET_ID, SHEET_NAME, id).row });
     }
 
+    // Settings page: the name they go by (blank clears it, and the portal uses their first name)
+    if (body.action === 'updatePreferredName') {
+      const preferred = cleanText_(body.preferredName, 50);
+      const headers = addMissingColumns_(found.sheet, found.headers, ['PREFERRED NAME']);
+      found.sheet.getRange(found.rowNumber, colFor_(headers, 'preferred name')).setValue(preferred);
+      return json_({ ok: true, id: id, row: findRow_(SHEET_ID, SHEET_NAME, id).row });
+    }
+
+    // Settings page: their email (must look like an email)
+    if (body.action === 'updateEmail') {
+      const email = String(body.email || '').trim().toLowerCase().slice(0, 120);
+      if (!/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return json_({ ok: false, error: 'invalid_email' });
+      const headers = addMissingColumns_(found.sheet, found.headers, ['EMAIL']);
+      found.sheet.getRange(found.rowNumber, colFor_(headers, 'email')).setValue(email);
+      return json_({ ok: true, id: id, row: findRow_(SHEET_ID, SHEET_NAME, id).row });
+    }
+
+    // Settings page (admins): every client's details, and saving one client's details
+    if (body.action === 'adminClients') return json_(adminClients_(found.row));
+    if (body.action === 'adminUpdateClient') return json_(adminUpdateClient_(found.row, body));
+    if (body.action === 'adminCreateClient') return json_(adminCreateClient_(found.row, body));
+
     // pages.html: one PAGES row (its PAGE TYPE decides what the page shows) plus what that type needs
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
     // Home page: the Buyer Breakdown pages this account is listed on (and, for admins, every buyer's)
@@ -918,6 +940,132 @@ function appendRow_(sheet, values) {
     above.copyTo(target, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
   }
   target.setValues([row]);
+}
+
+// The ACCOUNT LIST columns admins can edit on the Settings page (yes/no columns are TRUE/FALSE)
+const CLIENT_FIELDS = [
+  { col: 'FIRST NAME', type: 'text', required: true }, { col: 'LAST NAME', type: 'text', required: true },
+  { col: 'PREFERRED NAME', type: 'text' }, { col: 'EMAIL', type: 'email' },
+  { col: 'BUYER', type: 'bool' }, { col: 'SELLER', type: 'bool' }, { col: 'LANDLORD', type: 'bool' },
+  { col: 'FLIPPER BUYER', type: 'bool' }, { col: 'FLIPPER SELLER', type: 'bool' },
+  { col: 'LENDER', type: 'bool' }, { col: 'LENDER BANK', type: 'text' }, { col: 'WHOLESALER', type: 'bool' },
+  { col: 'FLIPPER LLC', type: 'text' }, { col: 'FLIPPER TITLE', type: 'text' },
+  { col: 'HARD MONEY LENDER', type: 'bool' }, { col: 'PREFLIPPER', type: 'bool' },
+];
+
+// One account's editable details, by column name
+function clientValues_(row) {
+  const get = function (name) {
+    const key = Object.keys(row).filter(function (k) { return k.trim().toUpperCase() === name; })[0];
+    return key === undefined ? '' : String(row[key]).trim();
+  };
+  const values = {};
+  CLIENT_FIELDS.forEach(function (f) { values[f.col] = f.type === 'bool' ? get(f.col).toUpperCase() === 'TRUE' : get(f.col); });
+  return values;
+}
+
+function adminClients_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const clients = allRows_(SHEET_ID, SHEET_NAME)
+    .map(function (r) {
+      const values = clientValues_(r);
+      return {
+        id: phoneToId_(r['ACCOUNT ID']),
+        name: [values['FIRST NAME'], values['LAST NAME']].filter(String).join(' '),
+        values: values,
+      };
+    })
+    .filter(function (c) { return c.id; })
+    .sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); });
+  return { ok: true, clients: clients };
+}
+
+// Saves the given fields for one account (only the CLIENT_FIELDS columns; anything else is ignored)
+function adminUpdateClient_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const clientId = phoneToId_(body.clientId);
+  const found = clientId && findRow_(SHEET_ID, SHEET_NAME, clientId);
+  if (!found) return { ok: false, error: 'not_found' };
+  const given = body.values || {};
+  const next = {};
+  for (var i = 0; i < CLIENT_FIELDS.length; i++) {
+    const f = CLIENT_FIELDS[i];
+    if (!(f.col in given)) continue;
+    const raw = given[f.col];
+    if (f.type === 'bool') {
+      next[f.col] = raw === true || String(raw).toUpperCase() === 'TRUE';
+    } else if (f.type === 'email') {
+      const email = String(raw || '').trim().toLowerCase().slice(0, 120);
+      if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
+      next[f.col] = email;
+    } else {
+      const text = cleanText_(raw, 100);
+      if (f.required && !text) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
+      next[f.col] = text;
+    }
+  }
+  const headers = addMissingColumns_(found.sheet, found.headers, Object.keys(next));
+  Object.keys(next).forEach(function (name) {
+    found.sheet.getRange(found.rowNumber, colFor_(headers, name.toLowerCase())).setValue(next[name]);
+  });
+  SpreadsheetApp.flush();
+  ROWS_CACHE_ = {};
+  return { ok: true, client: { id: clientId, values: clientValues_(findRow_(SHEET_ID, SHEET_NAME, clientId).row) } };
+}
+
+// Admins: a new ACCOUNT LIST row from the Settings page's New Client form. Every shown answer is required except
+// email; Lender Bank only when Lender is yes, Flipper LLC / Title only for flipper buyers or sellers.
+// ADMIN and CUM are always FALSE.
+function adminCreateClient_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const id = phoneToId_(body.phone);
+  if (!/^\d{10}$/.test(id)) return { ok: false, error: 'invalid_phone' };
+  const given = body.values || {};
+  const values = {};
+  for (var i = 0; i < CLIENT_FIELDS.length; i++) {
+    const f = CLIENT_FIELDS[i];
+    const raw = given[f.col];
+    if (f.type === 'bool') {
+      if (raw !== true && raw !== false) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
+      values[f.col] = raw;
+    } else if (f.type === 'email') {
+      const email = String(raw || '').trim().toLowerCase().slice(0, 120);
+      if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
+      values[f.col] = email;
+    } else {
+      values[f.col] = cleanText_(raw, 100);
+    }
+  }
+  // Text answers that are only asked sometimes
+  const asked = {
+    'LENDER BANK': values['LENDER'],
+    'FLIPPER LLC': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
+    'FLIPPER TITLE': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
+  };
+  const textCols = ['FIRST NAME', 'LAST NAME', 'PREFERRED NAME', 'LENDER BANK', 'FLIPPER LLC', 'FLIPPER TITLE'];
+  for (var j = 0; j < textCols.length; j++) {
+    const col = textCols[j];
+    if (col in asked && !asked[col]) { values[col] = ''; continue; }
+    if (!values[col]) return { ok: false, error: 'missing_' + col.toLowerCase().replace(/ /g, '_') };
+  }
+  values['ACCOUNT ID'] = id;
+  values['ADMIN'] = false;
+  values['CUM'] = false;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (findRow_(SHEET_ID, SHEET_NAME, id)) return { ok: false, error: 'exists' };
+    const sheet = getSheet_(SHEET_ID, SHEET_NAME);
+    addMissingColumns_(sheet, readHeaders_(sheet, false), Object.keys(values));
+    appendRow_(sheet, values);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  const found = findRow_(SHEET_ID, SHEET_NAME, id);
+  const saved = clientValues_(found.row);
+  return { ok: true, client: { id: id, name: [saved['FIRST NAME'], saved['LAST NAME']].filter(String).join(' '), values: saved } };
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)
