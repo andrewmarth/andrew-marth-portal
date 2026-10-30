@@ -105,6 +105,8 @@ var ROWS_CACHE_ = {};
 function doPost(e) {
   try {
     ROWS_CACHE_ = {};
+    // Documenso's webhook (a document has been completed); its URL carries the secret kept in Script Properties
+    if (e && e.parameter && e.parameter.documensoWebhook) return json_(documensoWebhook_(e.parameter.documensoWebhook));
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     const phone = verifyPhone_(body.idToken);
     if (!phone) return json_({ ok: false, error: 'unauthorized' });
@@ -146,6 +148,11 @@ function doPost(e) {
     if (body.action === 'adminClients') return json_(adminClients_(found.row));
     if (body.action === 'adminUpdateClient') return json_(adminUpdateClient_(found.row, body));
     if (body.action === 'adminCreateClient') return json_(adminCreateClient_(found.row, body));
+    // E-signatures: admins send documents; clients see and sign their own
+    if (body.action === 'adminSendForSignature') return json_(adminSendForSignature_(found.row, body));
+    if (body.action === 'adminSignatureCategories') return json_(adminSignatureCategories_(found.row));
+    if (body.action === 'mySignatureTasks') return json_(mySignatureTasks_(id));
+    if (body.action === 'signingTask') return json_(signingTask_(id, body));
 
     // pages.html: one PAGES row (its PAGE TYPE decides what the page shows) plus what that type needs
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
@@ -1066,6 +1073,300 @@ function adminCreateClient_(account, body) {
   const found = findRow_(SHEET_ID, SHEET_NAME, id);
   const saved = clientValues_(found.row);
   return { ok: true, client: { id: id, name: [saved['FIRST NAME'], saved['LAST NAME']].filter(String).join(' '), values: saved } };
+}
+
+// --- E-signatures (Documenso at sign.andrewmarth.com) ---
+// The API key lives only in Script Properties (DOCUMENSO_API_TOKEN). Documents are sent with Documenso's emails off:
+// signers find them in the portal's Current Tasks and sign inside the portal. Each signer of each document is one
+// row in the "Portal Signatures" spreadsheet (created on first use; its ID is kept in Script Properties).
+// Once everyone has signed, the signed PDF and its certificate are saved to the SIGNED_FOLDER_ID Drive folder and the
+// document gets a row in the DOCUMENTS_SHEET_ID log, on the tab named for its category. That happens the moment the
+// last signer finishes: Documenso's DOCUMENT_COMPLETED webhook calls this script (see setupDocumensoWebhook).
+const DOCUMENSO_URL = 'https://sign.andrewmarth.com';
+const DOCUMENTS_SHEET_ID = '1s8ll4sD2TqN6qP7hAp2P9eG0a5G6sTevR-kGYQym_Do';
+const SIGNED_FOLDER_ID = '1KdVqHpueNlMt2lOjl-tNLc2UvpwOsctw';
+const SIGNATURE_COLUMNS = ['ENVELOPE ID', 'TITLE', 'SENT DATE', 'SENT BY', 'ACCOUNT ID', 'NAME', 'EMAIL', 'RECIPIENT ID',
+  'RECIPIENT TOKEN', 'SIGNING STATUS', 'SIGNED DATE', 'DOCUMENT STATUS', 'CATEGORY', 'STREET ADDRESS', 'CITY', 'STATE',
+  'ZIP', 'LOGGED'];
+const SIGNATURE_FIELD_TYPES = ['SIGNATURE', 'INITIALS', 'NAME', 'DATE', 'TEXT'];
+// Every Documenso email switched off (distribution NONE covers the signers; these cover the owner)
+const DOCUMENSO_NO_EMAIL = {
+  recipientSigningRequest: false, recipientRemoved: false, recipientSigned: false, documentPending: false,
+  documentCompleted: false, documentDeleted: false, ownerDocumentCompleted: false, ownerRecipientExpired: false,
+  ownerDocumentCreated: false,
+};
+
+// One call to Documenso's API. body: an object (sent as JSON) or a {payload, files} form for uploads.
+// asFile: return the response as a Blob (downloads) instead of parsed JSON.
+function documenso_(method, path, body, isForm, asFile) {
+  const token = PropertiesService.getScriptProperties().getProperty('DOCUMENSO_API_TOKEN');
+  if (!token) throw new Error('DOCUMENSO_API_TOKEN is not set');
+  const options = { method: method, headers: { Authorization: token }, muteHttpExceptions: true };
+  if (body !== undefined) {
+    if (isForm) options.payload = body;
+    else { options.contentType = 'application/json'; options.payload = JSON.stringify(body); }
+  }
+  const res = UrlFetchApp.fetch(DOCUMENSO_URL + '/api/v2' + path, options);
+  const code = res.getResponseCode();
+  const text = res.getContentText();
+  if (code < 200 || code >= 300) throw new Error('Documenso ' + method + ' ' + path + ' failed (' + code + '): ' + text.slice(0, 300));
+  if (asFile) return res.getBlob();
+  return text ? JSON.parse(text) : {};
+}
+
+// The signatures sheet (made the first time it's needed)
+function signaturesSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('SIGNATURES_SHEET_ID');
+  if (!id) {
+    const ss = SpreadsheetApp.create('Portal Signatures');
+    const sheet = ss.getSheets()[0];
+    sheet.setName('SIGNATURES');
+    sheet.getRange(1, 1, 1, SIGNATURE_COLUMNS.length).setValues([SIGNATURE_COLUMNS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    id = ss.getId();
+    props.setProperty('SIGNATURES_SHEET_ID', id);
+  }
+  const sheet = getSheet_(id, 'SIGNATURES');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim().toUpperCase(); });
+  const missing = SIGNATURE_COLUMNS.filter(function (c) { return headers.indexOf(c) < 0; });
+  if (missing.length) sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+  return sheet;
+}
+
+// The categories documents can be filed under: the tabs of the DOCUMENTS log
+function signatureCategories_() {
+  return SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets().map(function (sh) { return sh.getName(); });
+}
+function adminSignatureCategories_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  return { ok: true, categories: signatureCategories_() };
+}
+
+// Every signer row, with its sheet row number
+function signatureRows_() {
+  const sheet = signaturesSheet_();
+  const values = sheet.getDataRange().getDisplayValues();
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
+  const rows = [];
+  for (var r = 1; r < values.length; r++) {
+    if (!values[r].some(function (v) { return String(v).trim() !== ''; })) continue;
+    const row = { rowNumber: r + 1 };
+    headers.forEach(function (h, c) { row[h] = String(values[r][c]).trim(); });
+    rows.push(row);
+  }
+  return { sheet: sheet, headers: headers, rows: rows };
+}
+
+// Admins: send a PDF for signature. body: { title, category, street, city, state, zip, pdf (base64),
+//   signers: [{ accountId, fields: [{ type, page, x, y, w, h }] }] }
+// Positions are percentages of the page (x/y from the top-left corner).
+function adminSendForSignature_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const title = cleanText_(body.title, 200);
+  if (!title) return { ok: false, error: 'missing_title' };
+  const category = signatureCategories_().filter(function (c) { return c === String(body.category || ''); })[0];
+  if (!category) return { ok: false, error: 'bad_category' };
+  const address = { street: cleanText_(body.street, 200), city: cleanText_(body.city, 100), state: cleanText_(body.state, 30), zip: cleanText_(body.zip, 10) };
+  if (!address.street || !address.city || !address.state || !/^\d{5}$/.test(address.zip)) return { ok: false, error: 'bad_address' };
+  const pdfBase64 = String(body.pdf || '');
+  if (!pdfBase64) return { ok: false, error: 'missing_pdf' };
+  const bytes = Utilities.base64Decode(pdfBase64);
+  if (bytes.length > 25 * 1024 * 1024) return { ok: false, error: 'pdf_too_large' };
+  const signers = Array.isArray(body.signers) ? body.signers : [];
+  if (!signers.length || signers.length > 10) return { ok: false, error: 'bad_signers' };
+
+  const byId = {};
+  allRows_(SHEET_ID, SHEET_NAME).forEach(function (r) { const id = phoneToId_(r['ACCOUNT ID']); if (id) byId[id] = r; });
+  const num = function (v, min, max) { const n = Number(v); return isFinite(n) ? Math.min(max, Math.max(min, n)) : null; };
+  const recipients = [];
+  const seen = {};
+  for (var i = 0; i < signers.length; i++) {
+    const accountId = phoneToId_(signers[i].accountId);
+    const row = byId[accountId];
+    if (!row || seen[accountId]) return { ok: false, error: 'bad_signers' };
+    seen[accountId] = true;
+    const name = [row['FIRST NAME'], row['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' ') || accountId;
+    const realEmail = String(row['EMAIL'] || '').trim().toLowerCase();
+    // No email on file: an address that is never delivered to (Documenso's emails are off anyway)
+    const email = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(realEmail) ? realEmail : accountId + '@clients.andrewmarth.com';
+    const fields = (Array.isArray(signers[i].fields) ? signers[i].fields : []).map(function (f) {
+      const type = String(f.type || '').toUpperCase();
+      if (SIGNATURE_FIELD_TYPES.indexOf(type) < 0) return null;
+      const page = Math.round(Number(f.page));
+      const x = num(f.x, 0, 100), y = num(f.y, 0, 100), w = num(f.w, 1, 100), h = num(f.h, 1, 100);
+      if (!(page >= 1) || x === null || y === null || w === null || h === null) return null;
+      return { type: type, identifier: 0, page: page, positionX: x, positionY: y, width: w, height: h };
+    });
+    if (!fields.length || fields.some(function (f) { return !f; })) return { ok: false, error: 'bad_fields' };
+    if (!fields.some(function (f) { return f.type === 'SIGNATURE' || f.type === 'INITIALS'; })) return { ok: false, error: 'needs_signature' };
+    recipients.push({ accountId: accountId, name: name, email: email, fields: fields });
+  }
+
+  const meta = {
+    distributionMethod: 'NONE',
+    emailSettings: DOCUMENSO_NO_EMAIL,
+    timezone: 'America/Phoenix',
+    typedSignatureEnabled: true, drawSignatureEnabled: true, uploadSignatureEnabled: false,
+  };
+  const created = documenso_('post', '/envelope/create', {
+    payload: JSON.stringify({
+      type: 'DOCUMENT',
+      title: title,
+      recipients: recipients.map(function (r) { return { name: r.name, email: r.email, role: 'SIGNER', fields: r.fields }; }),
+      meta: meta,
+    }),
+    files: Utilities.newBlob(bytes, 'application/pdf', title.replace(/[^\w .-]+/g, '') + '.pdf'),
+  }, true);
+  const sent = documenso_('post', '/envelope/distribute', { envelopeId: created.id, meta: { distributionMethod: 'NONE', emailSettings: DOCUMENSO_NO_EMAIL } });
+
+  const data = signatureRows_();
+  const sentBy = [account['FIRST NAME'], account['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' ');
+  const now = new Date();
+  recipients.forEach(function (r) {
+    const rec = (sent.recipients || []).filter(function (x) { return String(x.email).toLowerCase() === r.email; })[0] || {};
+    const values = {
+      'ENVELOPE ID': created.id, 'TITLE': title, 'SENT DATE': now, 'SENT BY': sentBy, 'ACCOUNT ID': r.accountId,
+      'NAME': r.name, 'EMAIL': r.email, 'RECIPIENT ID': rec.id || '', 'RECIPIENT TOKEN': rec.token || '',
+      'SIGNING STATUS': 'NOT_SIGNED', 'SIGNED DATE': '', 'DOCUMENT STATUS': 'PENDING', 'CATEGORY': category,
+      'STREET ADDRESS': address.street, 'CITY': address.city, 'STATE': address.state, 'ZIP': address.zip, 'LOGGED': '',
+    };
+    data.sheet.appendRow(data.headers.map(function (h) { return values[h] === undefined ? '' : values[h]; }));
+  });
+  return { ok: true, envelopeId: created.id };
+}
+
+// Brings one envelope's rows up to date with Documenso (who has signed, and whether it's finished)
+function refreshEnvelope_(data, envelopeId) {
+  const env = documenso_('get', '/envelope/' + encodeURIComponent(envelopeId));
+  const byToken = {};
+  (env.recipients || []).forEach(function (r) { byToken[r.token] = r; });
+  data.rows.filter(function (row) { return row['ENVELOPE ID'] === envelopeId; }).forEach(function (row) {
+    const rec = byToken[row['RECIPIENT TOKEN']];
+    const set = function (col, value) {
+      const c = data.headers.indexOf(col);
+      if (c >= 0 && String(row[col]) !== String(value)) { data.sheet.getRange(row.rowNumber, c + 1).setValue(value); row[col] = String(value); }
+    };
+    if (rec) {
+      set('SIGNING STATUS', rec.signingStatus || row['SIGNING STATUS']);
+      if (rec.signedAt && !row['SIGNED DATE']) set('SIGNED DATE', new Date(rec.signedAt));
+    }
+    set('DOCUMENT STATUS', env.status || row['DOCUMENT STATUS']);
+  });
+  const unlogged = data.rows.some(function (row) { return row['ENVELOPE ID'] === envelopeId && !row['LOGGED']; });
+  if (env.status === 'COMPLETED' && unlogged) logSignedEnvelope_(data, env);
+}
+
+// A finished document: its signed PDF and certificate go to the Drive folder, and it gets a row in the DOCUMENTS log
+function logSignedEnvelope_(data, env) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return;
+  try {
+    // Re-read, in case another request logged it while this one waited
+    const fresh = signatureRows_();
+    const rows = fresh.rows.filter(function (row) { return row['ENVELOPE ID'] === env.id; });
+    if (!rows.length || rows.some(function (row) { return row['LOGGED']; })) return;
+    const first = rows[0];
+    const title = first['TITLE'] || env.title || 'Document';
+    const folder = DriveApp.getFolderById(SIGNED_FOLDER_ID);
+    const item = (env.envelopeItems || []).slice().sort(function (a, b) { return a.order - b.order; })[0];
+    const pdf = documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
+    const docFile = folder.createFile(pdf.setName(title + ' - Signed.pdf').setContentType('application/pdf'));
+    var certFile = null;
+    try {
+      const cert = documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
+      certFile = folder.createFile(cert.setName(title + ' - Certificate.pdf').setContentType('application/pdf'));
+    } catch (err) { console.error(err); }
+    // Where each signer signed from, in signer order
+    const ipByEmail = {};
+    try {
+      (documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/audit-log?perPage=100').data || []).forEach(function (e) {
+        if (e.type === 'DOCUMENT_RECIPIENT_COMPLETED' && e.email && e.ipAddress) ipByEmail[String(e.email).toLowerCase()] = e.ipAddress;
+      });
+    } catch (err) { console.error(err); }
+    const download = function (file) { return 'https://drive.google.com/uc?export=download&id=' + file.getId(); };
+    const values = {
+      'DATE SIGNED': env.completedAt ? new Date(env.completedAt) : new Date(), 'CATEGORY': first['CATEGORY'],
+      'STREET ADDRESS': first['STREET ADDRESS'], 'CITY': first['CITY'], 'STATE': first['STATE'], 'ZIP': first['ZIP'],
+      'EXECUTED': true,
+      'IP ADDRESS': rows.map(function (row) { return ipByEmail[String(row['EMAIL']).toLowerCase()] || ''; }).filter(String).join(', '),
+      'DOCUMENSO FILE ID': env.id, 'DOCUMENT DRIVE FILE ID': docFile.getId(), 'DOCUMENT VIEW LINK': docFile.getUrl(),
+      'DOCUMENT DOWNLOAD LINK': download(docFile),
+      'CERTIFICATE DRIVE FILE ID': certFile ? certFile.getId() : '', 'CERTIFICATE VIEW LINK': certFile ? certFile.getUrl() : '',
+      'CERTIFICATE DOWNLOAD LINK': certFile ? download(certFile) : '',
+    };
+    rows.slice(0, 10).forEach(function (row, i) { values['SIGNER ACCOUNT ID ' + (i + 1)] = row['ACCOUNT ID']; });
+    const tab = SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheetByName(first['CATEGORY'])
+      || SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets()[0];
+    appendRow_(tab, values);
+    const c = fresh.headers.indexOf('LOGGED');
+    rows.forEach(function (row) { fresh.sheet.getRange(row.rowNumber, c + 1).setValue(docFile.getId()); });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Run once from the editor: makes the webhook secret (if there isn't one) and logs the URL to give Documenso
+// (Settings > Webhooks, event DOCUMENT_COMPLETED). WEB_APP_URL is this script's deployed web app URL.
+function setupDocumensoWebhook() {
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw7_6-r-ShjTBpqlkKeYTuTjdIH8-njHdEgEHuXFszDHWPg1L5AP5yaCawutnSEx3Z6/exec';
+  const props = PropertiesService.getScriptProperties();
+  var secret = props.getProperty('DOCUMENSO_WEBHOOK_SECRET');
+  if (!secret) { secret = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); props.setProperty('DOCUMENSO_WEBHOOK_SECRET', secret); }
+  console.log(WEB_APP_URL + '?documensoWebhook=' + secret);
+}
+
+// Documenso says a document is finished: bring every open document up to date, filing the finished ones
+function documensoWebhook_(secret) {
+  const expected = PropertiesService.getScriptProperties().getProperty('DOCUMENSO_WEBHOOK_SECRET');
+  if (!expected || secret !== expected) return { ok: false, error: 'unauthorized' };
+  checkSignatures();
+  return { ok: true };
+}
+
+// Brings unfinished documents up to date, filing any that have just been completed
+function checkSignatures() {
+  const data = signatureRows_();
+  const open = {};
+  data.rows.forEach(function (row) {
+    if (row['DOCUMENT STATUS'] === 'PENDING' || row['DOCUMENT STATUS'] === '' || (row['DOCUMENT STATUS'] === 'COMPLETED' && !row['LOGGED'])) open[row['ENVELOPE ID']] = true;
+  });
+  Object.keys(open).forEach(function (envelopeId) {
+    try { refreshEnvelope_(data, envelopeId); } catch (err) { console.error(err); }
+  });
+}
+
+// The signed-in client's documents still waiting for their signature
+// (Read from the sheet only, so the home page never waits on Documenso; the signing page brings rows up to date.)
+function mySignatureTasks_(id) {
+  const data = signatureRows_();
+  const mine = data.rows.filter(function (row) {
+    return row['ACCOUNT ID'] === id && row['SIGNING STATUS'] !== 'SIGNED' && row['SIGNING STATUS'] !== 'REJECTED'
+      && (row['DOCUMENT STATUS'] === 'PENDING' || row['DOCUMENT STATUS'] === '');
+  });
+  return {
+    ok: true,
+    tasks: mine.map(function (row) {
+      return { envelopeId: row['ENVELOPE ID'], title: row['TITLE'], sentDate: row['SENT DATE'], sentBy: row['SENT BY'] };
+    }),
+  };
+}
+
+// The signing session for one of the signed-in client's own documents
+function signingTask_(id, body) {
+  const envelopeId = String(body.envelopeId || '');
+  const data = signatureRows_();
+  const row = data.rows.filter(function (r) { return r['ENVELOPE ID'] === envelopeId && r['ACCOUNT ID'] === id; })[0];
+  if (!row) return { ok: false, error: 'not_found' };
+  try { refreshEnvelope_(data, envelopeId); } catch (err) { console.error(err); }
+  return {
+    ok: true,
+    title: row['TITLE'],
+    token: row['RECIPIENT TOKEN'],
+    signingStatus: row['SIGNING STATUS'],
+    documentStatus: row['DOCUMENT STATUS'],
+    signUrl: DOCUMENSO_URL + '/embed/sign/' + encodeURIComponent(row['RECIPIENT TOKEN']),
+  };
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)

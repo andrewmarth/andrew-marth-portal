@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Send for Signature | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
+        html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
+        .page-loader { touch-action: none; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* Morphing icon (loader.js): sits on the background and pops with a twist each time it changes */
+        .loader-badge {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 14px;
+            color: var(--brown);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-icon { width: 92px; height: 92px; overflow: visible; }
+        .loader-badge.is-morphing .loader-icon { animation: iconMorph 0.65s cubic-bezier(0.34, 1.4, 0.64, 1); }
+        @keyframes iconMorph {
+            0% { transform: rotate(0deg) scale(1); }
+            40% { transform: rotate(-12deg) scale(0.84); }
+            75% { transform: rotate(4deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .page-loader-text {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            opacity: 0.85;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+        .page-loader-text.is-leaving { opacity: 0; transform: translateY(-8px); }
+        .page-loader-text.is-entering { animation: phraseIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1); }
+        @keyframes phraseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 0.85; transform: none; } }
+        /* Loading bar: a gold segment that sweeps across the track, over and over */
+        .loader-bar {
+            position: relative;
+            width: 180px;
+            height: 6px;
+            margin-top: 16px;
+            border-radius: 999px;
+            background: rgba(78, 81, 62, 0.15);
+            overflow: hidden;
+        }
+        .loader-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--gold), var(--rust));
+            animation: loaderBar 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes loaderBar {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(250%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .loader-bar::before { animation-duration: 3s; }
+            .loader-badge.is-morphing .loader-icon, .page-loader-text.is-entering { animation: none; }
+        }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto 44px auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        /* Round gear-only button */
+        .sign-out.icon-only { width: 40px; padding: 0; }
+        .sign-out.icon-only svg { width: 19px; height: 19px; transition: transform 0.5s var(--ease); }
+        @media (hover: hover) { .sign-out.icon-only:hover svg { transform: rotate(60deg); } }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 10px;
+        }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main cards --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--rust);
+            margin-bottom: 6px;
+        }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 14px; }
+
+        .id-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .id-icon {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--olive);
+            color: var(--cream);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .id-icon svg { width: 22px; height: 22px; }
+        .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
+
+        /* Details from the Google Sheet */
+        .details { list-style: none; }
+        .details li {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            padding: 13px 2px;
+            border-bottom: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        .details li:last-child { border-bottom: none; }
+        .details .k { font-weight: bold; opacity: 0.75; flex: 0 0 auto; }
+        .details .v { text-align: right; overflow-wrap: anywhere; }
+        .details .v a { color: var(--tan); font-weight: bold; }
+
+        .status-text { text-align: center; font-style: italic; opacity: 0.75; padding: 14px 0; }
+        .status-text.is-error { color: var(--rust); font-style: normal; font-weight: bold; opacity: 1; }
+        .spinner {
+            display: block;
+            width: 30px;
+            height: 30px;
+            margin: 6px auto 10px auto;
+            border-radius: 50%;
+            border: 3px solid rgba(78, 81, 62, 0.2);
+            border-top-color: var(--olive);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .placeholder-note {
+            padding: 16px 18px;
+            border-radius: 16px;
+            background: #fdf6e9;
+            border: 1px dashed rgba(192, 144, 80, 0.7);
+        }
+
+        /* Brown "Ready When You Are" style contact card */
+        .contact-card { background: var(--brown); color: var(--cream); text-align: center; }
+        .contact-card .card-eyebrow { color: var(--gold); }
+        .contact-card .card-eyebrow::after { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .contact-card h2 { color: var(--cream); margin-bottom: 6px; }
+        .contact-card p { opacity: 0.88; margin-bottom: 18px; }
+        .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .details li { flex-direction: column; gap: 2px; }
+            .details .v { text-align: left; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .spinner { animation-duration: 2.4s; }
+        }
+
+        /* --- Settings rows --- */
+        .setting-list { list-style: none; margin-top: 6px; }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 4px;
+            border-top: 1px solid rgba(78, 81, 62, 0.15);
+        }
+        /* (the line under the last row is on the list, so it stays put when a row is hidden) */
+        .setting-list { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .setting-value .sv-line { display: block; white-space: nowrap; }
+        .setting-value .sv-line + .sv-line { opacity: 0.75; font-size: 0.92em; }
+        .setting-row[hidden] { display: none; }
+        .setting-label { font-weight: bold; flex: 0 1 auto; }
+        .setting-value { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+        .setting-value.is-empty { font-style: italic; opacity: 0.6; }
+        .edit-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--navy);
+            border-radius: 50%;
+            background: var(--white);
+            color: var(--olive);
+            cursor: pointer;
+            transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+        }
+        .edit-btn svg { width: 17px; height: 17px; }
+        .edit-btn:disabled { opacity: 0.4; cursor: default; }
+        @media (hover: hover) { .edit-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+        /* Nothing on file yet: the pencil becomes a "Start" pill */
+        .edit-btn.is-start {
+            width: auto;
+            gap: 6px;
+            padding: 0 14px 0 16px;
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .edit-btn.is-start svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
+        .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
+        .page-message:empty { min-height: 0; margin: 0; }
+        .page-message.is-error { color: var(--rust); }
+        .page-message.is-success { color: var(--olive); }
+
+        /* --- Edit pop-up (centered card on desktop, slides up from the bottom on phones) --- */
+        .edit-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 480px;
+            padding: 0;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+            overflow: visible;
+        }
+        .edit-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .edit-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .edit-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .dialog-inner { padding: 28px 28px 24px 28px; }
+        .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .dialog-head h2 { font-size: 1.6rem; line-height: 1.15; }
+        .close-btn {
+            flex: 0 0 auto;
+            width: 40px;
+            height: 40px;
+            margin: -4px -6px 0 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: #f2ede6;
+            color: var(--brown);
+            cursor: pointer;
+        }
+        .close-btn svg { width: 18px; height: 18px; }
+        .muted { opacity: 0.75; font-size: 0.95rem; margin-bottom: 18px; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .field label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field input {
+            width: 100%;
+            min-height: 54px;
+            padding: 12px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0;
+            font-family: inherit;
+            font-size: 1.05rem;
+            color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .field input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .form-message { min-height: 1.4em; margin: 12px 4px 0 4px; font-size: 0.92rem; font-weight: bold; color: var(--rust); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+        button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        button.btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .btn-secondary:hover { background: #f2ede6; } }
+        .btn .btn-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid rgba(233, 226, 216, 0.35);
+            border-top-color: var(--cream);
+            animation: spin 0.8s linear infinite;
+        }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+
+        @media (max-width: 600px) {
+            /* Phones: label on top, value(s) underneath, pencil on the right */
+            .setting-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 14px 0; }
+            .setting-label { grid-column: 1; }
+            .setting-value { grid-column: 1; text-align: left; opacity: 0.85; }
+            .setting-row .edit-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            .setting-label { font-size: 0.95rem; }
+            .edit-btn { width: 36px; height: 36px; }
+            /* The Start button already says nothing is on file, so skip the "Not added yet" text on phones */
+            .setting-value.is-empty { visibility: hidden; }
+            .edit-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .edit-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .dialog-inner { padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column-reverse; }
+            .form-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .edit-dialog[open], .edit-dialog[open]::backdrop { animation: none; }
+        }
+
+        /* --- Send for Signature --- */
+        .main-card + .main-card { margin-top: 0; }
+        .step-card h2 { margin-bottom: 6px; }
+        .step-lead { margin-bottom: 16px; opacity: 0.8; }
+        .pill-input { width: 100%; min-height: 50px; padding: 10px 20px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
+        .pill-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .field-label { display: block; margin: 0 0 8px 6px; font-weight: bold; font-size: 0.92rem; }
+        .field-label.is-spaced { margin-top: 16px; }
+        .pill-select { width: 100%; min-height: 50px; padding: 10px 18px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
+        .address-grid { display: grid; grid-template-columns: 1fr 90px 120px; gap: 10px; margin-top: 10px; }
+        @media (max-width: 600px) { .address-grid { grid-template-columns: 1fr 1fr; } .address-grid .city { grid-column: 1 / -1; } }
+        .file-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; min-height: 130px; padding: 18px; border: 2px dashed rgba(78, 81, 62, 0.4); border-radius: 18px; background: #f7f4f0; text-align: center; cursor: pointer; transition: border-color 0.2s ease, background-color 0.2s ease; }
+        .file-drop.is-over, .file-drop:hover { border-color: var(--tan); background: #f3ece2; }
+        .file-drop svg { width: 30px; height: 30px; color: var(--rust); }
+        .file-drop strong { font-size: 1.02rem; }
+        .file-drop span { font-size: 0.88rem; opacity: 0.7; }
+        .file-name { margin-top: 10px; font-weight: bold; color: var(--olive); }
+        .file-name:empty { display: none; }
+
+        /* Signers */
+        .signer-add { display: flex; gap: 10px; }
+        .signer-add select { flex: 1; min-width: 0; min-height: 50px; padding: 10px 18px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
+        .signer-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+        .signer-list:empty { display: none; }
+        .signer { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 14px; background: #f7f4f0; border: 2px solid transparent; }
+        .signer-dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; }
+        .signer-name { flex: 1; min-width: 0; font-weight: bold; }
+        .signer-sub { display: block; font-weight: normal; font-size: 0.85rem; opacity: 0.7; }
+        .signer-count { font-size: 0.85rem; opacity: 0.75; white-space: nowrap; }
+        .signer-remove { flex: 0 0 auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--brown); cursor: pointer; }
+        .signer-remove:hover { background: #ece4d8; }
+        .signer-remove svg { width: 16px; height: 16px; }
+
+        /* Placing fields */
+        .placer-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; margin: 0 -8px 14px -8px; padding: 12px 8px; background: var(--white); border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        .bar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .bar-label { font-size: 0.8rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.7; margin-right: 4px; }
+        .chip { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 6px 14px; border: 2px solid rgba(78, 81, 62, 0.25); border-radius: 999px; background: var(--white); font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--brown); cursor: pointer; }
+        .chip.is-on { border-color: var(--navy); background: var(--navy); color: var(--white); }
+        .chip .signer-dot { width: 11px; height: 11px; }
+        .chip svg { width: 16px; height: 16px; }
+        .placer-hint { font-size: 0.88rem; opacity: 0.75; }
+        .pages { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+        .page { position: relative; width: 100%; max-width: 820px; box-shadow: 0 2px 10px rgba(14, 42, 59, 0.18); background: var(--white); cursor: crosshair; user-select: none; }
+        .page canvas { display: block; width: 100%; height: auto; }
+        .page-num { position: absolute; top: 6px; right: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 42, 59, 0.6); color: var(--white); font-size: 0.75rem; font-weight: bold; pointer-events: none; }
+        .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: 0.78rem; font-weight: bold; cursor: move; touch-action: none; overflow: hidden; }
+        .field span:not(.field-resize) { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+        .field-del { position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; display: none; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: rgba(14, 42, 59, 0.75); color: var(--white); font-size: 12px; line-height: 1; cursor: pointer; }
+        .field:hover .field-del, .field.is-selected .field-del { display: inline-flex; }
+        .field-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, currentColor 50%); opacity: 0.7; }
+        .send-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
+        .send-message { flex: 1 1 100%; text-align: right; font-weight: bold; color: #b3392f; }
+        .send-message:empty { display: none; }
+        .send-row .btn { border: 2px solid var(--navy); font-family: inherit; font-size: 1.02rem; cursor: pointer; gap: 8px; }
+        .send-row .btn:disabled { opacity: 0.6; cursor: wait; }
+        .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .done-card { text-align: center; }
+        .done-card svg { width: 58px; height: 58px; color: var(--olive); margin-bottom: 8px; }
+        .no-access { text-align: center; padding: 40px 10px; font-weight: bold; }
+        [hidden] { display: none !important; }
+        @media (max-width: 600px) {
+            .signer-add { flex-direction: column; }
+            .placer-bar { margin: 0 -4px 12px -4px; }
+        }
+    </style>
+</head>
+<body class="is-checking">
+    <div class="page-loader" role="status">
+        <span class="loader-badge" aria-hidden="true"><svg class="loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg></span>
+        <span class="sr-only">Loading</span>
+        <span class="page-loader-text" aria-hidden="true">Nailing the boards...</span>
+        <span class="loader-bar" aria-hidden="true"></span>
+    </div>
+    <script src="/loader.js"></script>
+
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <div class="top-actions">
+                <a href="/" class="sign-out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                    Back
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow">Admin</span>
+            <h1>Send for Signature</h1>
+            <p class="hero-sub">Upload a document, choose who signs, and place their fields.</p>
+        </div>
+    </header>
+
+    <main>
+        <p class="main-card no-access" id="no-access" hidden>You do not have access to this page.</p>
+
+        <section class="main-card step-card reveal" id="doc-card">
+            <span class="card-eyebrow">Step 1</span>
+            <h2>Document</h2>
+            <p class="step-lead">A PDF up to 25 MB.</p>
+            <label class="field-label" for="doc-title">Title</label>
+            <input class="pill-input" id="doc-title" type="text" maxlength="200" placeholder="e.g. Purchase Contract - 123 Main St" autocomplete="off">
+            <label class="field-label is-spaced" for="doc-category">Category</label>
+            <select class="pill-select" id="doc-category"><option value="">Loading…</option></select>
+            <label class="field-label is-spaced" for="doc-street">Property Address</label>
+            <input class="pill-input" id="doc-street" type="text" maxlength="200" placeholder="Street address" autocomplete="off">
+            <div class="address-grid">
+                <input class="pill-input city" id="doc-city" type="text" maxlength="100" placeholder="City" aria-label="City" autocomplete="off">
+                <input class="pill-input" id="doc-state" type="text" maxlength="30" value="AZ" placeholder="State" aria-label="State" autocomplete="off">
+                <input class="pill-input" id="doc-zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP" aria-label="ZIP" autocomplete="off">
+            </div>
+            <label class="file-drop" id="file-drop" for="doc-file">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+                <strong>Choose a PDF</strong>
+                <span>or drop it here</span>
+            </label>
+            <input id="doc-file" type="file" accept="application/pdf,.pdf" hidden>
+            <p class="file-name" id="file-name"></p>
+        </section>
+
+        <section class="main-card step-card reveal" id="signer-card">
+            <span class="card-eyebrow">Step 2</span>
+            <h2>Signers</h2>
+            <p class="step-lead">Everyone who needs to sign. They'll find it in their Current Tasks.</p>
+            <div class="signer-add">
+                <select id="signer-select" aria-label="Add a signer"><option value="">Loading clients…</option></select>
+                <button type="button" class="btn" id="signer-add-btn" style="border:2px solid var(--navy);font-family:inherit;cursor:pointer">Add</button>
+            </div>
+            <ul class="signer-list" id="signer-list"></ul>
+        </section>
+
+        <section class="main-card step-card reveal" id="place-card">
+            <span class="card-eyebrow">Step 3</span>
+            <h2>Place Fields</h2>
+            <p class="step-lead" id="place-lead">Choose a PDF and add a signer first.</p>
+            <div class="placer-bar" id="placer-bar" hidden>
+                <div class="bar-row" id="signer-chips"><span class="bar-label">Signer</span></div>
+                <div class="bar-row" id="type-chips"><span class="bar-label">Field</span></div>
+                <p class="placer-hint">Click a page to drop the field. Drag to move, drag the corner to resize, × to remove.</p>
+            </div>
+            <div class="pages" id="pages"></div>
+        </section>
+
+        <section class="main-card step-card reveal" id="send-card">
+            <span class="card-eyebrow">Step 4</span>
+            <h2>Send</h2>
+            <p class="step-lead">Documenso won't email anyone. Each signer gets a Sign task in the portal.</p>
+            <div class="send-row">
+                <p class="send-message" id="send-message" role="alert"></p>
+                <button type="button" class="btn" id="send-btn"><span class="btn-spinner" aria-hidden="true"></span>Send for Signature</button>
+            </div>
+        </section>
+
+        <section class="main-card done-card" id="done-card" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+            <h2>Sent!</h2>
+            <p class="step-lead" id="done-text"></p>
+            <div class="send-row" style="justify-content:center"><a class="btn" href="/send">Send another</a><a class="btn" href="/" style="background:var(--white);color:var(--brown)">Back to portal</a></div>
+        </section>
+    </main>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const $ = sel => document.querySelector(sel);
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        const COLORS = ['#c0392b', '#2471a3', '#1e8449', '#b9770e', '#7d3c98', '#117a65', '#a04000', '#2e4053', '#b03a2e', '#5b2c6f'];
+        // Field types, with their starting size (percent of the page width / height)
+        const TYPES = [
+            { type: 'SIGNATURE', label: 'Signature', w: 24, h: 5.5 },
+            { type: 'INITIALS', label: 'Initials', w: 11, h: 4.5 },
+            { type: 'NAME', label: 'Name', w: 22, h: 3.5 },
+            { type: 'DATE', label: 'Date', w: 14, h: 3.5 },
+            { type: 'TEXT', label: 'Text', w: 22, h: 3.5 },
+        ];
+        let currentUser = null;
+        let clients = [];
+        let signers = [];          // [{ id, name, sub, color }]
+        let fields = [];           // [{ key, signerId, type, page, x, y, w, h }]
+        let activeSigner = null;
+        let activeType = 'SIGNATURE';
+        let pdfBytes = null;       // the chosen PDF (ArrayBuffer)
+        let pageCount = 0;
+        let fieldKey = 0;
+
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            return fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            }).then(r => r.json());
+        }
+
+        // --- Step 1: the PDF ---
+        const fileInput = $('#doc-file');
+        const drop = $('#file-drop');
+        fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadPdf(fileInput.files[0]); });
+        ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('is-over'); }));
+        ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('is-over'); }));
+        drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadPdf(f); });
+        async function loadPdf(file) {
+            setMessage('');
+            if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { setMessage('Please choose a PDF file.'); return; }
+            if (file.size > 25 * 1024 * 1024) { setMessage('That PDF is over 25 MB.'); return; }
+            pdfBytes = await file.arrayBuffer();
+            $('#file-name').textContent = file.name;
+            if (!$('#doc-title').value.trim()) $('#doc-title').value = file.name.replace(/\.pdf$/i, '');
+            fields = [];
+            await renderPages();
+            refreshPlacer();
+        }
+        async function renderPages() {
+            const pagesEl = $('#pages');
+            pagesEl.innerHTML = '';
+            const doc = await pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
+            pageCount = doc.numPages;
+            for (let n = 1; n <= doc.numPages; n++) {
+                const page = await doc.getPage(n);
+                const viewport = page.getViewport({ scale: 1.6 });
+                const wrap = document.createElement('div');
+                wrap.className = 'page';
+                wrap.dataset.page = n;
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                wrap.append(canvas);
+                wrap.insertAdjacentHTML('beforeend', '<span class="page-num">Page ' + n + ' of ' + doc.numPages + '</span>');
+                pagesEl.append(wrap);
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            }
+        }
+
+        // --- Step 2: signers ---
+        function fillSelect() {
+            const sel = $('#signer-select');
+            const taken = new Set(signers.map(s => s.id));
+            sel.innerHTML = '<option value="">Choose a client…</option>' + clients.filter(c => !taken.has(c.id))
+                .map(c => '<option value="' + c.id + '">' + escapeHtml(c.name || c.id) + '</option>').join('');
+        }
+        $('#signer-add-btn').addEventListener('click', () => {
+            const id = $('#signer-select').value;
+            const c = clients.find(x => x.id === id);
+            if (!c || signers.length >= 10) return;
+            const used = new Set(signers.map(s => s.color));
+            const color = COLORS.find(col => !used.has(col)) || COLORS[0];
+            const email = (c.values && c.values['EMAIL']) || '';
+            signers.push({ id: c.id, name: c.name || c.id, sub: email || 'No email on file (signs in the portal only)', color });
+            activeSigner = c.id;
+            renderSigners();
+            refreshPlacer();
+        });
+        function renderSigners() {
+            $('#signer-list').innerHTML = signers.map(s => {
+                const count = fields.filter(f => f.signerId === s.id).length;
+                return '<li class="signer"><span class="signer-dot" style="background:' + s.color + '"></span>'
+                    + '<span class="signer-name">' + escapeHtml(s.name) + '<span class="signer-sub">' + escapeHtml(s.sub) + '</span></span>'
+                    + '<span class="signer-count">' + count + (count === 1 ? ' field' : ' fields') + '</span>'
+                    + '<button type="button" class="signer-remove" data-remove="' + s.id + '" aria-label="Remove ' + escapeHtml(s.name) + '">' + X_ICON + '</button></li>';
+            }).join('');
+            fillSelect();
+        }
+        $('#signer-list').addEventListener('click', e => {
+            const b = e.target.closest('[data-remove]');
+            if (!b) return;
+            signers = signers.filter(s => s.id !== b.dataset.remove);
+            fields = fields.filter(f => f.signerId !== b.dataset.remove);
+            if (activeSigner === b.dataset.remove) activeSigner = signers[0] ? signers[0].id : null;
+            renderSigners();
+            refreshPlacer();
+        });
+
+        // --- Step 3: placing fields ---
+        function refreshPlacer() {
+            const ready = pdfBytes && signers.length;
+            $('#placer-bar').hidden = !ready;
+            $('#place-lead').textContent = ready ? 'Pick a signer and a field type, then click where it goes.' : 'Choose a PDF and add a signer first.';
+            $('#signer-chips').innerHTML = '<span class="bar-label">Signer</span>' + signers.map(s =>
+                '<button type="button" class="chip' + (s.id === activeSigner ? ' is-on' : '') + '" data-signer="' + s.id + '"><span class="signer-dot" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</button>').join('');
+            $('#type-chips').innerHTML = '<span class="bar-label">Field</span>' + TYPES.map(t =>
+                '<button type="button" class="chip' + (t.type === activeType ? ' is-on' : '') + '" data-type="' + t.type + '">' + t.label + '</button>').join('');
+            drawFields();
+        }
+        $('#placer-bar').addEventListener('click', e => {
+            const s = e.target.closest('[data-signer]');
+            const t = e.target.closest('[data-type]');
+            if (s) activeSigner = s.dataset.signer;
+            if (t) activeType = t.dataset.type;
+            if (s || t) refreshPlacer();
+        });
+        const signerOf = id => signers.find(s => s.id === id) || { color: '#555', name: '' };
+        const typeOf = type => TYPES.find(t => t.type === type);
+        function drawFields() {
+            document.querySelectorAll('.page .field').forEach(el => el.remove());
+            fields.forEach(f => {
+                const page = document.querySelector('.page[data-page="' + f.page + '"]');
+                if (!page) return;
+                const s = signerOf(f.signerId);
+                const el = document.createElement('div');
+                el.className = 'field';
+                el.dataset.key = f.key;
+                el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f';
+                el.innerHTML = '<span>' + typeOf(f.type).label + ' · ' + escapeHtml(s.name.split(' ')[0]) + '</span>'
+                    + '<button type="button" class="field-del" aria-label="Remove field">×</button><span class="field-resize"></span>';
+                page.append(el);
+            });
+            renderSignerCounts();
+        }
+        function renderSignerCounts() {
+            document.querySelectorAll('#signer-list .signer').forEach((li, i) => {
+                const s = signers[i];
+                if (!s) return;
+                const count = fields.filter(f => f.signerId === s.id).length;
+                li.querySelector('.signer-count').textContent = count + (count === 1 ? ' field' : ' fields');
+            });
+        }
+        // Click empty space on a page: drop a field there (centered on the click)
+        $('#pages').addEventListener('click', e => {
+            if (e.target.closest('.field')) return;
+            const page = e.target.closest('.page');
+            if (!page || !activeSigner) return;
+            const r = page.getBoundingClientRect();
+            const t = typeOf(activeType);
+            const x = Math.min(100 - t.w, Math.max(0, (e.clientX - r.left) / r.width * 100 - t.w / 2));
+            const y = Math.min(100 - t.h, Math.max(0, (e.clientY - r.top) / r.height * 100 - t.h / 2));
+            fields.push({ key: ++fieldKey, signerId: activeSigner, type: t.type, page: Number(page.dataset.page), x, y, w: t.w, h: t.h });
+            setMessage('');
+            drawFields();
+        });
+        // Remove, move and resize
+        $('#pages').addEventListener('pointerdown', e => {
+            const el = e.target.closest('.field');
+            if (!el) return;
+            const f = fields.find(x => String(x.key) === el.dataset.key);
+            if (e.target.closest('.field-del')) { fields = fields.filter(x => x !== f); drawFields(); return; }
+            e.preventDefault();
+            const page = el.parentElement.getBoundingClientRect();
+            const resizing = Boolean(e.target.closest('.field-resize'));
+            const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y, fw: f.w, fh: f.h };
+            el.setPointerCapture(e.pointerId);
+            const move = ev => {
+                const dx = (ev.clientX - start.x) / page.width * 100;
+                const dy = (ev.clientY - start.y) / page.height * 100;
+                if (resizing) {
+                    f.w = Math.min(100 - f.x, Math.max(3, start.fw + dx));
+                    f.h = Math.min(100 - f.y, Math.max(1.5, start.fh + dy));
+                } else {
+                    f.x = Math.min(100 - f.w, Math.max(0, start.fx + dx));
+                    f.y = Math.min(100 - f.h, Math.max(0, start.fy + dy));
+                }
+                el.style.left = f.x + '%'; el.style.top = f.y + '%'; el.style.width = f.w + '%'; el.style.height = f.h + '%';
+            };
+            const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+            el.addEventListener('pointermove', move);
+            el.addEventListener('pointerup', up);
+            el.addEventListener('pointercancel', up);
+        });
+
+        // --- Step 4: send ---
+        function setMessage(text) { $('#send-message').textContent = text; }
+        const ERRORS = {
+            needs_signature: 'Every signer needs at least one Signature or Initials field.',
+            bad_signers: 'One of the signers is no longer in the client list. Please refresh.',
+            pdf_too_large: 'That PDF is over 25 MB.',
+            missing_title: 'Please give the document a title.',
+            bad_category: 'Please choose a category.',
+            bad_address: 'Please fill in the full property address.',
+        };
+        const toBase64 = buf => new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(',')[1]);
+            reader.readAsDataURL(new Blob([buf], { type: 'application/pdf' }));
+        });
+        $('#send-btn').addEventListener('click', async () => {
+            const title = $('#doc-title').value.trim();
+            if (!pdfBytes) return setMessage('Please choose a PDF.');
+            if (!title) { $('#doc-title').focus(); return setMessage('Please give the document a title.'); }
+            const address = { street: $('#doc-street').value.trim(), city: $('#doc-city').value.trim(), state: $('#doc-state').value.trim(), zip: $('#doc-zip').value.trim() };
+            if (!$('#doc-category').value) { $('#doc-category').focus(); return setMessage('Please choose a category.'); }
+            if (!address.street || !address.city || !address.state) { $('#doc-street').focus(); return setMessage('Please fill in the full property address.'); }
+            if (!/^\d{5}$/.test(address.zip)) { $('#doc-zip').focus(); return setMessage('Please enter a 5-digit ZIP code.'); }
+            if (!signers.length) return setMessage('Please add at least one signer.');
+            for (const s of signers) {
+                const mine = fields.filter(f => f.signerId === s.id);
+                if (!mine.some(f => f.type === 'SIGNATURE' || f.type === 'INITIALS')) return setMessage(s.name + ' needs at least one Signature or Initials field.');
+            }
+            const btn = $('#send-btn');
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            setMessage('');
+            try {
+                const round = n => Math.round(n * 100) / 100;
+                const json = await api({
+                    action: 'adminSendForSignature',
+                    title,
+                    category: $('#doc-category').value,
+                    ...address,
+                    pdf: await toBase64(pdfBytes),
+                    signers: signers.map(s => ({
+                        accountId: s.id,
+                        fields: fields.filter(f => f.signerId === s.id).map(f => ({ type: f.type, page: f.page, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h) })),
+                    })),
+                });
+                if (!json.ok) throw new Error(json.error || 'failed');
+                ['#doc-card', '#signer-card', '#place-card', '#send-card'].forEach(sel => { $(sel).hidden = true; });
+                $('#done-text').textContent = '“' + title + '” was sent to ' + signers.map(s => s.name).join(', ') + '. It’s now in their Current Tasks.';
+                $('#done-card').hidden = false;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) {
+                console.error(err);
+                setMessage(ERRORS[err.message] || 'We couldn’t send it. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            }
+        });
+
+        async function load(user) {
+            currentUser = user;
+            try {
+                const me = await api({});
+                const isAdmin = me.ok && String((me.row || {}).ADMIN || '').trim().toUpperCase() === 'TRUE';
+                if (!isAdmin) {
+                    ['#doc-card', '#signer-card', '#place-card', '#send-card'].forEach(sel => { $(sel).hidden = true; });
+                    $('#no-access').hidden = false;
+                    return;
+                }
+                const [data, cats] = await Promise.all([api({ action: 'adminClients' }), api({ action: 'adminSignatureCategories' })]);
+                clients = data.ok ? data.clients || [] : [];
+                fillSelect();
+                // Categories are the tabs of the DOCUMENTS log; one tab is picked for you
+                const categories = cats.ok ? cats.categories || [] : [];
+                const toTitle = c => c.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
+                $('#doc-category').innerHTML = (categories.length === 1 ? '' : '<option value="">Choose a category…</option>')
+                    + categories.map(c => '<option value="' + escapeHtml(c) + '">' + escapeHtml(toTitle(c)) + '</option>').join('');
+            } catch (err) {
+                console.error(err);
+                $('#signer-select').innerHTML = '<option value="">Couldn’t load clients. Please refresh.</option>';
+            }
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) { items.forEach(el => el.classList.add('is-visible')); return; }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+                });
+            }, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+            onAuthStateChanged(auth, user => {
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([load(user), timeLimit]).then(() => {
+                    document.body.classList.remove('is-checking');
+                    initReveal();
+                });
+            });
+            const signOutBtn = document.getElementById('sign-out');
+            if (signOutBtn) signOutBtn.addEventListener('click', async () => { signOutBtn.disabled = true; await signOut(auth); });
+        }
+    </script>
+</body>
+</html>

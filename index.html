@@ -337,6 +337,8 @@
         .confetti-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
         .tasks-empty-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
         .tasks-empty-sub { font-size: 0.92rem; opacity: 0.75; }
+        .page-link-icon.is-sign { background: var(--rust); }
+        .tasks-empty[hidden] { display: none; }
 
         /* Buyer Breakdowns: one row per page, linking to it */
         .page-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
@@ -643,11 +645,12 @@
     </header>
 
     <main>
-        <!-- 1. Current tasks (placeholder until tasks are hooked up) -->
+        <!-- 1. Current tasks: documents waiting for this account's signature -->
         <section class="main-card reveal" id="tasks-card">
             <span class="card-eyebrow">To Do</span>
             <h2>Current Tasks</h2>
-            <div class="tasks-empty">
+            <ul class="page-links" id="task-list" hidden></ul>
+            <div class="tasks-empty" id="tasks-empty">
                 <span class="tasks-empty-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength="1"/></svg>
                 </span>
@@ -715,6 +718,19 @@
             <span class="sr-only" id="flipper-picker-label">Flipper</span>
             <div id="flipper-picker"></div>
             <div id="flipper-page-list" class="buyer-page-list"></div>
+        </section>
+
+        <!-- 3c. Admins only: send a document for e-signature -->
+        <section class="main-card glow-card reveal" id="signatures-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Signatures</h2>
+            <ul class="page-links">
+                <li><a class="page-link" href="/send">
+                    <span class="page-link-icon is-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+                    <span class="page-link-text"><span class="page-link-street">Send for Signature</span><br><span class="page-link-sub">Upload a document and choose who signs</span></span>
+                    <span class="page-link-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
+                </a></li>
+            </ul>
         </section>
 
         <!-- 4. Contact -->
@@ -1036,6 +1052,38 @@
         }
 
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
+        // Documents sent for this account's signature; each opens the portal's signing page
+        const SIGN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+        function renderTasks(tasks) {
+            const listEl = document.getElementById('task-list');
+            listEl.hidden = !tasks.length;
+            document.getElementById('tasks-empty').hidden = Boolean(tasks.length);
+            listEl.innerHTML = tasks.map(t => {
+                const sub = 'Sign this document' + (t.sentBy ? ' · from ' + t.sentBy : '');
+                return '<li><a class="page-link" href="/sign?id=' + encodeURIComponent(t.envelopeId) + '">'
+                    + '<span class="page-link-icon is-sign">' + SIGN_ICON + '</span>'
+                    + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(t.title || 'Document') + '</span><br>'
+                    + '<span class="page-link-sub">' + escapeHtml(sub) + '</span></span>'
+                    + '<span class="page-link-arrow">' + ARROW_ICON + '</span></a></li>';
+            }).join('');
+        }
+        async function loadTasks(user) {
+            if (!PORTAL_API_URL) return;
+            try {
+                const idToken = await user.getIdToken();
+                const res = await fetch(PORTAL_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ idToken, action: 'mySignatureTasks' }),
+                });
+                const data = await res.json();
+                if (data.ok) renderTasks(data.tasks || []);
+            } catch (err) {
+                // The card just stays "All caught up"
+                console.error(err);
+            }
+        }
+
         async function loadPages(user) {
             currentUser = user;
             if (!PORTAL_API_URL) { renderPages([]); renderFlips([]); return; }
@@ -1053,6 +1101,7 @@
                     // Only admins get the buyer list
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
+                        document.getElementById('signatures-card').hidden = false;
                         renderBuyers(data.buyers, data.buyerPages || []);
                         renderFlippers(data.flippers || [], data.flipperPages || []);
                         renderLinks(data.links);
@@ -1117,7 +1166,7 @@
         function confettiBurst() {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
             const icon = document.querySelector('.tasks-empty-icon');
-            if (!icon) return;
+            if (!icon || document.getElementById('tasks-empty').hidden) return;
             const canvas = document.createElement('canvas');
             canvas.className = 'confetti-canvas';
             document.body.append(canvas);
@@ -1188,8 +1237,10 @@
         if (isLocal && new URLSearchParams(location.search).has('demo')) {
             showPage();
             greet({ 'First Name': 'Jordan Sample' });
+            renderTasks([{ envelopeId: 'envelope_demo', title: 'Purchase Contract - 1234 E Sample St', sentBy: 'Andrew Marth' }]);
             document.getElementById('breakdowns-card').hidden = false;
             document.getElementById('cash-flow-card').hidden = false;
+            document.getElementById('signatures-card').hidden = false;
             const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550123'] };
             renderPages([demoPage]);
             document.getElementById('flips-card').hidden = false;
@@ -1211,7 +1262,7 @@
                 // Stay on the loading screen until both sheet requests are done (each handles its own errors),
                 // with a time limit so a stuck request can't hold the page forever
                 const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
-                Promise.race([Promise.all([loadDetails(user), loadPages(user)]), timeLimit]).then(showPage);
+                Promise.race([Promise.all([loadDetails(user), loadPages(user), loadTasks(user)]), timeLimit]).then(showPage);
             });
 
             signOutBtn.addEventListener('click', async () => {
