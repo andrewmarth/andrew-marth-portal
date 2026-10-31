@@ -526,20 +526,30 @@
         .pill-select { width: 100%; min-height: 50px; padding: 10px 18px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
         .address-grid { display: grid; grid-template-columns: 1fr 90px 120px; gap: 10px; margin-top: 10px; }
         @media (max-width: 600px) { .address-grid { grid-template-columns: 1fr 1fr; } .address-grid .city { grid-column: 1 / -1; } }
-        .file-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; min-height: 130px; padding: 18px; border: 2px dashed rgba(78, 81, 62, 0.4); border-radius: 18px; background: #f7f4f0; text-align: center; cursor: pointer; transition: border-color 0.2s ease, background-color 0.2s ease; }
-        .file-drop.is-over, .file-drop:hover { border-color: var(--tan); background: #f3ece2; }
-        .file-drop svg { width: 30px; height: 30px; color: var(--rust); }
-        .file-drop strong { font-size: 1.02rem; }
-        .file-drop span { font-size: 0.88rem; opacity: 0.7; }
-        .file-name { margin-top: 10px; font-weight: bold; color: var(--olive); }
-        .file-name:empty { display: none; }
+        /* PDFs: tiles like the role choices in Add New Client (an uploaded PDF is a filled tile) */
+        .pdf-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .pdf-list:empty { display: none; }
+        .pdf-list:not(:empty) { margin-bottom: 10px; }
+        .pdf-tile { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 10px; border: 2px solid rgba(233, 226, 216, 0.55); border-radius: 18px; background: rgba(233, 226, 216, 0.08); color: var(--cream); font-weight: bold; }
+        label.pdf-tile { cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        label.pdf-tile.is-drop { min-height: 92px; border-style: dashed; }
+        label.pdf-tile.is-over { border-color: var(--gold); background: rgba(192, 144, 80, 0.16); }
+        @media (hover: hover) { label.pdf-tile:hover { transform: translateX(3px); border-color: var(--gold); } }
+        .pdf-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: rgba(233, 226, 216, 0.14); color: var(--gold); }
+        .pdf-icon svg { width: 21px; height: 21px; }
+        .pdf-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .pdf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pdf-sub { font-size: 0.85rem; font-weight: normal; opacity: 0.75; }
+        .pdf-tile.is-file { background: var(--cream); border-color: var(--cream); color: var(--brown); }
+        .pdf-tile.is-file .pdf-icon { background: var(--white); color: var(--rust); }
+        .pdf-remove { flex: 0 0 auto; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--brown); cursor: pointer; }
+        .pdf-remove:hover { background: #ddd3c5; }
+        .pdf-remove svg { width: 16px; height: 16px; }
 
         /* Signers */
-        .signer-add { display: flex; gap: 10px; }
-        .signer-add select { flex: 1; min-width: 0; min-height: 50px; padding: 10px 18px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
-        .signer-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+        .signer-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
         .signer-list:empty { display: none; }
-        .signer { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 14px; background: #f7f4f0; border: 2px solid transparent; }
+        .signer { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 10px 8px 16px; border-radius: 18px; background: var(--cream); border: 2px solid var(--cream); }
         .signer-dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; }
         .signer-name { flex: 1; min-width: 0; font-weight: bold; }
         .signer-sub { display: block; font-weight: normal; font-size: 0.85rem; opacity: 0.7; }
@@ -557,22 +567,54 @@
         .chip .signer-dot { width: 11px; height: 11px; }
         .chip svg { width: 16px; height: 16px; }
         .placer-hint { font-size: 0.88rem; opacity: 0.75; }
-        .pages { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+        .pages { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+        .doc-pages { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+        .doc-heading { align-self: stretch; display: flex; align-items: center; gap: 10px; font-size: 1.1rem; color: var(--gold); }
+        .doc-heading svg { flex: 0 0 auto; width: 20px; height: 20px; }
+        .doc-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pages:not(.is-multi) .doc-heading { display: none; }
         .page { position: relative; width: 100%; max-width: 820px; box-shadow: 0 2px 10px rgba(14, 42, 59, 0.18); background: var(--white); cursor: crosshair; user-select: none; }
         .page canvas { display: block; width: 100%; height: auto; }
         .page-num { position: absolute; top: 6px; right: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 42, 59, 0.6); color: var(--white); font-size: 0.75rem; font-weight: bold; pointer-events: none; }
-        .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: 0.78rem; font-weight: bold; cursor: move; touch-action: none; overflow: hidden; }
-        .field span { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
-        .field-del { position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; display: none; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: rgba(14, 42, 59, 0.75); color: var(--white); font-size: 12px; line-height: 1; cursor: pointer; }
-        .field:hover .field-del, .field.is-selected .field-del { display: inline-flex; }
+        .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: 0.78rem; font-weight: bold; cursor: move; touch-action: none; }
+        .field span { max-width: 100%; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+        .field.is-selected { z-index: 2; box-shadow: 0 0 0 2px var(--white), 0 2px 8px rgba(14, 42, 59, 0.35); }
+        /* The × sits on the field's top-right corner (outside it, so small fields don't cut it off), with a bigger tap area */
+        .field-del { position: absolute; top: -11px; right: -11px; z-index: 1; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; padding: 0; border: 2px solid var(--white); border-radius: 50%; background: var(--navy); color: var(--white); font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; }
+        .field-del::before { content: ''; position: absolute; inset: -9px; }
+        .field.is-selected .field-del { display: inline-flex; }
+        @media (hover: hover) { .field:hover .field-del { display: inline-flex; } }
         .send-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
-        .send-message { flex: 1 1 100%; text-align: right; font-weight: bold; color: #b3392f; }
-        .send-message:empty { display: none; }
         .send-row .btn { border: 2px solid var(--navy); font-family: inherit; font-size: 1.02rem; cursor: pointer; gap: 8px; }
         .send-row .btn:disabled { opacity: 0.6; cursor: wait; }
         .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
         .btn.is-loading .btn-spinner { display: inline-block; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        /* Back / Next under each step */
+        .step-nav { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(233, 226, 216, 0.2); }
+        .step-nav .btn { border: 2px solid var(--navy); font-family: inherit; font-size: 1.02rem; cursor: pointer; gap: 8px; }
+        .step-nav .btn svg { width: 17px; height: 17px; }
+        .step-nav .btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+        .step-nav .btn-back { margin-right: auto; background: transparent; color: var(--cream); border-color: rgba(233, 226, 216, 0.75); }
+        @media (hover: hover) { .step-nav .btn-back:hover { background: rgba(233, 226, 216, 0.12); } }
+        .step-message { flex: 1 1 100%; text-align: right; font-weight: bold; color: #f2b8a8; }
+        .step-message:empty { display: none; }
+        /* Step 4's summary */
+        .review { list-style: none; }
+        .review li { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 12px 2px; border-bottom: 1px solid rgba(233, 226, 216, 0.2); }
+        .review li:last-child { border-bottom: none; }
+        .review .k { flex: 0 0 auto; font-weight: bold; opacity: 0.75; }
+        .review .v { text-align: right; overflow-wrap: anywhere; }
+        /* Where you are in the four steps (in the header) */
+        .stepper { list-style: none; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+        .stepper button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 14px 4px 5px; border: 2px solid rgba(233, 226, 216, 0.45); border-radius: 999px; background: rgba(14, 42, 59, 0.25); color: var(--cream); font-family: inherit; font-size: 0.9rem; font-weight: bold; cursor: pointer; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+        .stepper button:disabled { cursor: default; opacity: 0.55; }
+        .step-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(233, 226, 216, 0.18); font-size: 0.82rem; }
+        .step-num svg { width: 14px; height: 14px; }
+        .stepper button.is-current { background: var(--gold); border-color: var(--gold); color: var(--brown); }
+        .stepper button.is-current .step-num { background: var(--white); color: var(--rust); }
+        .stepper button.is-done .step-num { background: var(--cream); color: var(--olive); }
+        @media (hover: hover) { .stepper button:not(:disabled):not(.is-current):hover { border-color: var(--cream); } }
         .done-card { text-align: center; }
         .done-card svg { width: 58px; height: 58px; color: var(--olive); margin-bottom: 8px; }
         .no-access { text-align: center; padding: 40px 10px; font-weight: bold; }
@@ -611,6 +653,9 @@
             padding: 6px;
             color: var(--brown);
         }
+        .picker-list { max-height: 320px; overflow-y: auto; scrollbar-width: none; }
+        .picker-list::-webkit-scrollbar { display: none; }
+        .picker-btn:disabled { cursor: default; }
         .picker.is-open .picker-list { display: block; animation: pickerIn 0.18s ease both; }
         @keyframes pickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
         .picker-option { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 9px 14px; border-radius: 14px; cursor: pointer; }
@@ -645,17 +690,21 @@
         .glow-card > *:not(.sr-only) { position: relative; z-index: 1; }
         .glow-card .card-eyebrow { color: var(--gold); }
         .glow-card h2 { color: var(--cream); }
-        .glow-card .file-drop, .glow-card .signer { color: var(--brown); }
-        .glow-card .file-drop { border-color: rgba(233, 226, 216, 0.55); }
-        .glow-card .file-name { color: var(--gold); }
+        .glow-card .signer { color: var(--brown); }
         .glow-card .placer-bar { position: sticky; z-index: 5; background: var(--brown); border-bottom-color: rgba(233, 226, 216, 0.25); }
         .glow-card .chip { border-color: rgba(233, 226, 216, 0.5); }
         .glow-card .chip.is-on { border-color: var(--gold); background: var(--gold); color: var(--brown); }
-        .glow-card .send-message { color: #f2b8a8; }
         .glow-card.done-card svg { color: var(--gold); }
 
         @media (max-width: 600px) {
-            .signer-add { flex-direction: column; }
+            .step-nav .btn { flex: 1; white-space: nowrap; padding-left: 16px; padding-right: 16px; }
+            .step-message { text-align: left; }
+            .review li { flex-direction: column; gap: 2px; }
+            .review .v { text-align: left; }
+            .stepper { gap: 6px; }
+            .stepper button { padding: 4px; }
+            .stepper button.is-current { padding-right: 12px; }
+            .stepper button:not(.is-current) .step-name { display: none; }
             .placer-bar { margin: 0 -4px 12px -4px; }
             .picker-list { padding: 4px; }
             .picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
@@ -695,6 +744,7 @@
             <span class="hero-eyebrow">Admin</span>
             <h1>Send for Signature</h1>
             <p class="hero-sub">Upload a document, choose who signs, and place their fields.</p>
+            <ol class="stepper" id="stepper" aria-label="Steps"></ol>
         </div>
     </header>
 
@@ -702,9 +752,9 @@
         <p class="main-card no-access" id="no-access" hidden>You do not have access to this page.</p>
 
         <section class="main-card glow-card step-card reveal" id="doc-card">
-            <span class="card-eyebrow">Step 1</span>
+            <span class="card-eyebrow">Step 1 of 4</span>
             <h2>Document</h2>
-            <p class="step-lead">A PDF up to 25 MB.</p>
+            <p class="step-lead">Name it, file it, and add the PDFs to be signed.</p>
             <label class="field-label" for="doc-title">Title</label>
             <input class="pill-input" id="doc-title" type="text" maxlength="200" placeholder="e.g. Purchase Contract - 123 Main St" autocomplete="off">
             <span class="field-label is-spaced" id="doc-category-label">Category</span>
@@ -722,44 +772,63 @@
                     <input class="pill-input" id="doc-zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP" aria-label="ZIP" autocomplete="off">
                 </div>
             </div>
-            <label class="file-drop" id="file-drop" for="doc-file">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
-                <strong>Choose a PDF</strong>
-                <span>or drop it here</span>
+            <!-- The PDFs, signed together in one envelope: "Choose a PDF" until there's one, then "Add another PDF" -->
+            <span class="field-label is-spaced">PDFs</span>
+            <ul class="pdf-list" id="pdf-list"></ul>
+            <label class="pdf-tile is-drop" id="file-drop" for="doc-file">
+                <span class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg></span>
+                <span class="pdf-text"><span class="pdf-name">Choose a PDF</span><span class="pdf-sub">or drop it here (up to 25 MB)</span></span>
             </label>
-            <input id="doc-file" type="file" accept="application/pdf,.pdf" hidden>
-            <p class="file-name" id="file-name"></p>
-        </section>
-
-        <section class="main-card glow-card step-card reveal" id="signer-card">
-            <span class="card-eyebrow">Step 2</span>
-            <h2>Signers</h2>
-            <p class="step-lead">Everyone who needs to sign. They'll find it in their Current Tasks.</p>
-            <div class="signer-add">
-                <select id="signer-select" aria-label="Add a signer"><option value="">Loading clients…</option></select>
-                <button type="button" class="btn" id="signer-add-btn" style="border:2px solid var(--navy);font-family:inherit;cursor:pointer">Add</button>
+            <label class="pdf-tile" id="file-add" for="doc-file" hidden>
+                <span class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></span>
+                <span class="pdf-text"><span class="pdf-name">Add another PDF</span><span class="pdf-sub">Signed in the same envelope</span></span>
+            </label>
+            <input id="doc-file" type="file" accept="application/pdf,.pdf" multiple hidden>
+            <div class="step-nav">
+                <p class="step-message" role="alert"></p>
+                <button type="button" class="btn" data-next>Next: Signers<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
             </div>
-            <ul class="signer-list" id="signer-list"></ul>
         </section>
 
-        <section class="main-card glow-card step-card reveal" id="place-card">
-            <span class="card-eyebrow">Step 3</span>
+        <section class="main-card glow-card step-card reveal" id="signer-card" hidden>
+            <span class="card-eyebrow">Step 2 of 4</span>
+            <h2>Signers</h2>
+            <p class="step-lead">Everyone who needs to sign. They'll find it in their Current Tasks and sign in the portal.</p>
+            <span class="field-label" id="signer-picker-label">Add a Signer</span>
+            <div id="signer-picker"></div>
+            <ul class="signer-list" id="signer-list"></ul>
+            <div class="step-nav">
+                <p class="step-message" role="alert"></p>
+                <button type="button" class="btn btn-back" data-back>Back</button>
+                <button type="button" class="btn" data-next>Next: Place Fields<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+            </div>
+        </section>
+
+        <section class="main-card glow-card step-card reveal" id="place-card" hidden>
+            <span class="card-eyebrow">Step 3 of 4</span>
             <h2>Place Fields</h2>
-            <p class="step-lead" id="place-lead">Choose a PDF and add a signer first.</p>
-            <div class="placer-bar" id="placer-bar" hidden>
+            <p class="step-lead">Pick a signer and a field type, then click where it goes.</p>
+            <div class="placer-bar" id="placer-bar">
                 <div class="bar-row" id="signer-chips"><span class="bar-label">Signer</span></div>
                 <div class="bar-row" id="type-chips"><span class="bar-label">Field</span></div>
                 <p class="placer-hint">Click a page to drop the field. Drag to move, × to remove.</p>
             </div>
             <div class="pages" id="pages"></div>
+            <div class="step-nav">
+                <p class="step-message" role="alert"></p>
+                <button type="button" class="btn btn-back" data-back>Back</button>
+                <button type="button" class="btn" data-next>Next: Review<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+            </div>
         </section>
 
-        <section class="main-card glow-card step-card reveal" id="send-card">
-            <span class="card-eyebrow">Step 4</span>
-            <h2>Send</h2>
-            <p class="step-lead">Documenso won't email anyone. Each signer gets a Sign task in the portal.</p>
-            <div class="send-row">
-                <p class="send-message" id="send-message" role="alert"></p>
+        <section class="main-card glow-card step-card reveal" id="send-card" hidden>
+            <span class="card-eyebrow">Step 4 of 4</span>
+            <h2>Review &amp; Send</h2>
+            <p class="step-lead">Nothing is emailed. Each signer gets a Signature task and signs in the portal.</p>
+            <ul class="review" id="review"></ul>
+            <div class="step-nav">
+                <p class="step-message" role="alert"></p>
+                <button type="button" class="btn btn-back" data-back>Back</button>
                 <button type="button" class="btn" id="send-btn"><span class="btn-spinner" aria-hidden="true"></span>Send for Signature</button>
             </div>
         </section>
@@ -799,12 +868,15 @@
         let currentUser = null;
         let clients = [];
         let signers = [];          // [{ id, name, sub, color }]
-        let fields = [];           // [{ key, signerId, type, page, x, y, w, h }]
+        let pdfs = [];             // [{ key, name, bytes (ArrayBuffer), pages }], in envelope order
+        let fields = [];           // [{ key, signerId, type, doc (its PDF's key), page, x, y, w, h }]
         let activeSigner = null;
         let activeType = 'SIGNATURE';
-        let pdfBytes = null;       // the chosen PDF (ArrayBuffer)
-        let pageCount = 0;
         let fieldKey = 0;
+        let selectedField = null;  // the field showing its × (the last one placed or touched)
+        let pdfKey = 0;
+        const MAX_PDFS = 5;
+        const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 
         async function api(payload) {
             const idToken = await currentUser.getIdToken();
@@ -823,48 +895,30 @@
             { value: 'Property', sub: 'About a property, so it needs the address', icon: HOUSE_ICON },
             { value: 'General', sub: 'Anything else, no address needed', icon: DOC_ICON },
         ];
-        let category = '';
-        (function mountCategoryPicker() {
-            const mount = $('#doc-category');
-            let highlighted = -1;
+        // A dropdown like the client dropdowns on the home page (used for the category and for adding signers).
+        // setOptions([{ main, sub, icon }], chosen index or -1, button text, whether that text is a placeholder) fills it.
+        function makePicker(mount, { id, labelledBy, onPick }) {
             mount.innerHTML = '<div class="picker">'
-                + '<button type="button" class="picker-btn" id="category-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="category-list" aria-labelledby="doc-category-label category-btn"><span></span></button>'
-                + '<div class="picker-list" id="category-list" role="listbox" aria-labelledby="doc-category-label">'
-                + CATEGORIES.map((c, i) => '<div class="picker-option" role="option" id="category-opt-' + i + '" aria-selected="false">' + c.icon
-                    + '<span class="cp-text"><span class="cp-main">' + c.value + '</span><span class="cp-sub">' + c.sub + '</span></span>' + CHECK_ICON + '</div>').join('')
-                + '</div></div>';
+                + '<button type="button" class="picker-btn" id="' + id + '-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + id + '-list" aria-labelledby="' + labelledBy + ' ' + id + '-btn"><span></span></button>'
+                + '<div class="picker-list" id="' + id + '-list" role="listbox" aria-labelledby="' + labelledBy + '"></div></div>';
             const picker = mount.firstElementChild;
             const button = picker.querySelector('.picker-btn');
             const label = button.firstElementChild;
-            const options = [...picker.querySelectorAll('.picker-option')];
-            function render() {
-                const chosen = CATEGORIES.findIndex(c => c.value === category);
-                options.forEach((o, i) => o.setAttribute('aria-selected', String(chosen === i)));
-                label.textContent = category || 'Choose a category…';
-                label.classList.toggle('is-placeholder', !category);
-                $('#address-fields').hidden = category !== 'Property';
-            }
+            const list = picker.querySelector('.picker-list');
+            let options = [];
+            let chosen = -1;
+            let highlighted = -1;
             function highlight(i) {
                 highlighted = i;
                 options.forEach((o, j) => o.classList.toggle('is-active', j === i));
-                if (i >= 0) button.setAttribute('aria-activedescendant', options[i].id);
+                if (i >= 0) { button.setAttribute('aria-activedescendant', options[i].id); options[i].scrollIntoView({ block: 'nearest' }); }
                 else button.removeAttribute('aria-activedescendant');
             }
             const isOpen = () => picker.classList.contains('is-open');
-            function open() { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(Math.max(0, CATEGORIES.findIndex(c => c.value === category))); }
+            function open() { if (!options.length) return; picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(Math.max(0, chosen)); }
             function close() { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); }
-            function pick(i) {
-                close();
-                category = CATEGORIES[i].value;
-                setMessage('');
-                render();
-                if (category === 'Property' && !$('#doc-street').value) $('#doc-street').focus();
-            }
+            function pick(i) { close(); onPick(i); }
             button.addEventListener('click', () => isOpen() ? close() : open());
-            options.forEach((o, i) => {
-                o.addEventListener('pointerdown', e => e.preventDefault());
-                o.addEventListener('click', () => pick(i));
-            });
             button.addEventListener('keydown', e => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
@@ -880,8 +934,41 @@
             });
             document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
             button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
-            render();
-        })();
+            return {
+                setOptions(items, selected, text, isPlaceholder) {
+                    chosen = selected;
+                    list.innerHTML = items.map((c, i) => '<div class="picker-option" role="option" id="' + id + '-opt-' + i + '" aria-selected="' + (i === selected) + '">' + c.icon
+                        + '<span class="cp-text"><span class="cp-main">' + escapeHtml(c.main) + '</span>' + (c.sub ? '<span class="cp-sub">' + escapeHtml(c.sub) + '</span>' : '') + '</span>'
+                        + CHECK_ICON + '</div>').join('');
+                    options = [...list.querySelectorAll('.picker-option')];
+                    options.forEach((o, i) => {
+                        o.addEventListener('pointerdown', e => e.preventDefault());
+                        o.addEventListener('click', () => { button.focus(); pick(i); });
+                    });
+                    label.textContent = text;
+                    label.classList.toggle('is-placeholder', isPlaceholder);
+                    button.disabled = !items.length;
+                    if (!items.length) close();
+                },
+            };
+        }
+
+        let category = '';
+        const categoryPicker = makePicker($('#doc-category'), {
+            id: 'category', labelledBy: 'doc-category-label',
+            onPick(i) {
+                category = CATEGORIES[i].value;
+                setMessage('');
+                renderCategory();
+                if (category === 'Property' && !$('#doc-street').value) $('#doc-street').focus();
+            },
+        });
+        function renderCategory() {
+            categoryPicker.setOptions(CATEGORIES.map(c => ({ main: c.value, sub: c.sub, icon: c.icon })),
+                CATEGORIES.findIndex(c => c.value === category), category || 'Choose a category…', !category);
+            $('#address-fields').hidden = category !== 'Property';
+        }
+        renderCategory();
 
         // Property address: Google's suggestions as you type the street; picking one fills in city, state and ZIP
         // (Same browser key as the sign-up page and the New Property address search)
@@ -995,73 +1082,117 @@
             search.addEventListener('blur', () => setTimeout(close, 150));
         })();
 
-        // --- Step 1: the PDF ---
+        // --- Step 1: the PDFs (signed together in one envelope, in this order) ---
         const fileInput = $('#doc-file');
-        const drop = $('#file-drop');
-        fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadPdf(fileInput.files[0]); });
-        ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('is-over'); }));
-        ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('is-over'); }));
-        drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadPdf(f); });
-        async function loadPdf(file) {
+        fileInput.addEventListener('change', () => {
+            const files = [...fileInput.files];
+            fileInput.value = ''; // so the same file can be chosen again after it's removed
+            addPdfs(files);
+        });
+        ['#file-drop', '#file-add'].forEach(sel => {
+            const tile = $(sel);
+            ['dragenter', 'dragover'].forEach(t => tile.addEventListener(t, e => { e.preventDefault(); tile.classList.add('is-over'); }));
+            ['dragleave', 'drop'].forEach(t => tile.addEventListener(t, e => { e.preventDefault(); tile.classList.remove('is-over'); }));
+            tile.addEventListener('drop', e => addPdfs([...e.dataTransfer.files]));
+        });
+        const formatSize = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB';
+        const pageWord = n => n + (n === 1 ? ' page' : ' pages');
+        async function addPdfs(files) {
             setMessage('');
-            if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { setMessage('Please choose a PDF file.'); return; }
-            if (file.size > 25 * 1024 * 1024) { setMessage('That PDF is over 25 MB.'); return; }
-            pdfBytes = await file.arrayBuffer();
-            $('#file-name').textContent = file.name;
-            if (!$('#doc-title').value.trim()) $('#doc-title').value = file.name.replace(/\.pdf$/i, '');
-            fields = [];
-            await renderPages();
+            for (const file of files) {
+                if (pdfs.length >= MAX_PDFS) { setMessage('One envelope can hold up to ' + MAX_PDFS + ' PDFs.'); break; }
+                if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { setMessage(file.name + ' isn’t a PDF.'); continue; }
+                if (pdfs.reduce((n, p) => n + p.bytes.byteLength, 0) + file.size > MAX_TOTAL_BYTES) { setMessage('The PDFs can add up to 25 MB at most.'); continue; }
+                const bytes = await file.arrayBuffer();
+                let doc;
+                try { doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise; } catch (err) {
+                    console.error(err);
+                    setMessage('We couldn’t open ' + file.name + '.');
+                    continue;
+                }
+                const pdf = { key: ++pdfKey, name: file.name.replace(/\.pdf$/i, ''), bytes, pages: doc.numPages };
+                pdfs.push(pdf);
+                if (!$('#doc-title').value.trim()) $('#doc-title').value = pdf.name;
+                renderPdfList();
+                await renderPages(pdf, doc);
+            }
             refreshPlacer();
         }
-        async function renderPages() {
-            const pagesEl = $('#pages');
-            pagesEl.innerHTML = '';
-            const doc = await pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
-            pageCount = doc.numPages;
+        function renderPdfList() {
+            $('#pdf-list').innerHTML = pdfs.map(p => '<li class="pdf-tile is-file"><span class="pdf-icon">' + DOC_ICON + '</span>'
+                + '<span class="pdf-text"><span class="pdf-name">' + escapeHtml(p.name) + '</span><span class="pdf-sub">' + pageWord(p.pages) + ' · ' + formatSize(p.bytes.byteLength) + '</span></span>'
+                + '<button type="button" class="pdf-remove" data-remove-pdf="' + p.key + '" aria-label="Remove ' + escapeHtml(p.name) + '">' + X_ICON + '</button></li>').join('');
+            $('#file-drop').hidden = pdfs.length > 0;
+            $('#file-add').hidden = !pdfs.length || pdfs.length >= MAX_PDFS;
+        }
+        $('#pdf-list').addEventListener('click', e => {
+            const b = e.target.closest('[data-remove-pdf]');
+            if (!b) return;
+            const key = Number(b.dataset.removePdf);
+            pdfs = pdfs.filter(p => p.key !== key);
+            fields = fields.filter(f => f.doc !== key);
+            const pagesEl = document.querySelector('.doc-pages[data-doc="' + key + '"]');
+            if (pagesEl) pagesEl.remove();
+            setMessage('');
+            renderPdfList();
+            refreshPlacer();
+        });
+        // Each PDF's pages, drawn for Step 3 (under the PDF's name when there's more than one)
+        async function renderPages(pdf, doc) {
+            const section = document.createElement('div');
+            section.className = 'doc-pages';
+            section.dataset.doc = pdf.key;
+            section.innerHTML = '<h3 class="doc-heading">' + DOC_ICON + '<span>' + escapeHtml(pdf.name) + '</span></h3>';
+            $('#pages').append(section);
             for (let n = 1; n <= doc.numPages; n++) {
                 const page = await doc.getPage(n);
                 const viewport = page.getViewport({ scale: 1.6 });
                 const wrap = document.createElement('div');
                 wrap.className = 'page';
+                wrap.dataset.doc = pdf.key;
                 wrap.dataset.page = n;
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 wrap.append(canvas);
                 wrap.insertAdjacentHTML('beforeend', '<span class="page-num">Page ' + n + ' of ' + doc.numPages + '</span>');
-                pagesEl.append(wrap);
+                section.append(wrap);
                 await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
             }
         }
 
-        // --- Step 2: signers ---
-        function fillSelect() {
-            const sel = $('#signer-select');
+        // --- Step 2: signers (picking a client adds them) ---
+        const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+        const formatPhone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
+        let available = []; // the clients in the dropdown (everyone not already a signer)
+        const signerPicker = makePicker($('#signer-picker'), { id: 'signer-pick', labelledBy: 'signer-picker-label', onPick: i => addSigner(available[i]) });
+        function fillSignerPicker(text) {
             const taken = new Set(signers.map(s => s.id));
-            sel.innerHTML = '<option value="">Choose a client…</option>' + clients.filter(c => !taken.has(c.id))
-                .map(c => '<option value="' + c.id + '">' + escapeHtml(c.name || c.id) + '</option>').join('');
+            const full = signers.length >= 10;
+            available = full ? [] : clients.filter(c => !taken.has(c.id));
+            signerPicker.setOptions(available.map(c => ({ main: c.name || formatPhone(c.id), sub: c.name ? formatPhone(c.id) : '', icon: PERSON_ICON })), -1,
+                text || (full ? 'Up to 10 signers' : available.length ? 'Choose a client…' : 'Everyone has been added'), true);
         }
-        $('#signer-add-btn').addEventListener('click', () => {
-            const id = $('#signer-select').value;
-            const c = clients.find(x => x.id === id);
+        fillSignerPicker('Loading clients…');
+        function addSigner(c) {
             if (!c || signers.length >= 10) return;
             const used = new Set(signers.map(s => s.color));
             const color = COLORS.find(col => !used.has(col)) || COLORS[0];
-            const email = (c.values && c.values['EMAIL']) || '';
-            signers.push({ id: c.id, name: c.name || c.id, sub: email || 'No email on file (signs in the portal only)', color });
-            activeSigner = c.id;
+            signers.push({ id: c.id, name: c.name || formatPhone(c.id), sub: c.name ? formatPhone(c.id) : '', color });
+            if (!activeSigner) activeSigner = c.id;
+            setMessage('');
             renderSigners();
             refreshPlacer();
-        });
+        }
         function renderSigners() {
             $('#signer-list').innerHTML = signers.map(s => {
                 const count = fields.filter(f => f.signerId === s.id).length;
                 return '<li class="signer"><span class="signer-dot" style="background:' + s.color + '"></span>'
-                    + '<span class="signer-name">' + escapeHtml(s.name) + '<span class="signer-sub">' + escapeHtml(s.sub) + '</span></span>'
+                    + '<span class="signer-name">' + escapeHtml(s.name) + (s.sub ? '<span class="signer-sub">' + escapeHtml(s.sub) + '</span>' : '') + '</span>'
                     + '<span class="signer-count">' + count + (count === 1 ? ' field' : ' fields') + '</span>'
                     + '<button type="button" class="signer-remove" data-remove="' + s.id + '" aria-label="Remove ' + escapeHtml(s.name) + '">' + X_ICON + '</button></li>';
             }).join('');
-            fillSelect();
+            fillSignerPicker();
         }
         $('#signer-list').addEventListener('click', e => {
             const b = e.target.closest('[data-remove]');
@@ -1075,9 +1206,8 @@
 
         // --- Step 3: placing fields ---
         function refreshPlacer() {
-            const ready = pdfBytes && signers.length;
-            $('#placer-bar').hidden = !ready;
-            $('#place-lead').textContent = ready ? 'Pick a signer and a field type, then click where it goes.' : 'Choose a PDF and add a signer first.';
+            if (!signers.some(s => s.id === activeSigner)) activeSigner = signers[0] ? signers[0].id : null;
+            $('#pages').classList.toggle('is-multi', pdfs.length > 1);
             $('#signer-chips').innerHTML = '<span class="bar-label">Signer</span>' + signers.map(s =>
                 '<button type="button" class="chip' + (s.id === activeSigner ? ' is-on' : '') + '" data-signer="' + s.id + '"><span class="signer-dot" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</button>').join('');
             $('#type-chips').innerHTML = '<span class="bar-label">Field</span>' + TYPES.map(t =>
@@ -1096,11 +1226,11 @@
         function drawFields() {
             document.querySelectorAll('.page .field').forEach(el => el.remove());
             fields.forEach(f => {
-                const page = document.querySelector('.page[data-page="' + f.page + '"]');
+                const page = document.querySelector('.page[data-doc="' + f.doc + '"][data-page="' + f.page + '"]');
                 if (!page) return;
                 const s = signerOf(f.signerId);
                 const el = document.createElement('div');
-                el.className = 'field';
+                el.className = 'field' + (f.key === selectedField ? ' is-selected' : '');
                 el.dataset.key = f.key;
                 el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f';
                 el.innerHTML = '<span>' + typeOf(f.type).label + ' · ' + escapeHtml(s.name.split(' ')[0]) + '</span>'
@@ -1117,8 +1247,16 @@
                 li.querySelector('.signer-count').textContent = count + (count === 1 ? ' field' : ' fields');
             });
         }
-        // Click empty space on a page: drop a field there (centered on the click)
+        // Click empty space on a page: drop a field there (centered on the click). Click a field's ×: remove it.
+        // (Both on click, so removing a field can't also drop a new one where it was)
         $('#pages').addEventListener('click', e => {
+            const del = e.target.closest('.field-del');
+            if (del) {
+                fields = fields.filter(x => String(x.key) !== del.parentElement.dataset.key);
+                selectedField = null;
+                drawFields();
+                return;
+            }
             if (e.target.closest('.field')) return;
             const page = e.target.closest('.page');
             if (!page || !activeSigner) return;
@@ -1126,16 +1264,18 @@
             const t = typeOf(activeType);
             const x = Math.min(100 - t.w, Math.max(0, (e.clientX - r.left) / r.width * 100 - t.w / 2));
             const y = Math.min(100 - t.h, Math.max(0, (e.clientY - r.top) / r.height * 100 - t.h / 2));
-            fields.push({ key: ++fieldKey, signerId: activeSigner, type: t.type, page: Number(page.dataset.page), x, y, w: t.w, h: t.h });
+            fields.push({ key: ++fieldKey, signerId: activeSigner, type: t.type, doc: Number(page.dataset.doc), page: Number(page.dataset.page), x, y, w: t.w, h: t.h });
+            selectedField = fieldKey;
             setMessage('');
             drawFields();
         });
-        // Remove and move (every field keeps its type's standard size)
+        // Move (every field keeps its type's standard size). Touching a field selects it, which shows its ×.
         $('#pages').addEventListener('pointerdown', e => {
             const el = e.target.closest('.field');
-            if (!el) return;
+            if (!el || e.target.closest('.field-del')) return;
             const f = fields.find(x => String(x.key) === el.dataset.key);
-            if (e.target.closest('.field-del')) { fields = fields.filter(x => x !== f); drawFields(); return; }
+            selectedField = f.key;
+            document.querySelectorAll('.page .field').forEach(x => x.classList.toggle('is-selected', x === el));
             e.preventDefault();
             const page = el.parentElement.getBoundingClientRect();
             const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y };
@@ -1153,12 +1293,95 @@
             el.addEventListener('pointercancel', up);
         });
 
-        // --- Step 4: send ---
-        function setMessage(text) { $('#send-message').textContent = text; }
+        // --- The steps: one card at a time, and Next only once the current step is complete ---
+        const STEPS = [
+            { card: '#doc-card', name: 'Document' },
+            { card: '#signer-card', name: 'Signers' },
+            { card: '#place-card', name: 'Fields' },
+            { card: '#send-card', name: 'Send' },
+        ];
+        const SMALL_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        let step = 0;
+        let reached = 0; // the furthest step opened so far (the header can jump back to any step up to it)
+        function setMessage(text) { $(STEPS[step].card + ' .step-message').textContent = text; }
+        const addressValues = () => ({ street: $('#doc-street').value.trim(), city: $('#doc-city').value.trim(), state: $('#doc-state').value.trim(), zip: $('#doc-zip').value.trim() });
+        // What's still missing on a step: { text, focus } or null
+        function stepProblem(n) {
+            if (n === 0) {
+                if (!$('#doc-title').value.trim()) return { text: 'Please give the document a title.', focus: '#doc-title' };
+                if (!category) return { text: 'Please choose a category.', focus: '#category-btn' };
+                if (category === 'Property') {
+                    const a = addressValues();
+                    if (!a.street || !a.city || !a.state) return { text: 'Please fill in the full property address.', focus: '#doc-street' };
+                    if (!/^\d{5}$/.test(a.zip)) return { text: 'Please enter a 5-digit ZIP code.', focus: '#doc-zip' };
+                }
+                if (!pdfs.length) return { text: 'Please choose a PDF.' };
+            }
+            if (n === 1 && !signers.length) return { text: 'Please add at least one signer.', focus: '#signer-pick-btn' };
+            if (n === 2) {
+                for (const s of signers) {
+                    if (!fields.some(f => f.signerId === s.id && (f.type === 'SIGNATURE' || f.type === 'INITIALS'))) return { text: s.name + ' needs at least one Signature or Initials field.' };
+                }
+            }
+            return null;
+        }
+        function showStep(n) {
+            step = n;
+            reached = Math.max(reached, n);
+            STEPS.forEach((s, i) => { $(s.card).hidden = i !== n; $(s.card + ' .step-message').textContent = ''; });
+            if (n === 2) refreshPlacer();
+            if (n === 3) renderReview();
+            renderStepper();
+            const top = $(STEPS[n].card).getBoundingClientRect().top;
+            if (top < 0) window.scrollTo({ top: window.scrollY + top - 20, behavior: 'smooth' });
+        }
+        // Forward: every step on the way has to be complete (it stops on the first one that isn't)
+        function goTo(n) {
+            for (let i = Math.min(step, n); i < n; i++) {
+                const problem = stepProblem(i);
+                if (!problem) continue;
+                if (i !== step) showStep(i);
+                setMessage(problem.text);
+                if (problem.focus) $(problem.focus).focus();
+                return false;
+            }
+            showStep(n);
+            return true;
+        }
+        function renderStepper() {
+            $('#stepper').innerHTML = STEPS.map((s, i) => '<li><button type="button" data-step="' + i + '" class="' + (i === step ? 'is-current' : i < step ? 'is-done' : '') + '"'
+                + (i > reached ? ' disabled' : '') + (i === step ? ' aria-current="step"' : '') + '>'
+                + '<span class="step-num">' + (i < step ? SMALL_CHECK : i + 1) + '</span><span class="step-name">' + s.name + '</span></button></li>').join('');
+        }
+        $('#stepper').addEventListener('click', e => {
+            const b = e.target.closest('[data-step]');
+            if (!b) return;
+            const n = Number(b.dataset.step);
+            if (n < step) showStep(n); else if (n > step) goTo(n);
+        });
+        document.querySelector('main').addEventListener('click', e => {
+            if (e.target.closest('[data-back]')) showStep(step - 1);
+            else if (e.target.closest('[data-next]')) goTo(step + 1);
+        });
+        renderStepper();
+
+        // --- Step 4: review and send ---
+        function renderReview() {
+            const a = addressValues();
+            const rows = [['Title', $('#doc-title').value.trim()], ['Category', category]];
+            if (category === 'Property') rows.push(['Property', a.street + ', ' + a.city + ', ' + a.state + ' ' + a.zip]);
+            rows.push([pdfs.length === 1 ? 'PDF' : 'PDFs', pdfs.map(p => p.name + ' (' + pageWord(p.pages) + ')').join('\n')]);
+            rows.push(['Signers', signers.map(s => {
+                const count = fields.filter(f => f.signerId === s.id).length;
+                return s.name + ' (' + count + (count === 1 ? ' field' : ' fields') + ')';
+            }).join('\n')]);
+            $('#review').innerHTML = rows.map(([k, v]) => '<li><span class="k">' + k + '</span><span class="v">' + escapeHtml(v).replace(/\n/g, '<br>') + '</span></li>').join('');
+        }
         const ERRORS = {
             needs_signature: 'Every signer needs at least one Signature or Initials field.',
             bad_signers: 'One of the signers is no longer in the client list. Please refresh.',
-            pdf_too_large: 'That PDF is over 25 MB.',
+            pdf_too_large: 'The PDFs add up to more than 25 MB.',
+            too_many_pdfs: 'One envelope can hold up to ' + MAX_PDFS + ' PDFs.',
             missing_title: 'Please give the document a title.',
             bad_category: 'Please choose a category.',
             bad_address: 'Please fill in the full property address.',
@@ -1169,21 +1392,13 @@
             reader.readAsDataURL(new Blob([buf], { type: 'application/pdf' }));
         });
         $('#send-btn').addEventListener('click', async () => {
+            // (Everything was checked on the way here, but check again in case a step was changed)
+            for (let i = 0; i < 3; i++) {
+                const problem = stepProblem(i);
+                if (problem) { showStep(i); setMessage(problem.text); return; }
+            }
             const title = $('#doc-title').value.trim();
-            if (!pdfBytes) return setMessage('Please choose a PDF.');
-            if (!title) { $('#doc-title').focus(); return setMessage('Please give the document a title.'); }
-            if (!category) { $('#category-btn').focus(); return setMessage('Please choose a category.'); }
-            const address = category !== 'Property' ? {}
-                : { street: $('#doc-street').value.trim(), city: $('#doc-city').value.trim(), state: $('#doc-state').value.trim(), zip: $('#doc-zip').value.trim() };
-            if (category === 'Property') {
-                if (!address.street || !address.city || !address.state) { $('#doc-street').focus(); return setMessage('Please fill in the full property address.'); }
-                if (!/^\d{5}$/.test(address.zip)) { $('#doc-zip').focus(); return setMessage('Please enter a 5-digit ZIP code.'); }
-            }
-            if (!signers.length) return setMessage('Please add at least one signer.');
-            for (const s of signers) {
-                const mine = fields.filter(f => f.signerId === s.id);
-                if (!mine.some(f => f.type === 'SIGNATURE' || f.type === 'INITIALS')) return setMessage(s.name + ' needs at least one Signature or Initials field.');
-            }
+            const address = category === 'Property' ? addressValues() : {};
             const btn = $('#send-btn');
             btn.disabled = true;
             btn.classList.add('is-loading');
@@ -1195,14 +1410,17 @@
                     title,
                     category,
                     ...address,
-                    pdf: await toBase64(pdfBytes),
+                    pdfs: await Promise.all(pdfs.map(async p => ({ name: p.name, data: await toBase64(p.bytes) }))),
                     signers: signers.map(s => ({
                         accountId: s.id,
-                        fields: fields.filter(f => f.signerId === s.id).map(f => ({ type: f.type, page: f.page, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h) })),
+                        fields: fields.filter(f => f.signerId === s.id).map(f => ({
+                            type: f.type, doc: pdfs.findIndex(p => p.key === f.doc), page: f.page, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h),
+                        })),
                     })),
                 });
                 if (!json.ok) throw new Error(json.error || 'failed');
-                ['#doc-card', '#signer-card', '#place-card', '#send-card'].forEach(sel => { $(sel).hidden = true; });
+                STEPS.forEach(s => { $(s.card).hidden = true; });
+                $('#stepper').hidden = true;
                 $('#done-text').textContent = '“' + title + '” was sent to ' + signers.map(s => s.name).join(', ') + '. It’s now in their Current Tasks.';
                 $('#done-card').hidden = false;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1221,16 +1439,17 @@
                 const me = await api({});
                 const isAdmin = me.ok && String((me.row || {}).ADMIN || '').trim().toUpperCase() === 'TRUE';
                 if (!isAdmin) {
-                    ['#doc-card', '#signer-card', '#place-card', '#send-card'].forEach(sel => { $(sel).hidden = true; });
+                    STEPS.forEach(s => { $(s.card).hidden = true; });
+                    $('#stepper').hidden = true;
                     $('#no-access').hidden = false;
                     return;
                 }
                 const data = await api({ action: 'adminClients' });
                 clients = data.ok ? data.clients || [] : [];
-                fillSelect();
+                fillSignerPicker();
             } catch (err) {
                 console.error(err);
-                $('#signer-select').innerHTML = '<option value="">Couldn’t load clients. Please refresh.</option>';
+                fillSignerPicker('Couldn’t load clients. Please refresh.');
             }
         }
 

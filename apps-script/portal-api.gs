@@ -1079,8 +1079,8 @@ function adminCreateClient_(account, body) {
 // The API key lives only in Script Properties (DOCUMENSO_API_TOKEN). Documents are sent with Documenso's emails off:
 // each signer gets a Signature task (see addTasks_) and signs inside the portal. Each signer of each document is one
 // row in the "Portal Signatures" spreadsheet (created on first use; its ID is kept in Script Properties).
-// Once everyone has signed, the signed PDF and its certificate are saved to the SIGNED_FOLDER_ID Drive folder and the
-// document gets a row in the DOCUMENTS_SHEET_ID log, on the tab named for its category. That happens the moment the
+// Once everyone has signed, each signed PDF and the certificate are saved to the SIGNED_FOLDER_ID Drive folder and each
+// PDF gets a row in the DOCUMENTS_SHEET_ID log, on the tab named for its category. That happens the moment the
 // last signer finishes: Documenso's DOCUMENT_COMPLETED webhook calls this script (see setupDocumensoWebhook).
 const DOCUMENSO_URL = 'https://sign.andrewmarth.com';
 const DOCUMENTS_SHEET_ID = '1s8ll4sD2TqN6qP7hAp2P9eG0a5G6sTevR-kGYQym_Do';
@@ -1103,7 +1103,11 @@ function documenso_(method, path, body, isForm, asFile) {
   if (!token) throw new Error('DOCUMENSO_API_TOKEN is not set');
   const options = { method: method, headers: { Authorization: token }, muteHttpExceptions: true };
   if (body !== undefined) {
-    if (isForm) options.payload = body;
+    if (isForm && Object.keys(body).some(function (k) { return Array.isArray(body[k]); })) {
+      const form = multipartBody_(body);
+      options.contentType = form.contentType;
+      options.payload = form.bytes;
+    } else if (isForm) options.payload = body;
     else { options.contentType = 'application/json'; options.payload = JSON.stringify(body); }
   }
   const res = UrlFetchApp.fetch(DOCUMENSO_URL + '/api/v2' + path, options);
@@ -1112,6 +1116,28 @@ function documenso_(method, path, body, isForm, asFile) {
   if (code < 200 || code >= 300) throw new Error('Documenso ' + method + ' ' + path + ' failed (' + code + '): ' + text.slice(0, 300));
   if (asFile) return res.getBlob();
   return text ? JSON.parse(text) : {};
+}
+
+// A multipart form body built by hand, for forms that repeat a field (UrlFetchApp's own forms can't, and
+// Documenso takes several PDFs as repeated "files" fields). form: { name: string | Blob | [Blob, ...] }
+function multipartBody_(form) {
+  const boundary = 'portal' + Utilities.getUuid().replace(/-/g, '');
+  var bytes = [];
+  const add = function (s) { bytes = bytes.concat(Utilities.newBlob(s).getBytes()); };
+  Object.keys(form).forEach(function (name) {
+    [].concat(form[name]).forEach(function (value) {
+      if (typeof value === 'string') {
+        add('--' + boundary + '\r\nContent-Disposition: form-data; name="' + name + '"\r\n\r\n' + value + '\r\n');
+      } else {
+        add('--' + boundary + '\r\nContent-Disposition: form-data; name="' + name + '"; filename="' + value.getName().replace(/"/g, '') + '"\r\n'
+          + 'Content-Type: ' + value.getContentType() + '\r\n\r\n');
+        bytes = bytes.concat(value.getBytes());
+        add('\r\n');
+      }
+    });
+  });
+  add('--' + boundary + '--\r\n');
+  return { contentType: 'multipart/form-data; boundary=' + boundary, bytes: bytes };
 }
 
 // The signatures sheet (made the first time it's needed)
@@ -1153,9 +1179,10 @@ function signatureRows_() {
   return { sheet: sheet, headers: headers, rows: rows };
 }
 
-// Admins: send a PDF for signature. body: { title, category, street, city, state, zip (Property only), pdf (base64),
-//   signers: [{ accountId, fields: [{ type, page, x, y, w, h }] }] }
-// Positions are percentages of the page (x/y from the top-left corner).
+// Admins: send PDFs for signature, all in one envelope. body: { title, category, street, city, state, zip (Property only),
+//   pdfs: [{ name, data (base64) }], signers: [{ accountId, fields: [{ type, doc, page, x, y, w, h }] }] }
+// doc is the field's PDF (its place in pdfs); positions are percentages of the page (x/y from the top-left corner).
+const MAX_SIGNATURE_PDFS = 5;
 function adminSendForSignature_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
   const title = cleanText_(body.title, 200);
@@ -1167,10 +1194,17 @@ function adminSendForSignature_(account, body) {
     address = { street: cleanText_(body.street, 200), city: cleanText_(body.city, 100), state: cleanText_(body.state, 30), zip: cleanText_(body.zip, 10) };
     if (!address.street || !address.city || !address.state || !/^\d{5}$/.test(address.zip)) return { ok: false, error: 'bad_address' };
   }
-  const pdfBase64 = String(body.pdf || '');
-  if (!pdfBase64) return { ok: false, error: 'missing_pdf' };
-  const bytes = Utilities.base64Decode(pdfBase64);
-  if (bytes.length > 25 * 1024 * 1024) return { ok: false, error: 'pdf_too_large' };
+  const pdfList = Array.isArray(body.pdfs) ? body.pdfs : [];
+  if (!pdfList.length || pdfList.some(function (p) { return !p || !String(p.data || ''); })) return { ok: false, error: 'missing_pdf' };
+  if (pdfList.length > MAX_SIGNATURE_PDFS) return { ok: false, error: 'too_many_pdfs' };
+  var totalBytes = 0;
+  const files = pdfList.map(function (p, i) {
+    const bytes = Utilities.base64Decode(String(p.data));
+    totalBytes += bytes.length;
+    const name = (cleanText_(p.name, 150) || title).replace(/[^\w .()&,-]+/g, '').trim() || 'Document ' + (i + 1);
+    return Utilities.newBlob(bytes, 'application/pdf', name + '.pdf');
+  });
+  if (totalBytes > 25 * 1024 * 1024) return { ok: false, error: 'pdf_too_large' };
   const signers = Array.isArray(body.signers) ? body.signers : [];
   if (!signers.length || signers.length > 10) return { ok: false, error: 'bad_signers' };
 
@@ -1185,16 +1219,17 @@ function adminSendForSignature_(account, body) {
     if (!row || seen[accountId]) return { ok: false, error: 'bad_signers' };
     seen[accountId] = true;
     const name = [row['FIRST NAME'], row['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' ') || accountId;
-    const realEmail = String(row['EMAIL'] || '').trim().toLowerCase();
-    // No email on file: an address that is never delivered to (Documenso's emails are off anyway)
-    const email = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(realEmail) ? realEmail : accountId + '@clients.andrewmarth.com';
+    // Signing happens only in the portal, so Documenso never gets a client's real email: every signer has an address
+    // on clients.andrewmarth.com, which doesn't exist and can't receive mail (Documenso's emails are switched off too)
+    const email = accountId + '@clients.andrewmarth.com';
     const fields = (Array.isArray(signers[i].fields) ? signers[i].fields : []).map(function (f) {
       const type = String(f.type || '').toUpperCase();
       if (SIGNATURE_FIELD_TYPES.indexOf(type) < 0) return null;
+      const doc = Math.round(Number(f.doc || 0));
       const page = Math.round(Number(f.page));
       const x = num(f.x, 0, 100), y = num(f.y, 0, 100), w = num(f.w, 1, 100), h = num(f.h, 1, 100);
-      if (!(page >= 1) || x === null || y === null || w === null || h === null) return null;
-      return { type: type, identifier: 0, page: page, positionX: x, positionY: y, width: w, height: h };
+      if (!(doc >= 0 && doc < files.length) || !(page >= 1) || x === null || y === null || w === null || h === null) return null;
+      return { type: type, identifier: doc, page: page, positionX: x, positionY: y, width: w, height: h };
     });
     if (!fields.length || fields.some(function (f) { return !f; })) return { ok: false, error: 'bad_fields' };
     if (!fields.some(function (f) { return f.type === 'SIGNATURE' || f.type === 'INITIALS'; })) return { ok: false, error: 'needs_signature' };
@@ -1215,7 +1250,7 @@ function adminSendForSignature_(account, body) {
       recipients: recipients.map(function (r) { return { name: r.name, email: r.email, role: 'SIGNER', fields: r.fields }; }),
       meta: meta,
     }),
-    files: Utilities.newBlob(bytes, 'application/pdf', title.replace(/[^\w .-]+/g, '') + '.pdf'),
+    files: files.length === 1 ? files[0] : files,
   }, true);
   const sent = documenso_('post', '/envelope/distribute', { envelopeId: created.id, meta: { distributionMethod: 'NONE', emailSettings: DOCUMENSO_NO_EMAIL } });
 
@@ -1295,14 +1330,17 @@ function logSignedEnvelope_(data, env) {
   }
 }
 
-// Saves the signed PDF and certificate to Drive, adds the log row and marks the signer rows LOGGED
+// Saves each signed PDF and the certificate to Drive, adds a log row per PDF and marks the signer rows LOGGED
 function fileSignedEnvelope_(env, fresh, rows) {
   const first = rows[0];
   const title = first['TITLE'] || env.title || 'Document';
   const folder = DriveApp.getFolderById(SIGNED_FOLDER_ID);
-  const item = (env.envelopeItems || []).slice().sort(function (a, b) { return a.order - b.order; })[0];
-  const pdf = documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
-  const docFile = folder.createFile(pdf.setName(title + ' - Signed.pdf').setContentType('application/pdf'));
+  const items = (env.envelopeItems || []).slice().sort(function (a, b) { return a.order - b.order; });
+  const docFiles = items.map(function (item) {
+    const pdf = documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
+    const name = items.length > 1 ? title + ' - ' + String(item.title || '').replace(/\.pdf$/i, '') : title;
+    return folder.createFile(pdf.setName(name + ' - Signed.pdf').setContentType('application/pdf'));
+  });
   var certFile = null;
   try {
     const cert = documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
@@ -1321,17 +1359,22 @@ function fileSignedEnvelope_(env, fresh, rows) {
     'STREET ADDRESS': first['STREET ADDRESS'], 'CITY': first['CITY'], 'STATE': first['STATE'], 'ZIP': first['ZIP'],
     'EXECUTED': true,
     'IP ADDRESS': rows.map(function (row) { return ipByEmail[String(row['EMAIL']).toLowerCase()] || ''; }).filter(String).join(', '),
-    'DOCUMENSO FILE ID': env.id, 'DOCUMENT DRIVE FILE ID': docFile.getId(), 'DOCUMENT VIEW LINK': docFile.getUrl(),
-    'DOCUMENT DOWNLOAD LINK': download(docFile),
+    'DOCUMENSO FILE ID': env.id,
     'CERTIFICATE DRIVE FILE ID': certFile ? certFile.getId() : '', 'CERTIFICATE VIEW LINK': certFile ? certFile.getUrl() : '',
     'CERTIFICATE DOWNLOAD LINK': certFile ? download(certFile) : '',
   };
   rows.slice(0, 10).forEach(function (row, i) { values['SIGNER ACCOUNT ID ' + (i + 1)] = row['ACCOUNT ID']; });
   const tab = SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheetByName(first['CATEGORY'])
     || SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets()[0];
-  appendRow_(tab, values);
+  // One row per PDF; the envelope's PDFs share its certificate
+  docFiles.forEach(function (docFile) {
+    values['DOCUMENT DRIVE FILE ID'] = docFile.getId();
+    values['DOCUMENT VIEW LINK'] = docFile.getUrl();
+    values['DOCUMENT DOWNLOAD LINK'] = download(docFile);
+    appendRow_(tab, values);
+  });
   const c = fresh.headers.indexOf('LOGGED');
-  rows.forEach(function (row) { fresh.sheet.getRange(row.rowNumber, c + 1).setValue(docFile.getId()); });
+  rows.forEach(function (row) { fresh.sheet.getRange(row.rowNumber, c + 1).setValue(docFiles[0].getId()); });
   // Saved before the lock is let go, so a request waiting on it sees LOGGED
   SpreadsheetApp.flush();
 }
