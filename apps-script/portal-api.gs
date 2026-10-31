@@ -150,8 +150,8 @@ function doPost(e) {
     if (body.action === 'adminCreateClient') return json_(adminCreateClient_(found.row, body));
     // E-signatures: admins send documents; clients see and sign their own
     if (body.action === 'adminSendForSignature') return json_(adminSendForSignature_(found.row, body));
-    if (body.action === 'adminSignatureCategories') return json_(adminSignatureCategories_(found.row));
-    if (body.action === 'mySignatureTasks') return json_(mySignatureTasks_(id));
+    if (body.action === 'myTasks') return json_(myTasks_(id));
+    if (body.action === 'completeTask') return json_(completeTask_(id, body));
     if (body.action === 'signingTask') return json_(signingTask_(id, body));
 
     // pages.html: one PAGES row (its PAGE TYPE decides what the page shows) plus what that type needs
@@ -1077,7 +1077,7 @@ function adminCreateClient_(account, body) {
 
 // --- E-signatures (Documenso at sign.andrewmarth.com) ---
 // The API key lives only in Script Properties (DOCUMENSO_API_TOKEN). Documents are sent with Documenso's emails off:
-// signers find them in the portal's Current Tasks and sign inside the portal. Each signer of each document is one
+// each signer gets a Signature task (see addTasks_) and signs inside the portal. Each signer of each document is one
 // row in the "Portal Signatures" spreadsheet (created on first use; its ID is kept in Script Properties).
 // Once everyone has signed, the signed PDF and its certificate are saved to the SIGNED_FOLDER_ID Drive folder and the
 // document gets a row in the DOCUMENTS_SHEET_ID log, on the tab named for its category. That happens the moment the
@@ -1134,14 +1134,9 @@ function signaturesSheet_() {
   return sheet;
 }
 
-// The categories documents can be filed under: the tabs of the DOCUMENTS log
-function signatureCategories_() {
-  return SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets().map(function (sh) { return sh.getName(); });
-}
-function adminSignatureCategories_(account) {
-  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
-  return { ok: true, categories: signatureCategories_() };
-}
+// The categories a document can be sent under. Property documents carry a property address; General ones don't.
+// A finished document is filed on the DOCUMENTS log tab named for its category, or the first tab if there's none.
+const SIGNATURE_CATEGORIES = ['Property', 'General'];
 
 // Every signer row, with its sheet row number
 function signatureRows_() {
@@ -1158,17 +1153,20 @@ function signatureRows_() {
   return { sheet: sheet, headers: headers, rows: rows };
 }
 
-// Admins: send a PDF for signature. body: { title, category, street, city, state, zip, pdf (base64),
+// Admins: send a PDF for signature. body: { title, category, street, city, state, zip (Property only), pdf (base64),
 //   signers: [{ accountId, fields: [{ type, page, x, y, w, h }] }] }
 // Positions are percentages of the page (x/y from the top-left corner).
 function adminSendForSignature_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
   const title = cleanText_(body.title, 200);
   if (!title) return { ok: false, error: 'missing_title' };
-  const category = signatureCategories_().filter(function (c) { return c === String(body.category || ''); })[0];
+  const category = SIGNATURE_CATEGORIES.filter(function (c) { return c === String(body.category || ''); })[0];
   if (!category) return { ok: false, error: 'bad_category' };
-  const address = { street: cleanText_(body.street, 200), city: cleanText_(body.city, 100), state: cleanText_(body.state, 30), zip: cleanText_(body.zip, 10) };
-  if (!address.street || !address.city || !address.state || !/^\d{5}$/.test(address.zip)) return { ok: false, error: 'bad_address' };
+  var address = { street: '', city: '', state: '', zip: '' };
+  if (category === 'Property') {
+    address = { street: cleanText_(body.street, 200), city: cleanText_(body.city, 100), state: cleanText_(body.state, 30), zip: cleanText_(body.zip, 10) };
+    if (!address.street || !address.city || !address.state || !/^\d{5}$/.test(address.zip)) return { ok: false, error: 'bad_address' };
+  }
   const pdfBase64 = String(body.pdf || '');
   if (!pdfBase64) return { ok: false, error: 'missing_pdf' };
   const bytes = Utilities.base64Decode(pdfBase64);
@@ -1207,6 +1205,7 @@ function adminSendForSignature_(account, body) {
     distributionMethod: 'NONE',
     emailSettings: DOCUMENSO_NO_EMAIL,
     timezone: 'America/Phoenix',
+    dateFormat: 'MM/dd/yyyy', // Date fields show just the date signed (Documenso's default adds the time)
     typedSignatureEnabled: true, drawSignatureEnabled: true, uploadSignatureEnabled: false,
   };
   const created = documenso_('post', '/envelope/create', {
@@ -1233,11 +1232,18 @@ function adminSendForSignature_(account, body) {
     };
     data.sheet.appendRow(data.headers.map(function (h) { return values[h] === undefined ? '' : values[h]; }));
   });
+  addTasks_(recipients.map(function (r) {
+    return {
+      'ASSIGNED': r.accountId, 'SECTION': 'Signature', 'TYPE': 'Signature', 'TITLE': 'Signature Request',
+      'DESCRIPTION': 'You have been requested to sign ' + title, 'LINK': SIGN_PAGE_URL + encodeURIComponent(created.id),
+    };
+  }));
   return { ok: true, envelopeId: created.id };
 }
 
-// Brings one envelope's rows up to date with Documenso (who has signed, and whether it's finished)
-function refreshEnvelope_(data, envelopeId) {
+// Brings one envelope's rows up to date with Documenso (who has signed, and whether it's finished).
+// skipFiling: leave a finished document for Documenso's webhook to file (so the signing page isn't kept waiting).
+function refreshEnvelope_(data, envelopeId, skipFiling) {
   const env = documenso_('get', '/envelope/' + encodeURIComponent(envelopeId));
   const byToken = {};
   (env.recipients || []).forEach(function (r) { byToken[r.token] = r; });
@@ -1253,8 +1259,14 @@ function refreshEnvelope_(data, envelopeId) {
     }
     set('DOCUMENT STATUS', env.status || row['DOCUMENT STATUS']);
   });
+  // Signers who are done (or whose document is no longer waiting) lose their Signature task
+  const done = data.rows.filter(function (row) {
+    return row['ENVELOPE ID'] === envelopeId && (row['SIGNING STATUS'] === 'SIGNED' || row['SIGNING STATUS'] === 'REJECTED'
+      || (row['DOCUMENT STATUS'] !== 'PENDING' && row['DOCUMENT STATUS'] !== ''));
+  }).map(function (row) { return row['ACCOUNT ID']; });
+  if (done.length) completeSignatureTasks_(envelopeId, done);
   const unlogged = data.rows.some(function (row) { return row['ENVELOPE ID'] === envelopeId && !row['LOGGED']; });
-  if (env.status === 'COMPLETED' && unlogged) logSignedEnvelope_(data, env);
+  if (env.status === 'COMPLETED' && unlogged && !skipFiling) logSignedEnvelope_(data, env);
 }
 
 // A finished document: its signed PDF and certificate go to the Drive folder, and it gets a row in the DOCUMENTS log
@@ -1266,44 +1278,62 @@ function logSignedEnvelope_(data, env) {
     const fresh = signatureRows_();
     const rows = fresh.rows.filter(function (row) { return row['ENVELOPE ID'] === env.id; });
     if (!rows.length || rows.some(function (row) { return row['LOGGED']; })) return;
-    const first = rows[0];
-    const title = first['TITLE'] || env.title || 'Document';
-    const folder = DriveApp.getFolderById(SIGNED_FOLDER_ID);
-    const item = (env.envelopeItems || []).slice().sort(function (a, b) { return a.order - b.order; })[0];
-    const pdf = documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
-    const docFile = folder.createFile(pdf.setName(title + ' - Signed.pdf').setContentType('application/pdf'));
-    var certFile = null;
+    // Claimed in Script Properties before the slow part: Documenso gives up on a webhook call after ~12 seconds and
+    // retries while this one is still filing, and a property (unlike the sheet) is seen by the retry at once
+    const props = PropertiesService.getScriptProperties();
+    const claim = 'FILING_' + env.id;
+    if (props.getProperty(claim)) return;
+    props.setProperty(claim, String(Date.now()));
     try {
-      const cert = documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
-      certFile = folder.createFile(cert.setName(title + ' - Certificate.pdf').setContentType('application/pdf'));
-    } catch (err) { console.error(err); }
-    // Where each signer signed from, in signer order
-    const ipByEmail = {};
-    try {
-      (documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/audit-log?perPage=100').data || []).forEach(function (e) {
-        if (e.type === 'DOCUMENT_RECIPIENT_COMPLETED' && e.email && e.ipAddress) ipByEmail[String(e.email).toLowerCase()] = e.ipAddress;
-      });
-    } catch (err) { console.error(err); }
-    const download = function (file) { return 'https://drive.google.com/uc?export=download&id=' + file.getId(); };
-    const values = {
-      'DATE SIGNED': env.completedAt ? new Date(env.completedAt) : new Date(), 'CATEGORY': first['CATEGORY'],
-      'STREET ADDRESS': first['STREET ADDRESS'], 'CITY': first['CITY'], 'STATE': first['STATE'], 'ZIP': first['ZIP'],
-      'EXECUTED': true,
-      'IP ADDRESS': rows.map(function (row) { return ipByEmail[String(row['EMAIL']).toLowerCase()] || ''; }).filter(String).join(', '),
-      'DOCUMENSO FILE ID': env.id, 'DOCUMENT DRIVE FILE ID': docFile.getId(), 'DOCUMENT VIEW LINK': docFile.getUrl(),
-      'DOCUMENT DOWNLOAD LINK': download(docFile),
-      'CERTIFICATE DRIVE FILE ID': certFile ? certFile.getId() : '', 'CERTIFICATE VIEW LINK': certFile ? certFile.getUrl() : '',
-      'CERTIFICATE DOWNLOAD LINK': certFile ? download(certFile) : '',
-    };
-    rows.slice(0, 10).forEach(function (row, i) { values['SIGNER ACCOUNT ID ' + (i + 1)] = row['ACCOUNT ID']; });
-    const tab = SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheetByName(first['CATEGORY'])
-      || SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets()[0];
-    appendRow_(tab, values);
-    const c = fresh.headers.indexOf('LOGGED');
-    rows.forEach(function (row) { fresh.sheet.getRange(row.rowNumber, c + 1).setValue(docFile.getId()); });
+      fileSignedEnvelope_(env, fresh, rows);
+    } catch (err) {
+      props.deleteProperty(claim);
+      throw err;
+    }
   } finally {
     lock.releaseLock();
   }
+}
+
+// Saves the signed PDF and certificate to Drive, adds the log row and marks the signer rows LOGGED
+function fileSignedEnvelope_(env, fresh, rows) {
+  const first = rows[0];
+  const title = first['TITLE'] || env.title || 'Document';
+  const folder = DriveApp.getFolderById(SIGNED_FOLDER_ID);
+  const item = (env.envelopeItems || []).slice().sort(function (a, b) { return a.order - b.order; })[0];
+  const pdf = documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
+  const docFile = folder.createFile(pdf.setName(title + ' - Signed.pdf').setContentType('application/pdf'));
+  var certFile = null;
+  try {
+    const cert = documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
+    certFile = folder.createFile(cert.setName(title + ' - Certificate.pdf').setContentType('application/pdf'));
+  } catch (err) { console.error(err); }
+  // Where each signer signed from, in signer order
+  const ipByEmail = {};
+  try {
+    (documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/audit-log?perPage=100').data || []).forEach(function (e) {
+      if (e.type === 'DOCUMENT_RECIPIENT_COMPLETED' && e.email && e.ipAddress) ipByEmail[String(e.email).toLowerCase()] = e.ipAddress;
+    });
+  } catch (err) { console.error(err); }
+  const download = function (file) { return 'https://drive.google.com/uc?export=download&id=' + file.getId(); };
+  const values = {
+    'DATE SIGNED': env.completedAt ? new Date(env.completedAt) : new Date(), 'CATEGORY': first['CATEGORY'],
+    'STREET ADDRESS': first['STREET ADDRESS'], 'CITY': first['CITY'], 'STATE': first['STATE'], 'ZIP': first['ZIP'],
+    'EXECUTED': true,
+    'IP ADDRESS': rows.map(function (row) { return ipByEmail[String(row['EMAIL']).toLowerCase()] || ''; }).filter(String).join(', '),
+    'DOCUMENSO FILE ID': env.id, 'DOCUMENT DRIVE FILE ID': docFile.getId(), 'DOCUMENT VIEW LINK': docFile.getUrl(),
+    'DOCUMENT DOWNLOAD LINK': download(docFile),
+    'CERTIFICATE DRIVE FILE ID': certFile ? certFile.getId() : '', 'CERTIFICATE VIEW LINK': certFile ? certFile.getUrl() : '',
+    'CERTIFICATE DOWNLOAD LINK': certFile ? download(certFile) : '',
+  };
+  rows.slice(0, 10).forEach(function (row, i) { values['SIGNER ACCOUNT ID ' + (i + 1)] = row['ACCOUNT ID']; });
+  const tab = SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheetByName(first['CATEGORY'])
+    || SpreadsheetApp.openById(DOCUMENTS_SHEET_ID).getSheets()[0];
+  appendRow_(tab, values);
+  const c = fresh.headers.indexOf('LOGGED');
+  rows.forEach(function (row) { fresh.sheet.getRange(row.rowNumber, c + 1).setValue(docFile.getId()); });
+  // Saved before the lock is let go, so a request waiting on it sees LOGGED
+  SpreadsheetApp.flush();
 }
 
 // Run once from the editor: makes the webhook secret (if there isn't one) and logs the URL to give Documenso
@@ -1336,29 +1366,13 @@ function checkSignatures() {
   });
 }
 
-// The signed-in client's documents still waiting for their signature
-// (Read from the sheet only, so the home page never waits on Documenso; the signing page brings rows up to date.)
-function mySignatureTasks_(id) {
-  const data = signatureRows_();
-  const mine = data.rows.filter(function (row) {
-    return row['ACCOUNT ID'] === id && row['SIGNING STATUS'] !== 'SIGNED' && row['SIGNING STATUS'] !== 'REJECTED'
-      && (row['DOCUMENT STATUS'] === 'PENDING' || row['DOCUMENT STATUS'] === '');
-  });
-  return {
-    ok: true,
-    tasks: mine.map(function (row) {
-      return { envelopeId: row['ENVELOPE ID'], title: row['TITLE'], sentDate: row['SENT DATE'], sentBy: row['SENT BY'] };
-    }),
-  };
-}
-
 // The signing session for one of the signed-in client's own documents
 function signingTask_(id, body) {
   const envelopeId = String(body.envelopeId || '');
   const data = signatureRows_();
   const row = data.rows.filter(function (r) { return r['ENVELOPE ID'] === envelopeId && r['ACCOUNT ID'] === id; })[0];
   if (!row) return { ok: false, error: 'not_found' };
-  try { refreshEnvelope_(data, envelopeId); } catch (err) { console.error(err); }
+  try { refreshEnvelope_(data, envelopeId, true); } catch (err) { console.error(err); }
   return {
     ok: true,
     title: row['TITLE'],
@@ -1367,6 +1381,111 @@ function signingTask_(id, body) {
     documentStatus: row['DOCUMENT STATUS'],
     signUrl: DOCUMENSO_URL + '/embed/sign/' + encodeURIComponent(row['RECIPIENT TOKEN']),
   };
+}
+
+// --- Tasks (the home page's Current Tasks card) ---
+// One row per task in the TASKS_SHEET_ID sheet (its first tab, gid 0). ASSIGNED is the account the task belongs to;
+// it shows on their home page, grouped by SECTION, until COMPLETED is TRUE.
+const TASKS_SHEET_ID = '1CikwhTyAJtXr62br7sGSfOIRGTQ9ua9cp7bKNu2Q5oc';
+const SIGN_PAGE_URL = 'https://portal.andrewmarth.com/sign?id=';
+const TEXT_LINE_COUNT = 15;
+
+function tasksSheet_() {
+  const ss = SpreadsheetApp.openById(TASKS_SHEET_ID);
+  return ss.getSheets().filter(function (sh) { return sh.getSheetId() === 0; })[0] || ss.getSheets()[0];
+}
+
+// Every task row, with its sheet row number
+function taskRows_() {
+  const sheet = tasksSheet_();
+  const values = sheet.getDataRange().getDisplayValues();
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
+  const rows = [];
+  for (var r = 1; r < values.length; r++) {
+    if (!values[r].some(function (v) { return String(v).trim() !== ''; })) continue;
+    const row = { rowNumber: r + 1 };
+    headers.forEach(function (h, c) { row[h] = String(values[r][c]).trim(); });
+    rows.push(row);
+  }
+  return { sheet: sheet, headers: headers, rows: rows };
+}
+
+// Adds one task row per entry (each entry is { COLUMN: value }), numbered on from the highest TASK ID and dated today.
+// The script lock keeps two requests from handing out the same TASK ID.
+function addTasks_(tasks) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = tasksSheet_();
+    const idCol = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
+      .map(function (h) { return String(h).trim().toUpperCase(); }).indexOf('TASK ID') + 1;
+    if (!idCol) throw new Error('The tasks sheet has no TASK ID column');
+    var highest = 0;
+    if (sheet.getLastRow() >= 2) {
+      sheet.getRange(2, idCol, sheet.getLastRow() - 1, 1).getValues().forEach(function (r) {
+        const n = Number(String(r[0]).replace(/,/g, ''));
+        if (isFinite(n) && n > highest) highest = n;
+      });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    tasks.forEach(function (task, i) {
+      const values = { 'TASK ID': highest + 1 + i, 'COMPLETED': false, 'DATE': today };
+      Object.keys(task).forEach(function (k) { values[k] = task[k]; });
+      appendRow_(sheet, values);
+    });
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// The signed-in account's open tasks, in sheet order
+function myTasks_(id) {
+  const data = taskRows_();
+  return {
+    ok: true,
+    tasks: data.rows.filter(function (row) {
+      return phoneToId_(row['ASSIGNED']) === id && String(row['COMPLETED']).toUpperCase() !== 'TRUE';
+    }).map(function (row) {
+      // The text message: one line per TEXT LINE column, blank ones kept as empty lines, stopping at the last filled one
+      const lines = [];
+      for (var n = 1; n <= TEXT_LINE_COUNT; n++) lines.push(row['TEXT LINE ' + n] || '');
+      while (lines.length && !lines[lines.length - 1]) lines.pop();
+      return {
+        taskId: row['TASK ID'], section: row['SECTION'], type: row['TYPE'], title: row['TITLE'],
+        description: row['DESCRIPTION'], date: row['DATE'], link: row['LINK'], phone: row['PHONE NUMBER'],
+        message: lines.join('\n'),
+      };
+    }),
+  };
+}
+
+// "Clear this task": marks one of the signed-in account's own tasks COMPLETED. Signature tasks close themselves
+// once the document is signed, so they can't be cleared here.
+function completeTask_(id, body) {
+  const data = taskRows_();
+  const row = data.rows.filter(function (r) { return r['TASK ID'] === String(body.taskId || '') && phoneToId_(r['ASSIGNED']) === id; })[0];
+  if (!row) return { ok: false, error: 'not_found' };
+  if (String(row['TYPE']).toUpperCase() === 'SIGNATURE') return { ok: false, error: 'signature_task' };
+  data.sheet.getRange(row.rowNumber, data.headers.indexOf('COMPLETED') + 1).setValue(true);
+  SpreadsheetApp.flush();
+  return { ok: true };
+}
+
+// Marks these accounts' Signature tasks for one document COMPLETED
+function completeSignatureTasks_(envelopeId, accountIds) {
+  const data = taskRows_();
+  const c = data.headers.indexOf('COMPLETED');
+  const link = SIGN_PAGE_URL + encodeURIComponent(envelopeId);
+  var changed = false;
+  data.rows.forEach(function (row) {
+    if (String(row['TYPE']).toUpperCase() !== 'SIGNATURE' || row['LINK'] !== link) return;
+    if (accountIds.indexOf(phoneToId_(row['ASSIGNED'])) < 0 || String(row['COMPLETED']).toUpperCase() === 'TRUE') return;
+    data.sheet.getRange(row.rowNumber, c + 1).setValue(true);
+    changed = true;
+  });
+  if (changed) SpreadsheetApp.flush();
 }
 
 // New PAGE ID: the highest number in the PAGE ID column plus 1 (raw values, so "4,269" or 4269.0 still count)

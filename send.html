@@ -562,10 +562,9 @@
         .page canvas { display: block; width: 100%; height: auto; }
         .page-num { position: absolute; top: 6px; right: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 42, 59, 0.6); color: var(--white); font-size: 0.75rem; font-weight: bold; pointer-events: none; }
         .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: 0.78rem; font-weight: bold; cursor: move; touch-action: none; overflow: hidden; }
-        .field span:not(.field-resize) { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+        .field span { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
         .field-del { position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; display: none; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: rgba(14, 42, 59, 0.75); color: var(--white); font-size: 12px; line-height: 1; cursor: pointer; }
         .field:hover .field-del, .field.is-selected .field-del { display: inline-flex; }
-        .field-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, currentColor 50%); opacity: 0.7; }
         .send-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
         .send-message { flex: 1 1 100%; text-align: right; font-weight: bold; color: #b3392f; }
         .send-message:empty { display: none; }
@@ -578,9 +577,88 @@
         .done-card svg { width: 58px; height: 58px; color: var(--olive); margin-bottom: 8px; }
         .no-access { text-align: center; padding: 40px 10px; font-weight: bold; }
         [hidden] { display: none !important; }
+
+        /* Category dropdown (same look as the client dropdowns on the home page) */
+        .picker { position: relative; }
+        .picker-btn {
+            width: 100%;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            padding: 9px 46px 9px 22px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--brown);
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .picker-btn .is-placeholder { font-weight: normal; opacity: 0.55; }
+        .picker-btn > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .picker-btn:focus-visible, .picker.is-open .picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .picker-list {
+            display: none;
+            margin-top: 8px;
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 20px;
+            box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.35);
+            padding: 6px;
+            color: var(--brown);
+        }
+        .picker.is-open .picker-list { display: block; animation: pickerIn 0.18s ease both; }
+        @keyframes pickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .picker-option { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 9px 14px; border-radius: 14px; cursor: pointer; }
+        .picker-option > svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .picker-option .cp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .picker-option .cp-main { font-weight: bold; }
+        .picker-option .cp-sub { font-size: 0.85rem; opacity: 0.7; }
+        .picker-option .cp-check { width: 18px; height: 18px; flex-shrink: 0; color: var(--olive); visibility: hidden; }
+        .picker-option[aria-selected="true"] .cp-check { visibility: visible; }
+        .picker-option.is-active, .picker-option:active { background-color: #f4efe8; }
+        @media (hover: hover) { .picker-option:hover { background-color: #f4efe8; } }
+
+        /* Property address: Google's suggestions under the street box */
+        .addr-wrap { position: relative; }
+        .addr-suggestions { display: none; margin-top: 8px; max-height: 260px; overflow-y: auto; padding: 6px; background: var(--white); border: 2px solid var(--navy); border-radius: 20px; box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.35); color: var(--brown); }
+        .addr-suggestions.is-open { display: block; }
+        .addr-option { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border-radius: 14px; cursor: pointer; }
+        .addr-option svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
+        .addr-option.is-active, .addr-option:active { background: #f4efe8; }
+        @media (hover: hover) { .addr-option:hover { background: #f4efe8; } }
+        .addr-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+        .addr-main { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .addr-secondary { font-size: 0.85rem; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .addr-credit { padding: 4px 12px 2px 12px; font-size: 0.7rem; opacity: 0.55; text-align: right; }
+
+        /* Brown card with soft gold and rust glows (same as the admin cards on the home page) */
+        .glow-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        .glow-card::before,
+        .glow-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        .glow-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        .glow-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        .glow-card > *:not(.sr-only) { position: relative; z-index: 1; }
+        .glow-card .card-eyebrow { color: var(--gold); }
+        .glow-card h2 { color: var(--cream); }
+        .glow-card .file-drop, .glow-card .signer { color: var(--brown); }
+        .glow-card .file-drop { border-color: rgba(233, 226, 216, 0.55); }
+        .glow-card .file-name { color: var(--gold); }
+        .glow-card .placer-bar { position: sticky; z-index: 5; background: var(--brown); border-bottom-color: rgba(233, 226, 216, 0.25); }
+        .glow-card .chip { border-color: rgba(233, 226, 216, 0.5); }
+        .glow-card .chip.is-on { border-color: var(--gold); background: var(--gold); color: var(--brown); }
+        .glow-card .send-message { color: #f2b8a8; }
+        .glow-card.done-card svg { color: var(--gold); }
+
         @media (max-width: 600px) {
             .signer-add { flex-direction: column; }
             .placer-bar { margin: 0 -4px 12px -4px; }
+            .picker-list { padding: 4px; }
+            .picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
         }
     </style>
 </head>
@@ -623,20 +701,26 @@
     <main>
         <p class="main-card no-access" id="no-access" hidden>You do not have access to this page.</p>
 
-        <section class="main-card step-card reveal" id="doc-card">
+        <section class="main-card glow-card step-card reveal" id="doc-card">
             <span class="card-eyebrow">Step 1</span>
             <h2>Document</h2>
             <p class="step-lead">A PDF up to 25 MB.</p>
             <label class="field-label" for="doc-title">Title</label>
             <input class="pill-input" id="doc-title" type="text" maxlength="200" placeholder="e.g. Purchase Contract - 123 Main St" autocomplete="off">
-            <label class="field-label is-spaced" for="doc-category">Category</label>
-            <select class="pill-select" id="doc-category"><option value="">Loading…</option></select>
-            <label class="field-label is-spaced" for="doc-street">Property Address</label>
-            <input class="pill-input" id="doc-street" type="text" maxlength="200" placeholder="Street address" autocomplete="off">
-            <div class="address-grid">
-                <input class="pill-input city" id="doc-city" type="text" maxlength="100" placeholder="City" aria-label="City" autocomplete="off">
-                <input class="pill-input" id="doc-state" type="text" maxlength="30" value="AZ" placeholder="State" aria-label="State" autocomplete="off">
-                <input class="pill-input" id="doc-zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP" aria-label="ZIP" autocomplete="off">
+            <span class="field-label is-spaced" id="doc-category-label">Category</span>
+            <div id="doc-category"></div>
+            <!-- Property documents only: the address, found with Google's suggestions (and still editable) -->
+            <div id="address-fields" hidden>
+                <label class="field-label is-spaced" for="doc-street">Property Address</label>
+                <div class="addr-wrap">
+                    <input class="pill-input" id="doc-street" type="text" maxlength="200" placeholder="Start typing the address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="addr-list">
+                    <div class="addr-suggestions" id="addr-list" role="listbox"></div>
+                </div>
+                <div class="address-grid">
+                    <input class="pill-input city" id="doc-city" type="text" maxlength="100" placeholder="City" aria-label="City" autocomplete="off">
+                    <input class="pill-input" id="doc-state" type="text" maxlength="30" value="AZ" placeholder="State" aria-label="State" autocomplete="off">
+                    <input class="pill-input" id="doc-zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP" aria-label="ZIP" autocomplete="off">
+                </div>
             </div>
             <label class="file-drop" id="file-drop" for="doc-file">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
@@ -647,7 +731,7 @@
             <p class="file-name" id="file-name"></p>
         </section>
 
-        <section class="main-card step-card reveal" id="signer-card">
+        <section class="main-card glow-card step-card reveal" id="signer-card">
             <span class="card-eyebrow">Step 2</span>
             <h2>Signers</h2>
             <p class="step-lead">Everyone who needs to sign. They'll find it in their Current Tasks.</p>
@@ -658,19 +742,19 @@
             <ul class="signer-list" id="signer-list"></ul>
         </section>
 
-        <section class="main-card step-card reveal" id="place-card">
+        <section class="main-card glow-card step-card reveal" id="place-card">
             <span class="card-eyebrow">Step 3</span>
             <h2>Place Fields</h2>
             <p class="step-lead" id="place-lead">Choose a PDF and add a signer first.</p>
             <div class="placer-bar" id="placer-bar" hidden>
                 <div class="bar-row" id="signer-chips"><span class="bar-label">Signer</span></div>
                 <div class="bar-row" id="type-chips"><span class="bar-label">Field</span></div>
-                <p class="placer-hint">Click a page to drop the field. Drag to move, drag the corner to resize, × to remove.</p>
+                <p class="placer-hint">Click a page to drop the field. Drag to move, × to remove.</p>
             </div>
             <div class="pages" id="pages"></div>
         </section>
 
-        <section class="main-card step-card reveal" id="send-card">
+        <section class="main-card glow-card step-card reveal" id="send-card">
             <span class="card-eyebrow">Step 4</span>
             <h2>Send</h2>
             <p class="step-lead">Documenso won't email anyone. Each signer gets a Sign task in the portal.</p>
@@ -680,7 +764,7 @@
             </div>
         </section>
 
-        <section class="main-card done-card" id="done-card" hidden>
+        <section class="main-card glow-card done-card" id="done-card" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
             <h2>Sent!</h2>
             <p class="step-lead" id="done-text"></p>
@@ -704,7 +788,7 @@
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const COLORS = ['#c0392b', '#2471a3', '#1e8449', '#b9770e', '#7d3c98', '#117a65', '#a04000', '#2e4053', '#b03a2e', '#5b2c6f'];
-        // Field types, with their starting size (percent of the page width / height)
+        // Field types, with their standard size (percent of the page width / height; fields can't be resized)
         const TYPES = [
             { type: 'SIGNATURE', label: 'Signature', w: 24, h: 5.5 },
             { type: 'INITIALS', label: 'Initials', w: 11, h: 4.5 },
@@ -730,6 +814,186 @@
                 body: JSON.stringify({ idToken, ...payload }),
             }).then(r => r.json());
         }
+
+        // --- Step 1: category (Property documents need the property's address) ---
+        const HOUSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>';
+        const DOC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>';
+        const CHECK_ICON = '<svg class="cp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        const CATEGORIES = [
+            { value: 'Property', sub: 'About a property, so it needs the address', icon: HOUSE_ICON },
+            { value: 'General', sub: 'Anything else, no address needed', icon: DOC_ICON },
+        ];
+        let category = '';
+        (function mountCategoryPicker() {
+            const mount = $('#doc-category');
+            let highlighted = -1;
+            mount.innerHTML = '<div class="picker">'
+                + '<button type="button" class="picker-btn" id="category-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="category-list" aria-labelledby="doc-category-label category-btn"><span></span></button>'
+                + '<div class="picker-list" id="category-list" role="listbox" aria-labelledby="doc-category-label">'
+                + CATEGORIES.map((c, i) => '<div class="picker-option" role="option" id="category-opt-' + i + '" aria-selected="false">' + c.icon
+                    + '<span class="cp-text"><span class="cp-main">' + c.value + '</span><span class="cp-sub">' + c.sub + '</span></span>' + CHECK_ICON + '</div>').join('')
+                + '</div></div>';
+            const picker = mount.firstElementChild;
+            const button = picker.querySelector('.picker-btn');
+            const label = button.firstElementChild;
+            const options = [...picker.querySelectorAll('.picker-option')];
+            function render() {
+                const chosen = CATEGORIES.findIndex(c => c.value === category);
+                options.forEach((o, i) => o.setAttribute('aria-selected', String(chosen === i)));
+                label.textContent = category || 'Choose a category…';
+                label.classList.toggle('is-placeholder', !category);
+                $('#address-fields').hidden = category !== 'Property';
+            }
+            function highlight(i) {
+                highlighted = i;
+                options.forEach((o, j) => o.classList.toggle('is-active', j === i));
+                if (i >= 0) button.setAttribute('aria-activedescendant', options[i].id);
+                else button.removeAttribute('aria-activedescendant');
+            }
+            const isOpen = () => picker.classList.contains('is-open');
+            function open() { picker.classList.add('is-open'); button.setAttribute('aria-expanded', 'true'); highlight(Math.max(0, CATEGORIES.findIndex(c => c.value === category))); }
+            function close() { picker.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); highlight(-1); }
+            function pick(i) {
+                close();
+                category = CATEGORIES[i].value;
+                setMessage('');
+                render();
+                if (category === 'Property' && !$('#doc-street').value) $('#doc-street').focus();
+            }
+            button.addEventListener('click', () => isOpen() ? close() : open());
+            options.forEach((o, i) => {
+                o.addEventListener('pointerdown', e => e.preventDefault());
+                o.addEventListener('click', () => pick(i));
+            });
+            button.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!isOpen()) { open(); return; }
+                    highlight((highlighted + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+                } else if ((e.key === 'Enter' || e.key === ' ') && isOpen()) {
+                    e.preventDefault();
+                    if (highlighted >= 0) pick(highlighted); else close();
+                } else if (e.key === 'Escape' && isOpen()) {
+                    e.preventDefault();
+                    close();
+                }
+            });
+            document.addEventListener('pointerdown', e => { if (!picker.contains(e.target)) close(); });
+            button.addEventListener('blur', () => setTimeout(() => { if (!picker.contains(document.activeElement)) close(); }, 120));
+            render();
+        })();
+
+        // Property address: Google's suggestions as you type the street; picking one fills in city, state and ZIP
+        // (Same browser key as the sign-up page and the New Property address search)
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyB_huoPCD9Jls7QigYuoJdW7ut9rOuQgwM';
+        const PIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+        (function addressSearch() {
+            const search = $('#doc-street');
+            const list = $('#addr-list');
+            let places = null;
+            let session = null;
+            let results = [];
+            let highlighted = -1;
+            let timer = null;
+            let requestId = 0;
+            let placesPromise = null;
+            function loadPlaces() {
+                if (placesPromise) return placesPromise;
+                placesPromise = new Promise((resolve, reject) => {
+                    if (window.google && google.maps && google.maps.importLibrary) { google.maps.importLibrary('places').then(resolve, reject); return; }
+                    window.__sendPlacesReady = () => google.maps.importLibrary('places').then(resolve, reject);
+                    const script = document.createElement('script');
+                    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_API_KEY) + '&loading=async&v=weekly&callback=__sendPlacesReady';
+                    script.async = true;
+                    script.onerror = reject;
+                    document.head.append(script);
+                }).catch(err => { placesPromise = null; throw err; });
+                return placesPromise;
+            }
+            const close = () => { list.classList.remove('is-open'); search.setAttribute('aria-expanded', 'false'); highlighted = -1; };
+            const draw = () => {
+                if (!results.length) { close(); return; }
+                list.innerHTML = results.map((s, i) => {
+                    const p = s.placePrediction;
+                    return '<div class="addr-option' + (i === highlighted ? ' is-active' : '') + '" role="option" data-i="' + i + '">' + PIN_ICON
+                        + '<span class="addr-text"><span class="addr-main">' + escapeHtml(p.mainText ? p.mainText.text : p.text.text) + '</span>'
+                        + '<span class="addr-secondary">' + escapeHtml(p.secondaryText ? p.secondaryText.text : '') + '</span></span></div>';
+                }).join('') + '<div class="addr-credit">Google Maps</div>';
+                list.querySelectorAll('.addr-option').forEach(o => {
+                    o.addEventListener('pointerdown', e => e.preventDefault());
+                    o.addEventListener('click', () => choose(Number(o.dataset.i)));
+                });
+                list.classList.add('is-open');
+                search.setAttribute('aria-expanded', 'true');
+            };
+            const fetchSuggestions = async text => {
+                const id = ++requestId;
+                try {
+                    places = places || await loadPlaces();
+                    session = session || new places.AutocompleteSessionToken();
+                    const { suggestions: found } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+                        input: text,
+                        sessionToken: session,
+                        includedRegionCodes: ['us'],
+                        includedPrimaryTypes: ['street_address', 'premise', 'subpremise'],
+                        locationBias: { center: { lat: 33.4484, lng: -112.074 }, radius: 50000 },
+                    });
+                    if (id !== requestId) return;
+                    results = (found || []).filter(s => s.placePrediction).slice(0, 4);
+                    highlighted = -1;
+                    draw();
+                } catch (err) {
+                    // Google couldn't load or refused: the boxes still take a typed address
+                    console.error('Google address suggestions unavailable:', err);
+                    close();
+                }
+            };
+            const choose = async i => {
+                const s = results[i];
+                if (!s) return;
+                close();
+                const p = s.placePrediction;
+                search.value = p.mainText ? p.mainText.text : p.text.text;
+                try {
+                    const place = p.toPlace();
+                    await place.fetchFields({ fields: ['addressComponents'] });
+                    const get = (type, short) => {
+                        const c = (place.addressComponents || []).find(c => c.types.includes(type));
+                        return c ? (short ? c.shortText : c.longText) : '';
+                    };
+                    const line1 = [get('street_number'), get('route', true)].filter(Boolean).join(' ');
+                    const unit = get('subpremise');
+                    if (line1) search.value = unit ? line1 + ' #' + unit : line1;
+                    $('#doc-city').value = get('locality') || get('postal_town') || get('sublocality') || get('administrative_area_level_3');
+                    $('#doc-state').value = get('administrative_area_level_1', true);
+                    $('#doc-zip').value = get('postal_code');
+                } catch (err) {
+                    console.error('Could not load address details:', err);
+                }
+                session = null; // a choice ends Google's billing session
+            };
+            search.addEventListener('input', () => {
+                clearTimeout(timer);
+                const text = search.value.trim();
+                if (text.length < 3) { results = []; close(); return; }
+                timer = setTimeout(() => fetchSuggestions(text), 220);
+            });
+            search.addEventListener('keydown', e => {
+                if (!list.classList.contains('is-open')) return;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlighted = (highlighted + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
+                    draw();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    choose(highlighted >= 0 ? highlighted : 0);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    close();
+                }
+            });
+            search.addEventListener('blur', () => setTimeout(close, 150));
+        })();
 
         // --- Step 1: the PDF ---
         const fileInput = $('#doc-file');
@@ -840,7 +1104,7 @@
                 el.dataset.key = f.key;
                 el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f';
                 el.innerHTML = '<span>' + typeOf(f.type).label + ' · ' + escapeHtml(s.name.split(' ')[0]) + '</span>'
-                    + '<button type="button" class="field-del" aria-label="Remove field">×</button><span class="field-resize"></span>';
+                    + '<button type="button" class="field-del" aria-label="Remove field">×</button>';
                 page.append(el);
             });
             renderSignerCounts();
@@ -866,7 +1130,7 @@
             setMessage('');
             drawFields();
         });
-        // Remove, move and resize
+        // Remove and move (every field keeps its type's standard size)
         $('#pages').addEventListener('pointerdown', e => {
             const el = e.target.closest('.field');
             if (!el) return;
@@ -874,20 +1138,14 @@
             if (e.target.closest('.field-del')) { fields = fields.filter(x => x !== f); drawFields(); return; }
             e.preventDefault();
             const page = el.parentElement.getBoundingClientRect();
-            const resizing = Boolean(e.target.closest('.field-resize'));
-            const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y, fw: f.w, fh: f.h };
+            const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y };
             el.setPointerCapture(e.pointerId);
             const move = ev => {
                 const dx = (ev.clientX - start.x) / page.width * 100;
                 const dy = (ev.clientY - start.y) / page.height * 100;
-                if (resizing) {
-                    f.w = Math.min(100 - f.x, Math.max(3, start.fw + dx));
-                    f.h = Math.min(100 - f.y, Math.max(1.5, start.fh + dy));
-                } else {
-                    f.x = Math.min(100 - f.w, Math.max(0, start.fx + dx));
-                    f.y = Math.min(100 - f.h, Math.max(0, start.fy + dy));
-                }
-                el.style.left = f.x + '%'; el.style.top = f.y + '%'; el.style.width = f.w + '%'; el.style.height = f.h + '%';
+                f.x = Math.min(100 - f.w, Math.max(0, start.fx + dx));
+                f.y = Math.min(100 - f.h, Math.max(0, start.fy + dy));
+                el.style.left = f.x + '%'; el.style.top = f.y + '%';
             };
             const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
             el.addEventListener('pointermove', move);
@@ -914,10 +1172,13 @@
             const title = $('#doc-title').value.trim();
             if (!pdfBytes) return setMessage('Please choose a PDF.');
             if (!title) { $('#doc-title').focus(); return setMessage('Please give the document a title.'); }
-            const address = { street: $('#doc-street').value.trim(), city: $('#doc-city').value.trim(), state: $('#doc-state').value.trim(), zip: $('#doc-zip').value.trim() };
-            if (!$('#doc-category').value) { $('#doc-category').focus(); return setMessage('Please choose a category.'); }
-            if (!address.street || !address.city || !address.state) { $('#doc-street').focus(); return setMessage('Please fill in the full property address.'); }
-            if (!/^\d{5}$/.test(address.zip)) { $('#doc-zip').focus(); return setMessage('Please enter a 5-digit ZIP code.'); }
+            if (!category) { $('#category-btn').focus(); return setMessage('Please choose a category.'); }
+            const address = category !== 'Property' ? {}
+                : { street: $('#doc-street').value.trim(), city: $('#doc-city').value.trim(), state: $('#doc-state').value.trim(), zip: $('#doc-zip').value.trim() };
+            if (category === 'Property') {
+                if (!address.street || !address.city || !address.state) { $('#doc-street').focus(); return setMessage('Please fill in the full property address.'); }
+                if (!/^\d{5}$/.test(address.zip)) { $('#doc-zip').focus(); return setMessage('Please enter a 5-digit ZIP code.'); }
+            }
             if (!signers.length) return setMessage('Please add at least one signer.');
             for (const s of signers) {
                 const mine = fields.filter(f => f.signerId === s.id);
@@ -932,7 +1193,7 @@
                 const json = await api({
                     action: 'adminSendForSignature',
                     title,
-                    category: $('#doc-category').value,
+                    category,
                     ...address,
                     pdf: await toBase64(pdfBytes),
                     signers: signers.map(s => ({
@@ -964,14 +1225,9 @@
                     $('#no-access').hidden = false;
                     return;
                 }
-                const [data, cats] = await Promise.all([api({ action: 'adminClients' }), api({ action: 'adminSignatureCategories' })]);
+                const data = await api({ action: 'adminClients' });
                 clients = data.ok ? data.clients || [] : [];
                 fillSelect();
-                // Categories are the tabs of the DOCUMENTS log; one tab is picked for you
-                const categories = cats.ok ? cats.categories || [] : [];
-                const toTitle = c => c.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
-                $('#doc-category').innerHTML = (categories.length === 1 ? '' : '<option value="">Choose a category…</option>')
-                    + categories.map(c => '<option value="' + escapeHtml(c) + '">' + escapeHtml(toTitle(c)) + '</option>').join('');
             } catch (err) {
                 console.error(err);
                 $('#signer-select').innerHTML = '<option value="">Couldn’t load clients. Please refresh.</option>';

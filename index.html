@@ -338,7 +338,90 @@
         .tasks-empty-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
         .tasks-empty-sub { font-size: 0.92rem; opacity: 0.75; }
         .page-link-icon.is-sign { background: var(--rust); }
+        .page-link-icon.is-text { background: var(--tan); }
+        .page-link-icon.is-task { background: var(--olive); }
         .tasks-empty[hidden] { display: none; }
+
+        /* Current Tasks: one block per task, with its buttons underneath */
+        .tasks { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .task {
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: #f7f4f0;
+            border: 1px solid rgba(78, 81, 62, 0.15);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .task.is-leaving { opacity: 0; transform: translateX(16px); }
+        .task-head { display: flex; align-items: center; gap: 14px; }
+        .task-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-left: 58px; }
+        .task-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 42px;
+            padding: 8px 18px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font: inherit;
+            font-weight: bold;
+            font-size: 0.95rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        .task-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+        .task-btn.is-clear { background-color: transparent; color: var(--brown); }
+        .task-btn:disabled { opacity: 0.6; cursor: default; }
+        @media (hover: hover) {
+            .task-btn:hover:not(:disabled) { background-color: var(--rust); color: var(--cream); transform: translateY(-2px); }
+        }
+        .task-error { margin-top: 8px; padding-left: 58px; font-size: 0.88rem; font-weight: bold; color: var(--rust); }
+        @media (max-width: 480px) { .task-actions, .task-error { padding-left: 0; } }
+
+        /* "Clear this task?" pop-up (centered card on desktop, slides up from the bottom on phones) */
+        .confirm-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 440px;
+            padding: 28px 28px 24px 28px;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+        }
+        .confirm-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .confirm-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .confirm-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .confirm-dialog h2 { font-size: 1.6rem; line-height: 1.15; margin-bottom: 8px; }
+        .confirm-dialog p { opacity: 0.75; font-size: 0.95rem; margin-bottom: 22px; }
+        .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .confirm-actions .btn { font-family: inherit; font-size: 1rem; cursor: pointer; }
+        .confirm-actions .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .confirm-actions .btn-secondary:hover { background: #f2ede6; } }
+        @media (max-width: 600px) {
+            .confirm-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .confirm-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .confirm-actions { flex-direction: column-reverse; }
+            .confirm-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .confirm-dialog[open], .confirm-dialog[open]::backdrop { animation: none; }
+        }
 
         /* Buyer Breakdowns: one row per page, linking to it */
         .page-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
@@ -645,11 +728,11 @@
     </header>
 
     <main>
-        <!-- 1. Current tasks: documents waiting for this account's signature -->
+        <!-- 1. Current tasks: this account's open rows in the TASKS sheet, grouped by SECTION -->
         <section class="main-card reveal" id="tasks-card">
             <span class="card-eyebrow">To Do</span>
             <h2>Current Tasks</h2>
-            <ul class="page-links" id="task-list" hidden></ul>
+            <div id="task-list" hidden></div>
             <div class="tasks-empty" id="tasks-empty">
                 <span class="tasks-empty-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" pathLength="1"/></svg>
@@ -770,6 +853,16 @@
             </ul>
         </section>
     </main>
+
+    <!-- "Clear this task?" pop-up -->
+    <dialog class="confirm-dialog" id="clear-dialog" aria-labelledby="clear-dialog-title" aria-describedby="clear-dialog-text">
+        <h2 id="clear-dialog-title">Clear this task?</h2>
+        <p id="clear-dialog-text">It will be marked as complete and removed from your Current Tasks.</p>
+        <div class="confirm-actions">
+            <button type="button" class="btn btn-secondary" id="clear-cancel">Cancel</button>
+            <button type="button" class="btn" id="clear-confirm">Clear Task</button>
+        </div>
+    </dialog>
 
     <footer>
         <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
@@ -1052,20 +1145,119 @@
         }
 
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
-        // Documents sent for this account's signature; each opens the portal's signing page
+        // Current Tasks: this account's open rows in the TASKS sheet, one group per SECTION. What each task offers
+        // depends on its TYPE: Signature opens the signing page, Text sends a prefilled text and can be cleared,
+        // anything else can only be cleared.
         const SIGN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+        const TEXT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+        const TASK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/></svg>';
+        const CLEAR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        // Documents signed in this browser (set by the signing page the moment the signer finishes), so a Signature
+        // task never shows again while the sheet is still catching up
+        function signedEnvelopes() {
+            try { return JSON.parse(localStorage.getItem('signedEnvelopes') || '[]').map(e => e.id); } catch (err) { return []; }
+        }
+        // The signing page's address; links to the live portal stay on this site (so local previews work too)
+        function taskHref(link) {
+            try {
+                const url = new URL(link, location.origin);
+                return url.hostname === 'portal.andrewmarth.com' ? url.pathname + url.search : url.href;
+            } catch (err) { return link; }
+        }
+        function smsHref(phone, message) {
+            return 'sms:' + String(phone || '').replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent(message || '');
+        }
         function renderTasks(tasks) {
+            const signed = signedEnvelopes();
+            tasks = tasks.filter(t => {
+                if (String(t.type).toLowerCase() !== 'signature') return true;
+                try { return !signed.includes(new URL(t.link, location.origin).searchParams.get('id')); } catch (err) { return true; }
+            });
             const listEl = document.getElementById('task-list');
             listEl.hidden = !tasks.length;
             document.getElementById('tasks-empty').hidden = Boolean(tasks.length);
-            listEl.innerHTML = tasks.map(t => {
-                const sub = 'Sign this document' + (t.sentBy ? ' · from ' + t.sentBy : '');
-                return '<li><a class="page-link" href="/sign?id=' + encodeURIComponent(t.envelopeId) + '">'
-                    + '<span class="page-link-icon is-sign">' + SIGN_ICON + '</span>'
-                    + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(t.title || 'Document') + '</span><br>'
-                    + '<span class="page-link-sub">' + escapeHtml(sub) + '</span></span>'
-                    + '<span class="page-link-arrow">' + ARROW_ICON + '</span></a></li>';
-            }).join('');
+            const sections = [];
+            tasks.forEach(t => {
+                const name = t.section || 'Other';
+                let group = sections.find(g => g.name === name);
+                if (!group) sections.push(group = { name, tasks: [] });
+                group.tasks.push(t);
+            });
+            const clearBtn = '<button type="button" class="task-btn is-clear" data-clear>' + CLEAR_ICON + '<span>Clear Task</span></button>';
+            listEl.innerHTML = sections.map(g => '<div class="links-section"><h3 class="links-section-title">' + escapeHtml(g.name) + '</h3>'
+                + '<ul class="tasks">' + g.tasks.map(t => {
+                    const type = String(t.type || '').toLowerCase();
+                    let icon = TASK_ICON, iconClass = 'is-task', actions = clearBtn;
+                    if (type === 'signature') {
+                        icon = SIGN_ICON; iconClass = 'is-sign';
+                        actions = '<a class="task-btn" href="' + escapeHtml(taskHref(t.link)) + '">' + SIGN_ICON + '<span>Sign Document</span></a>';
+                    } else if (type === 'text') {
+                        icon = TEXT_ICON; iconClass = 'is-text';
+                        actions = '<a class="task-btn" href="' + escapeHtml(smsHref(t.phone, t.message)) + '">' + TEXT_ICON + '<span>Send Text</span></a>' + clearBtn;
+                    }
+                    return '<li class="task" data-task-id="' + escapeHtml(t.taskId) + '"><div class="task-head">'
+                        + '<span class="page-link-icon ' + iconClass + '">' + icon + '</span>'
+                        + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(t.title || 'Task') + '</span>'
+                        + (t.description ? '<br><span class="page-link-sub">' + escapeHtml(t.description) + '</span>' : '') + '</span>'
+                        + '</div><div class="task-actions">' + actions + '</div></li>';
+                }).join('') + '</ul></div>').join('');
+        }
+        // "Clear Task": asks first, then marks it COMPLETED in the sheet and takes it off the card
+        const clearDialog = document.getElementById('clear-dialog');
+        let clearPending = null;
+        document.getElementById('task-list').addEventListener('click', e => {
+            const btn = e.target.closest('[data-clear]');
+            if (!btn || btn.disabled) return;
+            clearPending = btn;
+            const title = btn.closest('.task').querySelector('.page-link-street').textContent;
+            document.getElementById('clear-dialog-title').textContent = 'Clear “' + title + '”?';
+            clearDialog.showModal();
+        });
+        document.getElementById('clear-cancel').addEventListener('click', () => clearDialog.close());
+        // Tap outside the card to close
+        clearDialog.addEventListener('click', e => { if (e.target === clearDialog) clearDialog.close(); });
+        document.getElementById('clear-confirm').addEventListener('click', () => {
+            const btn = clearPending;
+            clearPending = null;
+            clearDialog.close();
+            if (btn) clearTask(btn);
+        });
+        async function clearTask(btn) {
+            const li = btn.closest('.task');
+            const label = btn.querySelector('span');
+            li.querySelector('.task-error')?.remove();
+            btn.disabled = true;
+            label.textContent = 'Clearing…';
+            try {
+                if (currentUser) {
+                    const idToken = await currentUser.getIdToken();
+                    const res = await fetch(PORTAL_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ idToken, action: 'completeTask', taskId: li.dataset.taskId }),
+                    });
+                    const data = await res.json();
+                    if (!data.ok) throw new Error(data.error || 'failed');
+                }
+            } catch (err) {
+                console.error(err);
+                btn.disabled = false;
+                label.textContent = 'Clear Task';
+                li.insertAdjacentHTML('beforeend', '<div class="task-error">Couldn’t clear this task. Please try again.</div>');
+                return;
+            }
+            li.classList.add('is-leaving');
+            setTimeout(() => {
+                const section = li.closest('.links-section');
+                li.remove();
+                if (!section.querySelector('.task')) section.remove();
+                const listEl = document.getElementById('task-list');
+                if (!listEl.querySelector('.task')) {
+                    listEl.hidden = true;
+                    document.getElementById('tasks-empty').hidden = false;
+                    setTimeout(confettiBurst, 1050);
+                }
+            }, 300);
         }
         async function loadTasks(user) {
             if (!PORTAL_API_URL) return;
@@ -1074,7 +1266,7 @@
                 const res = await fetch(PORTAL_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ idToken, action: 'mySignatureTasks' }),
+                    body: JSON.stringify({ idToken, action: 'myTasks' }),
                 });
                 const data = await res.json();
                 if (data.ok) renderTasks(data.tasks || []);
@@ -1237,7 +1429,11 @@
         if (isLocal && new URLSearchParams(location.search).has('demo')) {
             showPage();
             greet({ 'First Name': 'Jordan Sample' });
-            renderTasks([{ envelopeId: 'envelope_demo', title: 'Purchase Contract - 1234 E Sample St', sentBy: 'Andrew Marth' }]);
+            renderTasks([
+                { taskId: '1', section: 'Signature', type: 'Signature', title: 'Signature Request', description: 'You have been requested to sign Purchase Contract - 1234 E Sample St', link: 'https://portal.andrewmarth.com/sign?id=envelope_demo' },
+                { taskId: '2', section: 'Clients', type: 'Text', title: 'Send Confirmation Text', description: 'Jordan Sample requested a buyer breakdown for 1234 E Sample St', phone: '4805550123', message: 'Hey Jordan\n\nI got your request\n\nAndrew Marth' },
+                { taskId: '3', section: 'Clients', type: 'Make Breakdown', title: 'Make Breakdown For Jordan Sample', description: 'Jordan Sample requested a buyer breakdown for 1234 E Sample St' },
+            ]);
             document.getElementById('breakdowns-card').hidden = false;
             document.getElementById('cash-flow-card').hidden = false;
             document.getElementById('signatures-card').hidden = false;

@@ -529,6 +529,7 @@
         .done-card svg { width: 58px; height: 58px; color: var(--olive); margin-bottom: 8px; }
         .done-card p { margin: 6px 0 18px; opacity: 0.8; }
         .done-card .btn { border: 2px solid var(--navy); }
+        .done-card .btn.is-waiting { opacity: 0.6; pointer-events: none; }
         [hidden] { display: none !important; }
         @media (max-width: 600px) {
             .sign-card { padding-left: 6px; padding-right: 6px; }
@@ -585,7 +586,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
             <h2 id="done-title">All signed!</h2>
             <p id="done-text">Thank you. We'll let you know when everyone has signed.</p>
-            <a class="btn" href="/">Back to portal</a>
+            <a class="btn" id="done-back" href="/">Back to portal</a>
         </section>
     </main>
 
@@ -641,12 +642,26 @@
             if (action === 'document-ready') $('#frame-wrap').classList.add('is-ready');
             if (action !== 'document-completed' && action !== 'document-rejected') return;
             finished = true;
+            // Remembered in this browser first, so the home page hides the task even before the sheet is updated
+            try {
+                const signed = JSON.parse(localStorage.getItem('signedEnvelopes') || '[]')
+                    .filter(e => e.id !== envelopeId && Date.now() - e.at < 7 * 864e5);
+                signed.push({ id: envelopeId, at: Date.now() });
+                localStorage.setItem('signedEnvelopes', JSON.stringify(signed));
+            } catch (err) { console.error(err); }
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (action === 'document-rejected') showDone('Declined', 'You declined to sign this document. We’ll be in touch.');
             else showDone('All signed!', 'Thank you. We’ll let you know when everyone has signed.');
-            // Brings the portal's record up to date, so the task leaves Current Tasks
-            // (filing the finished document is Documenso's webhook's job)
+            // Brings the portal's record up to date, which marks the Signature task COMPLETED
+            // (filing the finished document is Documenso's webhook's job). "Back to portal" waits for it.
+            const back = $('#done-back');
+            back.classList.add('is-waiting');
+            back.setAttribute('aria-disabled', 'true');
+            back.textContent = 'Saving…';
             try { await api({ action: 'signingTask', envelopeId }); } catch (err) { console.error(err); }
+            back.classList.remove('is-waiting');
+            back.removeAttribute('aria-disabled');
+            back.textContent = 'Back to portal';
         });
 
         async function load(user) {
