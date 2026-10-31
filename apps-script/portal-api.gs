@@ -108,6 +108,12 @@ function doPost(e) {
     // Documenso's webhook (a document has been completed); its URL carries the secret kept in Script Properties
     if (e && e.parameter && e.parameter.documensoWebhook) return json_(documensoWebhook_(e.parameter.documensoWebhook));
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    // Website sign-up form: whether a phone number already has an account, asked before a code is texted (yes/no only)
+    if (body.action === 'accountExists') {
+      const checkId = phoneToId_(body.phone);
+      if (checkId.length !== 10) return json_({ ok: false, error: 'invalid_phone' });
+      return json_({ ok: true, exists: Boolean(findRow_(SHEET_ID, SHEET_NAME, checkId)) });
+    }
     const phone = verifyPhone_(body.idToken);
     if (!phone) return json_({ ok: false, error: 'unauthorized' });
 
