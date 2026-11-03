@@ -533,6 +533,23 @@
         .flow-row.is-low .flow-balance { color: #b3392f; }
         .flow-right { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
         .flow-change-line { display: flex; align-items: baseline; gap: 8px; }
+        /* Line items under a transaction, and who a split is with */
+        .flow-note { font-size: 0.82rem; opacity: 0.7; }
+        .flow-lines { list-style: none; max-width: 280px; margin: 4px 0 2px; padding: 0 0 0 10px; border-left: 2px solid rgba(79, 45, 44, 0.15); font-size: 0.82rem; }
+        .flow-lines li { display: flex; justify-content: space-between; gap: 10px; }
+        .flow-lines li span:first-child { opacity: 0.8; overflow-wrap: anywhere; }
+        .flow-lines li span:last-child { white-space: nowrap; }
+        /* Line items in the edit menu */
+        .tx-items { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; }
+        .tx-item { margin: 0; padding: 12px 16px 4px; border: 1px solid rgba(79, 45, 44, 0.18); border-radius: 16px;
+            display: grid; grid-template-columns: 1fr 1.3fr 76px; column-gap: 10px; }
+        .tx-item > .ti-wide { grid-column: 1 / -1; }
+        .tx-item .ie-q { margin: 2px 0 8px; font-size: 0.9rem; }
+        .tx-item .type-picker { margin-bottom: 14px; }
+        .tx-item legend { padding: 0 6px; font-weight: bold; font-size: 0.95rem; }
+        .tx-date-note { margin: 0 0 10px; font-size: 0.85rem; opacity: 0.75; }
+        .tx-date-note { grid-column: 1 / -1; }
+        @media (max-width: 520px) { .tx-item { grid-template-columns: 1fr 76px; } .tx-item > .ti-amount-field { grid-column: 1 / -1; } }
         .flow-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
         .flow-add { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 2px solid var(--navy); border-radius: 50%; background: var(--olive); color: var(--cream); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; }
         .flow-add[hidden] { display: none; }
@@ -656,6 +673,14 @@
         const signOutBtn = document.getElementById('sign-out');
         // Whole dollars everywhere on this page
         const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+        // ...except line items, which keep their cents
+        const centsFormat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+        const cents = { format: n => Number.isInteger(n) ? money.format(n) : centsFormat.format(n) };
+        // The description, who a split is with, and any line items (credits shown as +)
+        const detailHtml = t => '<span class="flow-desc">' + escapeHtml(t.description || 'Transaction') + '</span>'
+            + (t.note ? '<span class="flow-note">' + escapeHtml(t.note) + '</span>' : '')
+            + ((t.lines || []).length ? '<ul class="flow-lines">' + t.lines.map(l => '<li><span>' + escapeHtml(l.description) + '</span><span>'
+                + (l.amount > 0 ? '+' : '') + cents.format(l.amount) + '</span></li>').join('') + '</ul>' : '');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         // Sheet amounts can look like "1500", "-652" or "$1,500.00"
         const amountOf = v => { const t = String(v == null ? '' : v).trim(); const n = parseFloat(t.replace(/[^0-9.-]/g, '')); return isFinite(n) ? (/^\(.*\)$/.test(t) ? -Math.abs(n) : n) : 0; };
@@ -668,6 +693,8 @@
             return isNaN(t) ? null : new Date(t);
         }
         const dayOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        // A sheet date as YYYY-MM-DD for a date input
+        const isoOf = value => { const d = dateOf(value); return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : ''; };
         const dateBox = d => d
             ? '<span class="flow-date"><span class="m">' + d.toLocaleDateString('en-US', { month: 'short' }) + '</span><span class="d">' + d.getDate() + '</span><span class="y">' + d.getFullYear() + '</span></span>'
             : '<span class="flow-date"><span class="m">—</span></span>';
@@ -681,6 +708,7 @@
         // projected balance after it.
         function render(data) {
             transactions = data.transactions || [];
+            splitPeople = data.splitPeople || [];
             pendingSteps = catchUpSteps(data);
             addBtn.hidden = pendingSteps.length > 0;
             if (pendingSteps.length) {
@@ -694,7 +722,8 @@
             const items = (data.transactions || [])
                 .map((t, order) => ({ ...t, order, when: dateOf(t.date), value: amountOf(t.amount) }))
                 .filter(t => t.when && (!asOf || dayOf(t.when) >= dayOf(asOf)))
-                .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || (a.order - b.order));
+                // On the same day, money coming in goes first so the running balance doesn't dip for nothing
+                .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || ((b.value > 0) - (a.value > 0)) || (a.order - b.order));
             const balanceRow = '<ul class="flow-list"><li class="flow-row is-balance">' + dateBox(asOf)
                 + '<span class="flow-text"><span class="flow-desc">Current Balance</span>'
                 + '<span><button type="button" class="flow-edit flow-update-balance" data-update-balance>Update Balance</button></span></span>'
@@ -707,9 +736,11 @@
                 let month = months[months.length - 1];
                 if (!month || month.key !== key) months.push(month = { key, title: t.when.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), rows: [] });
                 month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + '">' + dateBox(t.when)
-                    + '<span class="flow-text"><span class="flow-desc">' + escapeHtml(t.description || 'Transaction') + '</span>'
+                    + '<span class="flow-text">' + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
-                    + '<button type="button" class="flow-edit" data-edit-row="' + t.row + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button></span></span>'
+                    // The sheet row itself, or the date of a split coming in; separate items and what you owe are managed in the sheet
+                    + (t.part === 'main' || t.part === 'receive' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
+                    + '</span></span>'
                     + '<span class="flow-balance">' + money.format(running) + '</span></li>');
             });
             flowEl.innerHTML = balanceRow
@@ -719,6 +750,8 @@
 
         // --- Edit / delete a transaction ---
         let transactions = [];
+        // Everyone else with CUM, for "Split with"
+        let splitPeople = [];
         let currentUser = null;
         async function api(payload) {
             const idToken = await currentUser.getIdToken();
@@ -733,6 +766,9 @@
             changed: 'This transaction was changed in the sheet. Refresh the page and try again.',
             invalid_date: 'Please check the date and try again.',
             not_found: 'This transaction is no longer in the sheet. Refresh the page.',
+            invalid_split_id: 'Please choose who to split with again.',
+            invalid_separate_date: 'Please choose the date this line item is paid.',
+            invalid_split_percent: 'Please enter a split percent between 1 and 100.',
         };
         let editor = null;
         function buildEditor() {
@@ -747,8 +783,10 @@
                     + '<input type="radio" name="tx-kind" id="tx-income" value="income"><label for="tx-income">Income</label>'
                     + '<input type="radio" name="tx-kind" id="tx-expense" value="expense"><label for="tx-expense">Expense</label></div></div>'
                 + '<div class="field"><label for="tx-date">Date</label><input id="tx-date" type="date" required></div>'
-                + '<div class="field"><label for="tx-amount">Amount</label><div class="money-wrap"><input class="money" id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>'
-                + '<div class="field"><label for="tx-desc">Description</label><input id="tx-desc" type="text" maxlength="100" autocomplete="off"></div>'
+                + '<div class="field tx-amount-field"><label for="tx-amount">Amount</label><div class="money-wrap"><input class="money" id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>'
+                + '<div class="field tx-desc-field"><label for="tx-desc">Description</label><input id="tx-desc" type="text" maxlength="100" autocomplete="off"></div>'
+                + '<p class="tx-date-note" hidden></p>'
+                + '<div class="tx-items" hidden></div>'
                 + '</div></div>'
                 + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
                 + '<div class="form-actions"><button type="button" class="btn btn-secondary tx-delete" data-delete>Delete</button>'
@@ -766,10 +804,12 @@
             const confirmBox = $('.ie-confirm');
             let tx = null;
             let adding = false;
+            // Just the date (a split coming in: it moves SPLIT PERSON DATE for both people)
+            let dateOnly = false;
             let busy = false;
             const setBusy = (on, btn) => {
                 busy = on;
-                form.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                form.querySelectorAll('input, select, button').forEach(el => { el.disabled = on; });
                 if (btn) btn.classList.toggle('is-loading', on);
             };
             const close = () => { if (!busy) dialog.close(); };
@@ -800,20 +840,52 @@
             form.addEventListener('submit', async e => {
                 e.preventDefault();
                 const date = $('#tx-date').value;
+                if (dateOnly) {
+                    if (!date) { message.textContent = 'Please choose a date.'; $('#tx-date').focus(); return; }
+                    const btn = $('[data-save]');
+                    setBusy(true, btn);
+                    try {
+                        const json = await api({ action: 'moveTransaction', key: tx.key, original: { date: tx.date, description: tx.description }, date });
+                        if (!json.ok) throw new Error(json.error);
+                        await load(currentUser);
+                        setBusy(false, btn);
+                        dialog.close();
+                    } catch (err) { failed(err, btn); }
+                    return;
+                }
                 const description = $('#tx-desc').value.trim();
                 const raw = $('#tx-amount').value.trim().replace(/[$,]/g, '');
                 const amount = Number(raw);
                 const kind = (dialog.querySelector('[name="tx-kind"]:checked') || {}).value;
                 if (adding && !kind) { message.textContent = 'Please choose Income or Expense.'; $('#tx-income').focus(); return; }
                 if (!date) { message.textContent = 'Please choose a date.'; $('#tx-date').focus(); return; }
-                if (!raw || !isFinite(amount) || amount <= 0) { message.textContent = 'Please enter an amount above $0.'; $('#tx-amount').focus(); return; }
+                // A row with line items gets its total from them
+                const itemized = !adding && tx.itemized;
+                if (!itemized && (!raw || !isFinite(amount) || amount <= 0)) { message.textContent = 'Please enter an amount above $0.'; $('#tx-amount').focus(); return; }
                 if (!description) { message.textContent = 'Please enter a description.'; $('#tx-desc').focus(); return; }
+                const items = [];
+                if (itemized) {
+                    for (const box of dialog.querySelectorAll('.tx-item')) {
+                        const get = sel => box.querySelector(sel);
+                        const fail = (text, el) => { message.textContent = text; el.focus(); };
+                        const itemAmount = get('.ti-amount').value.trim().replace(/[$,]/g, '');
+                        const splitId = get('.ti-split').value;
+                        const percent = get('.ti-pct').value.trim();
+                        const separate = (box.querySelector('.ti-sep:checked') || {}).value === 'yes';
+                        const separateDate = get('.ti-sep-date').value;
+                        if (!get('.ti-desc').value.trim()) return fail('Please enter a description for each line item.', get('.ti-desc'));
+                        if (!itemAmount || itemAmount === '-' || !isFinite(Number(itemAmount))) return fail('Please enter an amount for each line item.', get('.ti-amount'));
+                        if (splitId && !(Number(percent) > 0 && Number(percent) <= 100)) return fail(ERRORS.invalid_split_percent, get('.ti-pct'));
+                        if (separate && !separateDate) return fail('Please choose the date this line item is paid.', get('.ti-sep-date'));
+                        items.push({ n: Number(box.dataset.n), description: get('.ti-desc').value.trim(), amount: Number(itemAmount), splitId, percent: splitId ? Number(percent) : '', separate, separateDate: separate ? separateDate : '' });
+                    }
+                }
                 const btn = $('[data-save]');
                 setBusy(true, btn);
                 try {
                     const json = adding
                         ? await api({ action: 'addTransaction', type: kind, date, description, amount })
-                        : await api({ action: 'updateTransaction', row: tx.row, original: original(), date, description, amount });
+                        : await api({ action: 'updateTransaction', row: tx.row, original: original(), date, description, amount: itemized ? 0 : amount, items });
                     if (!json.ok) throw new Error(json.error);
                     await load(currentUser);
                     setBusy(false, btn);
@@ -837,7 +909,10 @@
 
             const show = () => {
                 $('.tx-kind').hidden = !adding;
-                $('[data-delete]').style.display = adding ? 'none' : '';
+                $('[data-delete]').style.display = adding || dateOnly ? 'none' : '';
+                $('.tx-desc-field').style.display = dateOnly ? 'none' : '';
+                $('.tx-date-note').hidden = !dateOnly;
+                $('.tx-items').hidden = adding || dateOnly || !tx.itemized;
                 $('[data-save]').lastChild.textContent = adding ? 'Add' : 'Save Changes';
                 message.textContent = '';
                 confirmBox.hidden = true;
@@ -848,26 +923,78 @@
             return {
                 add() {
                     adding = true;
+                    dateOnly = false;
                     tx = null;
                     dialog.querySelectorAll('[name="tx-kind"]').forEach(r => { r.checked = false; });
                     $('#tx-title').textContent = 'Add Transaction';
                     $('#tx-date').value = '';
                     $('#tx-amount').value = '';
                     $('#tx-desc').value = '';
+                    $('.tx-amount-field').style.display = '';
                     show();
                 },
                 open(next) {
                     adding = false;
+                    dateOnly = false;
                     tx = next;
-                    const d = dateOf(tx.date);
-                    const pad = n => String(n).padStart(2, '0');
-                    $('#tx-date').value = d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : '';
+                    $('#tx-date').value = isoOf(tx.date);
                     const value = amountOf(tx.amount);
                     $('#tx-amount').value = value ? String(Math.abs(value)) : '';
                     // "Edit Income" / "Edit Expense" from the sheet's TYPE
                     const type = String(tx.type || '').trim();
                     $('#tx-title').textContent = 'Edit ' + (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Transaction');
                     $('#tx-desc').value = tx.description || '';
+                    $('.tx-amount-field').style.display = tx.itemized ? 'none' : '';
+                    // Each line item: description, amount (minus for a credit), who it's split with and whether it's paid
+                    // on its own date
+                    $('.tx-items').innerHTML = (tx.items || []).map(i => {
+                        const id = 'ti-' + i.n + '-';
+                        // Someone no longer marked CUM still shows, so saving doesn't drop their split
+                        const people = splitPeople.some(p => p.id === i.splitId) || !i.splitId ? splitPeople : splitPeople.concat({ id: i.splitId, name: i.splitId });
+                        const options = '<option value="">No split</option>' + people.map(p => '<option value="' + escapeHtml(p.id) + '"' + (p.id === i.splitId ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>').join('');
+                        return '<fieldset class="tx-item" data-n="' + i.n + '"><legend>Line Item ' + i.n + '</legend>'
+                            + '<div class="field ti-wide"><label for="' + id + 'desc">Description</label><input class="ti-desc" id="' + id + 'desc" type="text" maxlength="100" autocomplete="off" value="' + escapeHtml(i.description) + '"></div>'
+                            + '<div class="field ti-amount-field"><label for="' + id + 'amount">Amount</label><div class="money-wrap"><input class="money ti-amount" id="' + id + 'amount" type="text" inputmode="decimal" autocomplete="off" placeholder="-20 for a credit" value="' + escapeHtml(i.amount) + '"></div></div>'
+                            + '<div class="field"><label for="' + id + 'split">Split with</label><select class="ti-split" id="' + id + 'split">' + options + '</select></div>'
+                            + '<div class="field"><label for="' + id + 'pct">Split %</label><input class="ti-pct" id="' + id + 'pct" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="' + escapeHtml(i.percent) + '"></div>'
+                            + '<div class="ti-wide"><p class="ie-q">Paid separately?</p><div class="type-picker yes-no" role="radiogroup" aria-label="Paid separately?">'
+                                + '<input type="radio" class="ti-sep" name="' + id + 'sep" id="' + id + 'sep-yes" value="yes"' + (i.separate ? ' checked' : '') + '><label for="' + id + 'sep-yes">Yes</label>'
+                                + '<input type="radio" class="ti-sep" name="' + id + 'sep" id="' + id + 'sep-no" value="no"' + (i.separate ? '' : ' checked') + '><label for="' + id + 'sep-no">No</label></div></div>'
+                            + '<div class="field ti-wide ti-sep-field"' + (i.separate ? '' : ' style="display: none"') + '><label for="' + id + 'sep-date">Paid On</label><input class="ti-sep-date" id="' + id + 'sep-date" type="date" value="' + isoOf(i.separateDate) + '"></div>'
+                            + '</fieldset>';
+                    }).join('');
+                    // Amounts: digits, one decimal point and a leading minus; percents: digits and one decimal point
+                    dialog.querySelectorAll('.ti-amount').forEach(el => el.addEventListener('input', () => {
+                        const cleaned = el.value.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '').replace(/(\..*)\./g, '$1');
+                        if (cleaned !== el.value) el.value = cleaned;
+                    }));
+                    // Paid separately: its own date, and the split % stays as it is
+                    dialog.querySelectorAll('.ti-sep').forEach(el => el.addEventListener('change', () => {
+                        const box = el.closest('.tx-item');
+                        const on = el.value === 'yes';
+                        box.querySelector('.ti-sep-field').style.display = on ? '' : 'none';
+                        if (on && !box.querySelector('.ti-sep-date').value) box.querySelector('.ti-sep-date').focus();
+                    }));
+                    // Picking someone to split with starts at 50%
+                    dialog.querySelectorAll('.ti-split').forEach(el => el.addEventListener('change', () => {
+                        const pct = el.closest('.tx-item').querySelector('.ti-pct');
+                        if (el.value && !pct.value) pct.value = '50';
+                        if (!el.value) pct.value = '';
+                    }));
+                    dialog.querySelectorAll('.ti-pct').forEach(el => el.addEventListener('input', () => {
+                        const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                        if (cleaned !== el.value) el.value = cleaned;
+                    }));
+                    show();
+                },
+                openDate(next) {
+                    adding = false;
+                    dateOnly = true;
+                    tx = next;
+                    $('#tx-title').textContent = 'Edit Split Date';
+                    $('#tx-date').value = isoOf(tx.date);
+                    $('.tx-amount-field').style.display = 'none';
+                    $('.tx-date-note').textContent = 'This changes the date for you and for the person paying the split.';
                     show();
                 },
             };
@@ -885,12 +1012,13 @@
                 catchUp.open([{ kind: 'balance' }]);
                 return;
             }
-            const btn = e.target.closest('[data-edit-row]');
+            const btn = e.target.closest('[data-edit-key]');
             if (!btn) return;
-            const tx = transactions.find(t => String(t.row) === btn.dataset.editRow);
+            const tx = transactions.find(t => t.key === btn.dataset.editKey);
             if (!tx) return;
             if (!editor) editor = buildEditor();
-            editor.open(tx);
+            if (tx.part === 'receive') editor.openDate(tx);
+            else editor.open(tx);
         });
 
         // --- Catch up: a balance older than today, or transactions whose date has passed ---
@@ -994,11 +1122,13 @@
                 } else {
                     const t = step.tx;
                     const value = amountOf(t.amount);
+                    // A split asks whether the money changed hands
+                    const question = t.part === 'receive' ? 'Have you received this yet?' : t.part === 'split' ? 'Have you paid this yet?' : 'Has this happened yet?';
                     $('#cu-title').textContent = 'Past Transaction';
                     body.innerHTML = '<div class="cu-tx">' + dateBox(t.when)
-                        + '<span class="flow-text"><span class="flow-desc">' + escapeHtml(t.description || 'Transaction') + '</span>'
+                        + '<span class="flow-text">' + detailHtml(t)
                         + '<span class="flow-change ' + (value < 0 ? 'is-out' : 'is-in') + '">' + (value > 0 ? '+' : '') + money.format(value) + '</span></span></div>'
-                        + '<div class="ie-yn"><p class="ie-q">Has this happened yet?</p><div class="type-picker yes-no" role="radiogroup" aria-label="Has this happened yet?">'
+                        + '<div class="ie-yn"><p class="ie-q">' + question + '</p><div class="type-picker yes-no" role="radiogroup" aria-label="' + question + '">'
                             + '<input type="radio" name="cu-happened" id="cu-yes" value="yes"><label for="cu-yes">Yes</label>'
                             + '<input type="radio" name="cu-happened" id="cu-no" value="no"><label for="cu-no">No</label></div>'
                             + '<p class="cu-note" hidden>It’ll come off your projections, since your bank balance already includes it.</p></div>'
@@ -1023,13 +1153,14 @@
                     const t = step.tx;
                     const happened = (dialog.querySelector('[name="cu-happened"]:checked') || {}).value;
                     if (!happened) { message.textContent = 'Please choose Yes or No.'; $('#cu-yes').focus(); return; }
-                    const original = { date: t.date, description: t.description, amount: t.amount };
+                    // Happened: its paid box in the sheet is ticked. Not yet: it moves to the new date.
+                    const original = { date: t.date, description: t.description };
                     if (happened === 'yes') {
-                        request = { action: 'deleteTransaction', row: t.row, original };
+                        request = { action: 'markTransactionPaid', key: t.key, original };
                     } else {
                         const date = $('#cu-date').value;
                         if (!date || date < isoDay(currentDay())) { message.textContent = 'Please choose today or a later date.'; $('#cu-date').focus(); return; }
-                        request = { action: 'updateTransaction', row: t.row, original, date, description: t.description || 'Transaction', amount: Math.abs(amountOf(t.amount)) };
+                        request = { action: 'moveTransaction', key: t.key, original, date };
                     }
                 }
                 setBusy(true);
@@ -1037,8 +1168,6 @@
                     const json = await api(request);
                     if (!json.ok) throw new Error(json.error);
                     saved = true;
-                    // A deleted row moves every row under it up by one
-                    if (request.action === 'deleteTransaction') steps.forEach(st => { if (st.kind === 'tx' && st.tx.row > request.row) st.tx.row -= 1; });
                     index += 1;
                     if (index < steps.length) { showStep(); return; }
                     // Close first, so the reload can open it again if anything is still out of date

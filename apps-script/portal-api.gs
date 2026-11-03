@@ -169,6 +169,8 @@ function doPost(e) {
     if (body.action === 'updateTransaction') return json_(changeTransaction_(id, found.row, body, false));
     if (body.action === 'deleteTransaction') return json_(changeTransaction_(id, found.row, body, true));
     if (body.action === 'addTransaction') return json_(addTransaction_(id, found.row, body));
+    if (body.action === 'markTransactionPaid') return json_(settleTransaction_(id, found.row, body, true));
+    if (body.action === 'moveTransaction') return json_(settleTransaction_(id, found.row, body, false));
     if (body.action === 'updateBalance') return json_(updateBalance_(id, found.row, body));
     // flip-portal.html: wholesale properties with map positions (admins and FLIPPER BUYER accounts)
     if (body.action === 'wholesaleProperties') return json_(wholesaleProperties_(found.row));
@@ -443,32 +445,202 @@ function cashFlow_(id, account) {
     // The newest date wins; on the same date, the lower row (entered later) wins
     if (!balance || time(next.date) >= time(balance.date)) balance = next;
   });
-  const transactions = cumTransactionRows_().rows.filter(function (t) { return t.accountId === id; }).map(function (t) {
-    return { row: t.rowNumber, date: t.date, description: t.description, amount: t.amount, type: t.type };
+  // Split invoices name the other person (preferred or first name from the ACCOUNT LIST)
+  const names = {};
+  // ...and the edit menu's "Split with" choices: everyone else with CUM = TRUE
+  const splitPeople = [];
+  allRows_(SHEET_ID, SHEET_NAME).forEach(function (r) {
+    const rid = phoneToId_(r['ACCOUNT ID']);
+    names[rid] = String(r['PREFERRED NAME'] || r['FIRST NAME'] || '').trim();
+    if (rid.length === 10 && rid !== id && hasRole_(r, 'CUM')) {
+      splitPeople.push({ id: rid, name: [r['FIRST NAME'], r['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' ') || rid });
+    }
   });
-  return { ok: true, balance: balance, transactions: transactions };
+  splitPeople.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  const transactions = cumEntries_(cumTransactionRows_().rows, id).map(function (e) {
+    if (e.part === 'split') e.note = 'Owed to ' + (names[e.ownerId] || 'the account holder');
+    if (e.part === 'receive') e.note = 'From ' + (names[e.person] || 'split');
+    delete e.ownerId;
+    return e;
+  });
+  return { ok: true, balance: balance, transactions: transactions, splitPeople: splitPeople };
 }
 
-// Every row of the transactions sheet with its sheet row number (blank rows skipped)
+const CUM_LINE_ITEMS = 20;
+
+// Every row of the transactions sheet with its sheet row number (blank rows skipped). Rows can carry up to 20 line
+// items (RENT ITEM n ...): each has an amount (positive charges, negative credits), can be split with another account
+// (SPLIT ID gets invoiced AMOUNT x SPLIT PERCENT) and can be paid on its own date instead of with the main charge.
 function cumTransactionRows_() {
   const sheet = getSheet_(CUM_TRANSACTIONS_SHEET_ID, CUM_TRANSACTIONS_SHEET_NAME);
   const values = sheet.getDataRange().getDisplayValues();
-  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
-  const col = { id: headers.indexOf('ACCOUNT ID'), date: headers.indexOf('DATE'), description: headers.indexOf('DESCRIPTION'), amount: headers.indexOf('AMOUNT'), type: headers.indexOf('TYPE') };
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase().replace(/\s+/g, ' '); });
+  // "SEPERATE" and "SEPARATE" both work
+  const find = function (name) {
+    const i = headers.indexOf(name);
+    return i >= 0 ? i : headers.indexOf(name.replace(/SEPERATE/g, 'SEPARATE'));
+  };
+  const col = {
+    id: find('ACCOUNT ID'), date: find('DATE'), description: find('DESCRIPTION'), amount: find('AMOUNT'), type: find('TYPE'),
+    paid: find('PAID'), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
+    items: [],
+  };
   if (col.id < 0 || col.date < 0 || col.description < 0 || col.amount < 0) throw new Error('Transactions sheet is missing a column');
+  for (var n = 1; n <= CUM_LINE_ITEMS; n++) {
+    const p = 'RENT ITEM ' + n + ' ';
+    col.items.push({
+      n: n, description: find(p + 'DESCRIPTION'), amount: find(p + 'AMOUNT'), splitId: find(p + 'SPLIT ID'), percent: find(p + 'SPLIT PERCENT'),
+      separate: find(p + 'PAID SEPERATE'), separateDate: find(p + 'SEPERATE DATE'), separatePaid: find(p + 'SEPERATE PAID'),
+    });
+  }
   const rows = [];
   for (var r = 1; r < values.length; r++) {
-    if (!values[r].some(function (v) { return String(v).trim() !== ''; })) continue;
+    const line = values[r];
+    if (!line.some(function (v) { return String(v).trim() !== ''; })) continue;
+    const text = function (c) { return c < 0 ? '' : String(line[c]).trim(); };
+    const yes = function (c) { return text(c).toUpperCase() === 'TRUE'; };
+    const items = [];
+    col.items.forEach(function (c) {
+      if (c.amount < 0 || (text(c.amount) === '' && text(c.description) === '')) return;
+      const pct = text(c.percent);
+      items.push({
+        n: c.n,
+        description: text(c.description),
+        amount: cumNumber_(text(c.amount)),
+        splitId: phoneToId_(text(c.splitId)),
+        percent: cumNumber_(pct) / (/%/.test(pct) ? 100 : 1),
+        separate: yes(c.separate),
+        separateDate: text(c.separateDate),
+        separatePaid: yes(c.separatePaid),
+      });
+    });
     rows.push({
       rowNumber: r + 1,
-      accountId: phoneToId_(values[r][col.id]),
-      date: String(values[r][col.date]).trim(),
-      description: String(values[r][col.description]).trim(),
-      amount: String(values[r][col.amount]).trim(),
-      type: col.type < 0 ? '' : String(values[r][col.type]).trim(),
+      accountId: phoneToId_(line[col.id]),
+      date: text(col.date),
+      description: text(col.description),
+      amount: text(col.amount),
+      type: text(col.type),
+      paid: yes(col.paid),
+      items: items,
+      splitDate: text(col.splitDate),
+      splitPaid: yes(col.splitPaid),
+      receivePaid: yes(col.receivePaid),
     });
   }
   return { sheet: sheet, col: col, rows: rows };
+}
+
+// "1,707", "$56.70" or "(25)" as a number (blank is 0)
+function cumNumber_(text) {
+  const t = String(text).trim();
+  const n = Number(t.replace(/[$,%\s()]/g, ''));
+  if (!isFinite(n)) return 0;
+  return /^\(.*\)$/.test(t) ? -Math.abs(n) : n;
+}
+const cumRound_ = function (n) { return Math.round(n * 100) / 100; };
+
+// What one account sees from the transactions sheet. Each entry is one row on its page, with a key that names the part
+// of the sheet row it comes from:
+//   main     the row itself (the row's account; hidden once PAID). With line items, the charge is the sum of the
+//            items that aren't paid separately, listed under it.
+//   item     a line item paid separately, on its own SEPERATE DATE (the row's account; hidden once SEPERATE PAID)
+//   split    what a SPLIT ID person owes: each of their items x its percent, on SPLIT PERSON DATE (hidden once
+//            SPLIT PERSON PAID)
+//   receive  the same split, coming in to the row's account (hidden once RECEIVING PERSON PAID)
+function cumEntries_(rows, id) {
+  const out = [];
+  rows.forEach(function (t) {
+    const mine = t.accountId === id;
+    const entry = function (part, extra) {
+      const e = { key: t.rowNumber + ':' + part, row: t.rowNumber, part: part, date: t.date, description: t.description, type: t.type, lines: [], itemized: t.items.length > 0 };
+      Object.keys(extra).forEach(function (k) { e[k] = extra[k]; });
+      return e;
+    };
+    if (mine && !t.paid) {
+      if (!t.items.length) out.push(entry('main', { amount: t.amount }));
+      else {
+        const inline = t.items.filter(function (i) { return !i.separate; });
+        if (inline.length) {
+          out.push(entry('main', {
+            amount: String(cumRound_(-inline.reduce(function (s, i) { return s + i.amount; }, 0))),
+            lines: inline.map(function (i) { return { description: i.description || 'Item ' + i.n, amount: cumRound_(-i.amount) }; }),
+            // Every line item as the sheet has it, for the edit menu (split percent as 0-100)
+            items: t.items.map(function (i) {
+              return { n: i.n, description: i.description, amount: i.amount, splitId: i.splitId, percent: i.splitId ? cumRound_(i.percent * 100) : '', separate: i.separate, separateDate: i.separateDate };
+            }),
+          }));
+        }
+      }
+    }
+    if (mine) {
+      t.items.forEach(function (i) {
+        if (!i.separate || i.separatePaid) return;
+        const e = entry('item', { item: i.n, date: i.separateDate || t.date, description: i.description || t.description, amount: String(cumRound_(-i.amount)), note: t.description });
+        e.key += ':' + i.n;
+        out.push(e);
+      });
+    }
+    // Splits, one per person, from every line item that names them (paid separately or not)
+    const people = {};
+    t.items.forEach(function (i) {
+      if (!i.splitId || i.splitId === t.accountId || !i.percent) return;
+      (people[i.splitId] = people[i.splitId] || []).push(i);
+    });
+    Object.keys(people).forEach(function (person) {
+      const items = people[person];
+      const total = cumRound_(items.reduce(function (s, i) { return s + i.amount * i.percent; }, 0));
+      const lines = function (sign) {
+        return items.map(function (i) {
+          return { description: (i.description || 'Item ' + i.n) + ' (' + cumRound_(i.percent * 100) + '%)', amount: cumRound_(sign * i.amount * i.percent) };
+        });
+      };
+      if (mine && !t.receivePaid) {
+        const e = entry('receive', { date: t.splitDate || t.date, amount: String(total), lines: lines(1), person: person });
+        e.key += ':' + person;
+        out.push(e);
+      }
+      if (person === id && !t.splitPaid) {
+        out.push(entry('split', { date: t.splitDate || t.date, amount: String(-total), lines: lines(-1), ownerId: t.accountId }));
+      }
+    });
+  });
+  return out;
+}
+
+// The sheet cells behind one entry: its date and its paid checkbox (0-based columns)
+function cumCells_(col, entry) {
+  if (entry.part === 'main') return { date: col.date, paid: col.paid };
+  if (entry.part === 'item') { const c = col.items[entry.item - 1]; return { date: c.separateDate, paid: c.separatePaid }; }
+  return { date: col.splitDate, paid: entry.part === 'split' ? col.splitPaid : col.receivePaid };
+}
+
+// Catch up on one entry: it happened (its paid checkbox goes TRUE) or it moves to a new date (body.date, YYYY-MM-DD).
+// The entry must still show the date and description the person was looking at.
+function settleTransaction_(id, account, body, paid) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  var date = null;
+  if (!paid) {
+    const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return { ok: false, error: 'invalid_date' };
+    date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const data = cumTransactionRows_();
+    const entry = cumEntries_(data.rows, id).filter(function (e) { return e.key === String(body.key); })[0];
+    if (!entry) return { ok: false, error: 'not_found' };
+    const original = body.original || {};
+    if (String(original.date).trim() !== entry.date || String(original.description).trim() !== entry.description) return { ok: false, error: 'changed' };
+    const cells = cumCells_(data.col, entry);
+    const c = paid ? cells.paid : cells.date;
+    if (c < 0) throw new Error('Transactions sheet is missing a ' + (paid ? 'paid' : 'date') + ' column');
+    data.sheet.getRange(entry.row, c + 1).setValue(paid ? true : date);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // Edit (date, description, amount) or delete one of this account's transactions
@@ -478,8 +650,10 @@ function changeTransaction_(id, account, body, remove) {
   const target = data.rows.filter(function (t) { return t.rowNumber === Number(body.row); })[0];
   if (!target || target.accountId !== id) return { ok: false, error: 'not_found' };
   // The row must still say what the person was looking at (otherwise the sheet changed underneath them)
+  // (A row with line items has its total worked out from them, so only the date and description are checked and saved)
+  const itemized = target.items.length > 0;
   const original = body.original || {};
-  if (String(original.date).trim() !== target.date || String(original.description).trim() !== target.description || String(original.amount).trim() !== target.amount) {
+  if (String(original.date).trim() !== target.date || String(original.description).trim() !== target.description || (!itemized && String(original.amount).trim() !== target.amount)) {
     return { ok: false, error: 'changed' };
   }
   if (remove) {
@@ -490,6 +664,46 @@ function changeTransaction_(id, account, body, remove) {
   if (!m) return { ok: false, error: 'invalid_date' };
   const description = cleanText_(body.description, 100);
   if (!description) return { ok: false, error: 'invalid_description' };
+  if (itemized) {
+    // Line item changes: [{ n, description, amount (negative for a credit), splitId (10 digits or blank), percent (0-100) }]
+    const changes = [];
+    const list = Array.isArray(body.items) ? body.items : [];
+    for (var k = 0; k < list.length; k++) {
+      const it = list[k] || {};
+      const c = data.col.items[Number(it.n) - 1];
+      if (!c || c.amount < 0 || !target.items.some(function (i) { return i.n === Number(it.n); })) return { ok: false, error: 'not_found' };
+      const itemDescription = cleanText_(it.description, 100);
+      if (!itemDescription) return { ok: false, error: 'invalid_item_description' };
+      const itemAmount = Number(String(it.amount).replace(/[$,\s]/g, ''));
+      if (String(it.amount).trim() === '' || !isFinite(itemAmount) || Math.abs(itemAmount) > 100000000) return { ok: false, error: 'invalid_item_amount' };
+      const splitId = String(it.splitId || '').trim() === '' ? '' : phoneToId_(it.splitId);
+      if (splitId !== '' && splitId.length !== 10) return { ok: false, error: 'invalid_split_id' };
+      const percent = Number(it.percent);
+      if (splitId && (String(it.percent).trim() === '' || !isFinite(percent) || percent <= 0 || percent > 100)) return { ok: false, error: 'invalid_split_percent' };
+      if (c.splitId < 0 || c.percent < 0) return { ok: false, error: 'not_found' };
+      // Paid separately needs its own date (YYYY-MM-DD)
+      const separate = it.separate === true;
+      var separateDate = '';
+      if (separate) {
+        const sd = String(it.separateDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!sd) return { ok: false, error: 'invalid_separate_date' };
+        if (c.separate < 0 || c.separateDate < 0) return { ok: false, error: 'not_found' };
+        separateDate = new Date(Number(sd[1]), Number(sd[2]) - 1, Number(sd[3]));
+      }
+      changes.push({ c: c, description: itemDescription, amount: Math.round(itemAmount * 100) / 100, splitId: splitId, percent: splitId ? percent / 100 : '', separate: separate, separateDate: separateDate });
+    }
+    data.sheet.getRange(target.rowNumber, data.col.date + 1).setValue(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    data.sheet.getRange(target.rowNumber, data.col.description + 1).setValue(description);
+    changes.forEach(function (ch) {
+      if (ch.c.description >= 0) data.sheet.getRange(target.rowNumber, ch.c.description + 1).setValue(ch.description);
+      data.sheet.getRange(target.rowNumber, ch.c.amount + 1).setValue(ch.amount);
+      data.sheet.getRange(target.rowNumber, ch.c.splitId + 1).setValue(ch.splitId);
+      data.sheet.getRange(target.rowNumber, ch.c.percent + 1).setValue(ch.percent);
+      if (ch.c.separate >= 0) data.sheet.getRange(target.rowNumber, ch.c.separate + 1).setValue(ch.separate);
+      if (ch.c.separateDate >= 0) data.sheet.getRange(target.rowNumber, ch.c.separateDate + 1).setValue(ch.separateDate);
+    });
+    return { ok: true };
+  }
   // A positive amount; Expense rows are saved negative, Income rows positive (anything else keeps the old sign)
   const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
   if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
