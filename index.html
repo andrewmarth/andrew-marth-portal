@@ -611,6 +611,46 @@
             .client-picker-option { min-height: 46px; padding: 7px 12px; gap: 10px; }
         }
 
+        /* New Client (admins): the same form as Add New Client in Settings, without preferred name and email */
+        .cf-group-title { margin: 20px 0 4px 2px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--gold); }
+        .cf-group-title:first-child { margin-top: 0; }
+        .cf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-height: 62px; padding: 10px 0; border-bottom: 1px solid rgba(233, 226, 216, 0.18); }
+        .cf-row[hidden] { display: none !important; }
+        .cf-label { flex: 0 0 auto; min-width: 140px; font-weight: bold; color: var(--gold); }
+        .cf-editor { flex: 1 1 260px; display: flex; justify-content: flex-end; gap: 8px; min-width: 0; }
+        .cf-input { width: 100%; max-width: 360px; min-height: 44px; padding: 8px 16px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 1rem; color: var(--brown); }
+        .cf-input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.3); }
+        .cf-input.is-invalid { border-color: #f2b8a8; background: #fdf2f2; }
+        .cf-editor.is-names .cf-input { max-width: 175px; }
+        .cf-saved { margin-top: 12px; font-weight: bold; color: #cfe3b5; }
+        .cf-saved:empty { display: none; }
+        .cf-row.nc-tile-row { display: block; min-height: 0; padding: 5px 0; border-bottom: none; }
+        .nc-tile { position: relative; }
+        .nc-tile input { position: absolute; opacity: 0; pointer-events: none; }
+        .nc-tile label { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 8px 18px 8px 10px; border: 2px solid rgba(233, 226, 216, 0.55); border-radius: 18px; background: rgba(233, 226, 216, 0.08); color: var(--cream); font-weight: bold; cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        .nc-tile-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: rgba(233, 226, 216, 0.14); color: var(--gold); transition: background-color 0.2s ease, color 0.2s ease; }
+        .nc-tile-icon svg { width: 21px; height: 21px; }
+        .nc-tile input:checked + label { background: var(--cream); border-color: var(--cream); color: var(--brown); }
+        .nc-tile input:checked + label .nc-tile-icon { background: var(--white); color: var(--rust); }
+        .nc-tile input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 3px; }
+        @media (hover: hover) { .nc-tile label:hover { transform: translateX(3px); } }
+        .nc-tiles-help { margin: -2px 0 6px 2px; font-size: 0.86rem; opacity: 0.75; }
+        .nc-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+        .nc-foot .cf-error { flex: 1 1 100%; text-align: right; font-weight: bold; color: #f2b8a8; }
+        .nc-foot .cf-error:empty { display: none; }
+        .nc-foot .btn { white-space: nowrap; padding-left: 18px; padding-right: 18px; font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
+        .nc-foot .btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .nc-foot .btn-secondary { background: transparent; color: var(--cream); border-color: rgba(233, 226, 216, 0.75); }
+        .nc-foot .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
+        .nc-foot .btn.is-loading .btn-spinner { display: inline-block; }
+        @media (max-width: 600px) {
+            .nc-form .cf-row:not(.nc-tile-row) { flex-direction: column; align-items: stretch; gap: 8px; }
+            .nc-form .cf-editor { flex: 0 0 auto; justify-content: stretch; align-items: center; }
+            .cf-input, .cf-editor.is-names .cf-input { max-width: none; }
+            .nc-foot .btn { flex: 1; }
+            .nc-foot .cf-error { text-align: left; }
+        }
+
         /* Links card: one group per SECTION */
         .links-section + .links-section { margin-top: 24px; }
         .links-section-title {
@@ -776,7 +816,15 @@
             </div>
         </section>
 
-        <!-- 3. Admins only: any buyer's Buyer Breakdowns -->
+        <!-- 3. Admins only: add a client from the home page -->
+        <section class="main-card glow-card reveal" id="new-client-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>New Client</h2>
+            <div id="new-client-form"></div>
+            <p class="cf-saved" id="new-client-saved" role="status"></p>
+        </section>
+
+        <!-- 3a. Admins only: any buyer's Buyer Breakdowns -->
         <section class="main-card glow-card reveal" id="buyers-card" hidden>
             <span class="card-eyebrow">Admin</span>
             <h2>My Buyers</h2>
@@ -1091,6 +1139,149 @@
             });
         }
 
+        // --- New Client (admins): Settings' Add New Client, minus preferred name and email; last name is optional ---
+        const NC_LINES = [
+            { group: 'Details' },
+            { key: 'legal', label: 'Legal Name', kind: 'name' },
+            { key: 'phone', label: 'Phone', kind: 'phone' },
+            { group: 'Roles' },
+            { key: 'buyer', label: 'Buyer', col: 'BUYER', kind: 'bool' },
+            { key: 'seller', label: 'Seller', col: 'SELLER', kind: 'bool' },
+            { key: 'landlord', label: 'Landlord', col: 'LANDLORD', kind: 'bool' },
+            { key: 'flipper-buyer', label: 'Flipper Buyer', col: 'FLIPPER BUYER', kind: 'bool' },
+            { key: 'flipper-seller', label: 'Flipper Seller', col: 'FLIPPER SELLER', kind: 'bool' },
+            { key: 'lender', label: 'Lender', col: 'LENDER', kind: 'bool' },
+            { key: 'lender-bank', label: 'Lender Bank', col: 'LENDER BANK', kind: 'text', when: v => v['LENDER'] },
+            { key: 'wholesaler', label: 'Wholesaler', col: 'WHOLESALER', kind: 'bool' },
+            { key: 'flipper-llc', label: 'Flipper LLC', col: 'FLIPPER LLC', kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
+            { key: 'flipper-title', label: 'Flipper Title', col: 'FLIPPER TITLE', kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
+            { key: 'hard-money', label: 'Hard Money Lender', col: 'HARD MONEY LENDER', kind: 'bool' },
+            { key: 'preflipper', label: 'Preflipper', col: 'PREFLIPPER', kind: 'bool' },
+        ];
+        const TILE_ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+        const ROLE_ICONS = {
+            'buyer': TILE_ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>'),
+            'seller': TILE_ICON('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/>'),
+            'landlord': TILE_ICON('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3"/><path d="m16 7 3 3"/><path d="m14 9 2 2"/>'),
+            'flipper-buyer': TILE_ICON('<path d="m15 12-8.5 8.5a2.1 2.1 0 0 1-3-3L12 9"/><path d="M17.6 15 22 10.6"/><path d="m20.9 11.7-1.3-1.3a2.4 2.4 0 0 1-.7-1.7V7.5l-2.2-2.3A6 6 0 0 0 12.6 3.6l-1 .1 1.5 1.5a2.4 2.4 0 0 1 .7 1.7v1.4l2.3 2.3h1.3a2.4 2.4 0 0 1 1.7.7l1.2 1.1"/>'),
+            'flipper-seller': TILE_ICON('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
+            'lender': TILE_ICON('<path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/>'),
+            'wholesaler': TILE_ICON('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>'),
+            'hard-money': TILE_ICON('<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.6-3-1.6"/><path d="M12 6v2"/><path d="M12 16v2"/>'),
+            'preflipper': TILE_ICON('<path d="M12 3v3"/><path d="M18.4 5.6 16.3 7.7"/><path d="M21 12h-3"/><path d="M6 12H3"/><path d="M7.7 7.7 5.6 5.6"/><circle cx="12" cy="14" r="4"/><path d="M12 18v3"/>'),
+        };
+        const digitsOnly = v => String(v || '').replace(/\D/g, '');
+        const formatTyped = d => !d ? '' : d.length < 4 ? '(' + d : d.length < 7 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
+        let ncBusy = false;
+
+        function renderNewClient() {
+            const card = document.getElementById('new-client-card');
+            const mount = document.getElementById('new-client-form');
+            card.hidden = false;
+            if (mount.firstElementChild) return; // already built (the page lists reload after each add)
+            mount.innerHTML = '<form class="nc-form" id="nc-form" novalidate>' + NC_LINES.map(line => {
+                if (line.group) return '<h3 class="cf-group-title">' + line.group + '</h3>'
+                    + (line.group === 'Roles' ? '<p class="nc-tiles-help">Select all that apply.</p>' : '');
+                // Yes/no questions are tiles: selected is Yes, left alone is No
+                if (line.kind === 'bool') {
+                    const n = 'nc-' + line.key;
+                    return '<div class="cf-row nc-tile-row" data-line="' + line.key + '"><div class="nc-tile">'
+                        + '<input type="checkbox" id="' + n + '" data-col="' + line.col + '">'
+                        + '<label for="' + n + '"><span class="nc-tile-icon">' + (ROLE_ICONS[line.key] || '') + '</span>' + escapeHtml(line.label) + '</label></div></div>';
+                }
+                let editor;
+                if (line.kind === 'name') {
+                    editor = '<input class="cf-input" data-new-col="FIRST NAME" type="text" maxlength="50" placeholder="First" aria-label="Legal first name" autocomplete="off">'
+                        + '<input class="cf-input" data-new-col="LAST NAME" data-optional type="text" maxlength="50" placeholder="Last (optional)" aria-label="Legal last name (optional)" autocomplete="off">';
+                } else if (line.kind === 'phone') {
+                    editor = '<input class="cf-input" id="nc-phone" type="tel" inputmode="tel" autocomplete="off" placeholder="(480) 555-0123" aria-label="Phone">';
+                } else {
+                    editor = '<input class="cf-input" data-new-col="' + line.col + '" type="text" maxlength="100" aria-label="' + escapeHtml(line.label) + '" autocomplete="off">';
+                }
+                return '<div class="cf-row" data-line="' + line.key + '"' + (line.when ? ' hidden' : '') + '><span class="cf-label">' + escapeHtml(line.label) + '</span>'
+                    + '<div class="cf-editor' + (line.kind === 'name' ? ' is-names' : '') + '">' + editor + '</div></div>';
+            }).join('')
+                + '<div class="nc-foot"><span class="cf-error" role="alert"></span>'
+                + '<button type="button" class="btn btn-secondary" data-nc-clear>Clear</button>'
+                + '<button type="submit" class="btn" data-nc-save><span class="btn-spinner" aria-hidden="true"></span>Create Client</button></div></form>';
+
+            const form = document.getElementById('nc-form');
+            const phone = document.getElementById('nc-phone');
+            const errorEl = form.querySelector('.nc-foot .cf-error');
+            const savedEl = document.getElementById('new-client-saved');
+            phone.addEventListener('input', () => {
+                let d = digitsOnly(phone.value);
+                if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+                phone.value = formatTyped(d.slice(0, 10));
+            });
+            const answers = () => {
+                const v = {};
+                form.querySelectorAll('[data-new-col]').forEach(input => { v[input.dataset.newCol] = input.value.trim(); });
+                form.querySelectorAll('.nc-tile input').forEach(box => { v[box.dataset.col] = box.checked; });
+                return v;
+            };
+            // Lender Bank / Flipper LLC / Flipper Title follow the answers above them
+            const refresh = () => {
+                const v = answers();
+                NC_LINES.forEach(line => {
+                    if (line.when) form.querySelector('[data-line="' + line.key + '"]').hidden = !line.when(v);
+                });
+            };
+            form.addEventListener('change', refresh);
+            form.addEventListener('input', e => {
+                e.target.classList.remove('is-invalid');
+                errorEl.textContent = '';
+                savedEl.textContent = '';
+            });
+            const clear = () => {
+                form.reset();
+                form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                errorEl.textContent = '';
+                refresh();
+            };
+            form.querySelector('[data-nc-clear]').addEventListener('click', () => { if (!ncBusy) { clear(); savedEl.textContent = ''; } });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (ncBusy) return;
+                savedEl.textContent = '';
+                const v = answers();
+                const fail = (el, text) => { el.classList.add('is-invalid'); el.focus(); errorEl.textContent = text; };
+                // Every shown line is required, except the last name
+                for (const line of NC_LINES) {
+                    if (line.group || line.kind === 'bool') continue;
+                    const row = form.querySelector('[data-line="' + line.key + '"]');
+                    if (row.hidden) continue;
+                    if (line.kind === 'phone') {
+                        if (digitsOnly(phone.value).length !== 10) return fail(phone, 'Please enter their 10-digit phone number.');
+                    } else {
+                        const empty = [...row.querySelectorAll('.cf-input:not([data-optional])')].find(i => !i.value.trim());
+                        if (empty) return fail(empty, 'Please fill in ' + (line.kind === 'name' ? 'their first name' : line.label) + '.');
+                    }
+                }
+                const save = form.querySelector('[data-nc-save]');
+                const setBusy = on => {
+                    ncBusy = on;
+                    form.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                    save.classList.toggle('is-loading', on);
+                };
+                setBusy(true);
+                try {
+                    const data = await api({ action: 'adminCreateClient', phone: digitsOnly(phone.value), values: v });
+                    if (!data.ok) throw new Error(data.error);
+                    setBusy(false);
+                    clear();
+                    savedEl.textContent = 'Added ' + (data.client.name || formatPhone(data.client.id)) + '.';
+                    // A new buyer or flipper shows up in the dropdowns below
+                    loadPages(currentUser);
+                } catch (err) {
+                    console.error(err);
+                    setBusy(false);
+                    const known = { exists: 'That phone number already has an account.', invalid_phone: 'Please enter their 10-digit phone number.' };
+                    errorEl.textContent = known[err.message] || (String(err.message).startsWith('missing_') ? 'Please answer every question.' : 'We couldn’t add the client. Please try again.');
+                }
+            });
+        }
+
         // --- My Flippers (admins): a FLIPPER BUYER account's Flip proformas ---
         let selectedFlipperId = null;
         function renderFlippers(flippers, flipperPages) {
@@ -1295,6 +1486,7 @@
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
                         document.getElementById('signatures-card').hidden = false;
+                        renderNewClient();
                         renderBuyers(data.buyers, data.buyerPages || []);
                         renderFlippers(data.flippers || [], data.flipperPages || []);
                         renderLinks(data.links);
@@ -1438,6 +1630,7 @@
             document.getElementById('breakdowns-card').hidden = false;
             document.getElementById('cash-flow-card').hidden = false;
             document.getElementById('signatures-card').hidden = false;
+            renderNewClient();
             const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550123'] };
             renderPages([demoPage]);
             document.getElementById('flips-card').hidden = false;

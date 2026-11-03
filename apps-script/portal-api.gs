@@ -1269,7 +1269,8 @@ function adminCreateClient_(account, body) {
     'FLIPPER LLC': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
     'FLIPPER TITLE': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
   };
-  const textCols = ['FIRST NAME', 'LAST NAME', 'PREFERRED NAME', 'LENDER BANK', 'FLIPPER LLC', 'FLIPPER TITLE'];
+  // Last and preferred names can wait (the home page's quick add asks only for a first name)
+  const textCols = ['FIRST NAME', 'LENDER BANK', 'FLIPPER LLC', 'FLIPPER TITLE'];
   for (var j = 0; j < textCols.length; j++) {
     const col = textCols[j];
     if (col in asked && !asked[col]) { values[col] = ''; continue; }
