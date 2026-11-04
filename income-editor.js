@@ -114,9 +114,10 @@ const CSS = `
 .income-dialog .income-section[data-mode="view"] .ie-summary { display: block; }
 .income-dialog .income-section[data-mode="empty"] .ie-add { display: flex; }
 .income-dialog .income-section[data-mode="edit"] .ie-done-row { display: flex; justify-content: flex-end; margin-top: 18px; }
-.income-dialog .income-section:not([data-mode="edit"]) > .type-picker,
-.income-dialog .income-section:not([data-mode="edit"]) > .type-fields,
-.income-dialog .income-section:not([data-mode="edit"]) .section-total { display: none; }
+/* Only the income editor's own sections have a mode; other pop-ups that share these styles (New Property) always show their fields */
+.income-dialog .income-section[data-mode]:not([data-mode="edit"]) > .type-picker,
+.income-dialog .income-section[data-mode]:not([data-mode="edit"]) > .type-fields,
+.income-dialog .income-section[data-mode]:not([data-mode="edit"]) .section-total { display: none; }
 .income-dialog .income-section.is-locked .ie-locked { display: flex; }
 .income-dialog .income-section.is-edited .ie-edited { display: flex; }
 .income-dialog .ie-card { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 18px; border-radius: 16px; background: #f7f4f0; border: 1px solid rgba(78, 81, 62, 0.15); }
