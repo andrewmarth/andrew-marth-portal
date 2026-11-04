@@ -889,6 +889,10 @@
         .seg button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
         .pair { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
         .pair-even { grid-template-columns: 1fr 1fr; }
+        /* Several labeled boxes edited together (Seller Net's Loan Payoff) */
+        .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+        .sub-label { display: block; margin: 0 0 6px 6px; font-size: 0.82rem; font-weight: bold; opacity: 0.8; }
+        @media (max-width: 600px) { .sub-grid { grid-template-columns: 1fr; } }
         .field-help a { color: var(--tan); font-weight: bold; }
         .field-error { margin: 6px 0 0 6px; font-size: 0.85rem; font-weight: bold; color: #b3392f; }
         .field-error + .field-help, .field-help + .field-error { margin-top: 4px; }
@@ -1118,6 +1122,12 @@
             <div class="settings-section">
                 <h3 class="money-section-title" id="purchase-title">Purchase</h3>
                 <div class="settings-grid" id="purchase-fields"></div>
+            </div>
+
+            <!-- Seller Net only: the seller's loan, edited as one setting -->
+            <div class="settings-section" id="loan-payoff-section" hidden>
+                <h3 class="money-section-title">Loan Payoff</h3>
+                <div class="settings-grid" id="loan-payoff-fields"></div>
             </div>
 
             <div class="settings-section">
@@ -2406,6 +2416,40 @@
             makeEditable(document.getElementById('loan-card'));
         }
 
+        // Seller Net: the seller's loan in one setting (all six boxes open together), since a new statement
+        // usually changes several of them at once
+        function loanPayoffField(parent) {
+            const f = fieldShell('Loan Payoff', { span: true, key: 'LOAN INTEREST RATE', help: 'The principal balance is from a recent statement. Leave it blank to work it out from the original loan.' });
+            f.wrap.dataset.display = 'payoff';
+            const grid = el('div', 'sub-grid');
+            const sub = (label, box) => {
+                const s = el('div', 'sub-field');
+                s.append(el('span', 'sub-label', escapeHtml(label)), box.wrap);
+                box.input.setAttribute('aria-label', label);
+                grid.append(s);
+            };
+            const money = column => textBox({
+                value: withCommas(wholeDollars(current(column))), prefix: '$', placeholder: '0',
+                onInput: i => setDraft(column, digits(i.value)),
+                onBlur: i => { i.value = withCommas(digits(i.value)); },
+            });
+            const date = column => textBox({ type: 'date', value: toInputDate(current(column)), onInput: i => setDraft(column, toSheetDate(i.value)) });
+            sub('Original Loan Amount', money('ORIGINAL LOAN AMOUNT'));
+            sub('Original Loan Date', date('ORIGINAL LOAN DATE'));
+            sub('Loan Interest Rate', textBox({
+                value: decimalToPercent(current('LOAN INTEREST RATE')), suffix: '%', placeholder: '0', inputmode: 'decimal',
+                onInput: i => { const d = percentToDecimal(i.value); fieldBad('LOAN INTEREST RATE', d === null ? 'Please enter a number.' : ''); if (d !== null) setDraft('LOAN INTEREST RATE', d); else settingsEdited(); },
+            }));
+            sub('Loan Term', textBox({
+                value: digits(current('LOAN TERM MONTHS')), suffix: 'months', placeholder: '0',
+                onInput: i => setDraft('LOAN TERM MONTHS', digits(i.value)),
+            }));
+            sub('Principal Balance', money('LOAN PRINCIPAL BALANCE'));
+            sub('Principal Balance Date', date('PRINCIPAL LOAN BALANCE DATE'));
+            f.body.append(grid);
+            parent.append(f.wrap);
+        }
+
         // --- Seller Net settings: Sellers, the sale, the seller's loan payoff, and the seller's costs ---
         function setupSellerFields() {
             document.getElementById('people-label').textContent = 'Sellers';
@@ -2415,7 +2459,8 @@
             document.getElementById('loan-product-field').hidden = true;
             document.getElementById('inspection-section').hidden = true;
             document.getElementById('purchase-title').textContent = 'Sale';
-            document.getElementById('loan-title').textContent = 'Payoffs';
+            document.getElementById('loan-payoff-section').hidden = false;
+            document.getElementById('loan-title').textContent = 'Payoff Fees';
 
             const sale = document.getElementById('purchase-fields');
             moneyField(sale, 'Sale Price', 'PURCHASE PRICE');
@@ -2426,13 +2471,9 @@
             dateField(sale, 'Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             wholeField(sale, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
 
+            loanPayoffField(document.getElementById('loan-payoff-fields'));
+
             const payoffs = document.getElementById('loan-fields');
-            moneyField(payoffs, 'Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
-            dateField(payoffs, 'Original Loan Date', 'ORIGINAL LOAN DATE');
-            percentField(payoffs, 'Loan Interest Rate', 'LOAN INTEREST RATE');
-            wholeField(payoffs, 'Loan Term', 'LOAN TERM MONTHS', { suffix: 'months' });
-            moneyField(payoffs, 'Principal Balance', 'LOAN PRINCIPAL BALANCE', { help: 'From a recent statement. Leave blank to work it out from the original loan.' });
-            dateField(payoffs, 'Principal Balance Date', 'PRINCIPAL LOAN BALANCE DATE', { help: 'The date of that balance.' });
             moneyField(payoffs, 'Recording Fee', 'RECORDING FEE');
             moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
             percentAndDollars(payoffs, 'Prepayment Penalty', 'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'A percent of the loan balance, a flat amount, or both. Both are optional.');
@@ -2511,6 +2552,19 @@
             if (field.dataset.display === 'loan') {
                 const ltv = current('RETAIL LTV');
                 return ltv === '' ? '' : decimalToPercent(ltv) + '% · ' + wholeMoney.format(Math.round(num(current('PURCHASE PRICE')) * num(ltv)));
+            }
+            // Loan payoff: "$600,000 · 5.75% · 360 months · from May 13, 2023 · Balance $500,575 on October 1, 2026"
+            if (field.dataset.display === 'payoff') {
+                const dollars = c => (current(c) === '' ? '' : wholeMoney.format(Math.round(num(current(c)))));
+                const day = c => { const d = parseDate(current(c)); return d ? fmtDate(d) : ''; };
+                const balance = dollars('LOAN PRINCIPAL BALANCE');
+                return [
+                    dollars('ORIGINAL LOAN AMOUNT'),
+                    current('LOAN INTEREST RATE') === '' ? '' : decimalToPercent(current('LOAN INTEREST RATE')) + '%',
+                    digits(current('LOAN TERM MONTHS')) ? digits(current('LOAN TERM MONTHS')) + ' months' : '',
+                    day('ORIGINAL LOAN DATE') ? 'from ' + day('ORIGINAL LOAN DATE') : '',
+                    balance ? 'Balance ' + balance + (day('PRINCIPAL LOAN BALANCE DATE') ? ' on ' + day('PRINCIPAL LOAN BALANCE DATE') : '') : '',
+                ].filter(Boolean).join(' · ');
             }
             const picker = field.querySelector('.picker-btn .picker-main');
             // A placeholder like "No add-ons" is a real answer; "Choose..." means nothing is picked
