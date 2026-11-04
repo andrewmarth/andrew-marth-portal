@@ -1323,6 +1323,25 @@
                     selectedSellerId = seller.id;
                     renderPageList(listEl, sellerPages.filter(p => (p.people || []).includes(seller.id)),
                         'No seller net sheets for ' + (seller.name || formatPhone(seller.id)) + ' yet.');
+                    // "New Property" is always the last property row (above the View Older toggle), as in My Buyers
+                    const add = document.createElement('button');
+                    add.type = 'button';
+                    add.className = 'page-link page-link-add';
+                    add.innerHTML = '<span class="page-link-icon">' + PLUS_ICON + '</span>'
+                        + '<span class="page-link-text"><span class="page-link-street">New Property</span><br><span class="page-link-sub"></span></span>';
+                    add.querySelector('.page-link-sub').textContent = 'For ' + (seller.name || formatPhone(seller.id));
+                    add.addEventListener('click', () => {
+                        if (!adminData) return;
+                        openNewPropertyForm({
+                            seller: true,
+                            client: seller,
+                            buyers: adminData.sellers,
+                            accounts: adminData.accounts,
+                            submit: createProperty,
+                        });
+                    });
+                    const toggle = listEl.querySelector('.view-older');
+                    if (toggle) listEl.insertBefore(add, toggle); else listEl.append(add);
                 },
             });
         }
@@ -1530,7 +1549,7 @@
                     renderFlips(data.flipPages || []);
                     // Only admins get the buyer list
                     if (data.buyers) {
-                        adminData = { buyers: data.buyers, accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
+                        adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
                         document.getElementById('signatures-card').hidden = false;
                         renderNewClient();
                         renderBuyers(data.buyers, data.buyerPages || []);

@@ -1777,28 +1777,31 @@ function nextPageId_(sheet, idCol) {
 const PROPERTY_TYPES = ['Single Family', 'Townhome', 'Condo', 'Manufactured'];
 const CENSUS_DESIGNATIONS = ['Low', 'Moderate', 'Middle', 'Upper'];
 
-// Admins only: a new Buyer Breakdown row for a buyer, from the home page's New Property form.
-// The buyer goes in PRIMARY, then any other purchasers, then collaborators (six people at most).
+// Admins only: a new Buyer Breakdown row for a buyer (or, with pageType "Seller Net", a Seller Net row for a seller),
+// from the home page's New Property form.
+// The buyer (seller) goes in PRIMARY, then any other purchasers (sellers), then collaborators (six people at most).
 // Everything the form doesn't ask for starts at a standard placeholder; every other column stays blank.
 function createProperty_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const isSellerNet = String(body.pageType || '').trim().toLowerCase() === 'seller net';
+  const role = isSellerNet ? 'SELLER' : 'BUYER';
   const accounts = allRows_(SHEET_ID, SHEET_NAME);
   const byId = {};
   accounts.forEach(function (r) { const aid = phoneToId_(r['ACCOUNT ID']); if (aid) byId[aid] = r; });
 
   // People
   const clientId = phoneToId_(body.clientId);
-  if (!byId[clientId] || !hasRole_(byId[clientId], 'BUYER')) return { ok: false, error: 'bad_client' };
-  const people = [{ id: clientId, type: 'Purchaser' }];
-  const add = function (list, type, mustBeBuyer) {
+  if (!byId[clientId] || !hasRole_(byId[clientId], role)) return { ok: false, error: 'bad_client' };
+  const people = [{ id: clientId, type: isSellerNet ? 'Seller' : 'Purchaser' }];
+  const add = function (list, type, mustHaveRole) {
     (Array.isArray(list) ? list : []).forEach(function (v) {
       const pid = phoneToId_(v);
-      if (!pid || !byId[pid] || (mustBeBuyer && !hasRole_(byId[pid], 'BUYER'))) return;
+      if (!pid || !byId[pid] || (mustHaveRole && !hasRole_(byId[pid], role))) return;
       if (people.some(function (p) { return p.id === pid; })) return;
       people.push({ id: pid, type: type });
     });
   };
-  add(body.purchasers, 'Purchaser', true);
+  add(body.purchasers, isSellerNet ? 'Seller' : 'Purchaser', true);
   add(body.collaborators, 'Collaborator', false);
   if (people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
 
@@ -1815,8 +1818,8 @@ function createProperty_(account, body) {
   if (!propertyType) return { ok: false, error: 'bad_property_type' };
   const price = whole(body.purchasePrice);
   if (!(price > 0)) return { ok: false, error: 'missing_price' };
-  const product = allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME)[Number(body.loanProduct)];
-  if (!product) return { ok: false, error: 'bad_loan_product' };
+  const product = isSellerNet ? null : allRows_(LOAN_SHEET_ID, LOAN_SHEET_NAME)[Number(body.loanProduct)];
+  if (!isSellerNet && !product) return { ok: false, error: 'bad_loan_product' };
   const census = CENSUS_DESIGNATIONS.filter(function (c) { return c === body.census; })[0] || '';
   const pool = body.hasPool === true || String(body.hasPool).toUpperCase() === 'TRUE';
   const hoa = body.hoa || {};
@@ -1824,7 +1827,37 @@ function createProperty_(account, body) {
   const today = new Date();
   const dayOnly = function (d, plus) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (plus || 0)); };
 
-  const values = {
+  // Seller Net: the sale, the HOA, and the seller's costs (the loan payoff is filled in later from Settings)
+  const values = isSellerNet ? {
+    'PAGE TYPE': 'Seller Net',
+    'STREET ADDRESS': street, 'CITY': city, 'STATE': state, 'ZIP': zip,
+    'PROPERTY TYPE': propertyType,
+    'YEAR BUILT': whole(body.yearBuilt),
+    'YEARLY TAXES': whole(body.yearlyTaxes),
+    'PURCHASE PRICE': price,
+    'HOA TRANSFER FEE': whole(hoa.transfer),
+    'HOA CAP FEE': whole(hoa.cap),
+    'HOA DISCLOSURE FEE': whole(hoa.disclosure),
+    'HOA OTHER FEE': whole(hoa.other),
+    'HOA PRIMARY MONTHLY DUES': whole(hoa.primary),
+    'HOA MASTER MONTHLY DUES': whole(hoa.master),
+    // Placeholders (the same deal terms a new Buyer Breakdown starts with)
+    'SELLER CREDIT': 0,
+    'ESCROW FEE RATE': 0.002,
+    'OWNERS TITLE RATE': 0.0045,
+    'WHO PAYS TRANSFER FEE': 'Buyer',
+    'WHO PAYS CAP FEE': 'Buyer',
+    'WHO PAYS DISCLOSURE FEE': 'Seller',
+    'WHO PAYS OTHER FEE': 'Buyer',
+    'OFFER ACCEPTANCE DATE': dayOnly(today, 1),
+    'ESCROW DURATION': 30,
+    'SELLER PAID BUYER COMMISSION %': 0.03,
+    'SELLER PAID BUYER COMMISSION $': 0,
+    'LISTING AGENT COMMISSION %': 0.025,
+    'LISTING AGENT COMMISSION $': 0,
+    'VERSION TITLE': 'Initial Version',
+    'VERSION DATE': dayOnly(today, 0),
+  } : {
     'PAGE TYPE': 'Buyer Breakdown',
     'STREET ADDRESS': street, 'CITY': city, 'STATE': state, 'ZIP': zip,
     'PROPERTY TYPE': propertyType,

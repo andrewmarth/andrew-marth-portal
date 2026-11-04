@@ -17,7 +17,7 @@ const CSS = `
 .property-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; margin-bottom: 0; min-height: 54px; align-items: center; }
 /* (the general ".field label" style would otherwise pull these to the top-left) */
 .property-dialog .type-picker label { display: flex; align-items: center; justify-content: center; margin: 0; min-height: 44px; font-size: 0.95rem; }
-.property-dialog [data-hoa-fields][hidden] { display: none; }
+.property-dialog [data-hoa-fields][hidden], .property-dialog .field[hidden] { display: none; }
 /* Single-choice dropdowns: same look as the portal's other dropdowns */
 .property-dialog .sp-btn .mp-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 .property-dialog .sp-option > svg:first-child { width: 20px; height: 20px; flex-shrink: 0; color: var(--gold); }
@@ -156,6 +156,7 @@ function multiPicker(mount, { labelId, placeholder, items, canAdd, onChange }) {
         // Drop anything no longer allowed (e.g. a collaborator who was just made a purchaser)
         prune() { const ok = items(true).map(a => a.id); chosen = chosen.filter(id => ok.includes(id)); label(); if (root.classList.contains('is-open')) draw(); },
         reset() { chosen = []; close(); label(); },
+        setPlaceholder(text) { placeholder = text; label(); },
     };
 }
 
@@ -234,7 +235,7 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
             + '<input type="radio" name="np-pool" id="np-pool-yes" value="TRUE"><label for="np-pool-yes">Yes</label>'
             + '<input type="radio" name="np-pool" id="np-pool-no" value="FALSE" checked><label for="np-pool-no">No</label></div></div>'
     + '</div></fieldset>'
-    + '<fieldset class="income-section"><div class="section-head"><h3>Purchase</h3></div><div class="type-fields">'
+    + '<fieldset class="income-section"><div class="section-head"><h3 data-purchase-title>Purchase</h3></div><div class="type-fields">'
         + wholeField('np-price', 'Purchase Price', { money: true })
         + '<div class="field"><span class="field-label" id="np-loan-label">Loan Product</span><div data-loan></div></div>'
     + '</div></fieldset>'
@@ -259,13 +260,13 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
 let built = null;
 
 /**
- * Opens the New Property pop-up for one buyer.
- * client: { id, name }; buyers / accounts: [{ id, name }]; loanProducts: [{ index, name, lender }]
+ * Opens the New Property pop-up for one buyer (or, with seller: true, a Seller Net page for one seller).
+ * client: { id, name }; buyers (the other buyers, or sellers) / accounts: [{ id, name }]; loanProducts: [{ index, name, lender }]
  * submit(answers) must resolve once the property is saved (or throw).
  */
-export function openNewPropertyForm({ client, buyers, accounts, loanProducts, submit }) {
+export function openNewPropertyForm({ client, buyers, accounts, loanProducts, submit, seller = false }) {
     if (!built) built = build();
-    built.open({ client, buyers, accounts, loanProducts, submit });
+    built.open({ client, buyers, accounts, loanProducts, submit, seller });
 }
 
 function build() {
@@ -467,8 +468,8 @@ function build() {
         const year = value('np-year');
         const latest = new Date().getFullYear() + 1;
         if (year && (year.length !== 4 || Number(year) < 1850 || Number(year) > latest)) return problem($('#np-year'), 'Year built must be between 1850 and ' + latest + '.');
-        if (!(Number(digitsOf(value('np-price'))) > 0)) return problem($('#np-price'), 'Please enter the purchase price.');
-        if (loanPicker.value() === '') return problem(loanPicker.button, 'Please choose a loan product.');
+        if (!(Number(digitsOf(value('np-price'))) > 0)) return problem($('#np-price'), ctx.seller ? 'Please enter the sale price.' : 'Please enter the purchase price.');
+        if (!ctx.seller && loanPicker.value() === '') return problem(loanPicker.button, 'Please choose a loan product.');
         return false;
     }
     form.addEventListener('submit', async e => {
@@ -476,6 +477,7 @@ function build() {
         message.textContent = '';
         if (validate()) return;
         const answers = {
+            pageType: ctx.seller ? 'Seller Net' : 'Buyer Breakdown',
             clientId: ctx.client.id,
             purchasers: purchasers.value(),
             collaborators: collaborators.value(),
@@ -526,6 +528,14 @@ function build() {
             closeSuggestions();
             showManual(false);
             $('[data-intro]').textContent = 'For ' + nameOf(ctx.client) + '. Everything else starts with standard placeholder values you can change in Settings.';
+            // Seller Net: other sellers instead of purchasers, a sale price, and none of the buyer-only questions
+            $('#property-dialog-title').textContent = ctx.seller ? 'New Seller Net Sheet' : 'New Property';
+            $('#np-purchasers-label').textContent = ctx.seller ? 'Who Else Is A Seller' : 'Who Else Is A Purchaser';
+            purchasers.setPlaceholder(ctx.seller ? 'Just the seller' : 'Just the buyer');
+            $('[data-collaborators]').closest('.field').querySelector('.field-help').textContent = 'Up to six people in all, including the ' + (ctx.seller ? 'seller.' : 'buyer.');
+            $('[data-purchase-title]').textContent = ctx.seller ? 'Sale' : 'Purchase';
+            $('label[for="np-price"]').textContent = ctx.seller ? 'Sale Price' : 'Purchase Price';
+            [$('[data-census]'), $('#np-sqft'), $('#np-pool-yes'), $('[data-loan]')].forEach(el => { el.closest('.field').hidden = ctx.seller; });
             typePicker.reset();
             censusPicker.reset();
             loanPicker.setItems((ctx.loanProducts || []).map(p => ({ value: String(p.index), main: p.name || 'Loan product ' + (p.index + 1), secondary: p.lender })));
