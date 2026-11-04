@@ -1951,6 +1951,8 @@ function myPagesData_(id, account) {
   const result = { ok: true, pages: pages.filter(function (p) { return isOnPage_(p, id); }).map(summary) };
   // The Flips card: this account's "Flip" pages (the card itself is only shown to FLIPPER BUYER accounts)
   result.flipPages = pagesOfType('flip').filter(function (p) { return isOnPage_(p, id); }).map(summary);
+  // The Seller Net Sheets card: this account's "Seller Net" pages (the card itself is only shown to SELLER accounts)
+  result.sellerNetPages = pagesOfType('seller net').filter(function (p) { return isOnPage_(p, id); }).map(summary);
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
     result.accounts = accountChoices_().map(function (a) { return { id: a.id, name: a.name }; });

@@ -795,6 +795,16 @@
             </div>
         </section>
 
+        <!-- 2a. Seller Net pages this account is on (only for accounts with SELLER = TRUE) -->
+        <section class="main-card reveal" id="seller-nets-card" hidden>
+            <span class="card-eyebrow">Selling A Property</span>
+            <h2>Seller Net Sheets</h2>
+            <div id="seller-net-list">
+                <span class="spinner" aria-hidden="true"></span>
+                <p class="status-text">Loading your pages...</p>
+            </div>
+        </section>
+
         <!-- 2b. FLIPPER BUYER accounts only: the flip portal and this account's Flip proformas -->
         <section class="main-card reveal" id="flips-card" hidden>
             <span class="card-eyebrow">Properties &amp; Proformas</span>
@@ -951,6 +961,10 @@
         // One linked row per page: street on top, then "City, ST 85000"
         function renderPages(pages) {
             renderPageList(pageListEl, pages, 'No buyer breakdowns yet. They’ll show up here once Andrew makes one for you.');
+        }
+        const sellerNetListEl = document.getElementById('seller-net-list');
+        function renderSellerNets(pages) {
+            renderPageList(sellerNetListEl, pages, 'No seller net sheets yet. They’ll show up here once Andrew makes one for you.');
         }
         const flipListEl = document.getElementById('flip-list');
         function renderFlips(pages) {
@@ -1512,6 +1526,7 @@
                 const data = await res.json();
                 if (data.ok) {
                     renderPages(data.pages || []);
+                    renderSellerNets(data.sellerNetPages || []);
                     renderFlips(data.flipPages || []);
                     // Only admins get the buyer list
                     if (data.buyers) {
@@ -1524,11 +1539,12 @@
                         renderLinks(data.links);
                     }
                 }
-                else if (data.error === 'not_found') { renderPages([]); renderFlips([]); }
+                else if (data.error === 'not_found') { renderPages([]); renderSellerNets([]); renderFlips([]); }
                 else throw new Error(data.error || 'Request failed');
             } catch (err) {
                 console.error(err);
                 pageListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your pages. Please refresh to try again.</p>';
+                sellerNetListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your pages. Please refresh to try again.</p>';
                 flipListEl.innerHTML = '<p class="status-text is-error">We couldn’t load your proformas. Please refresh to try again.</p>';
             }
         }
@@ -1558,6 +1574,8 @@
                     greet(data.row);
                     // The Buying A Property card is only for buyers
                     document.getElementById('breakdowns-card').hidden = String((data.row || {}).BUYER || '').trim().toUpperCase() !== 'TRUE';
+                    // The Selling A Property card is only for sellers
+                    document.getElementById('seller-nets-card').hidden = String((data.row || {}).SELLER || '').trim().toUpperCase() !== 'TRUE';
                     // The Flips card is only for accounts with FLIPPER BUYER = TRUE
                     document.getElementById('flips-card').hidden = String((data.row || {})['FLIPPER BUYER'] || '').trim().toUpperCase() !== 'TRUE';
                     // Admins don't need the "call or text Andrew" card
@@ -1665,6 +1683,8 @@
             renderNewClient();
             const demoPage = { id: 'DEMO1', street: '1234 E Sample St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550123'] };
             renderPages([demoPage]);
+            document.getElementById('seller-nets-card').hidden = false;
+            renderSellerNets([{ id: 'DEMO4', street: '123 E Seller St', city: 'Tempe', state: 'AZ', zip: '85281' }]);
             document.getElementById('flips-card').hidden = false;
             renderFlips([{ id: 'DEMO2', street: '4321 W Example Ave', city: 'Phoenix', state: 'AZ', zip: '85031' }]);
             renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
