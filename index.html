@@ -589,6 +589,11 @@
         @media (hover: hover) { .glow-card .page-link:hover { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35); } }
         .glow-card .links-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         .glow-card .status-text.is-error { color: #f2b8a8; }
+        /* Green version (the lender's My Buyers card) */
+        .glow-card.is-green { background: #2c4a35; }
+        .glow-card.is-green::before { background: radial-gradient(circle, rgba(140, 190, 120, 0.32), transparent 70%); }
+        .glow-card.is-green::after { background: radial-gradient(circle, rgba(64, 120, 84, 0.45), transparent 70%); }
+        .glow-card.is-green .card-eyebrow, .glow-card.is-green .view-older { color: #a9cf96; }
         /* "New Property" row at the bottom of a buyer's list (admins) */
         .page-link-add {
             width: 100%;
@@ -824,6 +829,15 @@
                 <span class="spinner" aria-hidden="true"></span>
                 <p class="status-text">Loading your proformas...</p>
             </div>
+        </section>
+
+        <!-- 2d. Lenders only: the buyers on the Buyer Breakdowns this lender is on -->
+        <section class="main-card glow-card is-green reveal" id="lender-buyers-card" hidden>
+            <span class="card-eyebrow">Lender</span>
+            <h2>My Buyers</h2>
+            <span class="sr-only" id="lender-buyer-picker-label">Buyer</span>
+            <div id="lender-buyer-picker"></div>
+            <div id="lender-buyer-page-list" class="buyer-page-list"></div>
         </section>
 
         <!-- 3. Admins only: add a client from the home page -->
@@ -1158,6 +1172,27 @@
                     });
                     const toggle = listEl.querySelector('.view-older');
                     if (toggle) listEl.insertBefore(add, toggle); else listEl.append(add);
+                },
+            });
+        }
+
+        // Lenders: the same dropdown, limited to buyers on this lender's Buyer Breakdowns, with no New Property row
+        let selectedLenderBuyerId = null;
+        function renderLenderBuyers(buyers, buyerPages) {
+            const mount = document.getElementById('lender-buyer-picker');
+            const listEl = document.getElementById('lender-buyer-page-list');
+            document.getElementById('lender-buyers-card').hidden = false;
+            if (!buyers.length) {
+                mount.innerHTML = '<p class="pages-empty">You haven’t been added to any buyer breakdowns yet.</p>';
+                return;
+            }
+            mountClientPicker(mount, buyers, {
+                idPrefix: 'lender-buyer-picker', labelId: 'lender-buyer-picker-label', placeholder: 'Choose a buyer...', selectedId: selectedLenderBuyerId,
+                onPick(buyer) {
+                    if (!buyer) { listEl.innerHTML = ''; return; }
+                    selectedLenderBuyerId = buyer.id;
+                    renderPageList(listEl, buyerPages.filter(p => (p.people || []).includes(buyer.id)),
+                        'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
                 },
             });
         }
@@ -1547,6 +1582,8 @@
                     renderPages(data.pages || []);
                     renderSellerNets(data.sellerNetPages || []);
                     renderFlips(data.flipPages || []);
+                    // Only lenders get their own buyer list
+                    if (data.lenderBuyers) renderLenderBuyers(data.lenderBuyers, data.lenderBuyerPages || []);
                     // Only admins get the buyer list
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
@@ -1706,6 +1743,7 @@
             renderSellerNets([{ id: 'DEMO4', street: '123 E Seller St', city: 'Tempe', state: 'AZ', zip: '85281' }]);
             document.getElementById('flips-card').hidden = false;
             renderFlips([{ id: 'DEMO2', street: '4321 W Example Ave', city: 'Phoenix', state: 'AZ', zip: '85031' }]);
+            renderLenderBuyers([{ id: '4805550123', name: 'Jordan Sample' }], [demoPage]);
             renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
             renderSellers([{ id: '4805550321', name: 'Morgan Seller' }], [{ id: 'DEMO4', street: '123 E Seller St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550321'] }]);
             renderFlippers([{ id: '4805550789', name: 'Riley Flipper' }], [{ id: 'DEMO3', street: '987 E Proforma Rd', city: 'Mesa', state: 'AZ', zip: '85201', people: ['4805550789'] }]);

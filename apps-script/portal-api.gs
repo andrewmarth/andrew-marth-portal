@@ -1986,6 +1986,28 @@ function myPagesData_(id, account) {
   result.flipPages = pagesOfType('flip').filter(function (p) { return isOnPage_(p, id); }).map(summary);
   // The Seller Net Sheets card: this account's "Seller Net" pages (the card itself is only shown to SELLER accounts)
   result.sellerNetPages = pagesOfType('seller net').filter(function (p) { return isOnPage_(p, id); }).map(summary);
+  // Lenders' "My Buyers": the BUYER accounts on the Buyer Breakdowns this lender is on, and those pages
+  if (hasRole_(account, 'LENDER')) {
+    const lenderPages = pages.filter(function (p) { return isOnPage_(p, id); });
+    const onLenderPages = {};
+    lenderPages.forEach(function (p) {
+      PAGE_PEOPLE_COLUMNS.forEach(function (c) { const pid = phoneToId_(p[c]); if (pid && pid !== id) onLenderPages[pid] = true; });
+    });
+    result.lenderBuyers = allRows_(SHEET_ID, SHEET_NAME)
+      .filter(function (r) { return hasRole_(r, 'BUYER') && onLenderPages[phoneToId_(r['ACCOUNT ID'])]; })
+      .map(function (r) {
+        return {
+          id: phoneToId_(r['ACCOUNT ID']),
+          name: [r['FIRST NAME'], r['LAST NAME']].map(function (s) { return String(s || '').trim(); }).filter(String).join(' '),
+        };
+      })
+      .sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); });
+    result.lenderBuyerPages = lenderPages.map(function (p) {
+      const page = summary(p);
+      page.people = PAGE_PEOPLE_COLUMNS.map(function (c) { return phoneToId_(p[c]); }).filter(String);
+      return page;
+    });
+  }
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
     result.accounts = accountChoices_().map(function (a) { return { id: a.id, name: a.name }; });
