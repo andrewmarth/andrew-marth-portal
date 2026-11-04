@@ -833,7 +833,16 @@
             <div id="buyer-page-list" class="buyer-page-list"></div>
         </section>
 
-        <!-- 3b. Admins only: any flipper's Flip proformas -->
+        <!-- 3b. Admins only: any seller's Seller Net sheets -->
+        <section class="main-card glow-card reveal" id="sellers-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>My Sellers</h2>
+            <span class="sr-only" id="seller-picker-label">Seller</span>
+            <div id="seller-picker"></div>
+            <div id="seller-page-list" class="buyer-page-list"></div>
+        </section>
+
+        <!-- 3c. Admins only: any flipper's Flip proformas -->
         <section class="main-card glow-card reveal" id="flippers-card" hidden>
             <span class="card-eyebrow">Admin</span>
             <h2>My Flippers</h2>
@@ -1282,6 +1291,28 @@
             });
         }
 
+        // --- My Sellers (admins): a SELLER account's Seller Net sheets ---
+        let selectedSellerId = null;
+        function renderSellers(sellers, sellerPages) {
+            const card = document.getElementById('sellers-card');
+            const mount = document.getElementById('seller-picker');
+            const listEl = document.getElementById('seller-page-list');
+            card.hidden = false;
+            if (!sellers.length) {
+                mount.innerHTML = '<p class="pages-empty">No accounts are marked as sellers yet.</p>';
+                return;
+            }
+            mountClientPicker(mount, sellers, {
+                idPrefix: 'seller-picker', labelId: 'seller-picker-label', placeholder: 'Choose a seller...', selectedId: selectedSellerId,
+                onPick(seller) {
+                    if (!seller) { listEl.innerHTML = ''; return; }
+                    selectedSellerId = seller.id;
+                    renderPageList(listEl, sellerPages.filter(p => (p.people || []).includes(seller.id)),
+                        'No seller net sheets for ' + (seller.name || formatPhone(seller.id)) + ' yet.');
+                },
+            });
+        }
+
         // --- My Flippers (admins): a FLIPPER BUYER account's Flip proformas ---
         let selectedFlipperId = null;
         function renderFlippers(flippers, flipperPages) {
@@ -1488,6 +1519,7 @@
                         document.getElementById('signatures-card').hidden = false;
                         renderNewClient();
                         renderBuyers(data.buyers, data.buyerPages || []);
+                        renderSellers(data.sellers || [], data.sellerPages || []);
                         renderFlippers(data.flippers || [], data.flipperPages || []);
                         renderLinks(data.links);
                     }
@@ -1636,6 +1668,7 @@
             document.getElementById('flips-card').hidden = false;
             renderFlips([{ id: 'DEMO2', street: '4321 W Example Ave', city: 'Phoenix', state: 'AZ', zip: '85031' }]);
             renderBuyers([{ id: '4805550123', name: 'Jordan Sample' }, { id: '4805550456', name: 'Casey Example' }], [demoPage]);
+            renderSellers([{ id: '4805550321', name: 'Morgan Seller' }], [{ id: 'DEMO4', street: '123 E Seller St', city: 'Tempe', state: 'AZ', zip: '85281', people: ['4805550321'] }]);
             renderFlippers([{ id: '4805550789', name: 'Riley Flipper' }], [{ id: 'DEMO3', street: '987 E Proforma Rd', city: 'Mesa', state: 'AZ', zip: '85201', people: ['4805550789'] }]);
             renderLinks([{ title: 'Sample Link', description: 'A service you use', section: 'Tools', link: 'https://example.com' }]);
             signOutBtn.addEventListener('click', () => location.replace('/login'));

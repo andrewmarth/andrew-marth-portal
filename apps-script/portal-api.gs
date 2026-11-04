@@ -76,6 +76,13 @@ const PAGE_SETTING_FIELDS = {
   'SELLER PAID BUYER COMMISSION %': 'rate', 'SELLER PAID BUYER COMMISSION $': 'money',
   'HOME INSPECTOR': 'text', 'HOME INSPECTOR POOL': 'bool', 'HOME INSPECTOR SEWER': 'bool', 'HOME INSPECTOR TERMITE': 'bool',
   'SEWER INSPECTOR': 'text', 'TERMITE INSPECTOR': 'text',
+  // Seller Net pages: the seller's loan payoff and the listing agent's commission
+  'ORIGINAL LOAN AMOUNT': 'money', 'ORIGINAL LOAN DATE': 'date', 'LOAN INTEREST RATE': 'rate', 'LOAN TERM MONTHS': 'int',
+  'LOAN PRINCIPAL BALANCE': 'money', 'PRINCIPAL LOAN BALANCE DATE': 'date',
+  'RECORDING FEE': 'money', 'PAYOFF STATEMENT FEE': 'money',
+  'PREPAYMENT PENALTY %': 'rate', 'PREPAYMENT PENALTY $': 'money',
+  'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
+  'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
 };
 
 // Checks one submitted setting. Returns the value to write, or null if it isn't allowed. Blank is always allowed.
@@ -357,7 +364,9 @@ function updatePageAccess_(id, account, body) {
   const known = {};
   accounts.forEach(function (a) { known[a.id] = a; });
 
-  // Real accounts only, nobody listed twice, at least one purchaser and six people at most
+  // Seller Net pages list Sellers instead of Purchasers, and have no cash / loan choice or lender
+  const isSellerNet = String(found.row['PAGE TYPE'] || '').trim().toLowerCase() === 'seller net';
+  // Real accounts only, nobody listed twice, at least one purchaser (or seller) and six people at most
   const people = [];
   const addAll = function (list, type) {
     (Array.isArray(list) ? list : []).forEach(function (p) {
@@ -365,9 +374,9 @@ function updatePageAccess_(id, account, body) {
       if (pid && known[pid] && !people.some(function (x) { return x.id === pid; })) people.push({ id: pid, type: type });
     });
   };
-  addAll(body.purchasers, 'Purchaser');
+  addAll(body.purchasers, isSellerNet ? 'Seller' : 'Purchaser');
   addAll(body.collaborators, 'Collaborator');
-  if (!people.some(function (p) { return p.type === 'Purchaser'; })) return { ok: false, error: 'need_one_purchaser' };
+  if (!people.some(function (p) { return p.type !== 'Collaborator'; })) return { ok: false, error: 'need_one_purchaser' };
   if (people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
 
   // Lender: blank for "None", otherwise an account marked LENDER = TRUE.
@@ -388,8 +397,8 @@ function updatePageAccess_(id, account, body) {
   }
   if (fields.hasOwnProperty('HOA DISCLOSURE FEE')) fields['WHO PAYS DISCLOSURE FEE'] = 'Seller';
 
-  const headers = addMissingColumns_(found.sheet, found.headers, PAGE_ROLE_COLUMNS.concat([PAGE_CASH_COLUMN]).concat(Object.keys(fields)));
-  found.sheet.getRange(found.rowNumber, colFor_(headers, PAGE_CASH_COLUMN.toLowerCase())).setValue(cash);
+  const headers = addMissingColumns_(found.sheet, found.headers, PAGE_ROLE_COLUMNS.concat(isSellerNet ? [] : [PAGE_CASH_COLUMN]).concat(Object.keys(fields)));
+  if (!isSellerNet) found.sheet.getRange(found.rowNumber, colFor_(headers, PAGE_CASH_COLUMN.toLowerCase())).setValue(cash);
   Object.keys(fields).forEach(function (column) {
     found.sheet.getRange(found.rowNumber, colFor_(headers, column.toLowerCase())).setValue(fields[column]);
   });
@@ -398,7 +407,7 @@ function updatePageAccess_(id, account, body) {
     found.sheet.getRange(found.rowNumber, colFor_(headers, col.toLowerCase())).setValue(person ? Number(person.id) : '');
     found.sheet.getRange(found.rowNumber, colFor_(headers, PAGE_ROLE_COLUMNS[i].toLowerCase())).setValue(person ? person.type : '');
   });
-  found.sheet.getRange(found.rowNumber, colFor_(headers, PAGE_LENDER_COLUMN.toLowerCase())).setValue(lender ? Number(lender) : '');
+  if (!isSellerNet) found.sheet.getRange(found.rowNumber, colFor_(headers, PAGE_LENDER_COLUMN.toLowerCase())).setValue(lender ? Number(lender) : '');
 
   return { ok: true, page: findPage_(body.pageId).row };
 }
@@ -1969,6 +1978,9 @@ function myPagesData_(id, account) {
     };
     result.buyers = withRole('BUYER');
     result.buyerPages = pages.map(withPeople);
+    // "My Sellers": every SELLER account and every Seller Net page
+    result.sellers = withRole('SELLER');
+    result.sellerPages = pagesOfType('seller net').map(withPeople);
     // "My Flippers": every FLIPPER BUYER account and every Flip page
     result.flippers = withRole('FLIPPER BUYER');
     result.flipperPages = pagesOfType('flip').map(withPeople);

@@ -857,6 +857,7 @@
 
         /* Settings sections and inputs */
         .settings-section { margin-top: 26px; }
+        .settings-section[hidden], .field[hidden] { display: none; }
         .settings-section .money-section-title { margin-bottom: 4px; }
         .settings-grid { display: grid; grid-template-columns: 1fr; gap: 0; margin-top: 0; }
         .settings-section > .money-section-title + .settings-grid { margin-top: 0; }
@@ -1052,10 +1053,15 @@
 
         <!-- 2. Escrow breakdown -->
         <section class="main-card reveal" id="escrow-card" hidden>
-            <span class="card-eyebrow">Cash To Close</span>
+            <span class="card-eyebrow" id="escrow-eyebrow">Cash To Close</span>
             <h2>Escrow Breakdown</h2>
             <div id="escrow-list"></div>
-            <div class="total-box">
+            <!-- Seller Net pages fill this in instead of the Cash Breakdown below -->
+            <div class="total-box" id="seller-total" hidden>
+                <h3 class="label">Net Proceeds</h3>
+                <ul class="cash-list" id="seller-total-list"></ul>
+            </div>
+            <div class="total-box" id="cash-total">
                 <h3 class="label">Cash Breakdown</h3>
                 <div class="cash-group">
                     <h4 class="cash-group-title">During Escrow</h4>
@@ -1066,7 +1072,13 @@
                     <ul class="cash-list" id="cash-closing"></ul>
                 </div>
             </div>
-            <p class="fine-note">
+            <p class="fine-note" id="seller-note" hidden>
+                These are estimates. The loan payoff is the projected principal balance on the closing date; the lender's
+                payoff statement will also include interest owed through the payoff date. HOA dues are credited from the
+                closing date through the end of that month. The property tax line is the seller's share of this year's
+                taxes (January 1 through the day before closing), minus the first-half payment once it comes due on October 1.
+            </p>
+            <p class="fine-note" id="buyer-note">
                 These are estimates, not a loan offer. Prepaid interest and HOA dues are counted from the closing date
                 through the end of that month. The property tax credit is the seller's share of this year's taxes
                 (January 1 through the day before closing), minus the first-half payment once it comes due on October 1.
@@ -1090,27 +1102,27 @@
             <div class="field">
                 <span class="field-label" id="people-label">Purchasers</span>
                 <div id="people-picker"></div>
-                <p class="field-help">Purchasers' incomes count toward approval, and their credit scores are averaged for the rate.</p>
+                <p class="field-help" id="people-help">Purchasers' incomes count toward approval, and their credit scores are averaged for the rate.</p>
             </div>
             <div class="field">
                 <span class="field-label" id="collab-label">Collaborators</span>
                 <div id="collab-picker"></div>
-                <p class="field-help">Collaborators can view this page but aren't part of the loan. Up to 6 purchasers and collaborators in total.</p>
+                <p class="field-help" id="collab-help">Collaborators can view this page but aren't part of the loan. Up to 6 purchasers and collaborators in total.</p>
             </div>
-            <div class="field">
+            <div class="field" id="lender-field">
                 <span class="field-label" id="lender-label">Lender</span>
                 <div id="lender-picker"></div>
             </div>
             </div>
 
             <div class="settings-section">
-                <h3 class="money-section-title">Purchase</h3>
+                <h3 class="money-section-title" id="purchase-title">Purchase</h3>
                 <div class="settings-grid" id="purchase-fields"></div>
             </div>
 
             <div class="settings-section">
-                <h3 class="money-section-title">Loan</h3>
-                <div class="field">
+                <h3 class="money-section-title" id="loan-title">Loan</h3>
+                <div class="field" id="loan-product-field">
                     <span class="field-label" id="loan-label">Loan Product</span>
                     <div id="loan-picker"></div>
                 </div>
@@ -1122,7 +1134,7 @@
                 <div class="settings-grid" id="misc-fields"></div>
             </div>
 
-            <div class="settings-section">
+            <div class="settings-section" id="inspection-section">
                 <h3 class="money-section-title">Inspections</h3>
                 <div class="settings-grid" id="inspection-fields"></div>
             </div>
@@ -1420,6 +1432,102 @@
                 payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes };
         }
 
+        // --- Seller Net ---
+        // The seller's loan balance on a date. Starts from LOAN PRINCIPAL BALANCE as of PRINCIPAL LOAN BALANCE DATE
+        // (or, without one, ORIGINAL LOAN AMOUNT as of ORIGINAL LOAN DATE), then takes off the principal of each
+        // monthly payment due after that and on or before the date. Payments are due on the 1st, starting the second
+        // month after the loan date (a loan from March 15 is first due May 1), for LOAN TERM MONTHS, and are the
+        // fixed payment on the original amount at LOAN INTEREST RATE.
+        function loanBalanceOn(page, date) {
+            const known = text(col(page, 'LOAN PRINCIPAL BALANCE')) !== '';
+            const original = num(col(page, 'ORIGINAL LOAN AMOUNT'));
+            const originalDate = parseDate(col(page, 'ORIGINAL LOAN DATE'));
+            const from = known ? parseDate(col(page, 'PRINCIPAL LOAN BALANCE DATE')) : originalDate;
+            let balance = known ? num(col(page, 'LOAN PRINCIPAL BALANCE')) : original;
+            let rate = num(col(page, 'LOAN INTEREST RATE'));
+            if (rate > 1) rate /= 100; // "6.5" means 6.5%
+            const months = num(col(page, 'LOAN TERM MONTHS'));
+            if (!balance || !from || !date || !originalDate || !months) return { balance, warning: balance && date ? 'Couldn\'t project this to the closing date, so the balance entered is shown' : '' };
+            const r = rate / 12;
+            // Fixed monthly payment: from the original amount, or (without one) from the known balance over the months left
+            const firstDue = new Date(originalDate.getFullYear(), originalDate.getMonth() + 2, 1);
+            const dueDate = k => new Date(firstDue.getFullYear(), firstDue.getMonth() + k, 1);
+            const paidBy = d => { let k = 0; while (k < months && dueDate(k) <= d) k++; return k; };
+            const amortized = (amount, n) => !n ? amount : r ? amount * r / (1 - Math.pow(1 + r, -n)) : amount / n;
+            const payment = original ? amortized(original, months) : amortized(balance, months - paidBy(from));
+            for (let k = paidBy(from); k < paidBy(date); k++) balance = Math.max(0, balance * (1 + r) - payment);
+            return { balance, warning: '' };
+        }
+
+        function calculateSellerNet(page) {
+            const price = num(col(page, 'PURCHASE PRICE'));
+            const sellerPct = num(col(page, 'SELLER CREDIT'));
+
+            // Dates: projected close of escrow, and the days left in that month (closing day included)
+            const acceptance = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
+            const closing = acceptance ? addDays(acceptance, num(col(page, 'ESCROW DURATION'))) : null;
+            const daysInMonth = closing ? new Date(closing.getFullYear(), closing.getMonth() + 1, 0).getDate() : 30;
+            const daysLeft = closing ? daysInMonth - closing.getDate() + 1 : 0;
+
+            // Property taxes: the buyer breakdown's credit, as a charge to the seller
+            const yearlyTaxes = num(col(page, 'YEARLY TAXES'));
+            let taxCharge = 0;
+            if (closing) {
+                const year = closing.getFullYear();
+                const yearDays = new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
+                const sellerDays = Math.round((closing - new Date(year, 0, 1)) / 86400000);
+                const sellerShare = yearlyTaxes * sellerDays / yearDays;
+                const firstHalfPaid = closing >= new Date(year, 9, 1) ? yearlyTaxes / 2 : 0;
+                taxCharge = Math.max(0, sellerShare - firstHalfPaid);
+            }
+
+            const loan = loanBalanceOn(page, closing);
+            const principal = loan.balance;
+            // HOA fees only count when the seller pays them (a blank WHO PAYS means the seller)
+            const hoaFee = (name, key) => {
+                const amount = num(col(page, 'HOA ' + key + ' FEE'));
+                const payer = text(col(page, 'WHO PAYS ' + key + ' FEE'));
+                const buyerPays = payer.toLowerCase() === 'buyer';
+                return { section: 'Miscellaneous', label: name, amount: buyerPays ? 0 : -amount, note: buyerPays && amount > 0 ? 'Paid by buyer' : '' };
+            };
+            const percentPlus = (pctColumn, dollarColumn, base) => base * num(col(page, pctColumn)) + num(col(page, dollarColumn));
+
+            // Listed in display order; each line's section is the heading it shows under
+            const lines = [
+                { section: 'Financial', label: 'Sale Price', amount: price },
+                { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -(price * sellerPct) },
+
+                { section: 'Payoffs', payoff: true, label: 'Principal Loan Amount', amount: -principal, note: closing && principal && !loan.warning ? 'Projected balance on ' + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
+                { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -num(col(page, 'RECORDING FEE')) },
+                { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -num(col(page, 'PAYOFF STATEMENT FEE')) },
+                { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: -percentPlus('PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', principal) },
+                { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
+
+                // The buyer breakdown's prorations, the other way around
+                { section: 'Prorations', label: 'Primary HOA Dues Proration', amount: num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
+                { section: 'Prorations', label: 'Master HOA Dues Proration', amount: num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
+                { section: 'Prorations', label: 'Property Taxes Credit', amount: -taxCharge },
+
+                { section: 'Title', label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
+                { section: 'Title', label: 'Owners Title Insurance Fee', amount: -(price * num(col(page, 'OWNERS TITLE RATE'))) },
+
+                hoaFee('HOA Transfer Fee', 'TRANSFER'),
+                hoaFee('HOA Capital Improvement Fee', 'CAP'),
+                hoaFee('HOA Disclosure Fee', 'DISCLOSURE'),
+                hoaFee('HOA Other Fee', 'OTHER'),
+                { section: 'Miscellaneous', label: 'Buyers Agent Commission', amount: -percentPlus('SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', price) },
+                { section: 'Miscellaneous', label: 'Listing Agent Commission', amount: -percentPlus('LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', price) },
+            ].map(line => ({ ...line, amount: round2(line.amount) }));
+
+            const sum = list => round2(list.reduce((s, l) => s + l.amount, 0));
+            return {
+                sellerNet: true, lines, acceptance, closing, yearlyTaxes, price,
+                payoffs: sum(lines.filter(l => l.payoff)),
+                costs: sum(lines.filter(l => !l.payoff && l.label !== 'Sale Price')),
+                net: sum(lines),
+            };
+        }
+
         // --- Showing it ---
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         // Nearest whole dollar, with halves rounded away from zero for both credits and charges
@@ -1468,7 +1576,19 @@
                 '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
                 + '<ul class="money-list">' + shownLines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>'
             ).join('');
-            renderCashBreakdown(result);
+            if (result.sellerNet) renderSellerTotal(result);
+            else renderCashBreakdown(result);
+        }
+
+        // Seller Net: what the sale brings in, what comes out of it, and what's left for the seller
+        function renderSellerTotal(result) {
+            const row = (k, v) => '<li><span class="k">' + escapeHtml(k) + '</span><span class="v">' + signedMoney(v) + '</span></li>';
+            const net = toDollars(result.net);
+            document.getElementById('seller-total-list').innerHTML = row('Sale Price', result.price)
+                + row('Closing Costs, Credits & Prorations', result.costs)
+                + row('Loan Payoffs', result.payoffs)
+                + '<li class="is-total"><span class="k">' + (net < 0 ? 'Seller Owes At Closing' : 'Estimated Net To Seller') + '</span><span class="v">'
+                + wholeMoney.format(Math.abs(net)) + '</span></li>';
         }
 
         // Cash Breakdown: amounts the buyer puts in, in whole dollars (a refund shows as a minus)
@@ -1560,7 +1680,19 @@
             return { score: Math.round(used.reduce((a, b) => a + b, 0) / used.length), missing, count: used.length };
         }
 
+        // Seller Net pages share the Settings card (and its save) with buyer breakdowns
+        const isSellerNet = () => text(data && data.pageType).toLowerCase() === 'seller net';
+
         function update() {
+            // Seller Net: the numbers with any unsaved settings edits
+            if (isSellerNet()) {
+                const page = { ...data.page, ...draft };
+                const result = calculateSellerNet(page);
+                renderProperty(page, result);
+                if (!text(col(page, 'CITY'))) document.getElementById('hero-sub').textContent = 'Estimated proceeds from selling this home.';
+                renderEscrow(result);
+                return;
+            }
             const product = data.loanProducts[loanIndex] || {};
             const credit = purchaserCreditScore();
             // The Loan Product picker's "Cash" choice decides whether this is a cash purchase
@@ -1925,7 +2057,7 @@
                 validateSettings();
                 setMessage('', '');
                 saveBtn.disabled = !people.value().length || Object.keys(fieldErrors).length > 0;
-                if (!people.value().length) setMessage('Choose at least one purchaser.', 'error');
+                if (!people.value().length) setMessage(isSellerNet() ? 'Choose at least one seller.' : 'Choose at least one purchaser.', 'error');
                 else if (Object.keys(fieldErrors).length) setMessage('Please fix the highlighted settings before saving.', 'error');
             }
 
@@ -1942,7 +2074,7 @@
                     if (fresh.ok) { data.page = fresh.page; data.clients = fresh.clients; data.inspectors = fresh.inspectors; data.versions = fresh.versions || data.versions; }
                     draft = {};
                     setTimeout(markSaved, 0);
-                    applyPickedLoan();
+                    if (!isSellerNet()) applyPickedLoan();
                     update();
                     setupVersionPicker();
                     setMessage('Saved! Your settings have been updated.', 'success');
@@ -1969,6 +2101,8 @@
         // Number formatting for the inputs (what's saved never has commas or symbols)
         const digits = v => String(v == null ? '' : v).replace(/[^0-9]/g, '');
         const withCommas = v => (v === '' ? '' : Number(v).toLocaleString('en-US'));
+        // A sheet amount like "$1,234.56" as whole dollars ("1235") for a money box
+        const wholeDollars = v => (text(v) === '' ? '' : String(Math.round(num(v))));
         const decimalToPercent = v => (text(v) === '' ? '' : String(Math.round(num(v) * 1e6) / 1e4));
         const percentToDecimal = v => {
             const t = String(v).trim();
@@ -2045,7 +2179,7 @@
         function moneyField(parent, label, column, opts = {}) {
             const f = fieldShell(label, opts);
             const box = textBox({
-                value: withCommas(digits(current(column))), prefix: '$', placeholder: '0',
+                value: withCommas(wholeDollars(current(column))), prefix: '$', placeholder: '0',
                 onInput: i => setDraft(column, digits(i.value)),
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
@@ -2085,12 +2219,18 @@
             f.body.append(segToggle(options, current(column).toUpperCase() === 'TRUE' ? options[0][0] : options[1][0], v => setDraft(column, v), label));
             parent.append(f.wrap);
         }
+        function dateField(parent, label, column, opts = {}) {
+            const f = fieldShell(label, opts);
+            const box = textBox({ type: 'date', value: toInputDate(current(column)), onInput: i => setDraft(column, toSheetDate(i.value)) });
+            f.body.append(box.wrap);
+            parent.append(f.wrap);
+        }
         // HOA fee with a Buyer / Seller toggle on the same line
         function feeWithPayer(parent, label, feeColumn, payerColumn) {
             const f = fieldShell(label, { span: true });
             const row = el('div', 'pair');
             const box = textBox({
-                value: withCommas(digits(current(feeColumn))), prefix: '$', placeholder: '0',
+                value: withCommas(wholeDollars(current(feeColumn))), prefix: '$', placeholder: '0',
                 onInput: i => setDraft(feeColumn, digits(i.value)),
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
@@ -2108,7 +2248,7 @@
                 onInput: i => { const d = percentToDecimal(i.value); fieldBad(pctColumn, d === null ? 'Please enter a number.' : ''); if (d !== null) setDraft(pctColumn, d); else settingsEdited(); },
             });
             const dollars = textBox({
-                value: withCommas(digits(current(dollarColumn))), prefix: '$', placeholder: '0',
+                value: withCommas(wholeDollars(current(dollarColumn))), prefix: '$', placeholder: '0',
                 onInput: i => setDraft(dollarColumn, digits(i.value)),
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
@@ -2168,7 +2308,8 @@
         function validateSettings() {
             if (!settingsBlocks.length) return;
             const page = draftPage();
-            const product = pickedCash ? null : data.loanProducts[pickedLoanIndex] || {};
+            // Seller Net pages have no loan product to check against
+            const product = pickedCash || isSellerNet() ? null : data.loanProducts[pickedLoanIndex] || {};
             const maxOf = name => (!product || text(col(product, name)) === '' ? Infinity : num(col(product, name)));
             const keep = k => (fieldErrors[k] === 'Please enter a number.' ? fieldErrors[k] : '');
 
@@ -2214,10 +2355,7 @@
             moneyField(purchase, 'Yearly Taxes', 'YEARLY TAXES');
             choiceField(purchase, 'Census Designation', 'CENSUS DESIGNATION', ['Low', 'Moderate', 'Middle', 'Upper'].map(v => ({ value: v, main: v, icon: 'map' })),
                 { help: '<a href="https://geomap.ffiec.gov/ffiecgeomap/" target="_blank" rel="noopener noreferrer">Click here for the map</a>' });
-            const dateField = fieldShell('Offer Acceptance Date');
-            const dateBox = textBox({ type: 'date', value: toInputDate(current('OFFER ACCEPTANCE DATE')), onInput: i => setDraft('OFFER ACCEPTANCE DATE', toSheetDate(i.value)) });
-            dateField.body.append(dateBox.wrap);
-            purchase.append(dateField.wrap);
+            dateField(purchase, 'Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             wholeField(purchase, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
             moneyField(purchase, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');
             moneyField(purchase, 'Gift Funds', 'GIFT FUNDS');
@@ -2266,6 +2404,54 @@
 
             validateSettings();
             makeEditable(document.getElementById('loan-card'));
+        }
+
+        // --- Seller Net settings: Sellers, the sale, the seller's loan payoff, and the seller's costs ---
+        function setupSellerFields() {
+            document.getElementById('people-label').textContent = 'Sellers';
+            document.getElementById('people-help').textContent = 'The owners selling this home.';
+            document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren\'t selling. Up to 6 sellers and collaborators in total.';
+            document.getElementById('lender-field').hidden = true;
+            document.getElementById('loan-product-field').hidden = true;
+            document.getElementById('inspection-section').hidden = true;
+            document.getElementById('purchase-title').textContent = 'Sale';
+            document.getElementById('loan-title').textContent = 'Payoffs';
+
+            const sale = document.getElementById('purchase-fields');
+            moneyField(sale, 'Sale Price', 'PURCHASE PRICE');
+            percentField(sale, 'Seller Credit To Buyer', 'SELLER CREDIT');
+            choiceField(sale, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
+            wholeField(sale, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
+            moneyField(sale, 'Yearly Taxes', 'YEARLY TAXES');
+            dateField(sale, 'Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
+            wholeField(sale, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
+
+            const payoffs = document.getElementById('loan-fields');
+            moneyField(payoffs, 'Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
+            dateField(payoffs, 'Original Loan Date', 'ORIGINAL LOAN DATE');
+            percentField(payoffs, 'Loan Interest Rate', 'LOAN INTEREST RATE');
+            wholeField(payoffs, 'Loan Term', 'LOAN TERM MONTHS', { suffix: 'months' });
+            moneyField(payoffs, 'Principal Balance', 'LOAN PRINCIPAL BALANCE', { help: 'From a recent statement. Leave blank to work it out from the original loan.' });
+            dateField(payoffs, 'Principal Balance Date', 'PRINCIPAL LOAN BALANCE DATE', { help: 'The date of that balance.' });
+            moneyField(payoffs, 'Recording Fee', 'RECORDING FEE');
+            moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
+            percentAndDollars(payoffs, 'Prepayment Penalty', 'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'A percent of the loan balance, a flat amount, or both. Both are optional.');
+            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance, a flat amount, or both. Both are optional.');
+
+            const misc = document.getElementById('misc-fields');
+            percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
+            percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
+            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
+            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
+            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
+            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
+            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
+            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
+            percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price, a flat amount, or both. Both are optional.');
+            percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
+
+            validateSettings();
+            makeEditable(loanCard);
         }
 
         // --- View / edit rows ---
@@ -2376,6 +2562,7 @@
         // Each PAGE TYPE in the PAGES sheet has its own way of showing the page
         const PAGE_TYPES = {
             'buyer breakdown': showBuyerBreakdown,
+            'seller net': showSellerNet,
         };
 
         async function load(user) {
@@ -2422,6 +2609,8 @@
             }).sort((a, b) => (b.time - a.time) || (b.order - a.order));
         }
         function setupVersionPicker() {
+            // Only buyer breakdowns have versions so far
+            if (!data.versions) return;
             const versions = sortedVersions();
             const field = document.getElementById('version-field');
             field.hidden = versions.length < 2 && !data.isAdmin;
@@ -2586,6 +2775,24 @@
             statusCard.hidden = true;
             [propertyCard, escrowCard, paymentCard].forEach(c => { c.hidden = false; });
             // Only admins can change the inputs; everyone else sees the numbers for the chosen product
+            loanCard.hidden = !data.isAdmin;
+            initReveal();
+        }
+
+        // PAGE TYPE "Seller Net": property details, the seller's escrow breakdown, and the admin settings card
+        function showSellerNet() {
+            document.getElementById('escrow-eyebrow').textContent = 'Net Proceeds';
+            document.getElementById('cash-total').hidden = true;
+            document.getElementById('buyer-note').hidden = true;
+            document.getElementById('seller-total').hidden = false;
+            document.getElementById('seller-note').hidden = false;
+            update();
+            if (data.isAdmin) {
+                setupAccessPickers();
+                setupSellerFields();
+            }
+            statusCard.hidden = true;
+            [propertyCard, escrowCard].forEach(c => { c.hidden = false; });
             loanCard.hidden = !data.isAdmin;
             initReveal();
         }
