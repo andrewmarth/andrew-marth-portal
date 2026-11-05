@@ -653,8 +653,7 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (action === 'document-rejected') showDone('Declined', 'You declined to sign this document. We’ll be in touch.');
             else showDone('All signed!', 'Thank you. We’ll let you know when everyone has signed.');
-            // Brings the portal's record up to date, which marks the Signature task COMPLETED
-            // (filing the finished document is Documenso's webhook's job). "Back to portal" waits for it.
+            // Brings the portal's record up to date, which marks the Signature task COMPLETED. "Back to portal" waits for it.
             const back = $('#done-back');
             back.classList.add('is-waiting');
             back.setAttribute('aria-disabled', 'true');
@@ -663,6 +662,18 @@
             back.classList.remove('is-waiting');
             back.removeAttribute('aria-disabled');
             back.textContent = 'Back to portal';
+            // If that was the last signature, the API files the finished document now. Nobody waits for it, and
+            // keepalive lets the request finish even if the signer leaves the page straight away.
+            if (action === 'document-completed') {
+                try {
+                    const idToken = await currentUser.getIdToken();
+                    fetch(PORTAL_API_URL, {
+                        method: 'POST', keepalive: true,
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ idToken, action: 'fileSigned', envelopeId }),
+                    }).catch(err => console.error(err));
+                } catch (err) { console.error(err); }
+            }
         });
 
         async function load(user) {

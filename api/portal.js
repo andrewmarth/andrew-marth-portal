@@ -153,6 +153,7 @@ export async function handle(body, query) {
     if (body.action === 'myTasks') return await myTasks_(id);
     if (body.action === 'completeTask') return await completeTask_(id, body);
     if (body.action === 'signingTask') return await signingTask_(id, body);
+    if (body.action === 'fileSigned') return await fileSigned_(id, body);
 
     // pages.html: one PAGES row (its PAGE TYPE decides what the page shows) plus what that type needs
     if (body.action === 'page') return await pageData_(id, account, body.pageId);
@@ -1347,6 +1348,7 @@ async function refreshEnvelope_(data, envelopeId, skipFiling) {
   if (done.length) await completeSignatureTasks_(envelopeId, done);
   const unlogged = data.some(r => r['ENVELOPE ID'] === envelopeId && !r['LOGGED']);
   if (env.status === 'COMPLETED' && unlogged && !skipFiling) await logSignedEnvelope_(env);
+  return env;
 }
 
 // A finished document: its signed PDFs and certificate go to the Drive folder, and it gets a documents entry.
@@ -1449,6 +1451,27 @@ async function signingTask_(id, body) {
     documentStatus: r['DOCUMENT STATUS'],
     signUrl: DOCUMENSO_URL + '/embed/sign/' + encodeURIComponent(r['RECIPIENT TOKEN']),
   };
+}
+
+// The signing page, the moment a signer finishes: if that was the last signature, the document is filed right away
+// (signed PDFs and certificate to Drive, plus its documents entry). Documenso can take a few seconds after the last
+// signature to finish the document, so while every signer is done but it isn't COMPLETED yet, this waits (~25s at most).
+// Signing only happens in the portal, so this files every document as soon as it's finished.
+async function fileSigned_(id, body) {
+  const envelopeId = String(body.envelopeId || '');
+  const mine = (await signatureRows_()).some(r => r['ENVELOPE ID'] === envelopeId && phoneToId_(r['ACCOUNT ID']) === id);
+  if (!mine) return { ok: false, error: 'not_found' };
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const env = await refreshEnvelope_(await signatureRows_(), envelopeId);
+    if (env.status === 'COMPLETED') return { ok: true, filed: true };
+    if (env.status !== 'PENDING') return { ok: true, filed: false };
+    // Someone still has to sign: their signature will file it instead
+    if ((env.recipients || []).some(r => r.role === 'SIGNER' && r.signingStatus !== 'SIGNED' && r.signingStatus !== 'REJECTED')) {
+      return { ok: true, filed: false, waiting: true };
+    }
+    await new Promise(r => setTimeout(r, 2500));
+  }
+  return { ok: true, filed: false };
 }
 
 // --- Tasks (the home page's Current Tasks card) ---
