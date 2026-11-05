@@ -3,7 +3,7 @@
 //
 // 1. Firebase (phone number sign-in): Firebase console > Project settings > General >
 //    "Your apps" > Web app > SDK setup and configuration > Config. Paste the values below.
-//    These values are public by design; your data is protected by the Apps Script check.
+//    These values are public by design; your data is protected by the Portal API's sign-in check.
 export const firebaseConfig = {
     apiKey: 'AIzaSyDdwjGBP5ZwdtZhlq8wsLHbgn2UwfYKDrQ',
     authDomain: 'andrew-marth-portal.firebaseapp.com',
@@ -11,9 +11,10 @@ export const firebaseConfig = {
     appId: '1:1067689166695:web:d315fcf943f7b8430991c2',
 };
 
-// 2. Client data: the Web app URL from deploying apps-script/portal-api.gs
-//    (Deploy > New deployment > Web app). Leave empty to show the placeholder.
-export const PORTAL_API_URL = 'https://script.google.com/macros/s/AKfycbw7_6-r-ShjTBpqlkKeYTuTjdIH8-njHdEgEHuXFszDHWPg1L5AP5yaCawutnSEx3Z6/exec';
+// 2. Client data: the Portal API (api/, a Cloud Run function in the "Website APIs" project; data in Firestore).
+//    Leave empty to show the placeholder. The old Apps Script API (apps-script/portal-api.gs, still deployed as a
+//    fallback) was https://script.google.com/macros/s/AKfycbw7_6-r-ShjTBpqlkKeYTuTjdIH8-njHdEgEHuXFszDHWPg1L5AP5yaCawutnSEx3Z6/exec
+export const PORTAL_API_URL = 'https://portal-api-673039696492.us-west1.run.app';
 
 // True once the Firebase values above have been filled in
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.appId);
