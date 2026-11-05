@@ -23,8 +23,16 @@ and the rules the copy script and the new API follow.
 | 16. TASKS | 3 | `tasks` | the TASK ID |
 | Portal Signatures (SIGNATURES) | 3 | `signatures` | automatic (one per signer, as in the sheet) |
 
-The wholesale function's own sheets (target zips, status, history) stay in Sheets for now. Only the deals it
-writes move, to `wholesaleDeals`.
+The wholesale email function's own sheets moved too:
+
+| Sheet (tab) | Collection | Document ID |
+|---|---|---|
+| 12. WHOLESALE FILTER (ZIP) | `wholesaleZips` | the zip (its `ZIP CODE`): add a document to add a target zip, delete one to drop it |
+| 17. WHOLESALE STATUS | `wholesaleStatus` | the property API's name (e.g. `REDFIN.COM DATA`), with `USAGE` (requests used this period, written by the function) and `CAP` (its limit) |
+| 18. WHOLESALE HISTORY | `wholesaleHistory` | automatic: one per email a run handled (`DATE` with its time, `EMAIL`, `COMPANY`, `INDIVIDUAL`, `EMAIL LINK`, `API USED`, `SUCCESS`) |
+
+The API also keeps a few collections of its own (not from sheets): `geocodes` (wholesale map positions),
+`locks` (short-lived, so two requests don't hand out the same ID) and `filingClaims` (signed documents already filed).
 
 ## Rules for every document
 

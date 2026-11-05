@@ -35,13 +35,26 @@ const SOURCES = [
   { sheet: '1s8ll4sD2TqN6qP7hAp2P9eG0a5G6sTevR-kGYQym_Do', tab: 'all', collection: 'documents', categoryFromTab: true },
   { sheet: '1CikwhTyAJtXr62br7sGSfOIRGTQ9ua9cp7bKNu2Q5oc', tab: 0, collection: 'tasks', idColumn: 'TASK ID' },
   { sheet: '1RXuoPZDbDpwJm3w6wXv-4vV5VNoTVQIS-NwaQ5SA1Lg', tab: 'SIGNATURES', collection: 'signatures' },
+  // The wholesale email function's own data: target zips (one document per zip), its history log, and each
+  // property API's usage. The status sheet is one row of "<API> USAGE" / "<API> CAP" columns, so it becomes one
+  // document per API (its ID is the API's name) with USAGE and CAP.
+  { sheet: '1rHgOJRoZXMY8KurJvYwzsEBZ4JIjid6fzJX7TkKGGM8', tab: 0, collection: 'wholesaleZips', idColumn: 'ZIP CODE' },
+  { sheet: '1ACZpyHqTyHtgcjzw3KHG_tn5bPIVhoyyyQO_7cFFmX8', tab: 0, collection: 'wholesaleHistory' },
+  { sheet: '14MrsqnXgUYjGdprFSdrcNdq3Dy-5axZP66i_Biea62s', tab: 0, collection: 'wholesaleStatus', transform: rows => {
+    const byApi = {};
+    Object.entries(rows[0] || {}).forEach(([h, v]) => {
+      const m = h.match(/^(.+) (USAGE|CAP)$/);
+      if (m) (byApi[m[1]] = byApi[m[1]] || { _id: m[1] })[m[2]] = v;
+    });
+    return Object.values(byApi);
+  } },
 ];
 
 // Columns that hold a phone number / account ID: stored as the 10-digit text the API uses
 // (same rule as api/lib/store.js)
 const isAccountColumn = h => /ACCOUNT ID( \d+)?$/.test(h) || /^RENT ITEM \d+ SPLIT ID$/.test(h) || h === 'PHONE NUMBER' || h === 'ASSIGNED';
 // Other columns that are text even when they look like numbers
-const isTextColumn = h => /\bID\b/.test(h) || /^(ZIP|UNIT NUMBER|STREET ADDRESS|TITLE|TEXT LINE \d+)$/.test(h);
+const isTextColumn = h => /\bID\b/.test(h) || /^(ZIP|ZIP CODE|UNIT NUMBER|STREET ADDRESS|TITLE|TEXT LINE \d+)$/.test(h);
 
 // --- Google auth ---
 const gcloudToken = () => execSync(`"${GCLOUD}" auth print-access-token`).toString().trim();
@@ -112,8 +125,10 @@ async function readSource(src, token) {
     });
   }
   const used = new Set();
-  return docs.map(fields => {
-    let id = src.doc || (src.idColumn ? String(fields[src.idColumn] || '') : randomBytes(15).toString('base64url').replace(/[-_]/g, 'x').slice(0, 20));
+  return (src.transform ? src.transform(docs) : docs).map(fields => {
+    const chosen = fields._id;
+    delete fields._id;
+    let id = chosen || src.doc || (src.idColumn ? String(fields[src.idColumn] || '') : randomBytes(15).toString('base64url').replace(/[-_]/g, 'x').slice(0, 20));
     if (!id) throw new Error(`${src.collection}: a row has no ${src.idColumn} (sheet row ${fields._order})`);
     if (used.has(id)) throw new Error(`${src.collection}: two rows have the same ${src.idColumn || 'ID'} "${id}"`);
     used.add(id);

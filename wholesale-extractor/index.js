@@ -3,13 +3,15 @@
  *
  * Called every 5 minutes by Cloud Scheduler. Looks for new emails under the Gmail label
  * ".WHOLESALE PORTAL" in SUBJECT_EMAIL's mailbox, asks Gemini to pull out the property details,
- * keeps only deals whose zip is in the target-zip sheet, verifies the address with Google's
- * Address Validation API, and adds each deal to the portal's deals: the wholesaleDeals collection in
- * Firestore (project andrew-marth-portal) and/or the old deals sheet, as DEALS_TARGET says.
+ * keeps only deals whose zip is a target zip, verifies the address with Google's Address Validation
+ * API, and adds each deal to the portal's deals.
  *
- * Gmail and Sheets are accessed as SUBJECT_EMAIL through domain-wide delegation: the function's
- * service account signs a JWT with the IAM Credentials API (no key file) and exchanges it for a
- * token. Which emails were already handled is kept in a JSON file in Cloud Storage.
+ * Everything it reads and writes besides the mail lives in the portal's Firestore database (project
+ * andrew-marth-portal), reached as the function's own service account: the target zips (wholesaleZips),
+ * the deals (wholesaleDeals), a history entry per email (wholesaleHistory) and each property API's
+ * usage (wholesaleStatus). Gmail is read as SUBJECT_EMAIL through domain-wide delegation: the service
+ * account signs a JWT with the IAM Credentials API (no key file) and exchanges it for a token. Which
+ * emails were already handled is kept in a JSON file in Cloud Storage.
  *
  * Environment:
  *   GEMINI_API_KEY, MAPS_API_KEY  - from Secret Manager
@@ -17,14 +19,10 @@
  *   STATE_BUCKET                  - Cloud Storage bucket for state.json
  *   SUBJECT_EMAIL                 - mailbox to read (default tiffany@andrewmarth.com)
  *   START_AFTER_EPOCH             - first run only handles mail after this time (unix seconds)
- *   DEALS_TARGET                  - where deals go: "both" (default: the sheet and Firestore, while the
- *                                   portal still reads the sheet) or "firestore" (after the portal's move)
- *
- * The target-zip, status and history sheets stay in Google Sheets.
  *
  * Call with ?test=1 to run on the newest email in the label and report, without writing anything;
  * add &write=1 to really write that email's rows (once); add &resume=1 as well to skip rows that
- * are already in the sheet (for finishing an email whose earlier write was interrupted).
+ * are already in wholesaleDeals (for finishing an email whose earlier write was interrupted).
  */
 
 const functions = require('@google-cloud/functions-framework');
@@ -33,14 +31,6 @@ const { GoogleAuth } = require('google-auth-library');
 const CONFIG = {
   SUBJECT_EMAIL: process.env.SUBJECT_EMAIL || 'tiffany@andrewmarth.com',
   GMAIL_LABEL: process.env.GMAIL_LABEL || '.WHOLESALE PORTAL',
-  DEALS_SHEET_ID: '12aIo0maV2qzEylH6nOfJYR-8O9aEUqlE-BywcDZcOlQ',
-  DEALS_SHEET_GID: 0,
-  ZIPS_SHEET_ID: '1rHgOJRoZXMY8KurJvYwzsEBZ4JIjid6fzJX7TkKGGM8',
-  ZIPS_SHEET_GID: 0,
-  USAGE_SHEET_ID: '14MrsqnXgUYjGdprFSdrcNdq3Dy-5axZP66i_Biea62s', // "17. WHOLESALE STATUS"
-  USAGE_SHEET_GID: 0,
-  HISTORY_SHEET_ID: '1ACZpyHqTyHtgcjzw3KHG_tn5bPIVhoyyyQO_7cFFmX8', // "18. WHOLESALE HISTORY"
-  HISTORY_SHEET_GID: 0,
   STATE_BUCKET: process.env.STATE_BUCKET,
   STATE_OBJECT: 'state.json',
   GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
@@ -50,22 +40,10 @@ const CONFIG = {
   PROCESSED_RETENTION_DAYS: 14, // how long to remember processed message IDs
   MAX_BODY_CHARS: 30000,
   RUN_BUDGET_MS: 4.5 * 60000,   // stop starting new emails after this; leftovers go to the next run
-  DEALS_TARGET: (process.env.DEALS_TARGET || 'both').toLowerCase(),
 };
-const DEALS_TO_SHEET = CONFIG.DEALS_TARGET !== 'firestore';
 
-// The portal's deals in Firestore: one document per deal, fields named like the deals sheet's columns (A-T,
-// in this order), stored the way the portal's API stores them (see migration/FIRESTORE_LAYOUT.md in the portal)
-const DEALS_COLLECTION = 'https://firestore.googleapis.com/v1/projects/andrew-marth-portal/databases/(default)/documents/wholesaleDeals';
-const DEAL_COLUMNS = ['DATE SENT', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'STREET ADDRESS', 'UNIT NUMBER', 'CITY', 'STATE', 'ZIP',
-  'PICTURES LINK', 'EMAIL LINK', 'PRODUCTION READY', 'PRICE', 'STATUS', 'BED', 'BATH', 'SQFT', 'TAXES', 'PROPERTY TYPE', 'MARKUP'];
-
-const DELEGATED_SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/spreadsheets',
-];
+const DELEGATED_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
-const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 /* ------------------------------------------------------------------ */
 /* Entry point                                                         */
@@ -115,13 +93,13 @@ async function processNewDeals() {
     try {
       msg = await getMessage(id);
       if (!allowedZips) allowedZips = await loadAllowedZips();
-      // All of an email's rows go into the sheet in one write; then the email is marked handled
+      // All of an email's deals are added in one write; then the email is marked handled
       // and saved right away, so a timeout can't cause it to be added twice.
       out = await handleMessage(msg, allowedZips, true);
       results.push(out);
       processed[id] = Date.now();
       delete failuresLogged[id];
-      // "No properties found" unless at least one row actually went into the deals sheet.
+      // "No properties found" unless at least one deal was actually added.
       const nothingFound = !(out.properties || []).some(p => p.row);
       history.push(historyRow(id, msg, out, nothingFound ? 'No properties found' : 'Success'));
       await saveState({ ...state, processed, historyFailuresLogged: failuresLogged });
@@ -144,7 +122,7 @@ async function processNewDeals() {
   // Only advance the window when everything was handled, so failures/leftovers get retried.
   if (errors === 0 && !outOfTime) next.lastRunEpoch = runStart;
   await saveState(next);
-  await updateUsageSheet();
+  await updateUsageStatus();
   await appendHistoryRows(history);
 
   return { emailsInWindow: ids.length, handled: results, errors, outOfTime };
@@ -153,7 +131,7 @@ async function processNewDeals() {
 /**
  * Runs the pipeline on the newest email in the label and reports what it would do.
  * With write=true (?test=1&write=1) it really adds the rows, once: the email is then marked handled.
- * With resume=true, rows already in the sheet (same date, sender and address) are skipped.
+ * With resume=true, deals already added (same date, sender and address) are skipped.
  */
 async function testOnLatestEmail(write = false, resume = false) {
   const labelId = await getLabelId();
@@ -180,8 +158,8 @@ async function testOnLatestEmail(write = false, resume = false) {
 
 /**
  * Extracts every property for sale in the email and adds a row for each one that passes the
- * zip and address checks, all in one sheet write. Emails that aren't property-for-sale emails
- * are skipped entirely. `existing` (optional) holds keys of rows already in the sheet to skip.
+ * zip and address checks, all in one write. Emails that aren't property-for-sale emails
+ * are skipped entirely. `existing` (optional) holds keys of deals already added, to skip.
  */
 async function handleMessage(msg, allowedZips, write, existing = null) {
   const extracted = await extractWithGemini(msg);
@@ -249,7 +227,7 @@ async function handleProperty(msg, sender, deal, allowedZips, existing) {
     price !== '', // PRODUCTION READY: only when an asking price was given
     price,
   ];
-  if (existing && existing.has(rowKey(row))) return skip('already in the sheet (resume)');
+  if (existing && existing.has(rowKey(row))) return skip('already added (resume)');
 
   // Looked up last so requests are only spent on rows that are really being added.
   const facts = await getPropertyFacts(deal.street_address, deal.city, deal.state, zip,
@@ -363,7 +341,7 @@ async function getDelegatedToken() {
   return delegated.token;
 }
 
-/** Calls Gmail/Sheets as SUBJECT_EMAIL. */
+/** Calls Gmail as SUBJECT_EMAIL. */
 async function userApi(url, options = {}) {
   const token = await getDelegatedToken();
   const res = await fetch(url, {
@@ -650,17 +628,17 @@ function isSignInPage(url) {
 
 // Tried in order. If one fails in any way (out of requests, an error, or it doesn't find the home)
 // the next one is tried; one that is out of requests is also paused. More can be added later.
-// `sheet` is the column-name prefix in the usage sheet ("<sheet> USAGE" / "<sheet> CAP").
+// `status` is the provider's wholesaleStatus document (its USAGE and CAP).
 const PROPERTY_PROVIDERS = [
-  { name: 'Redfin (RapidAPI)', sheet: 'REDFIN.COM DATA',
+  { name: 'Redfin (RapidAPI)', status: 'REDFIN.COM DATA',
     enabled: () => !!process.env.RAPIDAPI_KEY, lookup: lookupRedfinRapidApi },
-  { name: 'Realtor (RapidAPI)', sheet: 'REALTOR SEARCH',
+  { name: 'Realtor (RapidAPI)', status: 'REALTOR SEARCH',
     enabled: () => !!process.env.RAPIDAPI_KEY, lookup: lookupRealtorRapidApi },
-  { name: 'Redfin Base (RapidAPI)', sheet: 'REDFIN BASE',
+  { name: 'Redfin Base (RapidAPI)', status: 'REDFIN BASE',
     enabled: () => !!process.env.RAPIDAPI_KEY, lookup: lookupRedfinBaseRapidApi },
-  { name: 'Realtor API Data (RapidAPI)', sheet: 'REALTOR API DATA',
+  { name: 'Realtor API Data (RapidAPI)', status: 'REALTOR API DATA',
     enabled: () => !!process.env.RAPIDAPI_KEY, lookup: lookupRealtorApiDataRapidApi },
-  { name: 'US Realtor (RapidAPI)', sheet: 'US REALTOR',
+  { name: 'US Realtor (RapidAPI)', status: 'US REALTOR',
     enabled: () => !!process.env.RAPIDAPI_KEY, lookup: lookupUsRealtorRapidApi },
 ];
 const PROPERTY_CACHE_DAYS = 90;   // the same houses show up in many emails; don't pay for them twice
@@ -742,45 +720,33 @@ function recordUsage(name, remaining, limitHeader) {
 }
 
 /**
- * Writes each API's usage (requests used this period = limit - requests left) into the usage
- * sheet's "<NAME> USAGE" cell in row 2. The limit comes from RapidAPI, or else the sheet's
- * "<NAME> CAP" cell. Only APIs that have reported usage at least once are written.
+ * Writes each API's usage (requests used this period = limit - requests left) as USAGE on its wholesaleStatus
+ * document (ID: the provider's `status` name). The limit comes from RapidAPI, or else that document's CAP. Only APIs
+ * that have reported usage at least once are written; a missing document is created.
  */
-async function updateUsageSheet() {
+async function updateUsageStatus() {
   try {
     // A provider paused for being out of requests has used its whole limit.
     const usageOf = p => providerUsage[p.name] ||
       ((providerPausedUntil[p.name] || 0) > Date.now() ? { remaining: 0, limit: null } : null);
-    const known = PROPERTY_PROVIDERS.filter(p => p.sheet && usageOf(p));
+    const known = PROPERTY_PROVIDERS.filter(p => p.status && usageOf(p));
     if (!known.length) return;
-    const tab = await sheetRangeName(CONFIG.USAGE_SHEET_ID, CONFIG.USAGE_SHEET_GID);
-    const { values = [] } = await userApi(`${SHEETS}/${CONFIG.USAGE_SHEET_ID}/values/` +
-      `${encodeURIComponent(tab + '!1:2')}?valueRenderOption=UNFORMATTED_VALUE`);
-    const headers = (values[0] || []).map(h => clean(h).toUpperCase());
-    const caps = values[1] || [];
-    const data = [];
+    const caps = {};
+    (await listDocuments('wholesaleStatus')).forEach(d => { caps[d.id] = d.data.CAP; });
+    const writes = [];
     for (const p of known) {
-      const col = headers.indexOf(`${p.sheet} USAGE`);
-      if (col < 0) { console.log(`Usage sheet has no "${p.sheet} USAGE" column.`); continue; }
-      const capCol = headers.indexOf(`${p.sheet} CAP`);
       const u = usageOf(p);
-      const limit = u.limit ?? (capCol >= 0 ? Number(String(caps[capCol] ?? '').replace(/[^\d.]/g, '')) : NaN);
+      const limit = u.limit ?? Number(String(caps[p.status] ?? '').replace(/[^\d.]/g, ''));
       if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(u.remaining)) continue;
-      data.push({ range: `${tab}!${columnLetter(col)}2`, values: [[Math.max(0, limit - u.remaining)]] });
+      writes.push({
+        update: { name: docName('wholesaleStatus', p.status), fields: { USAGE: { integerValue: String(Math.round(Math.max(0, limit - u.remaining))) } } },
+        updateMask: { fieldPaths: ['USAGE'] },
+      });
     }
-    if (!data.length) return;
-    await userApi(`${SHEETS}/${CONFIG.USAGE_SHEET_ID}/values:batchUpdate`,
-      { method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data }) });
+    await commitWrites(writes);
   } catch (e) {
-    console.log(`Could not update the usage sheet: ${e.message}`); // never fails the run
+    console.log(`Could not update the API usage: ${e.message}`); // never fails the run
   }
-}
-
-/** 0 -> A, 25 -> Z, 26 -> AA. */
-function columnLetter(i) {
-  let s = '';
-  for (i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s;
-  return s;
 }
 
 /** Drops expired cache entries so state.json stays small. */
@@ -1017,85 +983,110 @@ async function verifyAddress(street, city, state, zip) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Sheets                                                              */
+/* Firestore (the portal's database, project andrew-marth-portal)      */
 /* ------------------------------------------------------------------ */
 
-async function sheetRangeName(spreadsheetId, gid) {
-  const r = await userApi(`${SHEETS}/${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
-  const sheet = r.sheets.find(s => s.properties.sheetId === gid) || r.sheets[0];
-  return `'${sheet.properties.title.replace(/'/g, "''")}'`;
+// Collections, with fields named like the old sheets' columns and values stored the way the portal stores them
+// (see migration/FIRESTORE_LAYOUT.md in the portal): dates as text "YYYY-MM-DD" (with " HH:MM:SS" when they have a
+// time), zips and units as text, numbers as numbers, blanks left out, and _order to keep entries in the order added.
+const FIRESTORE_DOCS = 'https://firestore.googleapis.com/v1/projects/andrew-marth-portal/databases/(default)/documents';
+const docName = (collection, id) => `projects/andrew-marth-portal/databases/(default)/documents/${collection}/${id}`;
+// wholesaleDeals: one document per deal, fields A-T of the old deals sheet in this order
+const DEAL_COLUMNS = ['DATE SENT', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'STREET ADDRESS', 'UNIT NUMBER', 'CITY', 'STATE', 'ZIP',
+  'PICTURES LINK', 'EMAIL LINK', 'PRODUCTION READY', 'PRICE', 'STATUS', 'BED', 'BATH', 'SQFT', 'TAXES', 'PROPERTY TYPE', 'MARKUP'];
+// wholesaleHistory: one document per email a run handled
+const HISTORY_COLUMNS = ['DATE', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'EMAIL LINK', 'API USED', 'SUCCESS'];
+// wholesaleZips: one document per target zip (the zip is its ID); wholesaleStatus: one per property API (its name
+// is the ID, e.g. "REDFIN.COM DATA") with USAGE (requests used this period) and CAP (the plan's limit)
+
+const TEXT_FIELDS = ['ZIP', 'UNIT NUMBER', 'ZIP CODE'];
+/** A plain value as a Firestore value (null for blank, which is left out). */
+function fsValue(field, v) {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number' && !TEXT_FIELDS.includes(field)) return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  return { stringValue: String(v) };
+}
+/** A Firestore value as a plain value. */
+function fsPlain(v) {
+  if (!v) return '';
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  return v.stringValue ?? '';
+}
+/** { field: plain value } as Firestore fields (blanks left out). */
+function fsFields(values) {
+  const fields = {};
+  for (const [k, v] of Object.entries(values)) { const f = fsValue(k, v); if (f) fields[k] = f; }
+  return fields;
 }
 
+/** Every document of a collection: [{ id, data: { field: plain value } }]. */
+async function listDocuments(collection) {
+  const docs = [];
+  let pageToken = '';
+  do {
+    const r = await adcRequest(`${FIRESTORE_DOCS}/${collection}?pageSize=300${pageToken ? '&pageToken=' + pageToken : ''}`);
+    (r.documents || []).forEach(d => {
+      const data = {};
+      Object.entries(d.fields || {}).forEach(([k, v]) => { data[k] = fsPlain(v); });
+      docs.push({ id: decodeURIComponent(d.name.split('/').pop()), data });
+    });
+    pageToken = r.nextPageToken || '';
+  } while (pageToken);
+  return docs;
+}
+
+/** Writes in one commit (all or nothing). */
+async function commitWrites(writes) {
+  if (writes.length) await adcRequest(`${FIRESTORE_DOCS}:commit`, { method: 'POST', data: { writes } });
+}
+
+/** New documents after every existing one, in one commit: rows are { field: value }. */
+async function addDocuments(collection, rows) {
+  const base = Date.now() * 1000;
+  await commitWrites(rows.map((values, i) => ({
+    update: { name: docName(collection, newDocId()), fields: { ...fsFields(values), _order: { integerValue: String(base + i) } } },
+    currentDocument: { exists: false },
+  })));
+}
+const newDocId = () => Array.from(crypto.getRandomValues(new Uint8Array(20)),
+  b => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b % 62]).join('');
+
+/** The target zips (the wholesaleZips documents). */
 async function loadAllowedZips() {
-  const range = await sheetRangeName(CONFIG.ZIPS_SHEET_ID, CONFIG.ZIPS_SHEET_GID);
-  const { values = [] } = await userApi(
-    `${SHEETS}/${CONFIG.ZIPS_SHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`);
   const zips = new Set();
-  values.forEach(row => row.forEach(cell => {
-    const z = normalizeZip(cell);
+  (await listDocuments('wholesaleZips')).forEach(d => {
+    const z = normalizeZip(d.data['ZIP CODE'] || d.id);
     if (z) zips.add(z);
-  }));
-  if (!zips.size) throw new Error('No zip codes found in the target-zip sheet.');
+  });
+  if (!zips.size) throw new Error('No zip codes found in wholesaleZips.');
   return zips;
 }
 
-/** Adds all rows in one write per place, so an email's rows are never half-written there. */
-async function appendDealRows(rows) {
-  if (DEALS_TO_SHEET) {
-    const range = (await sheetRangeName(CONFIG.DEALS_SHEET_ID, CONFIG.DEALS_SHEET_GID)) + '!A:T';
-    // RAW keeps text as plain text (zips/units keep leading zeros) and true/false as TRUE/FALSE.
-    await userApi(
-      `${SHEETS}/${CONFIG.DEALS_SHEET_ID}/values/${encodeURIComponent(range)}:append` +
-      '?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
-      { method: 'POST', body: JSON.stringify({ values: rows }) });
-    // While the sheet is what counts, Firestore is a copy: a failure there is logged, never fails the run
-    // (a failed run would be retried and add the sheet rows twice). The portal's move re-copies the sheet anyway.
-    try {
-      await addDealDocuments(rows);
-    } catch (e) {
-      console.log(`Could not add the deals to Firestore: ${e.message}`);
-    }
-    return;
-  }
-  await addDealDocuments(rows);
-}
-
 /**
- * The same rows as wholesaleDeals documents, in one Firestore commit. Values are stored as the portal stores them:
- * DATE SENT as YYYY-MM-DD, zip and unit as text, numbers as numbers, blanks left out. _order (creation time) keeps
- * them after every older deal.
+ * Adds an email's rows (arrays in DEAL_COLUMNS order) as wholesaleDeals documents in one commit, so an email's
+ * deals are never half-written. DATE SENT (MM/DD/YYYY from formatDate) is stored as YYYY-MM-DD.
  */
-async function addDealDocuments(rows) {
-  const base = Date.now() * 1000;
-  const writes = rows.map((row, i) => {
-    const fields = { _order: { integerValue: String(base + i) } };
-    DEAL_COLUMNS.forEach((col, c) => {
-      const v = row[c];
-      if (v === undefined || v === null || v === '') return;
-      if (col === 'DATE SENT') {
-        const m = String(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        fields[col] = { stringValue: m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : String(v) };
-      } else if (typeof v === 'boolean') fields[col] = { booleanValue: v };
-      else if (typeof v === 'number' && col !== 'ZIP' && col !== 'UNIT NUMBER') {
-        fields[col] = Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
-      } else fields[col] = { stringValue: String(v) };
-    });
-    const id = Array.from(crypto.getRandomValues(new Uint8Array(15)), b => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[b % 62]).join('');
-    return { update: { name: `${DEALS_COLLECTION.replace('https://firestore.googleapis.com/v1/', '')}/${id}`, fields },
-      currentDocument: { exists: false } };
-  });
-  await adcRequest(DEALS_COLLECTION.replace(/\/wholesaleDeals$/, ':commit'), { method: 'POST', data: { writes } });
+async function appendDealRows(rows) {
+  await addDocuments('wholesaleDeals', rows.map(row => {
+    const values = {};
+    DEAL_COLUMNS.forEach((col, c) => { values[col] = row[c]; });
+    const m = String(values['DATE SENT'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) values['DATE SENT'] = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return values;
+  }));
 }
 
 /**
- * One history-log row per email a run handled:
- * DATE (when it was handled) | EMAIL | COMPANY | INDIVIDUAL | EMAIL LINK | API USED | SUCCESS.
- * API USED is the number of RapidAPI credits (requests) spent on it; SUCCESS is "Success",
- * "No properties found", or the error message.
+ * One history entry per email a run handled: DATE (when it was handled, Phoenix time) | EMAIL | COMPANY |
+ * INDIVIDUAL | EMAIL LINK | API USED | SUCCESS. API USED is the number of RapidAPI credits (requests) spent on it;
+ * SUCCESS is "Success", "No properties found", or the error message.
  */
 function historyRow(id, msg, out, outcome) {
   return [
-    formatDateTime(new Date()),
+    formatStoredDateTime(new Date()),
     msg ? parseFromEmail(msg.from) : '',
     out ? out.company : 'Unknown',
     out ? out.individual : 'Unknown',
@@ -1105,45 +1096,31 @@ function historyRow(id, msg, out, outcome) {
   ];
 }
 
-/** Adds the run's history rows to the history sheet; a failure here is logged, never fails the run. */
+/** Adds the run's history entries; a failure here is logged, never fails the run. */
 async function appendHistoryRows(rows) {
   if (!rows.length) return;
   try {
-    const range = (await sheetRangeName(CONFIG.HISTORY_SHEET_ID, CONFIG.HISTORY_SHEET_GID)) + '!A:G';
-    await userApi(
-      `${SHEETS}/${CONFIG.HISTORY_SHEET_ID}/values/${encodeURIComponent(range)}:append` +
-      '?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
-      { method: 'POST', body: JSON.stringify({ values: rows }) });
+    await addDocuments('wholesaleHistory', rows.map(row => {
+      const values = {};
+      HISTORY_COLUMNS.forEach((col, c) => { values[col] = row[c]; });
+      return values;
+    }));
   } catch (e) {
-    console.log(`Could not update the history sheet: ${e.message}`);
+    console.log(`Could not add to the wholesale history: ${e.message}`);
   }
 }
 
+/** Keys of every deal already added (for ?resume=1), each from the row it was written from. */
 async function loadExistingRowKeys() {
-  if (DEALS_TO_SHEET) {
-    const range = (await sheetRangeName(CONFIG.DEALS_SHEET_ID, CONFIG.DEALS_SHEET_GID)) + '!A:L';
-    const { values = [] } = await userApi(
-      `${SHEETS}/${CONFIG.DEALS_SHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`);
-    return new Set(values.slice(1).map(rowKey));
-  }
-  // Firestore: each deal as the row it was written from (DATE SENT back to MM/DD/YYYY, like formatDate)
   const keys = new Set();
-  let pageToken = '';
-  do {
-    const r = await adcRequest(`${DEALS_COLLECTION}?pageSize=300${pageToken ? '&pageToken=' + pageToken : ''}`);
-    (r.documents || []).forEach(doc => {
-      const f = doc.fields || {};
-      const text = col => {
-        const v = f[col];
-        if (!v) return '';
-        const s = String(v.stringValue ?? v.integerValue ?? v.doubleValue ?? v.booleanValue ?? '');
-        const m = col === 'DATE SENT' && s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        return m ? `${m[2]}/${m[3]}/${m[1]}` : s;
-      };
-      keys.add(rowKey(DEAL_COLUMNS.map(text)));
+  (await listDocuments('wholesaleDeals')).forEach(d => {
+    const row = DEAL_COLUMNS.map(col => {
+      const s = String(d.data[col] ?? '');
+      const m = col === 'DATE SENT' && s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? `${m[2]}/${m[3]}/${m[1]}` : s; // back to formatDate's MM/DD/YYYY
     });
-    pageToken = r.nextPageToken || '';
-  } while (pageToken);
+    keys.add(rowKey(row));
+  });
   return keys;
 }
 
@@ -1219,12 +1196,14 @@ function parseFromEmail(from) {
   return (m ? m[1] : from).trim();
 }
 
-/** "10/29/2026 11:55 AM" in the deals' time zone. */
-function formatDateTime(date) {
-  return new Intl.DateTimeFormat('en-US', {
+/** "2026-10-29 11:55:04" in the deals' time zone (how the portal stores a date with a time). */
+function formatStoredDateTime(date) {
+  const p = {};
+  new Intl.DateTimeFormat('en-US', {
     timeZone: CONFIG.TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: 'numeric', minute: '2-digit',
-  }).format(date).replace(',', '');
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date).forEach(x => { p[x.type] = x.value; });
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
 }
 
 function formatDate(date) {
