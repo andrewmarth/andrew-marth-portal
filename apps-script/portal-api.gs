@@ -100,8 +100,43 @@ function cleanSetting_(kind, value) {
   const n = Number(raw.replace(/[$,\s]/g, ''));
   if (!isFinite(n) || n < 0) return null;
   if (kind === 'rate') return n <= 1 ? Math.round(n * 1e6) / 1e6 : null;
+  if (kind === 'cents') return n <= 100000000 ? Math.round(n * 100) / 100 : null;
   return n <= 100000000 ? Math.round(n) : null;
 }
+
+// LOAN_PRODUCTS columns a lender fills in from the home page's My Loan Products card, in the form's order and sections.
+// Kinds as for PAGE_SETTING_FIELDS (rate: a decimal like 0.03 for 3%), plus cents: dollars that may have cents.
+// ACCOUNT ID is always the lender's own; any other column on the sheet that isn't listed here is asked as text under "Other".
+// The form (loan-products.js) lays these out with its own yes/no questions and fills in every column before saving.
+const LOAN_PRODUCT_FIELDS = (function () {
+  const dti = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
+  const sections = [
+    ['Product', [['LOAN PRODUCT NAME', 'text'], ['LENDER NAME', 'text'], ['LOAN TERM', 'int']]],
+    ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
+      ['INCOME LIMIT', 'money'], ['SECOND LOAN LTV MAX', 'rate'], ['SILENT SECOND', 'bool']]],
+    ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
+    ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'],
+      ['LENDER CREDIT % OF PURCHASE PRICE', 'rate'], ['LENDER CREDIT % OF LOAN AMOUNT', 'rate'], ['LENDER CREDIT FLAT $', 'cents'],
+      ['ADDITIONAL LENDER CREDIT', 'cents']]],
+    ['Lender Fees', [['APPRAISAL FEE AT CLOSING', 'cents'], ['APPRAISAL DEPOSIT', 'cents'], ['APPRASIAL MANAGEMENT FEE', 'cents'],
+      ['CREDIT REPORT FEE', 'cents'], ['FLOOD CERT FEE', 'cents'], ['TAX CERT FEE', 'cents'], ['OTHER FEE', 'cents']]],
+    ['Mortgage Insurance', [['PREPAID MORTGAGE INSURANCE RATE 0%-5% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 5%-10% DOWN', 'rate'],
+      ['PREPAID MORTGAGE INSURANCE RATE 10%-20% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 20%+ DOWN', 'rate'],
+      ['PMI LTV THRESHOLD', 'rate'], ['LOAN PRODUCT PMI RATE', 'rate']]],
+    ['Rates', dti.map(function (s) { return ['PAR RATE CREDIT SCORE ' + s, 'rate']; }).concat([['POINT RATE BUYDOWN AMOUNT', 'rate']])],
+    ['Max DTI', dti.map(function (s) { return ['MAX DTI CREDIT SCORE ' + s, 'rate']; })],
+    ['Max DTI Housing Only', dti.map(function (s) { return ['MAX DTI HOUSING ONLY CREDIT SCORE ' + s, 'rate']; })],
+    ['Income Qualifying', [['SALARY QUALIFYING %', 'rate'], ['HOURLY QUALIFYING %', 'rate'], ['1099 QUALIFYING %', 'rate'],
+      ['TIP QUALIFYING %', 'rate'], ['COMMISSION QUALIFYING %', 'rate'], ['BONUS QUALIFYING %', 'rate']]],
+    ['Escrow', [['MONTHS COLLECTED FOR TAXES', 'int'], ['MONTHS COLLECTED FOR INSURANCE', 'int']]],
+    ['Census Credit', ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'].reduce(function (list, d) {
+      return list.concat([['CENSUS CREDIT ' + d, 'bool'], ['CENSUS CREDIT % ' + d, 'rate']]);
+    }, [])],
+  ];
+  const out = [];
+  sections.forEach(function (s) { s[1].forEach(function (f) { out.push({ section: s[0], col: f[0], kind: f[1] }); }); });
+  return out;
+})();
 
 // Allowed values for the commission and bonus interval columns
 const INTERVALS = ['Weekly', 'Monthly', 'Quarterly', 'Annually', 'Bi-Annually'];
@@ -171,6 +206,7 @@ function doPost(e) {
     if (body.action === 'page') return json_(pageData_(id, found.row, body.pageId));
     // Home page: the Buyer Breakdown pages this account is listed on (and, for admins, every buyer's)
     if (body.action === 'myPages') return json_(myPagesData_(id, found.row));
+    if (body.action === 'saveLoanProduct') return json_(saveLoanProduct_(id, found.row, body));
     // cum.html: this account's cash flow (CUM accounts only)
     if (body.action === 'cashFlow') return json_(cashFlow_(id, found.row));
     if (body.action === 'updateTransaction') return json_(changeTransaction_(id, found.row, body, false));
@@ -2007,6 +2043,10 @@ function myPagesData_(id, account) {
       page.people = PAGE_PEOPLE_COLUMNS.map(function (c) { return phoneToId_(p[c]); }).filter(String);
       return page;
     });
+    // "My Loan Products": this lender's LOAN_PRODUCTS rows and the questions the form asks
+    const loanSheet = getSheet_(LOAN_SHEET_ID, LOAN_SHEET_NAME);
+    result.myLoanProducts = lenderLoanProducts_(loanSheet, id);
+    result.loanProductFields = loanProductFields_(readHeaders_(loanSheet, false));
   }
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
@@ -2050,6 +2090,90 @@ function myPagesData_(id, account) {
     }
   }
   return result;
+}
+
+// The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column on the sheet as text (not ACCOUNT ID)
+function loanProductFields_(headers) {
+  const known = {};
+  LOAN_PRODUCT_FIELDS.forEach(function (f) { known[f.col] = true; });
+  return LOAN_PRODUCT_FIELDS.concat(headers
+    .map(function (h) { return String(h).trim().toUpperCase(); })
+    .filter(function (h) { return h && h !== 'ACCOUNT ID' && !known[h]; })
+    .map(function (h) { return { section: 'Other', col: h, kind: 'text' }; }));
+}
+
+// This lender's LOAN_PRODUCTS rows (ACCOUNT ID is theirs): each one's sheet row number and its values as text, by column
+function lenderLoanProducts_(sheet, id) {
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(function (h) { return String(h).trim().toUpperCase(); });
+  const idCol = headers.indexOf('ACCOUNT ID');
+  if (idCol < 0) throw new Error('No "ACCOUNT ID" column found on ' + LOAN_SHEET_NAME);
+  const products = [];
+  values.slice(1).forEach(function (r, i) {
+    if (phoneToId_(r[idCol]) !== id) return;
+    const product = {};
+    headers.forEach(function (h, c) {
+      if (h && h !== 'ACCOUNT ID') product[h] = r[c] === true ? 'TRUE' : r[c] === false ? 'FALSE' : String(r[c]);
+    });
+    products.push({ row: i + 2, values: product });
+  });
+  return products;
+}
+
+// Lenders only: saves one of their own LOAN_PRODUCTS rows (body.row, its sheet row number), or adds a new one (no row).
+// body.values: { column: value } for every question; each is checked like a Settings value and none may be blank
+// (except the extra text columns). A new product's LENDER NAME is the lender's bank on file, and SILENT SECOND is
+// always TRUE. Returns the lender's products again.
+function saveLoanProduct_(id, account, body) {
+  if (!hasRole_(account, 'LENDER')) return { ok: false, error: 'not_allowed' };
+  const row = body.row ? Number(body.row) : 0;
+  const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
+  if (!row) {
+    submitted['LENDER NAME'] = String(account['LENDER BANK'] || '').trim();
+    if (!submitted['LENDER NAME']) return { ok: false, error: 'no_lender_bank' };
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = getSheet_(LOAN_SHEET_ID, LOAN_SHEET_NAME);
+    const headers = readHeaders_(sheet, true);
+    const fields = loanProductFields_(headers);
+    const clean = {};
+    for (var i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      const value = cleanSetting_(f.kind, submitted[f.col]);
+      if (value === null || (value === '' && f.section !== 'Other')) return { ok: false, error: 'invalid_value', field: f.col };
+      clean[f.col] = value;
+    }
+    const mine = lenderLoanProducts_(sheet, id);
+    if (row && !mine.some(function (p) { return p.row === row; })) return { ok: false, error: 'not_found' };
+    // Pages pick a product by name, so one lender can't have two with the same name
+    const name = String(clean['LOAN PRODUCT NAME']).toLowerCase();
+    if (mine.some(function (p) { return p.row !== row && String(p.values['LOAN PRODUCT NAME'] || '').trim().toLowerCase() === name; })) {
+      return { ok: false, error: 'duplicate_name' };
+    }
+    if (row) {
+      // Only the asked-about cells change; any formulas elsewhere in the row are kept
+      const range = sheet.getRange(row, 1, 1, headers.length);
+      const values = range.getValues()[0];
+      const formulas = range.getFormulas()[0];
+      headers.forEach(function (h, c) {
+        const key = h.toUpperCase();
+        if (clean.hasOwnProperty(key)) values[c] = clean[key];
+        else if (formulas[c]) values[c] = formulas[c];
+      });
+      range.setValues([values]);
+    } else {
+      sheet.appendRow(headers.map(function (h) {
+        const key = h.toUpperCase();
+        return key === 'ACCOUNT ID' ? Number(id) : clean.hasOwnProperty(key) ? clean[key] : '';
+      }));
+    }
+    SpreadsheetApp.flush();
+    return { ok: true, products: lenderLoanProducts_(sheet, id) };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // Each row of the LINKS sheet that has a web address, in sheet order

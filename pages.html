@@ -1330,7 +1330,8 @@
             const hoPremium = price * num(col(page, 'HOMEOWNERS INSURANCE RATE'));
             const insuranceMonths = num(col(product, 'MONTHS COLLECTED FOR INSURANCE'));
             const designation = text(col(page, 'CENSUS DESIGNATION')).toUpperCase();
-            const censusEligible = designation && isTrue(col(product, 'CENSUS CREDIT ' + designation));
+            // Each designation has its own yes/no and its own credit % (CENSUS CREDIT LOW / CENSUS CREDIT % LOW, ...)
+            const censusRate = designation && isTrue(col(product, 'CENSUS CREDIT ' + designation)) ? num(col(product, 'CENSUS CREDIT % ' + designation)) : 0;
 
             // Seller credit can't be more than the loan product's MAX SELLER CREDIT %
             const enteredSellerPct = num(col(page, 'SELLER CREDIT'));
@@ -1364,7 +1365,7 @@
                 { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))) },
                 { section: 'Loan', cost: true, label: 'Prepaid Interest', amount: -(loan * rate / 360 * daysLeft), note: daysLeft + ' days' },
                 { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan) },
-                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: censusEligible ? loan * num(col(product, 'CENSUS CREDIT %')) : 0 },
+                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: loan * censusRate },
                 { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths) },
                 { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))) },
                 // Flat lender fees from the LOAN PRODUCTS sheet ("APPRASIAL" is spelled that way in the sheet)

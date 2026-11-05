@@ -608,6 +608,10 @@
         }
         .page-link-add .page-link-icon { background: var(--olive); }
         .page-link-add .page-link-street { color: var(--rust); }
+        /* Loan product rows are buttons that open the edit form */
+        .loan-product-link { width: 100%; font-family: inherit; font-size: inherit; text-align: left; cursor: pointer; }
+        .glow-card.is-green .page-link-add .page-link-icon { background: #2c4a35; }
+        .glow-card.is-green .page-link-add .page-link-street { color: #2c4a35; }
         .older-pages + .page-link-add, .page-links + .page-link-add { margin-top: 12px; }
         .buyer-page-list { margin-top: 16px; }
         .buyer-page-list:empty { display: none; }
@@ -840,6 +844,13 @@
             <div id="lender-buyer-page-list" class="buyer-page-list"></div>
         </section>
 
+        <!-- 2e. Lenders only: their own rows of the LOAN PRODUCTS sheet, to edit or add to -->
+        <section class="main-card glow-card is-green reveal" id="loan-products-card" hidden>
+            <span class="card-eyebrow">Lender</span>
+            <h2>My Loan Products</h2>
+            <div id="loan-product-list" class="buyer-page-list"></div>
+        </section>
+
         <!-- 3. Admins only: add a client from the home page -->
         <section class="main-card glow-card reveal" id="new-client-card" hidden>
             <span class="card-eyebrow">Admin</span>
@@ -956,6 +967,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { openNewPropertyForm } from '/new-property.js';
+        import { openLoanProductForm } from '/loan-products.js';
 
         const greetingEl = document.getElementById('greeting');
         const signOutBtn = document.getElementById('sign-out');
@@ -1195,6 +1207,40 @@
                         'No buyer breakdowns for ' + (buyer.name || formatPhone(buyer.id)) + ' yet.');
                 },
             });
+        }
+
+        // Lenders: one row per loan product (opens it to edit), then "New Loan Product"
+        const BANK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/></svg>';
+        function renderLoanProducts(products, fields) {
+            const listEl = document.getElementById('loan-product-list');
+            document.getElementById('loan-products-card').hidden = false;
+            const row = (icon, title, sub) => '<span class="page-link-icon">' + icon + '</span>'
+                + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(title) + '</span><br><span class="page-link-sub">' + escapeHtml(sub) + '</span></span>';
+            const save = async (values, rowNumber) => {
+                const json = await api({ action: 'saveLoanProduct', row: rowNumber, values });
+                if (!json.ok) throw new Error(json.error || 'Request failed');
+                renderLoanProducts(json.products || [], fields);
+            };
+            listEl.innerHTML = '<div class="page-links"></div>';
+            const links = listEl.firstElementChild;
+            if (!products.length) links.innerHTML = '<p class="pages-empty">You don’t have any loan products yet.</p>';
+            products.forEach(p => {
+                const term = Number(p.values['LOAN TERM']);
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'page-link loan-product-link';
+                b.innerHTML = row(BANK_ICON, p.values['LOAN PRODUCT NAME'] || 'Untitled loan product',
+                    [p.values['LENDER NAME'], term ? term + ' years' : ''].filter(Boolean).join(' · '))
+                    + '<span class="page-link-arrow">' + ARROW_ICON + '</span>';
+                b.addEventListener('click', () => openLoanProductForm({ fields, product: p, submit: save }));
+                links.append(b);
+            });
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'page-link page-link-add';
+            add.innerHTML = row(PLUS_ICON, 'New Loan Product', 'Add another loan product');
+            add.addEventListener('click', () => openLoanProductForm({ fields, product: null, submit: save }));
+            listEl.append(add);
         }
 
         // --- New Client (admins): Settings' Add New Client, minus preferred name and email; last name is optional ---
@@ -1584,6 +1630,7 @@
                     renderFlips(data.flipPages || []);
                     // Only lenders get their own buyer list
                     if (data.lenderBuyers) renderLenderBuyers(data.lenderBuyers, data.lenderBuyerPages || []);
+                    if (data.loanProductFields) renderLoanProducts(data.myLoanProducts || [], data.loanProductFields);
                     // Only admins get the buyer list
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
