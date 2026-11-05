@@ -12,8 +12,7 @@ export const firebaseConfig = {
 };
 
 // 2. Client data: the Portal API (api/, a Cloud Run function in the "Website APIs" project; data in Firestore).
-//    Leave empty to show the placeholder. The old Apps Script API (apps-script/portal-api.gs, still deployed as a
-//    fallback) was https://script.google.com/macros/s/AKfycbw7_6-r-ShjTBpqlkKeYTuTjdIH8-njHdEgEHuXFszDHWPg1L5AP5yaCawutnSEx3Z6/exec
+//    Leave empty to show the placeholder.
 export const PORTAL_API_URL = 'https://portal-api-673039696492.us-west1.run.app';
 
 // True once the Firebase values above have been filled in

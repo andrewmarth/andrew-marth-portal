@@ -60,7 +60,7 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
         body.is-checking > *:not(.page-loader) { visibility: hidden; }
         /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
         html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
@@ -273,7 +273,7 @@
         .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
         .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
 
-        /* Details from the Google Sheet */
+        /* Details from the portal's data */
         .details { list-style: none; }
         .details li {
             display: flex;
@@ -893,7 +893,7 @@
             setLineButton(emailBtn, Boolean(profile.email), 'your email');
         }
 
-        // Talks to the private Google Sheet script (it only ever touches this person's own row)
+        // Talks to the Portal API (it only ever touches this person's own details)
         async function callApi(user, payload = {}) {
             const idToken = await user.getIdToken();
             const res = await fetch(PORTAL_API_URL, {

@@ -45,8 +45,7 @@ if (Test-Secret 'portal-documenso-webhook-secret') { Write-Host '  Already set u
 
 Write-Host "`n3 of 4: Documenso API token" -ForegroundColor Cyan
 if (Test-Secret 'portal-documenso-api-token') { Write-Host '  Already set up' } else {
-    Write-Host '  Paste the Documenso API token (the DOCUMENSO_API_TOKEN script property in the Apps Script project''s' -ForegroundColor Yellow
-    Write-Host '  settings, or a new token from sign.andrewmarth.com > Settings > API Tokens). Nothing shows while you paste.' -ForegroundColor Yellow
+    Write-Host '  Paste a Documenso API token (from sign.andrewmarth.com > Settings > API Tokens). Nothing shows while you paste.' -ForegroundColor Yellow
     $secure = Read-Host -AsSecureString '  Token'
     $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
     if (-not $plain.Trim()) { throw 'No token was pasted' }

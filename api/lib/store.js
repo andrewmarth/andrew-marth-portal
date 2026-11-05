@@ -1,14 +1,14 @@
-// Firestore, read and written the way the Apps Script version read and wrote its sheets.
+// Firestore, read and written for the API.
 //
 // rows(collection) gives every document as a "row": { COLUMN: text } with every known column present ('' when the
-// document has no value), like a sheet's display values: numbers as plain text ("495000", "0.025"), yes/no as
+// document has no value), as display text: numbers as plain text ("495000", "0.025"), yes/no as
 // "TRUE" / "FALSE", dates as "11/4/2026". Each row also carries two hidden (non-enumerable) properties: _id, the
-// document ID, and _order, its place in the list (the old sheet row number for copied rows).
+// document ID, and _order, its place in the list.
 //
 // Writes take ordinary values (numbers, true/false, text, Date objects) and store them as real types:
 // dates become "YYYY-MM-DD", account IDs become 10-digit text, and blank values remove the field.
-// See migration/FIRESTORE_LAYOUT.md.
-// "Today", dates and times are Phoenix time, as they were in the Apps Script (servers otherwise run on UTC)
+// See firestore/LAYOUT.md.
+// "Today", dates and times are Phoenix time (servers otherwise run on UTC)
 process.env.TZ = process.env.TZ || 'America/Phoenix';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ export const PROJECT_ID = 'andrew-marth-portal';
 if (!getApps().length) initializeApp({ projectId: PROJECT_ID });
 export const db = getFirestore();
 
-// Each collection's columns in the old sheet's order (columns added later in the console are picked up too)
+// Each collection's usual columns, in order (columns added later in the console are picked up too)
 const COLUMNS = JSON.parse(readFileSync(new URL('./columns.json', import.meta.url)));
 
 // Columns that hold a phone number / account ID, and other columns that are always text
@@ -34,7 +34,7 @@ const cache = () => requestStore.getStore() || new Map();
 // --- Values ---
 const pad = n => String(n).padStart(2, '0');
 
-// Stored value -> the text a sheet would have shown
+// Stored value -> its display text
 function display(v) {
   if (v === undefined || v === null) return '';
   if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
@@ -81,7 +81,7 @@ function toRow(collection, doc) {
 }
 
 // --- Reading ---
-// Every document of a collection as a row, in _order (oldest first, like the sheet's rows)
+// Every document of a collection as a row, in _order (oldest first)
 export async function rows(collection) {
   const c = cache();
   if (!c.has(collection)) {
@@ -98,7 +98,7 @@ export async function row(collection, id) {
   return all.find(r => r._id === String(id)) || null;
 }
 
-// The collection's column names: the old sheet's, then any others its documents have
+// The collection's column names: the usual ones, then any others its documents have
 export async function columns(collection) {
   const out = (COLUMNS[collection] || []).slice();
   (await rows(collection)).forEach(r => Object.keys(r).forEach(k => { if (!out.includes(k)) out.push(k); }));
@@ -134,7 +134,7 @@ export async function remove(collection, id) {
   await db.collection(collection).doc(String(id)).delete();
 }
 
-// --- Locks (in place of Apps Script's LockService) ---
+// --- Locks ---
 // Only one holder at a time across every running copy of the API. A lock left by a crashed request expires after 60s.
 // wait: how long to keep trying (ms). Returns false if it couldn't be had in time (when wait is given as "try").
 const LOCK_LEASE = 60000;

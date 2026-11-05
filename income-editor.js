@@ -1,5 +1,5 @@
 // Income math and the "Your Income" edit pop-up, shared by settings.html and pages.html.
-// Columns match the INCOME sheet: PRIMARY / SECONDARY / TERTIARY / QUATERNARY / QUINARY income levels plus monthly debt payments.
+// Fields match the income records: PRIMARY / SECONDARY / TERTIARY / QUATERNARY / QUINARY income levels plus monthly debt payments.
 
 export const LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
 // Debt types: the Yes/No column (TRUE / FALSE), the monthly payment column, how many of each, and the text columns
@@ -217,7 +217,7 @@ const CSS = `
 }
 `;
 
-// Form markup: one section per income level, plus debt. Each input's data-col is the exact INCOME sheet column.
+// Form markup: one section per income level, plus debt. Each input's data-col is the exact income field.
 const slug = s => 'ie-' + s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const field = (id, label, input, span) => '<div class="field' + (span ? ' span-2' : '') + '"><label for="' + id + '">' + label + '</label>' + input + '</div>';
 const moneyField = (col, label, span, id = slug(col)) => field(id, label, '<div class="money-wrap"><input class="money" id="' + id + '" data-col="' + col + '" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div>', span);
@@ -234,7 +234,7 @@ const yesNo = (L, p, kind, question) => {
         + '<input type="radio" name="' + name + '" id="' + name + '-no" value="no" data-extra-toggle="' + kind + '" checked><label for="' + name + '-no">No</label></div></div>';
 };
 const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
-// One debt type, in its own block: the Yes/No (Yes by default; a hidden input holds TRUE / FALSE for the sheet),
+// One debt type, in its own block: the Yes/No (Yes by default; a hidden input holds TRUE / FALSE to save),
 // then on Yes its entries (all written out; the unused ones stay hidden, so they're saved blank) and "+ Add another"
 const debtGroup = t => {
     const name = 'ie-debt-' + t.kind;

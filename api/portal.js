@@ -1,8 +1,6 @@
 // Andrew Marth Client Portal - private data API (Cloud Run function).
 //
-// The Apps Script version (apps-script/portal-api.gs) moved here: same requests, same replies, but the data lives in
-// Firestore (see migration/FIRESTORE_LAYOUT.md) instead of Google Sheets. Functions keep their Apps Script names so the
-// two can be read side by side. Rows come from lib/store.js, shaped like the sheets' rows were.
+// The data lives in Firestore (see firestore/LAYOUT.md). Rows come from lib/store.js as { COLUMN: text }.
 import { rows, row as getRow, columns, update, add, remove, withLock } from './lib/store.js';
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
@@ -442,7 +440,7 @@ async function cashFlow_(id, account) {
 
 const CUM_LINE_ITEMS = 20;
 
-// Every transaction with its row number (its _order: the old sheet row for copied ones). Rows can carry up to 20 line
+// Every transaction with its row number (its _order). Rows can carry up to 20 line
 // items (RENT ITEM n ...): each has an amount (positive charges, negative credits), can be split with another account
 // (SPLIT ID gets invoiced AMOUNT x SPLIT PERCENT) and can be paid on its own date instead of with the main charge.
 // col holds each part's column name ('' when there's no such column).
@@ -721,7 +719,7 @@ async function updateBalance_(id, account, body) {
   return { ok: true };
 }
 
-// Remembered for a while by this copy of the API (in place of Apps Script's CacheService)
+// Remembered for a while by this copy of the API
 const memo = new Map();
 function memoGet(key) {
   const hit = memo.get(key);
@@ -1219,7 +1217,7 @@ async function documenso_(method, path, body, isForm, asFile) {
 // The categories a document can be sent under. Property documents carry a property address; General ones don't.
 const SIGNATURE_CATEGORIES = ['Property', 'General'];
 
-// Every signer, as { COLUMN: text } with docId (column names upper-cased, like the old sheet's)
+// Every signer, as { COLUMN: text } with docId (column names upper-cased)
 async function signatureRows_() {
   return (await rows('signatures')).map(r => {
     const out = { docId: r._id };
@@ -1978,7 +1976,7 @@ function phoneToId_(value) {
   return digits.length === 11 && digits.charAt(0) === '1' ? digits.slice(1) : digits;
 }
 
-// Trims submitted text, drops characters that could start a spreadsheet formula, and caps the length
+// Trims submitted text, drops characters that could start a formula (if exported to a spreadsheet), and caps the length
 function cleanText_(value, maxLength) {
   return String(value || '').replace(/\s+/g, ' ').trim().replace(/^[=+\-@]+/, '').trim().slice(0, maxLength);
 }

@@ -61,7 +61,7 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
         body.is-checking > *:not(.page-loader) { visibility: hidden; }
         /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
         html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
@@ -274,7 +274,7 @@
         .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
         .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
 
-        /* Details from the Google Sheet */
+        /* Details from the portal's data */
         .details { list-style: none; }
         .details li {
             display: flex;
@@ -856,7 +856,7 @@
         // Square feet with commas when it's a plain number ("1450" -> "1,450")
         const sqftText = v => { const t = known(v); const n = Number(t.replace(/,/g, '')); return t && isFinite(n) ? n.toLocaleString('en-US') : t; };
 
-        // Sheet dates look like "10/23/2026"
+        // Dates look like "10/23/2026"
         function dateOf(value) {
             const m = known(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
             if (m) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), m[1] - 1, m[2]);
@@ -1084,7 +1084,7 @@
             document.getElementById('sheet-title').innerHTML = addressHtml(p.address);
             document.getElementById('sheet-price').textContent = price || 'Price Unknown';
             showPhotos(p);
-            // "3 bd • 2 ba • 1,500 sqft" (only the parts the sheet has; Unknown when it has none)
+            // "3 bd • 2 ba • 1,500 sqft" (only the parts it has; Unknown when it has none)
             const size = [known(p.bed) && known(p.bed) + ' bd', known(p.bath) && known(p.bath) + ' ba', known(p.sqft) && sqftText(p.sqft) + ' sqft'].filter(Boolean).join(' • ');
             document.getElementById('sheet-details').innerHTML = row('Price', price) + row('Size', size) + row('Property Type', p.type);
             renderSends(p);

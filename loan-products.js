@@ -125,7 +125,7 @@ export function labelFor(col, section) {
     }).join(' ');
 }
 
-// Sheet value → what the box shows (rates as percents: 0.0275 → "2.75")
+// Saved value → what the box shows (rates as percents: 0.0275 → "2.75")
 function shown(kind, raw) {
     const v = String(raw === undefined || raw === null ? '' : raw).trim();
     if (v === '' || kind === 'text' || kind === 'bool') return v;
@@ -330,7 +330,7 @@ function build() {
         showGates();
     }
 
-    // Every column's value for the sheet (rates back to decimals). missing: the first unanswered question shown.
+    // Every field's value to save (rates back to decimals). missing: the first unanswered question shown.
     function read() {
         const values = {};
         const offs = [];

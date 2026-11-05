@@ -60,7 +60,7 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
         body.is-checking > *:not(.page-loader) { visibility: hidden; }
         /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
         html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
@@ -273,7 +273,7 @@
         .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
         .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
 
-        /* Details from the Google Sheet */
+        /* Details from the portal's data */
         .details { list-style: none; }
         .details li {
             display: flex;
@@ -682,9 +682,9 @@
             + ((t.lines || []).length ? '<ul class="flow-lines">' + t.lines.map(l => '<li><span>' + escapeHtml(l.description) + '</span><span>'
                 + (l.amount > 0 ? '+' : '') + cents.format(l.amount) + '</span></li>').join('') + '</ul>' : '');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        // Sheet amounts can look like "1500", "-652" or "$1,500.00"
+        // Amounts can look like "1500", "-652" or "$1,500.00"
         const amountOf = v => { const t = String(v == null ? '' : v).trim(); const n = parseFloat(t.replace(/[^0-9.-]/g, '')); return isFinite(n) ? (/^\(.*\)$/.test(t) ? -Math.abs(n) : n) : 0; };
-        // Dates as the sheet shows them ("11/5/2026"), as local days
+        // Dates as the API sends them ("11/5/2026"), as local days
         function dateOf(value) {
             const v = String(value || '').trim();
             const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
@@ -693,7 +693,7 @@
             return isNaN(t) ? null : new Date(t);
         }
         const dayOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-        // A sheet date as YYYY-MM-DD for a date input
+        // A date from the API as YYYY-MM-DD for a date input
         const isoOf = value => { const d = dateOf(value); return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : ''; };
         const dateBox = d => d
             ? '<span class="flow-date"><span class="m">' + d.toLocaleDateString('en-US', { month: 'short' }) + '</span><span class="d">' + d.getDate() + '</span><span class="y">' + d.getFullYear() + '</span></span>'
@@ -738,7 +738,7 @@
                 month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + '">' + dateBox(t.when)
                     + '<span class="flow-text">' + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
-                    // The sheet row itself, or the date of a split coming in; separate items and what you owe are managed in the sheet
+                    // The transaction itself, or the date of a split coming in; separate items and what you owe are managed elsewhere
                     + (t.part === 'main' || t.part === 'receive' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
                     + '</span></span>'
                     + '<span class="flow-balance">' + money.format(running) + '</span></li>');
@@ -763,9 +763,9 @@
         }
         const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const ERRORS = {
-            changed: 'This transaction was changed in the sheet. Refresh the page and try again.',
+            changed: 'This transaction was changed somewhere else. Refresh the page and try again.',
             invalid_date: 'Please check the date and try again.',
-            not_found: 'This transaction is no longer in the sheet. Refresh the page.',
+            not_found: 'This transaction no longer exists. Refresh the page.',
             invalid_split_id: 'Please choose who to split with again.',
             invalid_separate_date: 'Please choose the date this line item is paid.',
             invalid_split_percent: 'Please enter a split percent between 1 and 100.',
@@ -793,7 +793,7 @@
                 + '<button type="button" class="btn btn-secondary" data-close>Cancel</button>'
                 + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Changes</button></div></div>'
                 + '<div class="ie-confirm" hidden role="alertdialog" aria-labelledby="tx-confirm-title"><div class="ie-confirm-card"><h3 id="tx-confirm-title">Delete this transaction?</h3>'
-                    + '<p>It will be removed from your cash flow sheet. This can’t be undone here.</p>'
+                    + '<p>It will be removed from your cash flow. This can’t be undone here.</p>'
                     + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-keep>Cancel</button>'
                     + '<button type="button" class="btn" data-confirm-delete><span class="btn-spinner" aria-hidden="true"></span>Delete</button></div></div></div>'
                 + '</form>';
@@ -821,7 +821,7 @@
                 close();
             });
             form.addEventListener('input', () => { message.textContent = ''; });
-            // Amounts are positive (whether it's money in or out comes from the sheet's TYPE): digits and one decimal point only
+            // Amounts are positive (whether it's money in or out comes from its TYPE): digits and one decimal point only
             $('#tx-amount').addEventListener('input', e => {
                 const el = e.target;
                 const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
@@ -940,7 +940,7 @@
                     $('#tx-date').value = isoOf(tx.date);
                     const value = amountOf(tx.amount);
                     $('#tx-amount').value = value ? String(Math.abs(value)) : '';
-                    // "Edit Income" / "Edit Expense" from the sheet's TYPE
+                    // "Edit Income" / "Edit Expense" from its TYPE
                     const type = String(tx.type || '').trim();
                     $('#tx-title').textContent = 'Edit ' + (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Transaction');
                     $('#tx-desc').value = tx.description || '';
@@ -1153,7 +1153,7 @@
                     const t = step.tx;
                     const happened = (dialog.querySelector('[name="cu-happened"]:checked') || {}).value;
                     if (!happened) { message.textContent = 'Please choose Yes or No.'; $('#cu-yes').focus(); return; }
-                    // Happened: its paid box in the sheet is ticked. Not yet: it moves to the new date.
+                    // Happened: it's marked paid. Not yet: it moves to the new date.
                     const original = { date: t.date, description: t.description };
                     if (happened === 'yes') {
                         request = { action: 'markTransactionPaid', key: t.key, original };

@@ -1,5 +1,5 @@
 // Google services the API uses besides Firestore: Firebase sign-in tokens, Google Drive (as tiffany@andrewmarth.com,
-// through the portal-api service account's domain-wide delegation, the same access the Apps Script had) and the
+// through the portal-api service account's domain-wide delegation) and the
 // geocoder for the wholesale map.
 import { GoogleAuth } from 'google-auth-library';
 import { getAuth } from 'firebase-admin/auth';
@@ -92,7 +92,7 @@ export async function driveImage(id, width) {
   return null;
 }
 
-// Saves a file into a folder. Returns { id, url } (url: the file's Drive page, like Apps Script's file.getUrl())
+// Saves a file into a folder. Returns { id, url } (url: the file's Drive page)
 export async function createDriveFile(folderId, name, mimeType, bytes) {
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({ name, parents: [folderId], mimeType })], { type: 'application/json' }));

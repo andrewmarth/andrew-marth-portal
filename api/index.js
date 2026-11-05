@@ -1,5 +1,5 @@
-// HTTP entry point (Cloud Run function "portalApi"). The portal's pages POST JSON as text/plain (no CORS preflight),
-// exactly as they did to the Apps Script web app; Documenso's webhook POSTs here with ?documensoWebhook=<secret>.
+// HTTP entry point (Cloud Run function "portalApi"). The portal's pages POST JSON as text/plain (no CORS preflight);
+// Documenso's webhook (unused for now) could POST here with ?documensoWebhook=<secret>.
 import functions from '@google-cloud/functions-framework';
 import { handle } from './portal.js';
 import { inRequest } from './lib/store.js';

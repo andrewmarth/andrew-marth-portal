@@ -933,7 +933,7 @@ async function rapidApiGet(host, name, path, params) {
 }
 
 /**
- * Maps the API's wording to one of the sheet's options: Single Family, Townhome, Condo,
+ * Maps the API's wording to one of the portal's options: Single Family, Townhome, Condo,
  * Multifamily, Manufactured, Land. Anything else (or nothing) -> "" so the cell stays blank.
  */
 function normalizePropertyType(v) {
@@ -986,12 +986,12 @@ async function verifyAddress(street, city, state, zip) {
 /* Firestore (the portal's database, project andrew-marth-portal)      */
 /* ------------------------------------------------------------------ */
 
-// Collections, with fields named like the old sheets' columns and values stored the way the portal stores them
-// (see migration/FIRESTORE_LAYOUT.md in the portal): dates as text "YYYY-MM-DD" (with " HH:MM:SS" when they have a
+// Collections, with values stored the way the portal stores them
+// (see firestore/LAYOUT.md in the portal): dates as text "YYYY-MM-DD" (with " HH:MM:SS" when they have a
 // time), zips and units as text, numbers as numbers, blanks left out, and _order to keep entries in the order added.
 const FIRESTORE_DOCS = 'https://firestore.googleapis.com/v1/projects/andrew-marth-portal/databases/(default)/documents';
 const docName = (collection, id) => `projects/andrew-marth-portal/databases/(default)/documents/${collection}/${id}`;
-// wholesaleDeals: one document per deal, fields A-T of the old deals sheet in this order
+// wholesaleDeals: one document per deal, with these fields (in this order)
 const DEAL_COLUMNS = ['DATE SENT', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'STREET ADDRESS', 'UNIT NUMBER', 'CITY', 'STATE', 'ZIP',
   'PICTURES LINK', 'EMAIL LINK', 'PRODUCTION READY', 'PRICE', 'STATUS', 'BED', 'BATH', 'SQFT', 'TAXES', 'PROPERTY TYPE', 'MARKUP'];
 // wholesaleHistory: one document per email a run handled

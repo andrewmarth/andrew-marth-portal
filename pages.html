@@ -60,7 +60,7 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
         body.is-checking > *:not(.page-loader) { visibility: hidden; }
         /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
         html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
@@ -272,7 +272,7 @@
         .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
         .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
 
-        /* Details from the Google Sheet */
+        /* Details from the portal's data */
         .details { list-style: none; }
         .details li {
             display: flex;
@@ -1205,7 +1205,7 @@
         let onSettingsChanged = () => {};
         let currentUser = null;
 
-        // --- Reading sheet values ---
+        // --- Reading saved values ---
         // Display values can look like "900000", "$900,000" or "0.97". A trailing % means "divide by 100".
         function num(v) {
             const s = String(v == null ? '' : v).trim();
@@ -1222,7 +1222,7 @@
         const isTrue = v => text(v).toUpperCase() === 'TRUE';
         const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
-        // "10/20/2026" (sheet format) or "2026-10-20" -> local date
+        // "10/20/2026" (the API's format) or "2026-10-20" -> local date
         function parseDate(v) {
             const s = text(v);
             let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -1368,7 +1368,7 @@
                 { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: loan * censusRate },
                 { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths) },
                 { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))) },
-                // Flat lender fees from the LOAN PRODUCTS sheet ("APPRASIAL" is spelled that way in the sheet)
+                // Flat lender fees from the loan product ("APPRASIAL" is spelled that way in its fields)
                 { section: 'Loan', cost: true, label: 'Appraisal Fee', amount: -num(col(product, 'APPRAISAL FEE AT CLOSING')) },
                 { section: 'Loan', cost: true, label: 'Appraisal Management Fee', amount: -num(col(product, 'APPRASIAL MANAGEMENT FEE')) },
                 { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')) },
@@ -1992,7 +1992,7 @@
             });
         }
 
-        // After a save: the breakdown switches to the picked product (cash is saved to the sheet;
+        // After a save: the breakdown switches to the picked product (cash is saved;
         // a loan product lives in the link as ?loan= so a shared link opens the same product)
         function applyPickedLoan() {
             cashSelected = pickedCash;
@@ -2100,8 +2100,8 @@
         }
 
         // --- Settings fields (admins) ---
-        // Every edit goes into "draft" (sheet column -> the exact value that will be saved) and the page
-        // previews it right away. Save Settings writes the draft to the PAGES sheet.
+        // Every edit goes into "draft" (field -> the exact value that will be saved) and the page
+        // previews it right away. Save Settings saves the draft to the page.
         let draft = {};
         let fieldErrors = {};
         const settingsBlocks = [];
@@ -2112,7 +2112,7 @@
         // Number formatting for the inputs (what's saved never has commas or symbols)
         const digits = v => String(v == null ? '' : v).replace(/[^0-9]/g, '');
         const withCommas = v => (v === '' ? '' : Number(v).toLocaleString('en-US'));
-        // A sheet amount like "$1,234.56" as whole dollars ("1235") for a money box
+        // An amount like "$1,234.56" as whole dollars ("1235") for a money box
         const wholeDollars = v => (text(v) === '' ? '' : String(Math.round(num(v))));
         const decimalToPercent = v => (text(v) === '' ? '' : String(Math.round(num(v) * 1e6) / 1e4));
         const percentToDecimal = v => {
@@ -2596,7 +2596,7 @@
                 field.classList.toggle('is-changed', saved !== null && text !== saved);
             });
         }
-        // Talks to the private Google Sheet script as the signed-in person
+        // Talks to the Portal API as the signed-in person
         async function api(payload) {
             const idToken = await currentUser.getIdToken();
             const res = await fetch(PORTAL_API_URL, {
@@ -2614,7 +2614,7 @@
             document.getElementById('hero-sub').textContent = 'We couldn’t open this page.';
         }
 
-        // Each PAGE TYPE in the PAGES sheet has its own way of showing the page
+        // Each PAGE TYPE has its own way of showing the page
         const PAGE_TYPES = {
             'buyer breakdown': showBuyerBreakdown,
             'seller net': showSellerNet,
@@ -2646,7 +2646,7 @@
         }
 
         // --- Versions ---
-        // VERSION DATE as the sheet shows it ("10/20/2026", "2026-10-20", "Oct 20, 2026"...): a local date, or null
+        // VERSION DATE as the API sends it ("10/20/2026", "2026-10-20", "Oct 20, 2026"...): a local date, or null
         function parseVersionDate(value) {
             const v = text(value);
             let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
@@ -2656,7 +2656,7 @@
             const t = Date.parse(v);
             return isNaN(t) ? null : new Date(t);
         }
-        // Newest VERSION DATE first (undated last); same date keeps the newer sheet row first
+        // Newest VERSION DATE first (undated last); same date keeps the newer page first
         function sortedVersions() {
             return (data.versions || []).map((v, order) => {
                 const d = parseVersionDate(col(v.page, 'VERSION DATE'));

@@ -60,7 +60,7 @@
             min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
         }
-        /* Hidden until we know who is signed in and the sheets have loaded (only the loading screen shows) */
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
         body.is-checking > *:not(.page-loader) { visibility: hidden; }
         /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
         html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
@@ -272,7 +272,7 @@
         .id-label { font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
         .id-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; }
 
-        /* Details from the Google Sheet */
+        /* Details from the portal's data */
         .details { list-style: none; }
         .details li {
             display: flex;
@@ -778,7 +778,7 @@
     </header>
 
     <main>
-        <!-- 1. Current tasks: this account's open rows in the TASKS sheet, grouped by SECTION -->
+        <!-- 1. Current tasks: this account's open tasks, grouped by SECTION -->
         <section class="main-card reveal" id="tasks-card">
             <span class="card-eyebrow">To Do</span>
             <h2>Current Tasks</h2>
@@ -844,7 +844,7 @@
             <div id="lender-buyer-page-list" class="buyer-page-list"></div>
         </section>
 
-        <!-- 2e. Lenders only: their own rows of the LOAN PRODUCTS sheet, to edit or add to -->
+        <!-- 2e. Lenders only: their own loan products, to edit or add to -->
         <section class="main-card glow-card is-green reveal" id="loan-products-card" hidden>
             <span class="card-eyebrow">Lender</span>
             <h2>My Loan Products</h2>
@@ -926,7 +926,7 @@
             </div>
         </section>
 
-        <!-- 5. Admins only: links to other services, from the LINKS sheet -->
+        <!-- 5. Admins only: links to other services -->
         <section class="main-card glow-card reveal" id="links-card" hidden>
             <span class="card-eyebrow">Admin</span>
             <h2>Links</h2>
@@ -999,7 +999,7 @@
         const RECENT_DAYS = 21;
         const CHEVRON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
-        // VERSION DATE as the sheet shows it ("10/20/2026", "2026-10-20", "Oct 20, 2026"...): a local date, or null
+        // VERSION DATE as the API sends it ("10/20/2026", "2026-10-20", "Oct 20, 2026"...): a local date, or null
         function parseVersionDate(value) {
             const v = String(value || '').trim();
             let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
@@ -1019,7 +1019,7 @@
                 const d = parseVersionDate(p.versionDate);
                 return { page: p, order, time: d ? dayStart(d) : -Infinity, key: p.street ? keyOf(p) : 'id:' + p.id };
             });
-            // Newest first; on the same date, keep the sheet's order (newer rows come first from the API)
+            // Newest first; on the same date, keep the saved order (newer pages come first from the API)
             dated.sort((x, y) => (y.time - x.time) || (x.order - y.order));
             const seen = new Set();
             const unique = dated.filter(d => (seen.has(d.key) ? false : (seen.add(d.key), true)));
@@ -1453,7 +1453,7 @@
         const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
         const EXTERNAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
 
-        // Grouped by SECTION, in the order each section first appears in the sheet; each link opens in a new tab
+        // Grouped by SECTION, in the order each section first appears; each link opens in a new tab
         function renderLinks(links) {
             const card = document.getElementById('links-card');
             const listEl = document.getElementById('links-list');
@@ -1463,7 +1463,7 @@
                 return;
             }
             if (!links.length) {
-                listEl.innerHTML = '<p class="pages-empty">No links yet. Add some to the LINKS sheet.</p>';
+                listEl.innerHTML = '<p class="pages-empty">No links yet. Add some to the links collection in Firestore.</p>';
                 return;
             }
             const sections = [];
@@ -1482,7 +1482,7 @@
         }
 
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
-        // Current Tasks: this account's open rows in the TASKS sheet, one group per SECTION. What each task offers
+        // Current Tasks: this account's open tasks, one group per SECTION. What each task offers
         // depends on its TYPE: Signature opens the signing page, Text sends a prefilled text and can be cleared,
         // anything else can only be cleared.
         const SIGN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
@@ -1490,7 +1490,7 @@
         const TASK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/></svg>';
         const CLEAR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
         // Documents signed in this browser (set by the signing page the moment the signer finishes), so a Signature
-        // task never shows again while the sheet is still catching up
+        // task never shows again while the API is still catching up
         function signedEnvelopes() {
             try { return JSON.parse(localStorage.getItem('signedEnvelopes') || '[]').map(e => e.id); } catch (err) { return []; }
         }
@@ -1539,7 +1539,7 @@
                         + '</div><div class="task-actions">' + actions + '</div></li>';
                 }).join('') + '</ul></div>').join('');
         }
-        // "Clear Task": asks first, then marks it COMPLETED in the sheet and takes it off the card
+        // "Clear Task": asks first, then marks it COMPLETED and takes it off the card
         const clearDialog = document.getElementById('clear-dialog');
         let clearPending = null;
         document.getElementById('task-list').addEventListener('click', e => {
@@ -1661,14 +1661,14 @@
             else if (firstName) greetingEl.textContent = `Welcome, ${String(firstName).split(' ')[0]}`;
         }
 
-        // Ask the private Google Sheet script for this client's row only
+        // Ask the Portal API for this client's own details only
         async function loadDetails(user) {
             if (!PORTAL_API_URL) return;
             try {
                 const idToken = await user.getIdToken();
                 const res = await fetch(PORTAL_API_URL, {
                     method: 'POST',
-                    // text/plain keeps this a "simple" request, which Apps Script accepts from other sites
+                    // text/plain keeps this a "simple" request (no CORS preflight)
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ idToken }),
                 });
@@ -1806,7 +1806,7 @@
             onAuthStateChanged(auth, user => {
                 // Not signed in: send them to the login page
                 if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
-                // Stay on the loading screen until both sheet requests are done (each handles its own errors),
+                // Stay on the loading screen until both API requests are done (each handles its own errors),
                 // with a time limit so a stuck request can't hold the page forever
                 const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
                 Promise.race([Promise.all([loadDetails(user), loadPages(user), loadTasks(user)]), timeLimit]).then(showPage);
