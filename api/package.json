@@ -1,0 +1,16 @@
+{
+  "name": "portal-api",
+  "version": "1.0.0",
+  "description": "Andrew Marth Client Portal private data API (Cloud Run function, Firestore)",
+  "type": "module",
+  "main": "index.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "functions-framework --target=portalApi --port=8080"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0",
+    "firebase-admin": "^13.0.0",
+    "google-auth-library": "^9.14.0"
+  }
+}
