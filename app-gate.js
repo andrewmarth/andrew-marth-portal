@@ -1,6 +1,6 @@
-// The portal only runs as the installed app. In a regular browser tab every page is covered by a screen
-// that explains how to install it, with a button for the visitor's device (Android, iPhone/iPad or computer).
-// The local preview server is left open so pages can still be checked in a browser.
+// On phones and tablets the portal only runs as the installed app: in a regular browser tab every page is covered
+// by a screen that explains how to install it, with a button for the visitor's device (Android or iPhone/iPad).
+// Computers use the portal in the browser as normal. The local preview server is left open too.
 (function () {
     const PREVIEW_HOST = '127.0.0.1:5175';
     const installed = ['standalone', 'fullscreen', 'minimal-ui'].some(m => matchMedia('(display-mode: ' + m + ')').matches)
@@ -10,6 +10,7 @@
     const ua = navigator.userAgent;
     const device = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios'
         : /Android/.test(ua) ? 'android' : 'desktop';
+    if (device === 'desktop') return;
 
     // Hide the page right away so nothing flashes before the gate is drawn
     const style = document.createElement('style');
@@ -89,18 +90,10 @@
                 'Tap <b>Install</b>, then open <b>My Homes</b> from your home screen.'
             ],
             note: 'Already installed? Open My Homes from your home screen or app drawer.'
-        },
-        desktop: {
-            button: 'Install the app',
-            steps: [
-                'Open <b>' + location.host + '</b> on your phone.',
-                'Follow the steps there to add <b>My Homes</b> to your home screen.'
-            ],
-            note: 'On a computer, Chrome and Edge can also install it: look for the install icon at the right end of the address bar.'
         }
     }[device];
 
-    // Android and desktop Chrome hand over a native install prompt; keep it for the button
+    // Android Chrome hands over a native install prompt; keep it for the button
     let installPrompt = null;
     addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
