@@ -36,6 +36,18 @@ const PAGE_SETTING_FIELDS = {
   // Seller Net pages: the seller's loan payoff and the listing agent's commission
   'ORIGINAL LOAN AMOUNT': 'money', 'ORIGINAL LOAN DATE': 'date', 'LOAN INTEREST RATE': 'rate', 'LOAN TERM MONTHS': 'int',
   'LOAN PRINCIPAL BALANCE': 'money', 'PRINCIPAL LOAN BALANCE DATE': 'date',
+  'LOAN TYPE': ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other'],
+  'ORIGINAL PREPAID MORTGAGE INSURANCE': 'money',
+  'PREPAYMENT PENALTY': ['Yes', 'No', 'Unknown'],
+  'PREPAYMENT PENALTY TYPE': ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'],
+  'OUTSTANDING CONSTRUCTION HOLDBACK': 'money', 'OUTSTANDING INTEREST RESERVE': 'money',
+  'DRAW FEE HOLDBACK': 'money', 'OTHER HOLDBACK': 'money',
+  // Seller Net: whether each fee is an estimate or the final amount, and whether there's an HOA / master association
+  'RECORDING FEE STATUS': ['Estimated', 'Final'], 'PAYOFF STATEMENT FEE STATUS': ['Estimated', 'Final'],
+  'OTHER LOAN PAYOFF FEES STATUS': ['Estimated', 'Final'], 'HOA TRANSFER FEE STATUS': ['Estimated', 'Final'],
+  'HOA CAP FEE STATUS': ['Estimated', 'Final'], 'HOA DISCLOSURE FEE STATUS': ['Estimated', 'Final'],
+  'HOA PRIMARY MONTHLY DUES STATUS': ['Estimated', 'Final'], 'HOA MASTER MONTHLY DUES STATUS': ['Estimated', 'Final'],
+  'HAS HOA': ['Yes', 'No'], 'HAS MASTER ASSOCIATION': ['Yes', 'No'],
   'RECORDING FEE': 'money', 'PAYOFF STATEMENT FEE': 'money',
   'PREPAYMENT PENALTY %': 'rate', 'PREPAYMENT PENALTY $': 'money',
   'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
@@ -182,6 +194,7 @@ export async function handle(body, query) {
     if (body.action === 'createVersion') return await createVersion_(id, account, body);
     // pages.html (admins): change who can see the page
     if (body.action === 'updatePageAccess') return await updatePageAccess_(id, account, body);
+    if (body.action === 'saveClientInput') return await saveClientInput_(id, account, body);
 
     // Settings page: save this client's income and debt (adds their row if they don't have one yet)
     if (body.action === 'updateIncome') {
@@ -381,6 +394,30 @@ async function updatePageAccess_(id, account, body) {
   });
   if (!isSellerNet) fields[PAGE_LENDER_COLUMN] = lender || '';
   await update('pages', found.docId, fields);
+  return { ok: true, page: (await findPage_(body.pageId)).row };
+}
+
+// Seller Net "Client Input": what the seller fills in themselves (their loan and HOA). Anyone on the page (or an admin)
+// can save these, and only these. body: { pageId, fields: { COLUMN: value } } (each checked as in PAGE_SETTING_FIELDS)
+const CLIENT_INPUT_FIELDS = ['LOAN TYPE', 'LOAN PRINCIPAL BALANCE', 'PRINCIPAL LOAN BALANCE DATE', 'LOAN INTEREST RATE',
+  'LOAN TERM MONTHS', 'ORIGINAL PREPAID MORTGAGE INSURANCE', 'PREPAYMENT PENALTY', 'PREPAYMENT PENALTY TYPE',
+  'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'OUTSTANDING CONSTRUCTION HOLDBACK', 'OUTSTANDING INTEREST RESERVE',
+  'DRAW FEE HOLDBACK', 'OTHER HOLDBACK', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS',
+  'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS'];
+async function saveClientInput_(id, account, body) {
+  const found = await findPage_(body.pageId);
+  if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
+  if (String(found.row['PAGE TYPE'] || '').trim().toLowerCase() !== 'seller net') return { ok: false, error: 'not_allowed' };
+  const fields = {};
+  const submitted = body.fields || {};
+  for (const key in submitted) {
+    const column = String(key).trim().toUpperCase();
+    if (!CLIENT_INPUT_FIELDS.includes(column)) return { ok: false, error: 'invalid_field' };
+    const value = cleanSetting_(PAGE_SETTING_FIELDS[column], submitted[key]);
+    if (value === null) return { ok: false, error: 'invalid_value', field: column };
+    fields[column] = value;
+  }
+  if (Object.keys(fields).length) await update('pages', found.docId, fields);
   return { ok: true, page: (await findPage_(body.pageId)).row };
 }
 

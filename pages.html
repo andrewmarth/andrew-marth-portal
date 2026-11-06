@@ -890,6 +890,19 @@
         .pair { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
         .pair-even { grid-template-columns: 1fr 1fr; }
         /* Several labeled boxes edited together (Seller Net's Loan Payoff) */
+        .field-body > .status-seg { margin-top: 10px; }
+        /* Seller Net: the breakdown is held back until every input is in */
+        .net-waiting { margin-top: 18px; padding: 22px 20px; border-radius: 20px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); text-align: center; }
+        .net-waiting h3 { margin: 0 0 8px 0; font-size: 1.15rem; }
+        .net-waiting p { margin: 0 0 14px 0; line-height: 1.5; }
+        .net-waiting .net-waiting-agent { margin: 14px 0 0 0; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-size: 0.85rem; color: var(--olive); }
+        .net-waiting .net-missing { margin: 14px 0 0 0; font-size: 0.8rem; opacity: 0.7; }
+        /* The seller's Client Input pop-up: a $ in front of amounts, "%" / "months" after */
+        .client-dialog .cl-box { position: relative; max-width: 300px; }
+        .client-dialog .cl-money::before { content: '$'; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+        .client-dialog .tf-step .cl-money input[type="text"] { padding-left: 36px; }
+        .client-dialog .cl-suffix::after { content: attr(data-suffix); position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+        .client-dialog .tf-step .cl-suffix input[type="text"] { padding-right: 90px; }
         .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
         .sub-label { display: block; margin: 0 0 6px 6px; font-size: 0.82rem; font-weight: bold; opacity: 0.8; }
         @media (max-width: 600px) { .sub-grid { grid-template-columns: 1fr; } }
@@ -1060,6 +1073,8 @@
             <span class="card-eyebrow" id="escrow-eyebrow">Cash To Close</span>
             <h2>Escrow Breakdown</h2>
             <div id="escrow-list"></div>
+            <!-- Seller Net: shown instead of the numbers while any input is missing -->
+            <div class="net-waiting" id="net-waiting" hidden></div>
             <!-- Seller Net pages fill this in instead of the Cash Breakdown below -->
             <div class="total-box" id="seller-total" hidden>
                 <h3 class="label">Net Proceeds</h3>
@@ -1168,6 +1183,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
+        import { ensureStepFormStyles } from '/task-form.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1495,13 +1511,22 @@
             const loan = loanBalanceOn(page, closing);
             const principal = loan.balance;
             // HOA fees only count when the seller pays them (a blank WHO PAYS means the seller)
+            // No HOA: its fees don't count (they're hidden in the settings)
+            const noHoaHere = text(col(page, 'HAS HOA')) === 'No';
             const hoaFee = (name, key) => {
-                const amount = num(col(page, 'HOA ' + key + ' FEE'));
+                const amount = noHoaHere ? 0 : num(col(page, 'HOA ' + key + ' FEE'));
                 const payer = text(col(page, 'WHO PAYS ' + key + ' FEE'));
                 const buyerPays = payer.toLowerCase() === 'buyer';
                 return { section: 'Miscellaneous', label: name, amount: buyerPays ? 0 : -amount, note: buyerPays && amount > 0 ? 'Paid by buyer' : '' };
             };
             const percentPlus = (pctColumn, dollarColumn, base) => base * num(col(page, pctColumn)) + num(col(page, dollarColumn));
+            // Prepayment penalty: none when it's No or Unknown; with Yes, the % and / or $ its type says (any that are filled
+            // in when the type is Unknown). Pages from before PREPAYMENT PENALTY count whatever is filled in.
+            const hasPenalty = text(col(page, 'PREPAYMENT PENALTY'));
+            const penaltyType = text(col(page, 'PREPAYMENT PENALTY TYPE'));
+            const penaltyApplies = hasPenalty === '' || hasPenalty === 'Yes';
+            const penaltyPct = penaltyApplies && !['Flat Dollar Amount'].includes(penaltyType) ? principal * num(col(page, 'PREPAYMENT PENALTY %')) : 0;
+            const penaltyDollars = penaltyApplies && !['Percent Of Loan Amount'].includes(penaltyType) ? num(col(page, 'PREPAYMENT PENALTY $')) : 0;
 
             // Listed in display order; each line's section is the heading it shows under
             const lines = [
@@ -1511,7 +1536,7 @@
                 { section: 'Payoffs', payoff: true, label: 'Principal Loan Amount', amount: -principal, note: closing && principal && !loan.warning ? 'Projected balance on ' + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
                 { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -num(col(page, 'RECORDING FEE')) },
                 { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -num(col(page, 'PAYOFF STATEMENT FEE')) },
-                { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: -percentPlus('PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', principal) },
+                { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: -(penaltyPct + penaltyDollars) },
                 { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
 
                 // The buyer breakdown's prorations, the other way around
@@ -1691,6 +1716,327 @@
             return { score: Math.round(used.reduce((a, b) => a + b, 0) / used.length), missing, count: used.length };
         }
 
+        // Seller Net: which inputs are still blank. client: the seller's own questions (Client Input) that apply;
+        // agent: everything else the numbers need (Other Loan Payoff Fees and the HOA Other Fee are optional, and the
+        // HOA fees only count when there's an HOA). Labels, for the admin's list.
+        function sellerNetMissing(page) {
+            const get = c => text(col(page, c));
+            const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && get(p.column) === '').map(p => p.label);
+            const agent = [];
+            const need = (label, ...columns) => { if (columns.every(c => get(c) === '')) agent.push(label); };
+            need('Sale Price', 'PURCHASE PRICE');
+            need('Seller Credit To Buyer', 'SELLER CREDIT');
+            need('Property Type', 'PROPERTY TYPE');
+            need('Year Built', 'YEAR BUILT');
+            need('Yearly Taxes', 'YEARLY TAXES');
+            need('Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
+            need('Escrow Duration', 'ESCROW DURATION');
+            need('Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
+            need('Original Loan Date', 'ORIGINAL LOAN DATE');
+            need('Recording Fee', 'RECORDING FEE');
+            need('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
+            need('Escrow Fee', 'ESCROW FEE RATE');
+            need('Owners Title Insurance', 'OWNERS TITLE RATE');
+            if (get('HAS HOA') === 'Yes') {
+                need('HOA Transfer Fee', 'HOA TRANSFER FEE');
+                need('HOA Cap Fee', 'HOA CAP FEE');
+                need('HOA Disclosure Fee', 'HOA DISCLOSURE FEE');
+            }
+            need('Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $');
+            need('Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $');
+            return { client, agent };
+        }
+        // Seller Net: while anything is missing, the numbers are hidden and this says what's holding them up: a button for
+        // the seller's own questions, and "Waiting on Andrew Marth" for the rest
+        function renderNetWaiting(page) {
+            const missing = sellerNetMissing(page);
+            const waiting = missing.client.length > 0 || missing.agent.length > 0;
+            ['escrow-list', 'seller-total', 'seller-note'].forEach(id => { document.getElementById(id).hidden = waiting; });
+            const box = document.getElementById('net-waiting');
+            box.hidden = !waiting;
+            if (!waiting) { box.innerHTML = ''; return; }
+            // The seller's questions come first; "Waiting on Andrew Marth" (and, for admins, what's missing) only once they're answered
+            box.innerHTML = '<h3>Your Net Sheet Isn’t Ready Yet</h3>'
+                + (missing.client.length
+                    ? '<p>We need a few details about your loan and HOA to finish it.</p><button type="button" class="btn" data-client-input>Add Your Loan Details</button>'
+                    : '<p class="net-waiting-agent">Waiting on Andrew Marth</p>'
+                        + (data.isAdmin ? '<p class="net-missing">Missing: ' + escapeHtml(missing.agent.join(', ')) + '</p>' : ''));
+        }
+        document.getElementById('net-waiting').addEventListener('click', e => {
+            if (!e.target.closest('[data-client-input]')) return;
+            if (!clientDialog) clientDialog = buildClientDialog();
+            clientDialog.open();
+        });
+
+        // The seller's Client Input questions in a pop-up, one at a time (the same look as the CUM and New Task forms),
+        // saved straight to the page. Questions that don't apply (by the answers so far) are skipped.
+        const CLIENT_QUESTIONS = {
+            'LOAN TYPE': ['What kind of loan do you have?', 'It’s on your mortgage statement or closing papers.'],
+            'LOAN PRINCIPAL BALANCE': ['What’s your current principal balance?', 'From your most recent mortgage statement.'],
+            'PRINCIPAL LOAN BALANCE DATE': ['What date is that balance from?', 'The date on that statement.'],
+            'LOAN INTEREST RATE': ['What’s your interest rate?', ''],
+            'LOAN TERM MONTHS': ['How long is your loan?', ''],
+            'ORIGINAL PREPAID MORTGAGE INSURANCE': ['How much upfront mortgage insurance did you pay?', 'The prepaid mortgage insurance (or VA funding fee) from when you got the loan.'],
+            'PREPAYMENT PENALTY': ['Does your loan have a prepayment penalty?', 'A fee for paying the loan off early.'],
+            'PREPAYMENT PENALTY TYPE': ['How is the prepayment penalty figured?', ''],
+            'PREPAYMENT PENALTY %': ['What percent of the loan is the penalty?', ''],
+            'PREPAYMENT PENALTY $': ['How much is the penalty?', ''],
+            'OUTSTANDING CONSTRUCTION HOLDBACK': ['How much is left in the construction holdback?', 'Enter 0 if there isn’t one.'],
+            'OUTSTANDING INTEREST RESERVE': ['How much is left in the interest reserve?', 'Enter 0 if there isn’t one.'],
+            'DRAW FEE HOLDBACK': ['How much is the draw fee holdback?', 'Enter 0 if there isn’t one.'],
+            'OTHER HOLDBACK': ['Is there any other holdback?', 'Enter 0 if there isn’t one.'],
+            'HAS HOA': ['Is the home in an HOA?', ''],
+            'HOA PRIMARY MONTHLY DUES': ['How much are the HOA dues each month?', ''],
+            'HAS MASTER ASSOCIATION': ['Is there a master association too?', 'Some communities have a second, larger association.'],
+            'HOA MASTER MONTHLY DUES': ['How much are the master association dues each month?', ''],
+        };
+        const STEP_ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+        const ANSWER_ICONS = {
+            Yes: STEP_ICON('<path d="M20 6 9 17l-5-5"/>'),
+            No: STEP_ICON('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+            Unknown: STEP_ICON('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><path d="M12 17h.01"/>'),
+        };
+        const CAL_PREV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>';
+        const CAL_NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+        // Loan term: 30 or 15 years (saved in months), or another number of months
+        const TERMS = [['360', '30 Years'], ['180', '15 Years'], ['other', 'Other']];
+
+        let clientDialog = null;
+        function buildClientDialog() {
+            ensureStepFormStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog task-dialog client-dialog';
+            dialog.setAttribute('aria-labelledby', 'client-dialog-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="client-dialog-title">Your Loan &amp; HOA</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+                + '<div class="tf-progress"><span class="tf-progress-text" data-progress></span><div class="tf-bar"><span data-bar></span></div></div>'
+                + '<div class="dialog-scroll" data-step-mount></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-back>Cancel</button>'
+                + '<button type="submit" class="btn" data-next><span class="btn-spinner" aria-hidden="true"></span><span data-next-text>Next</span></button></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const $ = sel => dialog.querySelector(sel);
+            const form = $('form');
+            const mount = $('[data-step-mount]');
+            const message = $('.form-message');
+            const nextBtn = $('[data-next]');
+            const backBtn = $('[data-back]');
+            let saving = false;
+            let answers = {};
+            let parts = [];
+            let at = null;
+            // Loan term "Other" stays picked while its box is being filled in
+            let termOther = false;
+            // The month the calendar shows
+            let shown = new Date();
+
+            const get = c => (c in answers ? answers[c] : text(col(data.page, c)));
+            const put = (c, v) => { answers[c] = v; };
+            const steps = () => parts.filter(p => !p.show || p.show());
+            const today = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+            const sameDay = (a, b) => a && b && a.getTime() === b.getTime();
+
+            function answer(p, value) {
+                put(p.column, value);
+                if (p.then) p.then(value);
+                message.textContent = '';
+            }
+            // A tap answers and moves on (or, on the last question, waits for Save)
+            function tapped(p, value) {
+                answer(p, value);
+                draw(p, 0);
+                const list = steps();
+                if (list.indexOf(p) < list.length - 1) setTimeout(() => go(1), 180);
+            }
+            const choiceHtml = (value, main, icon, on) => '<button type="button" class="tf-choice" data-value="' + escapeHtml(value) + '" aria-pressed="' + on + '">'
+                + '<span class="tf-choice-icon">' + icon + '</span><span>' + escapeHtml(main) + '</span></button>';
+
+            function drawCalendar(p) {
+                const box = mount.querySelector('.tf-cal');
+                const picked = parseDate(get(p.column));
+                const end = today();
+                const year = shown.getFullYear(), month = shown.getMonth();
+                box.querySelector('[data-cal-title]').textContent = shown.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                // A statement date is today or earlier
+                box.querySelector('[data-cal-next]').disabled = year === end.getFullYear() && month === end.getMonth();
+                const first = new Date(year, month, 1).getDay();
+                const days = new Date(year, month + 1, 0).getDate();
+                let html = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => '<span class="tf-cal-dow">' + d + '</span>').join('');
+                for (let i = 0; i < first; i++) html += '<span></span>';
+                for (let d = 1; d <= days; d++) {
+                    const day = new Date(year, month, d);
+                    const on = sameDay(day, picked);
+                    html += '<button type="button" class="tf-cal-day' + (sameDay(day, end) ? ' is-today' : '') + (on ? ' is-picked' : '') + '" data-day="' + d + '"'
+                        + (day > end ? ' disabled' : '') + (on ? ' aria-pressed="true"' : '') + ' aria-label="' + escapeHtml(fmtDate(day)) + '">' + d + '</button>';
+                }
+                box.querySelector('[data-cal-grid]').innerHTML = html;
+                mount.querySelector('[data-cal-picked]').textContent = picked ? fmtDate(picked) : '';
+            }
+
+            // One question: its words, then the right kind of answer
+            function draw(p, direction) {
+                const [question, hint] = CLIENT_QUESTIONS[p.column] || [p.label, ''];
+                const v = get(p.column);
+                let body = '';
+                if (p.kind === 'choice' || p.kind === 'seg') {
+                    body = '<div class="tf-choices is-stacked">' + p.options.map(o => choiceHtml(o, o, ANSWER_ICONS[o] || ICONS[p.icon || 'bank'], v === o)).join('') + '</div>';
+                } else if (p.kind === 'months') {
+                    const mode = termOther ? 'other' : v === '360' || v === '180' ? v : v === '' ? '' : 'other';
+                    body = '<div class="tf-choices is-stacked">' + TERMS.map(([value, main]) => choiceHtml(value, main, ICONS.calendar, mode === value)).join('') + '</div>'
+                        + '<div class="tf-other"' + (mode === 'other' ? '' : ' hidden') + '><label for="cl-term">How many months?</label>'
+                        + '<div class="cl-box cl-suffix" data-suffix="months"><input id="cl-term" type="text" inputmode="numeric" autocomplete="off" placeholder="0" value="' + escapeHtml(mode === 'other' ? digits(v) : '') + '"></div></div>';
+                } else if (p.kind === 'date') {
+                    body = '<div class="tf-cal"><div class="tf-cal-head">'
+                        + '<button type="button" class="tf-cal-nav" data-cal-prev aria-label="Previous month">' + CAL_PREV + '</button>'
+                        + '<span class="tf-cal-title" data-cal-title></span>'
+                        + '<button type="button" class="tf-cal-nav" data-cal-next aria-label="Next month">' + CAL_NEXT + '</button></div>'
+                        + '<div class="tf-cal-grid" data-cal-grid></div></div><p class="tf-picked" data-cal-picked></p>';
+                } else if (p.kind === 'money') {
+                    body = '<div class="cl-box cl-money"><input id="cl-input" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-labelledby="cl-question" value="' + escapeHtml(withCommas(wholeDollars(v))) + '"></div>';
+                } else {
+                    body = '<div class="cl-box cl-suffix" data-suffix="%"><input id="cl-input" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-labelledby="cl-question" value="' + escapeHtml(decimalToPercent(v)) + '"></div>';
+                }
+                mount.innerHTML = '<section class="tf-step' + (direction > 0 ? ' is-entering' : '') + '"><h3 class="tf-question" id="cl-question">' + escapeHtml(question) + '</h3>'
+                    + (hint ? '<p class="tf-hint">' + escapeHtml(hint) + '</p>' : '') + body + '</section>';
+                if (p.kind === 'date') {
+                    const picked = parseDate(v);
+                    if (direction !== 0) shown = picked ? new Date(picked.getFullYear(), picked.getMonth(), 1) : new Date(today().getFullYear(), today().getMonth(), 1);
+                    drawCalendar(p);
+                }
+                const list = steps();
+                const n = list.indexOf(p) + 1;
+                $('[data-progress]').textContent = 'Question ' + n + ' of ' + list.length;
+                $('[data-bar]').style.width = Math.round((n / list.length) * 100) + '%';
+                $('[data-next-text]').textContent = n === list.length ? 'Save' : 'Next';
+                backBtn.textContent = n === 1 ? 'Cancel' : 'Back';
+                if (direction !== 0) {
+                    mount.scrollTop = 0;
+                    const box = mount.querySelector('#cl-input');
+                    if (box) setTimeout(() => box.focus(), 60);
+                }
+            }
+
+            mount.addEventListener('click', e => {
+                const p = at;
+                const choice = e.target.closest('.tf-choice');
+                if (choice) {
+                    if (p.kind === 'months') {
+                        termOther = choice.dataset.value === 'other';
+                        if (termOther) {
+                            if (get(p.column) === '360' || get(p.column) === '180') answer(p, '');
+                            draw(p, 0);
+                            setTimeout(() => { const box = mount.querySelector('#cl-term'); if (box) box.focus(); }, 60);
+                        } else {
+                            tapped(p, choice.dataset.value);
+                        }
+                        return;
+                    }
+                    tapped(p, choice.dataset.value);
+                    return;
+                }
+                if (e.target.closest('[data-cal-prev]')) { shown = new Date(shown.getFullYear(), shown.getMonth() - 1, 1); drawCalendar(p); return; }
+                if (e.target.closest('[data-cal-next]')) { shown = new Date(shown.getFullYear(), shown.getMonth() + 1, 1); drawCalendar(p); return; }
+                const day = e.target.closest('[data-day]');
+                if (day && !day.disabled) tapped(p, toSheetDate(toInputDate(new Date(shown.getFullYear(), shown.getMonth(), Number(day.dataset.day)))));
+            });
+            mount.addEventListener('input', e => {
+                const p = at;
+                const input = e.target;
+                input.classList.remove('is-invalid');
+                message.textContent = '';
+                if (input.id === 'cl-term') { input.value = digits(input.value); answer(p, input.value); return; }
+                if (p.kind === 'money') {
+                    const d = digits(input.value);
+                    answer(p, d);
+                } else if (p.kind === 'rate') {
+                    const d = percentToDecimal(input.value);
+                    answer(p, d === null ? '' : d);
+                    input.dataset.bad = d === null ? '1' : '';
+                }
+            });
+            mount.addEventListener('focusout', e => { if (e.target.id === 'cl-input' && at.kind === 'money') e.target.value = withCommas(digits(e.target.value)); });
+
+            // Each question needs an answer before moving on
+            function check(p) {
+                const input = mount.querySelector('#cl-input, #cl-term');
+                const bad = text => { if (input) { input.classList.add('is-invalid'); input.focus(); } message.textContent = text; return false; };
+                if (p.kind === 'rate' && input && input.dataset.bad) return bad('Please enter a number.');
+                if (p.kind === 'months' && !(Number(get(p.column)) > 0)) return bad(termOther ? 'Please enter the number of months.' : 'Please choose one.');
+                if (get(p.column) === '') {
+                    if (p.kind === 'choice' || p.kind === 'seg') return bad('Please choose one.');
+                    if (p.kind === 'date') return bad('Please pick a day.');
+                    return bad('Please enter an amount.');
+                }
+                return true;
+            }
+            function show(p, direction) {
+                at = p;
+                termOther = false;
+                draw(p, direction);
+            }
+            function go(direction) {
+                if (saving) return;
+                message.textContent = '';
+                const list = steps();
+                const i = list.indexOf(at);
+                if (direction > 0) {
+                    if (!check(at)) return;
+                    if (i === list.length - 1) { save(); return; }
+                    show(list[i + 1], 1);
+                } else {
+                    if (i <= 0) { close(); return; }
+                    show(list[i - 1], -1);
+                }
+            }
+            backBtn.addEventListener('click', () => go(-1));
+            form.addEventListener('submit', e => { e.preventDefault(); go(1); });
+            form.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[type="text"]')) { e.preventDefault(); go(1); } });
+
+            async function save() {
+                // Dues the seller gives are the final amounts
+                if (get('HAS HOA') === 'Yes') put('HOA PRIMARY MONTHLY DUES STATUS', 'Final');
+                if (get('HAS HOA') === 'Yes' && get('HAS MASTER ASSOCIATION') === 'Yes') put('HOA MASTER MONTHLY DUES STATUS', 'Final');
+                saving = true;
+                nextBtn.disabled = true;
+                backBtn.disabled = true;
+                nextBtn.classList.add('is-loading');
+                try {
+                    const json = await api({ action: 'saveClientInput', pageId, fields: answers });
+                    if (!json.ok || !json.page) throw new Error(json.error || 'Request failed');
+                    data.page = json.page;
+                    saving = false;
+                    dialog.close();
+                    update();
+                    // An admin's Settings card shows the new answers too
+                    if (data.isAdmin) rebuildSettings();
+                } catch (err) {
+                    console.error(err);
+                    message.textContent = 'We couldn’t save your answers. Please try again.';
+                } finally {
+                    saving = false;
+                    nextBtn.disabled = false;
+                    backBtn.disabled = false;
+                    nextBtn.classList.remove('is-loading');
+                }
+            }
+
+            const close = () => { if (!saving) dialog.close(); };
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+            dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+            dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+            return {
+                open() {
+                    answers = {};
+                    message.textContent = '';
+                    parts = clientInputParts(get, put);
+                    show(steps()[0], 0);
+                    dialog.showModal();
+                    lockPageScroll(dialog);
+                },
+            };
+        }
+
         // Seller Net pages share the Settings card (and its save) with buyer breakdowns
         const isSellerNet = () => text(data && data.pageType).toLowerCase() === 'seller net';
 
@@ -1702,6 +2048,7 @@
                 renderProperty(page, result);
                 if (!text(col(page, 'CITY'))) document.getElementById('hero-sub').textContent = 'Estimated proceeds from selling this home.';
                 renderEscrow(result);
+                renderNetWaiting(page);
                 return;
             }
             const product = data.loanProducts[loanIndex] || {};
@@ -2175,6 +2522,7 @@
             options.forEach(([value, text]) => {
                 const b = el('button', value === selected ? 'is-on' : '', escapeHtml(text));
                 b.type = 'button';
+                b.dataset.value = value;
                 b.setAttribute('role', 'radio');
                 b.setAttribute('aria-checked', String(value === selected));
                 b.addEventListener('click', () => {
@@ -2185,8 +2533,20 @@
             });
             return seg;
         }
+        // Turns on the button for value (none when it matches nothing)
+        function setSeg(seg, value) {
+            seg.querySelectorAll('button').forEach(b => { const on = b.dataset.value === value; b.classList.toggle('is-on', on); b.setAttribute('aria-checked', String(on)); });
+        }
+        // Seller Net: whether a fee is an estimate or the final amount (statusColumn), under the fee's own boxes
+        function statusToggle(f, statusColumn) {
+            const seg = segToggle([['Estimated', 'Estimated'], ['Final', 'Final']], current(statusColumn), v => setDraft(statusColumn, v), 'Estimated or final');
+            seg.classList.add('status-seg');
+            f.body.append(seg);
+            return () => setSeg(seg, current(statusColumn));
+        }
 
         // --- Field kinds ---
+        // opts.status: the column that says whether it's Estimated or Final (adds that question)
         function moneyField(parent, label, column, opts = {}) {
             const f = fieldShell(label, opts);
             const box = textBox({
@@ -2195,6 +2555,9 @@
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
             f.body.append(box.wrap);
+            const syncStatus = opts.status ? statusToggle(f, opts.status) : null;
+            // Shows the saved / draft value again (it can be changed from Client Input too)
+            f.wrap.syncInputs = () => { box.input.value = withCommas(wholeDollars(current(column))); if (syncStatus) syncStatus(); };
             parent.append(f.wrap);
             return box;
         }
@@ -2237,7 +2600,7 @@
             parent.append(f.wrap);
         }
         // HOA fee with a Buyer / Seller toggle on the same line
-        function feeWithPayer(parent, label, feeColumn, payerColumn) {
+        function feeWithPayer(parent, label, feeColumn, payerColumn, status) {
             const f = fieldShell(label, { span: true });
             const row = el('div', 'pair');
             const box = textBox({
@@ -2248,10 +2611,11 @@
             const payer = /^seller$/i.test(current(payerColumn)) ? 'Seller' : 'Buyer';
             row.append(box.wrap, segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payer, v => setDraft(payerColumn, v), label + ' paid by'));
             f.body.append(row);
+            if (status) statusToggle(f, status);
             parent.append(f.wrap);
         }
         // Optional % and $ boxes side by side
-        function percentAndDollars(parent, label, pctColumn, dollarColumn, help) {
+        function percentAndDollars(parent, label, pctColumn, dollarColumn, help, status) {
             const f = fieldShell(label, { span: true, help, key: pctColumn });
             const row = el('div', 'pair pair-even');
             const pct = textBox({
@@ -2265,6 +2629,7 @@
             });
             row.append(pct.wrap, dollars.wrap);
             f.body.append(row);
+            if (status) statusToggle(f, status);
             parent.append(f.wrap);
         }
 
@@ -2417,38 +2782,150 @@
             makeEditable(document.getElementById('loan-card'));
         }
 
-        // Seller Net: the seller's loan in one setting (all six boxes open together), since a new statement
-        // usually changes several of them at once
-        function loanPayoffField(parent) {
-            const f = fieldShell('Loan Payoff', { span: true, key: 'LOAN INTEREST RATE', help: 'The principal balance is from a recent statement. Leave it blank to work it out from the original loan.' });
-            f.wrap.dataset.display = 'payoff';
+        // Several settings edited together as one line item (Seller Net's Agent Input and Client Input). parts:
+        // [{ label, column, kind: money | date | rate | months | choice | seg, options (choice / seg), show (when it
+        // applies, from the current values), short (its name in the summary line), then (value: fills in other
+        // settings that follow from the answer) }]. The same column can be in more than one group: each group re-reads
+        // the values whenever it's opened. opts.io says where values are read and written: the settings draft by
+        // default, or the client's own answers in the Client Input pop-up.
+        const SETTINGS_IO = { get: c => current(c), put: (c, v) => { draft[c] = v; }, edited: () => settingsEdited(), bad: (k, m) => fieldBad(k, m) };
+        function groupField(parent, label, parts, opts = {}) {
+            const io = opts.io || SETTINGS_IO;
+            const key = opts.key || label.toUpperCase();
+            const f = fieldShell(label, { span: true, key, help: opts.help });
+            f.wrap.dataset.display = 'group';
             const grid = el('div', 'sub-grid');
-            const sub = (label, box) => {
-                const s = el('div', 'sub-field');
-                s.append(el('span', 'sub-label', escapeHtml(label)), box.wrap);
-                box.input.setAttribute('aria-label', label);
-                grid.append(s);
-            };
-            const money = column => textBox({
-                value: withCommas(wholeDollars(current(column))), prefix: '$', placeholder: '0',
-                onInput: i => setDraft(column, digits(i.value)),
-                onBlur: i => { i.value = withCommas(digits(i.value)); },
-            });
-            const date = column => textBox({ type: 'date', value: toInputDate(current(column)), onInput: i => setDraft(column, toSheetDate(i.value)) });
-            sub('Original Loan Amount', money('ORIGINAL LOAN AMOUNT'));
-            sub('Original Loan Date', date('ORIGINAL LOAN DATE'));
-            sub('Loan Interest Rate', textBox({
-                value: decimalToPercent(current('LOAN INTEREST RATE')), suffix: '%', placeholder: '0', inputmode: 'decimal',
-                onInput: i => { const d = percentToDecimal(i.value); fieldBad('LOAN INTEREST RATE', d === null ? 'Please enter a number.' : ''); if (d !== null) setDraft('LOAN INTEREST RATE', d); else settingsEdited(); },
-            }));
-            sub('Loan Term', textBox({
-                value: digits(current('LOAN TERM MONTHS')), suffix: 'months', placeholder: '0',
-                onInput: i => setDraft('LOAN TERM MONTHS', digits(i.value)),
-            }));
-            sub('Principal Balance', money('LOAN PRINCIPAL BALANCE'));
-            sub('Principal Balance Date', date('PRINCIPAL LOAN BALANCE DATE'));
             f.body.append(grid);
             parent.append(f.wrap);
+            const bad = new Set();
+            const shown = p => !p.show || p.show();
+            const money = c => (io.get(c) === '' ? '' : wholeMoney.format(Math.round(num(io.get(c)))));
+            const day = c => { const d = parseDate(io.get(c)); return d ? fmtDate(d) : ''; };
+            // How each kind shows in the summary line
+            const valueOf = p => {
+                const v = io.get(p.column);
+                if (v === '') return '';
+                if (p.kind === 'money') return money(p.column);
+                if (p.kind === 'date') return day(p.column);
+                if (p.kind === 'rate') return decimalToPercent(v) + '%';
+                if (p.kind === 'months') return digits(v) ? digits(v) + ' months' : '';
+                return v;
+            };
+            const visibility = () => { parts.forEach(p => { if (p.cell) p.cell.hidden = !shown(p); }); };
+            function build() {
+                grid.innerHTML = '';
+                bad.clear();
+                io.bad(key, '');
+                parts.forEach(p => {
+                    const cell = el('div', 'sub-field');
+                    const lab = el('span', 'sub-label', escapeHtml(p.label));
+                    lab.id = 'set-' + (++fieldCount) + '-label';
+                    cell.append(lab);
+                    p.cell = cell;
+                    const set = v => {
+                        io.put(p.column, v);
+                        if (p.then) p.then(v);
+                        io.edited();
+                        cell.classList.remove('is-missing');
+                        // Answers that change other boxes redraw them (not while typing in a box)
+                        if (p.then && p.kind === 'seg') build(); else visibility();
+                    };
+                    if (p.kind === 'choice') {
+                        const mount = el('div');
+                        cell.append(mount);
+                        makePicker({ mount, labelId: lab.id, items: p.options.map(v => ({ value: v, main: v, icon: p.icon || 'bank' })), selected: [io.get(p.column)], placeholder: 'Choose...', onChange: set });
+                    } else if (p.kind === 'seg') {
+                        cell.append(segToggle(p.options.map(v => [v, v]), io.get(p.column), set, p.label));
+                    } else {
+                        let box;
+                        if (p.kind === 'money') {
+                            box = textBox({ value: withCommas(wholeDollars(io.get(p.column))), prefix: '$', placeholder: '0', onInput: i => set(digits(i.value)), onBlur: i => { i.value = withCommas(digits(i.value)); } });
+                        } else if (p.kind === 'date') {
+                            box = textBox({ type: 'date', value: toInputDate(io.get(p.column)), onInput: i => set(toSheetDate(i.value)) });
+                        } else if (p.kind === 'months') {
+                            box = textBox({ value: digits(io.get(p.column)), suffix: 'months', placeholder: '0', onInput: i => set(digits(i.value)) });
+                        } else {
+                            box = textBox({
+                                value: decimalToPercent(io.get(p.column)), suffix: '%', placeholder: '0', inputmode: 'decimal',
+                                onInput: i => {
+                                    const d = percentToDecimal(i.value);
+                                    if (d === null) bad.add(p.column); else bad.delete(p.column);
+                                    io.bad(key, bad.size ? 'Please enter a number.' : '');
+                                    if (d !== null) set(d); else io.edited();
+                                },
+                            });
+                        }
+                        box.input.setAttribute('aria-label', p.label);
+                        cell.append(box.wrap);
+                    }
+                    grid.append(cell);
+                });
+                visibility();
+            }
+            build();
+            // Opening it again picks up anything changed in another group
+            f.wrap.groupSync = build;
+            f.wrap.groupDisplay = () => parts.filter(shown).map(p => { const v = valueOf(p); return v ? (p.short ? p.short + ' ' + v : v) : ''; }).filter(Boolean).join(' · ');
+            return { wrap: f.wrap, invalid: () => bad.size > 0 };
+        }
+
+        // The kind of loan the seller is paying off
+        const LOAN_TYPES = ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other'];
+        // No HOA (or no master association): its dues are $0, and that's final. put(column, value) writes a value.
+        const noDues = (column, put = SETTINGS_IO.put) => { put(column, '0'); put(column + ' STATUS', 'Final'); };
+        function noHoa(put = SETTINGS_IO.put) {
+            noDues('HOA PRIMARY MONTHLY DUES', put);
+            noDues('HOA MASTER MONTHLY DUES', put);
+            put('HAS MASTER ASSOCIATION', 'No');
+        }
+        // Seller Net: the HOA fee settings, hidden when there's no HOA (blank shows them, for pages from before)
+        let hoaFields = [];
+        const showHoaFields = () => hoaFields.forEach(w => { w.style.display = current('HAS HOA') === 'No' ? 'none' : ''; });
+
+        // The questions the seller answers about their loan and HOA ("Client Input"), read with get(column) and
+        // written with put(column, value). Used by the settings card and by the client's own pop-up.
+        function clientInputParts(get, put) {
+            const type = () => get('LOAN TYPE');
+            const hardMoney = () => type() === 'Hard Money';
+            const penalty = () => get('PREPAYMENT PENALTY') === 'Yes';
+            const penaltyType = () => get('PREPAYMENT PENALTY TYPE');
+            const hoa = () => get('HAS HOA') === 'Yes';
+            return [
+                { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
+                { label: 'Current Principal Balance', column: 'LOAN PRINCIPAL BALANCE', kind: 'money', short: 'Balance' },
+                { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'date', short: 'on' },
+                { label: 'Loan Interest Rate', column: 'LOAN INTEREST RATE', kind: 'rate' },
+                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months' },
+                { label: 'Original Prepaid Mortgage Insurance', column: 'ORIGINAL PREPAID MORTGAGE INSURANCE', kind: 'money', short: 'Prepaid MI', show: () => ['FHA', 'VA', 'Other'].includes(type()) },
+                { label: 'Prepayment Penalty', column: 'PREPAYMENT PENALTY', kind: 'seg', options: ['Yes', 'No', 'Unknown'], short: 'Prepayment Penalty:' },
+                { label: 'Prepayment Penalty Type', column: 'PREPAYMENT PENALTY TYPE', kind: 'choice', icon: 'cash', options: ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'], short: 'Type:', show: penalty },
+                { label: 'Prepayment Penalty %', column: 'PREPAYMENT PENALTY %', kind: 'rate', short: 'Penalty', show: () => penalty() && ['Percent Of Loan Amount', 'Both'].includes(penaltyType()) },
+                { label: 'Prepayment Penalty $', column: 'PREPAYMENT PENALTY $', kind: 'money', short: 'Penalty', show: () => penalty() && ['Flat Dollar Amount', 'Both'].includes(penaltyType()) },
+                { label: 'Outstanding Construction Holdback', column: 'OUTSTANDING CONSTRUCTION HOLDBACK', kind: 'money', short: 'Construction Holdback', show: hardMoney },
+                { label: 'Outstanding Interest Reserve', column: 'OUTSTANDING INTEREST RESERVE', kind: 'money', short: 'Interest Reserve', show: hardMoney },
+                { label: 'Draw Fee Holdback', column: 'DRAW FEE HOLDBACK', kind: 'money', short: 'Draw Fee Holdback', show: hardMoney },
+                { label: 'Other Holdback', column: 'OTHER HOLDBACK', kind: 'money', short: 'Other Holdback', show: hardMoney },
+                // HOA: dues the client gives are final; no HOA (or no master association) means $0, also final
+                { label: 'HOA', column: 'HAS HOA', kind: 'seg', options: ['Yes', 'No'], short: 'HOA:', then: v => {
+                    if (v === 'Yes') put('HOA PRIMARY MONTHLY DUES STATUS', 'Final'); else noHoa(put);
+                } },
+                { label: 'HOA Primary Dues', column: 'HOA PRIMARY MONTHLY DUES', kind: 'money', short: 'Primary Dues', show: hoa, then: () => put('HOA PRIMARY MONTHLY DUES STATUS', 'Final') },
+                { label: 'Is there a master association?', column: 'HAS MASTER ASSOCIATION', kind: 'seg', options: ['Yes', 'No'], short: 'Master Association:', show: hoa, then: v => {
+                    if (v === 'Yes') put('HOA MASTER MONTHLY DUES STATUS', 'Final'); else noDues('HOA MASTER MONTHLY DUES', put);
+                } },
+                { label: 'HOA Master Dues', column: 'HOA MASTER MONTHLY DUES', kind: 'money', short: 'Master Dues', show: () => hoa() && get('HAS MASTER ASSOCIATION') === 'Yes', then: () => put('HOA MASTER MONTHLY DUES STATUS', 'Final') },
+            ];
+        }
+
+        // Seller Net: the seller's loan as two line items, each edited all at once. Loan Type and Loan Term are in both.
+        function loanPayoffFields(parent) {
+            groupField(parent, 'Agent Input', [
+                { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money' },
+                { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from' },
+                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months' },
+                { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
+            ]);
+            groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
         }
 
         // --- Seller Net settings: Sellers, the sale, the seller's loan payoff, and the seller's costs ---
@@ -2472,23 +2949,35 @@
             dateField(sale, 'Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             wholeField(sale, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
 
-            loanPayoffField(document.getElementById('loan-payoff-fields'));
+            loanPayoffFields(document.getElementById('loan-payoff-fields'));
 
+            // (The prepayment penalty is in Client Input)
             const payoffs = document.getElementById('loan-fields');
-            moneyField(payoffs, 'Recording Fee', 'RECORDING FEE');
-            moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
-            percentAndDollars(payoffs, 'Prepayment Penalty', 'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'A percent of the loan balance, a flat amount, or both. Both are optional.');
-            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance, a flat amount, or both. Both are optional.');
+            moneyField(payoffs, 'Recording Fee', 'RECORDING FEE', { status: 'RECORDING FEE STATUS' });
+            moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE', { status: 'PAYOFF STATEMENT FEE STATUS' });
+            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance, a flat amount, or both. Both are optional.', 'OTHER LOAN PAYOFF FEES STATUS');
 
             const misc = document.getElementById('misc-fields');
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
             percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
-            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
-            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
-            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
+            // HOA yes / no (also in Client Input): No hides the HOA fees below and sets the dues to $0 (final)
+            const hoaField = fieldShell('HOA');
+            const hoaSeg = segToggle([['Yes', 'Yes'], ['No', 'No']], current('HAS HOA'), v => {
+                draft['HAS HOA'] = v;
+                if (v === 'No') noHoa();
+                settingsEdited();
+            }, 'HOA');
+            hoaField.body.append(hoaSeg);
+            hoaField.wrap.syncInputs = () => setSeg(hoaSeg, current('HAS HOA'));
+            misc.append(hoaField.wrap);
+            const hoaStart = misc.children.length;
+            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', 'HOA TRANSFER FEE STATUS');
+            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', 'HOA CAP FEE STATUS');
+            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.', status: 'HOA DISCLOSURE FEE STATUS' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
             feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
-            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
-            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
+            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
+            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month', status: 'HOA MASTER MONTHLY DUES STATUS' });
+            hoaFields = [...misc.children].slice(hoaStart);
             percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price, a flat amount, or both. Both are optional.');
             percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
 
@@ -2524,6 +3013,11 @@
                 const error = field.querySelector('.field-error');
                 if (error) field.insertBefore(done, error); else field.append(done);
                 edit.addEventListener('click', () => {
+                    // One setting open at a time
+                    editableFields.forEach(f => { if (f.field !== field) f.field.classList.remove('is-editing'); });
+                    // A group re-reads its values (another group may have changed one they share)
+                    if (field.groupSync) field.groupSync();
+                    refreshDisplays();
                     field.classList.add('is-editing');
                     const first = field.querySelector('.set-input, .picker-btn, .seg button');
                     if (first) first.focus();
@@ -2554,19 +3048,8 @@
                 const ltv = current('RETAIL LTV');
                 return ltv === '' ? '' : decimalToPercent(ltv) + '% · ' + wholeMoney.format(Math.round(num(current('PURCHASE PRICE')) * num(ltv)));
             }
-            // Loan payoff: "$600,000 · 5.75% · 360 months · from May 13, 2023 · Balance $500,575 on October 1, 2026"
-            if (field.dataset.display === 'payoff') {
-                const dollars = c => (current(c) === '' ? '' : wholeMoney.format(Math.round(num(current(c)))));
-                const day = c => { const d = parseDate(current(c)); return d ? fmtDate(d) : ''; };
-                const balance = dollars('LOAN PRINCIPAL BALANCE');
-                return [
-                    dollars('ORIGINAL LOAN AMOUNT'),
-                    current('LOAN INTEREST RATE') === '' ? '' : decimalToPercent(current('LOAN INTEREST RATE')) + '%',
-                    digits(current('LOAN TERM MONTHS')) ? digits(current('LOAN TERM MONTHS')) + ' months' : '',
-                    day('ORIGINAL LOAN DATE') ? 'from ' + day('ORIGINAL LOAN DATE') : '',
-                    balance ? 'Balance ' + balance + (day('PRINCIPAL LOAN BALANCE DATE') ? ' on ' + day('PRINCIPAL LOAN BALANCE DATE') : '') : '',
-                ].filter(Boolean).join(' · ');
-            }
+            // Agent Input / Client Input: "$600,000 · from May 13, 2023 · 360 months · FHA"
+            if (field.dataset.display === 'group') return field.groupDisplay();
             const picker = field.querySelector('.picker-btn .picker-main');
             // A placeholder like "No add-ons" is a real answer; "Choose..." means nothing is picked
             if (picker) return picker.classList.contains('is-placeholder') ? (/^choose/i.test(picker.textContent) ? '' : picker.textContent) : picker.textContent;
@@ -2588,6 +3071,9 @@
             return parts.join(' \u00b7 ');
         }
         function refreshDisplays() {
+            // Closed settings show what's in the draft (Client Input can change the HOA dues)
+            editableFields.forEach(({ field }) => { if (field.syncInputs && !field.classList.contains('is-editing')) field.syncInputs(); });
+            showHoaFields();
             editableFields.forEach(({ field, value, saved }) => {
                 const text = displayOf(field);
                 value.textContent = text || 'Not set';
@@ -2807,6 +3293,12 @@
             loanMode = 'percent';
             loanDollars = '';
             onSettingsChanged = () => {};
+            // Seller Net has its own settings (and no loan product picker)
+            if (isSellerNet()) {
+                setupAccessPickers();
+                setupSellerFields();
+                return;
+            }
             setupLoanPicker();
             setupAccessPickers();
             setupSettingsFields();
