@@ -166,6 +166,7 @@ export async function handle(body, query) {
     if (body.action === 'deleteTransaction') return await changeTransaction_(id, account, body, true);
     if (body.action === 'addTransaction') return await addTransaction_(id, account, body);
     if (body.action === 'saveRentSplit') return await saveRentSplit_(id, account, body);
+    if (body.action === 'saveSplitPayments') return await saveSplitPayments_(id, account, body);
     if (body.action === 'markTransactionPaid') return await settleTransaction_(id, account, body, true);
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
@@ -435,13 +436,18 @@ async function cashFlow_(id, account) {
   const transactions = cumEntries_((await cumTransactionRows_()).rows, id).map(e => {
     if (e.part === 'split') e.note = 'Owed to ' + (names[e.ownerId] || 'the account holder');
     if (e.part === 'receive') e.note = 'From ' + (names[e.person] || 'split');
+    if (e.paymentLabel) e.note += ' · ' + e.paymentLabel;
+    if (e.part === 'receive') e.personName = names[e.person] || '';
     delete e.ownerId;
+    delete e.paymentLabel;
     return e;
   });
   return { ok: true, balance, transactions, splitPeople };
 }
 
 const CUM_LINE_ITEMS = 20;
+// A split person's share can be paid in up to this many set amounts (SPLIT PAYMENT n ...) plus "the rest"
+const CUM_SPLIT_PAYMENTS = 10;
 
 // Every transaction with its row number (its _order). Rows can carry up to 20 line
 // items (RENT ITEM n ...): each has an amount (positive charges, negative credits), can be split with another account
@@ -460,8 +466,12 @@ async function cumTransactionRows_() {
   const col = {
     id: find('ACCOUNT ID'), date: find('DATE'), description: find('DESCRIPTION'), amount: find('AMOUNT'), type: find('TYPE'),
     paid: find('PAID'), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
-    items: [],
+    items: [], payments: [],
   };
+  for (let n = 1; n <= CUM_SPLIT_PAYMENTS; n++) {
+    const p = 'SPLIT PAYMENT ' + n + ' ';
+    col.payments.push({ n, date: find(p + 'DATE'), amount: find(p + 'AMOUNT'), received: find(p + 'RECEIVED'), paid: find(p + 'PAID') });
+  }
   if (!col.id || !col.date || !col.description || !col.amount) throw new Error('Transactions are missing a column');
   for (let n = 1; n <= CUM_LINE_ITEMS; n++) {
     const p = 'RENT ITEM ' + n + ' ';
@@ -488,6 +498,9 @@ async function cumTransactionRows_() {
         separatePaid: yes(c.separatePaid),
       });
     });
+    const payments = col.payments.filter(c => c.amount && text(c.amount) !== '').map(c => ({
+      n: c.n, date: text(c.date), amount: cumNumber_(text(c.amount)), received: yes(c.received), paid: yes(c.paid),
+    }));
     return {
       rowNumber: line._order,
       docId: line._id,
@@ -501,6 +514,7 @@ async function cumTransactionRows_() {
       splitDate: text(col.splitDate),
       splitPaid: yes(col.splitPaid),
       receivePaid: yes(col.receivePaid),
+      payments,
     };
   });
   return { col, rows: out };
@@ -523,6 +537,17 @@ const cumRound_ = n => Math.round(n * 100) / 100;
 //   split    what a SPLIT ID person owes: each of their items x its percent, on SPLIT PERSON DATE (hidden once
 //            SPLIT PERSON PAID)
 //   receive  the same split, coming in to the transaction's account (hidden once RECEIVING PERSON PAID)
+// A split can also come in as several payments (only when one person is split with): SPLIT PAYMENT n has its own date,
+// amount and checkboxes (RECEIVED for the account holder, PAID for the person paying), and "the rest" of the share is the
+// split above (SPLIT PERSON DATE and its checkboxes). Each shows and is checked off on its own (key ...:pN).
+
+// The payments of one person's share, in order, the rest last: [{ n ('rest' for the rest), date, amount, locked }]
+// (locked: already checked off by either person)
+function cumSplitSchedule_(t, total) {
+  const parts = t.payments.map(p => ({ n: p.n, date: p.date, amount: cumRound_(p.amount), locked: p.received || p.paid }));
+  return parts.concat([{ n: 'rest', date: t.splitDate || t.date, amount: cumRound_(total - t.payments.reduce((s, p) => s + p.amount, 0)), locked: t.receivePaid || t.splitPaid }]);
+}
+
 function cumEntries_(list, id) {
   const out = [];
   list.forEach(t => {
@@ -562,17 +587,46 @@ function cumEntries_(list, id) {
       if (!i.splitId || i.splitId === t.accountId || !i.percent) return;
       (people[i.splitId] = people[i.splitId] || []).push(i);
     });
+    const single = Object.keys(people).length === 1;
     Object.keys(people).forEach(person => {
       const items = people[person];
       const total = cumRound_(items.reduce((s, i) => s + i.amount * i.percent, 0));
       const lines = sign => items.map(i => ({ description: (i.description || 'Item ' + i.n) + ' (' + cumRound_(i.percent * 100) + '%)', amount: cumRound_(sign * i.amount * i.percent) }));
-      if (mine && !t.receivePaid) {
-        const e = entry('receive', { date: t.splitDate || t.date, amount: String(total), lines: lines(1), person });
-        e.key += ':' + person;
-        out.push(e);
+      // Paid in several payments: each one on its own, then the rest (the line breakdown only when it's one payment)
+      const schedule = single ? cumSplitSchedule_(t, total) : null;
+      const split = schedule && schedule.length > 1;
+      const label = k => (split ? 'Payment ' + (k + 1) + ' of ' + schedule.length : '');
+      if (mine) {
+        // For the edit menu: the whole share and every payment of it
+        const extra = { person, total, payments: schedule || [] };
+        if (split) {
+          t.payments.forEach((p, k) => {
+            if (p.received) return;
+            const e = entry('receive', Object.assign({ date: p.date, amount: String(cumRound_(p.amount)), payment: p.n, paymentLabel: label(k) }, extra));
+            e.key += ':' + person + ':p' + p.n;
+            out.push(e);
+          });
+        }
+        if (!t.receivePaid && !(split && schedule[schedule.length - 1].amount === 0)) {
+          const rest = split ? schedule[schedule.length - 1].amount : total;
+          const e = entry('receive', Object.assign({ date: t.splitDate || t.date, amount: String(rest), lines: split ? [] : lines(1), paymentLabel: label(schedule ? schedule.length - 1 : 0) }, extra));
+          e.key += ':' + person;
+          out.push(e);
+        }
       }
-      if (person === id && !t.splitPaid) {
-        out.push(entry('split', { date: t.splitDate || t.date, amount: String(-total), lines: lines(-1), ownerId: t.accountId }));
+      if (person === id) {
+        if (split) {
+          t.payments.forEach((p, k) => {
+            if (p.paid) return;
+            const e = entry('split', { date: p.date, amount: String(cumRound_(-p.amount)), payment: p.n, paymentLabel: label(k), ownerId: t.accountId });
+            e.key += ':p' + p.n;
+            out.push(e);
+          });
+        }
+        if (!t.splitPaid && !(split && schedule[schedule.length - 1].amount === 0)) {
+          const rest = split ? schedule[schedule.length - 1].amount : total;
+          out.push(entry('split', { date: t.splitDate || t.date, amount: String(-rest), lines: split ? [] : lines(-1), paymentLabel: label(schedule ? schedule.length - 1 : 0), ownerId: t.accountId }));
+        }
       }
     });
   });
@@ -583,6 +637,7 @@ function cumEntries_(list, id) {
 function cumCells_(col, entry) {
   if (entry.part === 'main') return { date: col.date, paid: col.paid };
   if (entry.part === 'item') { const c = col.items[entry.item - 1]; return { date: c.separateDate, paid: c.separatePaid }; }
+  if (entry.payment) { const c = col.payments[entry.payment - 1]; return { date: c.date, paid: entry.part === 'split' ? c.paid : c.received }; }
   return { date: col.splitDate, paid: entry.part === 'split' ? col.splitPaid : col.receivePaid };
 }
 
@@ -794,6 +849,56 @@ async function saveRentSplit_(id, account, body) {
     if (col.paid) fields[col.paid] = false;
     const made = await add('cumTransactions', fields);
     return { ok: true, row: made.order };
+  });
+}
+
+// The account holder splits one person's share of a transaction into payments, each on its own day and checked off on
+// its own. body: { row, person (10 digits), original (the payments as the edit menu got them, JSON),
+//   payments: [{ date (YYYY-MM-DD), amount }] (set amounts), restDate (YYYY-MM-DD: the day the rest comes in) }
+// Payments already checked off by either person stay as they are; the others are replaced. The rest is whatever the
+// share comes to beyond the set amounts, so it follows the line items if they change later.
+async function saveSplitPayments_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const day = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; };
+  const restDate = day(body.restDate);
+  if (!restDate) return { ok: false, error: 'invalid_date' };
+  const list = Array.isArray(body.payments) ? body.payments : [];
+  const payments = [];
+  for (const p of list) {
+    const date = day((p || {}).date);
+    if (!date) return { ok: false, error: 'invalid_date' };
+    const amount = Math.round(Number(String(p.amount).replace(/[$,\s]/g, '')) * 100) / 100;
+    if (!isFinite(amount) || amount <= 0) return { ok: false, error: 'invalid_payment_amount' };
+    payments.push({ date, amount });
+  }
+  const person = phoneToId_(body.person || '');
+  return withLock('cumTransactions', async () => {
+    const data = await cumTransactionRows_();
+    const col = data.col;
+    if (!col.splitDate || col.payments.some(c => !c.date || !c.amount || !c.received || !c.paid)) throw new Error('Transactions are missing a split payment column');
+    const target = data.rows.filter(r => r.rowNumber === Number(body.row))[0];
+    if (!target || target.accountId !== id) return { ok: false, error: 'not_found' };
+    // The share as it is now must be what the edit menu showed
+    const entry = cumEntries_([target], id).filter(e => e.part === 'receive' && e.person === person)[0];
+    if (!entry) return { ok: false, error: 'not_found' };
+    if (JSON.stringify(entry.payments) !== String(body.original)) return { ok: false, error: 'changed' };
+    const restBefore = entry.payments[entry.payments.length - 1];
+    if (restBefore.locked) return { ok: false, error: 'rest_locked' };
+    const kept = target.payments.filter(p => p.received || p.paid);
+    const free = col.payments.filter(c => !kept.some(p => p.n === c.n));
+    if (payments.length > free.length) return { ok: false, error: 'too_many_payments' };
+    const rest = cumRound_(entry.total - kept.reduce((s, p) => s + p.amount, 0) - payments.reduce((s, p) => s + p.amount, 0));
+    if (rest <= 0) return { ok: false, error: 'payments_too_big' };
+    const fields = { [col.splitDate]: restDate };
+    free.forEach((c, k) => {
+      const p = payments[k];
+      fields[c.date] = p ? p.date : '';
+      fields[c.amount] = p ? p.amount : '';
+      fields[c.received] = p ? false : '';
+      fields[c.paid] = p ? false : '';
+    });
+    await update('cumTransactions', target.docId, fields);
+    return { ok: true };
   });
 }
 

@@ -3,6 +3,7 @@
 //   Rent Split         what it's called, the day the rent is due, who it's split with, the line items, what percent of
 //                      each they pay, whether any item is paid on its own day, and when they pay their share
 // Editing a rent split opens the same questions (without Income / Expense / Rent Split), filled in, with Delete.
+// openSplitPayments: the Edit on money coming in from someone splitting with you: their share in payments on different days.
 import { ensureStepFormStyles } from '/task-form.js';
 import { lockPageScroll } from '/income-editor.js';
 
@@ -136,7 +137,7 @@ export function openCumForm(next) {
     built.open(next);
 }
 
-function build() {
+function ensureCumFormStyles() {
     ensureStepFormStyles();
     if (!document.getElementById('cum-form-css')) {
         const style = document.createElement('style');
@@ -144,6 +145,10 @@ function build() {
         style.textContent = CSS;
         document.head.append(style);
     }
+}
+
+function build() {
+    ensureCumFormStyles();
     const dialog = document.createElement('dialog');
     dialog.className = 'income-dialog task-dialog cum-form-dialog';
     dialog.setAttribute('aria-labelledby', 'cf-title');
@@ -528,6 +533,178 @@ function build() {
             $('#cf-description').value = a.description || '';
             drawChoices();
             show(steps()[0], 0);
+            dialog.showModal();
+            lockPageScroll(dialog);
+        },
+    };
+}
+
+// --- Payments from someone splitting with you ---
+// Their share split into payments, each on its own day (and checked off on its own). The set amounts come first;
+// the last payment is always "the rest", so the payments add up to their share. Payments already checked off are shown
+// but can't be changed.
+const PAY_CSS = `
+.pay-dialog .tf-step { padding-top: 8px; }
+.pay-dialog .cf-pay { display: grid; grid-template-columns: 1fr 140px 40px; gap: 8px; align-items: center; }
+.pay-dialog .cf-pay .cf-rest { font-weight: bold; color: var(--olive); padding-left: 6px; }
+.pay-dialog .cf-pay-label { grid-column: 1 / -1; font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: var(--olive); }
+.pay-dialog .cf-row.is-locked { opacity: 0.7; }
+@media (max-width: 600px) { .pay-dialog .cf-pay { grid-template-columns: 1fr 40px; } .pay-dialog .cf-pay > .cf-money, .pay-dialog .cf-pay > .cf-rest { grid-column: 1; } }
+`;
+let payBuilt = null;
+
+/**
+ * Opens the payments editor. entry: the money-coming-in entry ({ row, person, personName, total, payments:
+ * [{ n, date, amount, locked }] with the rest last }); save(payload) sends { action: 'saveSplitPayments', ... } and must
+ * resolve once saved (or throw an Error whose message is the API's error code); errorText(err) words an error.
+ */
+export function openSplitPayments(next) {
+    if (!payBuilt) payBuilt = buildPayments();
+    payBuilt.open(next);
+}
+
+function buildPayments() {
+    ensureCumFormStyles();
+    if (!document.getElementById('cum-pay-css')) {
+        const style = document.createElement('style');
+        style.id = 'cum-pay-css';
+        style.textContent = PAY_CSS;
+        document.head.append(style);
+    }
+    const dialog = document.createElement('dialog');
+    dialog.className = 'income-dialog task-dialog cum-form-dialog pay-dialog';
+    dialog.setAttribute('aria-labelledby', 'pay-title');
+    dialog.innerHTML = '<form class="income-form" novalidate>'
+        + '<div class="dialog-head"><h2 id="pay-title">Payments</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+        + '<div class="dialog-scroll"><section class="tf-step">'
+        + '<p class="tf-hint" data-pay-hint></p><div class="cf-rows" data-pays></div>'
+        + '<button type="button" class="cf-add-item" data-add-pay>+ Add a payment</button><p class="cf-total" data-pay-total></p>'
+        + '</section></div>'
+        + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+        + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
+        + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Changes</button></div></div>'
+        + '</form>';
+    document.body.append(dialog);
+    const $ = sel => dialog.querySelector(sel);
+    const form = $('form');
+    const message = $('.form-message');
+    let ctx = null;
+    // Payments already checked off: [{ date, amount }]
+    let locked = [];
+    // The payments that can change: [{ date (YYYY-MM-DD), amount (text) }], then the rest: { date }
+    let pays = [];
+    let rest = { date: '' };
+    let saving = false;
+
+    const amountOf = v => Number(String(v).replace(/[$,]/g, '')) || 0;
+    const restAmount = () => Math.round((ctx.entry.total - locked.reduce((s, p) => s + p.amount, 0) - pays.reduce((s, p) => s + amountOf(p.amount), 0)) * 100) / 100;
+    const shortDay = v => { const d = dayOf(v); return d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+    function draw() {
+        const today = isoDate(new Date());
+        const count = locked.length + pays.length + 1;
+        let k = 0;
+        const label = extra => '<span class="cf-pay-label">Payment ' + (++k) + ' of ' + count + (extra || '') + '</span>';
+        $('[data-pays]').innerHTML = locked.map(p => '<div class="cf-row is-locked"><div class="cf-row-head"><span><span class="cf-row-name">' + escapeHtml(shortDay(p.date)) + '</span><br>'
+                + '<span class="cf-row-sub">Already checked off</span></span><span class="cf-row-name">' + dollars(p.amount) + '</span></div></div>').join('')
+            + pays.map((p, i) => '<div class="cf-row cf-pay" data-i="' + i + '">' + label()
+                + '<input type="date" class="cf-pay-date" min="' + today + '" aria-label="Payment ' + k + ' day" value="' + escapeHtml(p.date) + '">'
+                + '<div class="cf-money"><input type="text" class="cf-pay-amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Payment ' + k + ' amount" value="' + escapeHtml(p.amount) + '"></div>'
+                + '<button type="button" class="cf-remove" data-remove aria-label="Remove payment ' + k + '">' + CLOSE_ICON + '</button></div>').join('')
+            + '<div class="cf-row cf-pay" data-rest>' + label(count > 1 ? ' · the rest' : '')
+                + '<input type="date" class="cf-pay-date" min="' + today + '" aria-label="Day the rest comes in" value="' + escapeHtml(rest.date) + '">'
+                + '<span class="cf-rest" data-rest-amount></span></div>';
+        $('[data-add-pay]').hidden = pays.length + locked.length >= 10;
+        drawTotals();
+    }
+    function drawTotals() {
+        const r = restAmount();
+        $('[data-rest-amount]').textContent = dollars(r);
+        $('[data-pay-total]').textContent = r > 0 ? 'Adds up to ' + dollars(ctx.entry.total) : 'The payments come to more than ' + dollars(ctx.entry.total) + '.';
+    }
+    $('[data-pays]').addEventListener('input', e => {
+        message.textContent = '';
+        e.target.classList.remove('is-invalid');
+        const row = e.target.closest('.cf-pay');
+        if (!row) return;
+        const target = row.hasAttribute('data-rest') ? rest : pays[Number(row.dataset.i)];
+        if (e.target.matches('.cf-pay-date')) target.date = e.target.value;
+        if (e.target.matches('.cf-pay-amount')) {
+            const v = cleanMoney(e.target.value, false);
+            if (v !== e.target.value) e.target.value = v;
+            target.amount = v;
+            drawTotals();
+        }
+    });
+    $('[data-pays]').addEventListener('click', e => {
+        const b = e.target.closest('[data-remove]');
+        if (!b) return;
+        pays.splice(Number(b.closest('.cf-pay').dataset.i), 1);
+        message.textContent = '';
+        draw();
+    });
+    // A new payment goes before the rest, starting on the rest's day
+    $('[data-add-pay]').addEventListener('click', () => {
+        pays.push({ date: rest.date, amount: '' });
+        message.textContent = '';
+        draw();
+        const boxes = dialog.querySelectorAll('.cf-pay-amount');
+        boxes[boxes.length - 1].focus();
+    });
+
+    const problem = (el, text) => { if (el) { el.classList.add('is-invalid'); el.focus(); } message.textContent = text; };
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        if (saving) return;
+        const today = isoDate(new Date());
+        const rows = dialog.querySelectorAll('.cf-pay[data-i]');
+        for (let i = 0; i < pays.length; i++) {
+            if (!pays[i].date || pays[i].date < today) return problem(rows[i].querySelector('.cf-pay-date'), 'Please pick a day for each payment (today or later).');
+            if (!(amountOf(pays[i].amount) > 0)) return problem(rows[i].querySelector('.cf-pay-amount'), 'Please enter an amount for each payment.');
+        }
+        if (!rest.date || rest.date < today) return problem($('[data-rest] .cf-pay-date'), 'Please pick the day the rest comes in (today or later).');
+        if (!(restAmount() > 0)) {
+            return problem(rows.length ? rows[rows.length - 1].querySelector('.cf-pay-amount') : null,
+                'The payments come to more than ' + dollars(ctx.entry.total) + '. Lower one so there’s some left for the last payment.');
+        }
+        const btn = $('[data-save]');
+        saving = true;
+        form.querySelectorAll('button, input').forEach(el => { el.disabled = true; });
+        btn.classList.add('is-loading');
+        try {
+            await ctx.save({
+                action: 'saveSplitPayments', row: ctx.entry.row, person: ctx.entry.person, original: JSON.stringify(ctx.entry.payments),
+                payments: pays.map(p => ({ date: p.date, amount: amountOf(p.amount) })), restDate: rest.date,
+            });
+            saving = false;
+            dialog.close();
+        } catch (err) {
+            console.error(err);
+            message.textContent = ctx.errorText(err);
+        } finally {
+            saving = false;
+            form.querySelectorAll('button, input').forEach(el => { el.disabled = false; });
+            btn.classList.remove('is-loading');
+        }
+    });
+    const close = () => { if (!saving) dialog.close(); };
+    dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+    dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+    dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+
+    return {
+        open(next) {
+            ctx = next;
+            const list = next.entry.payments || [];
+            const iso = v => { const d = dayOf(v); return d ? isoDate(d) : ''; };
+            locked = list.slice(0, -1).filter(p => p.locked).map(p => ({ date: p.date, amount: p.amount }));
+            pays = list.slice(0, -1).filter(p => !p.locked).map(p => ({ date: iso(p.date), amount: String(p.amount) }));
+            rest = { date: iso((list[list.length - 1] || {}).date) };
+            const name = next.entry.personName || 'They';
+            $('#pay-title').textContent = 'Payments from ' + name.split(' ')[0];
+            $('[data-pay-hint]').textContent = name + '’s share is ' + dollars(next.entry.total)
+                + '. Split it into payments on different days; each one is checked off on its own. The last payment is whatever is left.';
+            message.textContent = '';
+            draw();
             dialog.showModal();
             lockPageScroll(dialog);
         },

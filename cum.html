@@ -658,7 +658,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
-        import { openCumForm } from '/cum-form.js';
+        import { openCumForm, openSplitPayments } from '/cum-form.js';
 
         const flowEl = document.getElementById('flow');
         const signOutBtn = document.getElementById('sign-out');
@@ -763,6 +763,10 @@
             invalid_split_percent: 'Please enter a split percent between 1 and 100.',
             invalid_item_description: 'Please describe each line.',
             invalid_item_amount: 'Please enter an amount for each line.',
+            invalid_payment_amount: 'Please enter an amount for each payment.',
+            payments_too_big: 'The payments come to more than the share. Lower one so there’s some left for the last payment.',
+            too_many_payments: 'That’s more payments than can be saved (10 at most).',
+            rest_locked: 'The last payment was already checked off, so these payments can’t be changed here.',
         };
         let editor = null;
         function buildEditor() {
@@ -945,6 +949,19 @@
                 return;
             }
             if (!editor) editor = buildEditor();
+            // Money coming in from someone splitting with you: their share in one or more payments
+            if (tx.part === 'receive' && (tx.payments || []).length) {
+                openSplitPayments({
+                    entry: tx,
+                    save: async payload => {
+                        const json = await api(payload);
+                        if (!json.ok) throw new Error(json.error);
+                        await load(currentUser);
+                    },
+                    errorText: err => ERRORS[err.message] || 'We couldn’t save that. Please try again.',
+                });
+                return;
+            }
             if (tx.part === 'receive' || tx.part === 'item') editor.openDate(tx);
             else editor.open(tx);
         });
