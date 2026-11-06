@@ -150,6 +150,7 @@ export async function handle(body, query) {
     if (body.action === 'adminSendForSignature') return await adminSendForSignature_(account, body);
     if (body.action === 'myTasks') return await myTasks_(id);
     if (body.action === 'completeTask') return await completeTask_(id, body);
+    if (body.action === 'adminCreateTask') return await adminCreateTask_(account, body);
     if (body.action === 'signingTask') return await signingTask_(id, body);
     if (body.action === 'fileSigned') return await fileSigned_(id, body);
 
@@ -1504,23 +1505,102 @@ async function addTasks_(tasks) {
   }, { wait: 30000 });
 }
 
-// The signed-in account's open tasks, oldest first
+// When a task is due: its DATE ("11/7/2026" or "11/7/2026 15:30:00", Phoenix time), or null when it has none
+function taskWhen_(r, column) {
+  const m = String(r[column || 'DATE'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!m) return null;
+  return new Date(+m[3], +m[1] - 1, +m[2], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+}
+const isoLocal_ = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+
+// The signed-in account's tasks:
+//   tasks      open ones that are due (their date and time have passed), oldest first: the Current Tasks card
+//   upcoming   open ones that aren't due yet, soonest first
+//   completed  the 25 most recently completed, newest first
+// Each has its title, description, type and when it's due ("YYYY-MM-DDTHH:MM", Phoenix time), plus what its buttons
+// need: who to text (textTo) and the message, or who to call (callTo), each with their name when they have an account.
+const COMPLETED_SHOWN = 25;
 async function myTasks_(id) {
   const data = await taskRows_();
-  return {
-    ok: true,
-    tasks: data.filter(r => phoneToId_(r['ASSIGNED']) === id && String(r['COMPLETED']).toUpperCase() !== 'TRUE').map(r => {
-      // The text message: one line per TEXT LINE column, blank ones kept as empty lines, stopping at the last filled one
+  const names = {};
+  (await rows('accounts')).forEach(a => { names[phoneToId_(a['ACCOUNT ID'])] = fullName_(a); });
+  const person = phone => ({ phone, name: names[phone] || '' });
+  const now = Date.now();
+  const shape = r => {
+    // The text message: MESSAGE as typed (line breaks kept), or for older tasks one line per TEXT LINE column
+    // (blank ones kept as empty lines, stopping at the last filled one)
+    let message = r['MESSAGE'] || '';
+    if (!message) {
       const lines = [];
       for (let n = 1; n <= TEXT_LINE_COUNT; n++) lines.push(r['TEXT LINE ' + n] || '');
       while (lines.length && !lines[lines.length - 1]) lines.pop();
-      return {
-        taskId: r['TASK ID'], section: r['SECTION'], type: r['TYPE'], title: r['TITLE'],
-        description: r['DESCRIPTION'], date: r['DATE'], link: r['LINK'], phone: r['PHONE NUMBER'],
-        message: lines.join('\n'),
-      };
-    }),
+      message = lines.join('\n');
+    }
+    const when = taskWhen_(r);
+    const completed = taskWhen_(r, 'COMPLETED DATE');
+    const type = String(r['TYPE'] || '').toLowerCase();
+    const textTo = String(r['TEXT TO'] || '').split(',').map(phoneToId_).filter(String);
+    const phone = phoneToId_(r['PHONE NUMBER']);
+    return {
+      taskId: r['TASK ID'], section: r['SECTION'], type: r['TYPE'], title: r['TITLE'],
+      description: r['DESCRIPTION'], date: r['DATE'], when: when ? isoLocal_(when) : '', link: r['LINK'], phone: r['PHONE NUMBER'],
+      message,
+      textTo: textTo.length ? textTo.map(person) : (type === 'text' && phone ? [person(phone)] : []),
+      callTo: type === 'call' && phone ? person(phone) : null,
+      completedAt: completed ? isoLocal_(completed) : '',
+    };
   };
+  const mine = data.filter(r => phoneToId_(r['ASSIGNED']) === id);
+  const open = mine.filter(r => String(r['COMPLETED']).toUpperCase() !== 'TRUE');
+  const time = r => { const w = taskWhen_(r); return w ? w.getTime() : 0; };
+  const due = r => time(r) <= now;
+  const doneTime = r => { const w = taskWhen_(r, 'COMPLETED DATE'); return w ? w.getTime() : time(r); };
+  return {
+    ok: true,
+    tasks: open.filter(due).map(shape),
+    upcoming: open.filter(r => !due(r)).sort((a, b) => time(a) - time(b)).map(shape),
+    completed: mine.filter(r => String(r['COMPLETED']).toUpperCase() === 'TRUE')
+      .sort((a, b) => doneTime(b) - doneTime(a)).slice(0, COMPLETED_SHOWN).map(shape),
+  };
+}
+
+// Admins: a new task from the home page's New Task form. body: { type, assignedTo (10 digits), title, description,
+// textTo ([10 digits], Send Text), message (Send Text), callTo (10 digits, Call), date (YYYY-MM-DD), time (HH:MM, 24h) }.
+// It shows on the assigned account's Current Tasks once its date and time (Phoenix) have passed.
+const TASK_TYPES = ['General', 'Send Text', 'Call', 'Errand'];
+async function adminCreateTask_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const type = TASK_TYPES.filter(t => t === String(body.type || ''))[0];
+  if (!type) return { ok: false, error: 'bad_type' };
+  const assigned = phoneToId_(body.assignedTo);
+  if (!(await findAccount_(assigned))) return { ok: false, error: 'bad_assigned' };
+  const title = cleanText_(body.title, 100);
+  if (!title) return { ok: false, error: 'missing_title' };
+  const description = cleanText_(body.description, 300);
+  const d = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const t = String(body.time || '').match(/^(\d{2}):(\d{2})$/);
+  if (!d || !t || +t[1] > 23 || +t[2] > 59) return { ok: false, error: 'bad_when' };
+  const when = new Date(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
+  if (isNaN(when) || when.getMonth() !== +d[2] - 1) return { ok: false, error: 'bad_when' };
+  const task = { 'ASSIGNED': assigned, 'SECTION': type, 'TYPE': type, 'TITLE': title, 'DESCRIPTION': description, 'DATE': when };
+  if (type === 'Send Text') {
+    const phones = [];
+    (Array.isArray(body.textTo) ? body.textTo : []).forEach(p => { const n = phoneToId_(p); if (phones.indexOf(n) < 0) phones.push(n); });
+    if (!phones.length || phones.length > 10 || phones.some(n => n.length !== 10)) return { ok: false, error: 'bad_text_to' };
+    // The message keeps its line breaks (blank lines too); only the very start and end are trimmed
+    const message = String(body.message || '').replace(/\r\n?/g, '\n').replace(/^\s+|\s+$/g, '').slice(0, 2000);
+    if (!message) return { ok: false, error: 'missing_message' };
+    task['TEXT TO'] = phones.join(', ');
+    task['MESSAGE'] = message;
+  }
+  if (type === 'Call') {
+    const phone = phoneToId_(body.callTo);
+    if (phone.length !== 10) return { ok: false, error: 'bad_call_to' };
+    task['PHONE NUMBER'] = phone;
+  }
+  await addTasks_([task]);
+  return { ok: true };
 }
 
 // "Clear this task": marks one of the signed-in account's own tasks COMPLETED. Signature tasks close themselves
@@ -1530,7 +1610,7 @@ async function completeTask_(id, body) {
   const r = data.filter(x => x['TASK ID'] === String(body.taskId || '') && phoneToId_(x['ASSIGNED']) === id)[0];
   if (!r) return { ok: false, error: 'not_found' };
   if (String(r['TYPE']).toUpperCase() === 'SIGNATURE') return { ok: false, error: 'signature_task' };
-  await update('tasks', r.docId, { 'COMPLETED': true });
+  await update('tasks', r.docId, { 'COMPLETED': true, 'COMPLETED DATE': new Date() });
   return { ok: true };
 }
 
@@ -1541,7 +1621,7 @@ async function completeSignatureTasks_(envelopeId, accountIds) {
   for (const r of await taskRows_()) {
     if (String(r['TYPE']).toUpperCase() !== 'SIGNATURE' || r['LINK'] !== link) continue;
     if (ids.indexOf(phoneToId_(r['ASSIGNED'])) < 0 || String(r['COMPLETED']).toUpperCase() === 'TRUE') continue;
-    await update('tasks', r.docId, { 'COMPLETED': true });
+    await update('tasks', r.docId, { 'COMPLETED': true, 'COMPLETED DATE': new Date() });
   }
 }
 

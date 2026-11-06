@@ -380,6 +380,17 @@
             .task-btn:hover:not(:disabled) { background-color: var(--rust); color: var(--cream); transform: translateY(-2px); }
         }
         .task-error { margin-top: 8px; padding-left: 58px; font-size: 0.88rem; font-weight: bold; color: var(--rust); }
+        .page-link-icon.is-call { background: var(--olive); }
+        .page-link-icon.is-errand { background: var(--rust); }
+        .task-new { margin-top: 14px; }
+        /* Upcoming & Completed: the same blocks, without buttons, with when each is due / was done */
+        .task-history { margin-top: 6px; }
+        .task-history[hidden] { display: none; }
+        .task-history .links-section + .links-section { margin-top: 18px; }
+        .task-when { display: block; margin-top: 2px; font-size: 0.84rem; font-weight: bold; color: var(--olive); }
+        .task.is-done { opacity: 0.75; }
+        .task.is-done .page-link-street { text-decoration: line-through; text-decoration-color: rgba(79, 45, 44, 0.45); }
+        .task-history-empty { padding: 10px 4px; font-size: 0.92rem; opacity: 0.7; }
         @media (max-width: 480px) { .task-actions, .task-error { padding-left: 0; } }
 
         /* "Clear this task?" pop-up (centered card on desktop, slides up from the bottom on phones) */
@@ -792,6 +803,14 @@
                     <div class="tasks-empty-sub">You don't have any tasks right now.</div>
                 </div>
             </div>
+            <!-- Admins: add a task for anyone (task-form.js) -->
+            <button type="button" class="page-link page-link-add task-new" id="new-task-btn" hidden>
+                <span class="page-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg></span>
+                <span class="page-link-text"><span class="page-link-street">New Task</span><br><span class="page-link-sub">Add a task for yourself or anyone else</span></span>
+            </button>
+            <!-- Everyone: tasks that aren't due yet, then recently completed ones -->
+            <button type="button" class="view-older" id="task-history-toggle" aria-expanded="false" aria-controls="task-history"><span>Upcoming &amp; Completed</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="task-history" id="task-history" hidden></div>
         </section>
 
         <!-- 2. Buyer Breakdown pages this account is on (only for accounts with BUYER = TRUE) -->
@@ -965,9 +984,10 @@
     </footer>
 
     <script type="module">
-        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK, phoneToId } from '/firebase-config.js';
         import { openNewPropertyForm } from '/new-property.js';
         import { openLoanProductForm } from '/loan-products.js';
+        import { openTaskForm } from '/task-form.js';
 
         const greetingEl = document.getElementById('greeting');
         const signOutBtn = document.getElementById('sign-out');
@@ -1482,12 +1502,15 @@
         }
 
         // The Buyer Breakdown pages that list this account in one of their ACCOUNT ID columns
-        // Current Tasks: this account's open tasks, one group per SECTION. What each task offers
-        // depends on its TYPE: Signature opens the signing page, Text sends a prefilled text and can be cleared,
-        // anything else can only be cleared.
+        // Current Tasks: this account's open tasks that are due, one group per SECTION. What each task offers
+        // depends on its TYPE: Signature opens the signing page; Send Text (and the older Text) opens a prefilled
+        // text, as a group text when there are several people; Call calls the person; General, Errand and anything
+        // else can only be cleared. Clear always asks first and is always the last button.
         const SIGN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
         const TEXT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
         const TASK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/></svg>';
+        const CALL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>';
+        const ERRAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14l-1.5-6.5A2 2 0 0 0 15.6 9H8.4a2 2 0 0 0-1.9 1.5Z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/><path d="M9 9V6h6v3"/></svg>';
         const CLEAR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
         // Documents signed in this browser (set by the signing page the moment the signer finishes), so a Signature
         // task never shows again while the API is still catching up
@@ -1501,8 +1524,53 @@
                 return url.hostname === 'portal.andrewmarth.com' ? url.pathname + url.search : url.href;
             } catch (err) { return link; }
         }
-        function smsHref(phone, message) {
-            return 'sms:' + String(phone || '').replace(/[^\d+]/g, '') + '?&body=' + encodeURIComponent(message || '');
+        // A text to one or more numbers with the message filled in (line breaks, blank lines too, are kept).
+        // iPhones take a group as sms:/open?addresses=a,b; Android and others as sms:a,b
+        function smsHref(phones, message) {
+            const list = [].concat(phones).map(p => String(p || '').replace(/[^\d+]/g, '')).filter(String);
+            const body = encodeURIComponent(String(message || '').replace(/\r\n?/g, '\n'));
+            const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (list.length > 1 && ios) return 'sms:/open?addresses=' + list.join(',') + '&body=' + body;
+            return 'sms:' + list.join(',') + '?&body=' + body;
+        }
+        const personLabel = p => p.name || formatPhone(p.phone);
+        // "Fri, Nov 7 at 3:00 PM" from "2026-11-07T15:00" (no time shown for midnight, which older tasks have)
+        function whenLabel(iso) {
+            const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+            if (!m) return '';
+            const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+            const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+            return +m[4] || +m[5] ? day + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : day;
+        }
+        // One task's look: its icon and its buttons (none in the Upcoming & Completed list)
+        function taskParts(t, withButtons) {
+            const type = String(t.type || '').toLowerCase();
+            const clearBtn = '<button type="button" class="task-btn is-clear" data-clear>' + CLEAR_ICON + '<span>Clear Task</span></button>';
+            let icon = TASK_ICON, iconClass = 'is-task', actions = clearBtn;
+            if (type === 'signature') {
+                icon = SIGN_ICON; iconClass = 'is-sign';
+                actions = '<a class="task-btn" href="' + escapeHtml(taskHref(t.link)) + '">' + SIGN_ICON + '<span>Sign Document</span></a>';
+            } else if (type === 'send text' || type === 'text') {
+                icon = TEXT_ICON; iconClass = 'is-text';
+                const people = t.textTo && t.textTo.length ? t.textTo : [{ phone: t.phone, name: '' }];
+                const label = people.length > 1 ? 'Group Text (' + people.length + ')' : (people[0].name ? 'Text ' + people[0].name : 'Send Text');
+                actions = '<a class="task-btn" href="' + escapeHtml(smsHref(people.map(p => p.phone), t.message)) + '">' + TEXT_ICON + '<span>' + escapeHtml(label) + '</span></a>' + clearBtn;
+            } else if (type === 'call') {
+                icon = CALL_ICON; iconClass = 'is-call';
+                actions = (t.callTo ? '<a class="task-btn" href="tel:' + escapeHtml(t.callTo.phone) + '">' + CALL_ICON + '<span>Call ' + escapeHtml(personLabel(t.callTo)) + '</span></a>' : '') + clearBtn;
+            } else if (type === 'errand') {
+                icon = ERRAND_ICON; iconClass = 'is-errand';
+            }
+            return { icon, iconClass, actions: withButtons ? actions : '' };
+        }
+        function taskItem(t, { withButtons, note, done }) {
+            const part = taskParts(t, withButtons);
+            return '<li class="task' + (done ? ' is-done' : '') + '" data-task-id="' + escapeHtml(t.taskId) + '"><div class="task-head">'
+                + '<span class="page-link-icon ' + part.iconClass + '">' + part.icon + '</span>'
+                + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(t.title || 'Task') + '</span>'
+                + (t.description ? '<br><span class="page-link-sub">' + escapeHtml(t.description) + '</span>' : '')
+                + (note ? '<span class="task-when">' + escapeHtml(note) + '</span>' : '') + '</span>'
+                + '</div>' + (part.actions ? '<div class="task-actions">' + part.actions + '</div>' : '') + '</li>';
         }
         function renderTasks(tasks) {
             const signed = signedEnvelopes();
@@ -1520,25 +1588,38 @@
                 if (!group) sections.push(group = { name, tasks: [] });
                 group.tasks.push(t);
             });
-            const clearBtn = '<button type="button" class="task-btn is-clear" data-clear>' + CLEAR_ICON + '<span>Clear Task</span></button>';
             listEl.innerHTML = sections.map(g => '<div class="links-section"><h3 class="links-section-title">' + escapeHtml(g.name) + '</h3>'
-                + '<ul class="tasks">' + g.tasks.map(t => {
-                    const type = String(t.type || '').toLowerCase();
-                    let icon = TASK_ICON, iconClass = 'is-task', actions = clearBtn;
-                    if (type === 'signature') {
-                        icon = SIGN_ICON; iconClass = 'is-sign';
-                        actions = '<a class="task-btn" href="' + escapeHtml(taskHref(t.link)) + '">' + SIGN_ICON + '<span>Sign Document</span></a>';
-                    } else if (type === 'text') {
-                        icon = TEXT_ICON; iconClass = 'is-text';
-                        actions = '<a class="task-btn" href="' + escapeHtml(smsHref(t.phone, t.message)) + '">' + TEXT_ICON + '<span>Send Text</span></a>' + clearBtn;
-                    }
-                    return '<li class="task" data-task-id="' + escapeHtml(t.taskId) + '"><div class="task-head">'
-                        + '<span class="page-link-icon ' + iconClass + '">' + icon + '</span>'
-                        + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(t.title || 'Task') + '</span>'
-                        + (t.description ? '<br><span class="page-link-sub">' + escapeHtml(t.description) + '</span>' : '') + '</span>'
-                        + '</div><div class="task-actions">' + actions + '</div></li>';
-                }).join('') + '</ul></div>').join('');
+                + '<ul class="tasks">' + g.tasks.map(t => taskItem(t, { withButtons: true })).join('') + '</ul></div>').join('');
         }
+        // Upcoming & Completed: tasks not due yet (soonest first), then recently completed ones (newest first)
+        function renderTaskHistory(upcoming, completed) {
+            const section = (title, list, empty, note, done) => '<div class="links-section"><h3 class="links-section-title">' + title + '</h3>'
+                + (list.length ? '<ul class="tasks">' + list.map(t => taskItem(t, { note: note(t), done })).join('') + '</ul>'
+                    : '<p class="task-history-empty">' + empty + '</p>') + '</div>';
+            document.getElementById('task-history').innerHTML =
+                section('Upcoming', upcoming, 'Nothing coming up.', t => (t.when ? 'Due ' + whenLabel(t.when) : ''), false)
+                + section('Completed', completed, 'Nothing completed yet.', t => (t.completedAt ? 'Done ' + whenLabel(t.completedAt) : ''), true);
+        }
+        const historyToggle = document.getElementById('task-history-toggle');
+        historyToggle.addEventListener('click', () => {
+            const box = document.getElementById('task-history');
+            const open = box.hidden;
+            box.hidden = !open;
+            historyToggle.setAttribute('aria-expanded', String(open));
+        });
+        // Admins: New Task opens the pop-up; once saved, the lists load again
+        document.getElementById('new-task-btn').addEventListener('click', () => {
+            if (!adminData || !currentUser) return;
+            openTaskForm({
+                me: phoneToId(currentUser.phoneNumber),
+                accounts: adminData.accounts,
+                submit: async answers => {
+                    const json = await api({ action: 'adminCreateTask', ...answers });
+                    if (!json.ok) throw new Error(json.error || 'Request failed');
+                    await loadTasks(currentUser);
+                },
+            });
+        });
         // "Clear Task": asks first, then marks it COMPLETED and takes it off the card
         const clearDialog = document.getElementById('clear-dialog');
         let clearPending = null;
@@ -1584,6 +1665,7 @@
                 return;
             }
             li.classList.add('is-leaving');
+            if (currentUser) loadTaskHistory(currentUser);
             setTimeout(() => {
                 const section = li.closest('.links-section');
                 li.remove();
@@ -1606,11 +1688,21 @@
                     body: JSON.stringify({ idToken, action: 'myTasks' }),
                 });
                 const data = await res.json();
-                if (data.ok) renderTasks(data.tasks || []);
+                if (data.ok) {
+                    renderTasks(data.tasks || []);
+                    renderTaskHistory(data.upcoming || [], data.completed || []);
+                }
             } catch (err) {
                 // The card just stays "All caught up"
                 console.error(err);
             }
+        }
+        // Just the Upcoming & Completed list (after a task is cleared)
+        async function loadTaskHistory(user) {
+            try {
+                const data = await api({ action: 'myTasks' });
+                if (data.ok) renderTaskHistory(data.upcoming || [], data.completed || []);
+            } catch (err) { console.error(err); }
         }
 
         async function loadPages(user) {
@@ -1635,6 +1727,7 @@
                     if (data.buyers) {
                         adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
                         document.getElementById('signatures-card').hidden = false;
+                        document.getElementById('new-task-btn').hidden = false;
                         renderNewClient();
                         renderBuyers(data.buyers, data.buyerPages || []);
                         renderSellers(data.sellers || [], data.sellerPages || []);
@@ -1779,6 +1872,14 @@
                 { taskId: '1', section: 'Signature', type: 'Signature', title: 'Signature Request', description: 'You have been requested to sign Purchase Contract - 1234 E Sample St', link: 'https://portal.andrewmarth.com/sign?id=envelope_demo' },
                 { taskId: '2', section: 'Clients', type: 'Text', title: 'Send Confirmation Text', description: 'Jordan Sample requested a buyer breakdown for 1234 E Sample St', phone: '4805550123', message: 'Hey Jordan\n\nI got your request\n\nAndrew Marth' },
                 { taskId: '3', section: 'Clients', type: 'Make Breakdown', title: 'Make Breakdown For Jordan Sample', description: 'Jordan Sample requested a buyer breakdown for 1234 E Sample St' },
+                { taskId: '4', section: 'Send Text', type: 'Send Text', title: 'Check in with the buyers', description: 'Ask how the showings went', textTo: [{ phone: '4805550123', name: 'Jordan Sample' }, { phone: '4805550456', name: 'Casey Example' }], message: 'Hi both!\n\nHow did the showings go?\nAndrew' },
+                { taskId: '5', section: 'Call', type: 'Call', title: 'Call the lender', description: 'Rate lock for 1234 E Sample St', callTo: { phone: '4805550789', name: 'Riley Lender' } },
+                { taskId: '6', section: 'Errand', type: 'Errand', title: 'Drop off keys', description: 'At the title office' },
+            ]);
+            renderTaskHistory([
+                { taskId: '7', type: 'General', title: 'Order the appraisal', description: 'For 1234 E Sample St', when: '2026-11-07T15:00' },
+            ], [
+                { taskId: '8', type: 'Call', title: 'Call the seller', description: 'About the repair request', completedAt: '2026-11-04T10:30' },
             ]);
             document.getElementById('breakdowns-card').hidden = false;
             document.getElementById('cash-flow-card').hidden = false;

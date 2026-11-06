@@ -105,8 +105,19 @@ function loadPlaces() {
     return placesPromise;
 }
 
+// The dropdowns' styles, for other pop-ups that use multiPicker / singlePicker (their dialog needs the property-dialog class)
+export function ensurePickerStyles() {
+    ensureDialogStyles();
+    if (document.getElementById('new-property-css')) return;
+    const style = document.createElement('style');
+    style.id = 'new-property-css';
+    style.textContent = CSS;
+    document.head.append(style);
+}
+
 // A dropdown of checkboxes. items() is re-read each time it opens (choices can depend on another dropdown).
-function multiPicker(mount, { labelId, placeholder, items, canAdd, onChange }) {
+// Each item is { id, name } (shown with its phone number underneath), or { id, name, sub } to show sub there instead.
+export function multiPicker(mount, { labelId, placeholder, items, canAdd, onChange }) {
     mount.innerHTML = '<div class="mp"><button type="button" class="mp-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="' + labelId + '"><span></span></button>'
         + '<div class="mp-list" role="listbox" aria-multiselectable="true"></div></div>';
     const root = mount.firstElementChild;
@@ -127,7 +138,7 @@ function multiPicker(mount, { labelId, placeholder, items, canAdd, onChange }) {
             const off = !on && !canAdd();
             return '<div class="mp-option' + (on ? ' is-on' : '') + (off ? ' is-disabled' : '') + '" role="option" aria-selected="' + on + '" data-id="' + escapeHtml(a.id) + '">'
                 + '<span class="mp-box">' + CHECK_ICON + '</span><span class="mp-text"><span class="mp-main">' + escapeHtml(nameOf(a)) + '</span>'
-                + (a.name ? '<span class="mp-sub">' + escapeHtml(formatPhone(a.id)) + '</span>' : '') + '</span></div>';
+                + ((a.sub !== undefined ? a.sub : a.name ? formatPhone(a.id) : '') ? '<span class="mp-sub">' + escapeHtml(a.sub !== undefined ? a.sub : formatPhone(a.id)) + '</span>' : '') + '</span></div>';
         }).join('') : '<p class="mp-empty">No one else to add.</p>';
         list.querySelectorAll('.mp-option').forEach(o => {
             o.addEventListener('pointerdown', e => e.preventDefault());
@@ -160,8 +171,9 @@ function multiPicker(mount, { labelId, placeholder, items, canAdd, onChange }) {
     };
 }
 
-// One choice from a list, drawn like the portal's other dropdowns (icon, name, small text, check on the choice)
-function singlePicker(mount, { labelId, placeholder, icon }) {
+// One choice from a list, drawn like the portal's other dropdowns (icon, name, small text, check on the choice).
+// onChange(value) runs after each pick.
+export function singlePicker(mount, { labelId, placeholder, icon, onChange }) {
     mount.innerHTML = '<div class="mp"><button type="button" class="mp-btn sp-btn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="' + labelId + '"><span class="mp-text"><span class="mp-main"></span><span class="mp-sub"></span></span></button>'
         + '<div class="mp-list" role="listbox"></div></div>';
     const root = mount.firstElementChild;
@@ -185,7 +197,7 @@ function singlePicker(mount, { labelId, placeholder, icon }) {
             + CHECK_ICON.replace('<svg ', '<svg class="sp-check" ') + '</div>').join('');
         list.querySelectorAll('.sp-option').forEach(o => {
             o.addEventListener('pointerdown', e => e.preventDefault());
-            o.addEventListener('click', () => { chosen = o.dataset.value; close(); label(); button.classList.remove('is-invalid'); button.focus(); });
+            o.addEventListener('click', () => { chosen = o.dataset.value; close(); label(); button.classList.remove('is-invalid'); button.focus(); if (onChange) onChange(chosen); });
         });
     };
     const close = () => { root.classList.remove('is-open'); button.setAttribute('aria-expanded', 'false'); };
@@ -200,6 +212,7 @@ function singlePicker(mount, { labelId, placeholder, icon }) {
         button,
         value: () => chosen,
         setItems(next) { items = next; chosen = ''; close(); label(); },
+        setValue(value) { chosen = items.some(i => i.value === value) ? value : ''; label(); },
         reset() { chosen = ''; close(); label(); },
     };
 }
@@ -270,13 +283,7 @@ export function openNewPropertyForm({ client, buyers, accounts, loanProducts, su
 }
 
 function build() {
-    ensureDialogStyles();
-    if (!document.getElementById('new-property-css')) {
-        const style = document.createElement('style');
-        style.id = 'new-property-css';
-        style.textContent = CSS;
-        document.head.append(style);
-    }
+    ensurePickerStyles();
     const dialog = document.createElement('dialog');
     dialog.className = 'income-dialog property-dialog';
     dialog.setAttribute('aria-labelledby', 'property-dialog-title');

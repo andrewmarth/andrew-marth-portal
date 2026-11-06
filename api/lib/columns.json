@@ -706,7 +706,10 @@
   "STREET ADDRESS",
   "CITY",
   "STATE",
-  "ZIP"
+  "ZIP",
+  "MESSAGE",
+  "TEXT TO",
+  "COMPLETED DATE"
  ],
  "signatures": [
   "ENVELOPE ID",
