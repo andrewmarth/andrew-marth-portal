@@ -729,8 +729,9 @@
                 month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + '">' + dateBox(t.when)
                     + '<span class="flow-text">' + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
-                    // The transaction itself, or the date of a split coming in; separate items and what you owe are managed elsewhere
-                    + (t.part === 'main' || t.part === 'receive' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
+                    // The transaction itself, or just the date of a split coming in or a line paid on its own day; what you owe
+                    // someone else is managed by them
+                    + (t.part === 'main' || t.part === 'receive' || t.part === 'item' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
                     + '</span></span>'
                     + '<span class="flow-balance">' + money.format(running) + '</span></li>');
             });
@@ -897,10 +898,12 @@
                 openDate(next) {
                     dateOnly = true;
                     tx = next;
-                    $('#tx-title').textContent = 'Edit Split Date';
+                    $('#tx-title').textContent = tx.part === 'item' ? 'Edit Date' : 'Edit Split Date';
                     $('#tx-date').value = isoOf(tx.date);
                     $('.tx-amount-field').style.display = 'none';
-                    $('.tx-date-note').textContent = 'This changes the date for you and for the person paying the split.';
+                    $('.tx-date-note').textContent = tx.part === 'item'
+                        ? 'This changes the day “' + (tx.description || 'this line') + '” is paid. The rest of ' + (tx.note || 'the rent') + ' stays on its own date.'
+                        : 'This changes the date for you and for the person paying the split.';
                     show();
                 },
             };
@@ -942,7 +945,7 @@
                 return;
             }
             if (!editor) editor = buildEditor();
-            if (tx.part === 'receive') editor.openDate(tx);
+            if (tx.part === 'receive' || tx.part === 'item') editor.openDate(tx);
             else editor.open(tx);
         });
 
