@@ -151,6 +151,7 @@ export async function handle(body, query) {
     if (body.action === 'myTasks') return await myTasks_(id);
     if (body.action === 'completeTask') return await completeTask_(id, body);
     if (body.action === 'adminCreateTask') return await adminCreateTask_(account, body);
+    if (body.action === 'adminOpenTasks') return await adminOpenTasks_(account);
     if (body.action === 'signingTask') return await signingTask_(id, body);
     if (body.action === 'fileSigned') return await fileSigned_(id, body);
 
@@ -1514,15 +1515,25 @@ function taskWhen_(r, column) {
 const isoLocal_ = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
   + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 
+// What a contingent task is waiting on: the open task its CONTINGENT names (that task, or null once it's completed
+// or gone). Tasks can wait on tasks that are themselves waiting, so a chain shows one task at a time.
+function waitingOn_(r, byId) {
+  const before = byId[String(r['CONTINGENT'] || '').trim()];
+  return before && String(before['COMPLETED']).toUpperCase() !== 'TRUE' ? before : null;
+}
+
 // The signed-in account's tasks:
-//   tasks      open ones that are due (their date and time have passed), oldest first: the Current Tasks card
-//   upcoming   open ones that aren't due yet, soonest first
+//   tasks      open ones that are due (their date and time have passed, and any task they wait on is completed),
+//              oldest first: the Current Tasks card
+//   upcoming   open ones that aren't due yet, soonest first (waitingOn says which task a contingent one waits for)
 //   completed  the 25 most recently completed, newest first
 // Each has its title, description, type and when it's due ("YYYY-MM-DDTHH:MM", Phoenix time), plus what its buttons
 // need: who to text (textTo) and the message, or who to call (callTo), each with their name when they have an account.
 const COMPLETED_SHOWN = 25;
 async function myTasks_(id) {
   const data = await taskRows_();
+  const byId = {};
+  data.forEach(r => { byId[r['TASK ID']] = r; });
   const names = {};
   (await rows('accounts')).forEach(a => { names[phoneToId_(a['ACCOUNT ID'])] = fullName_(a); });
   const person = phone => ({ phone, name: names[phone] || '' });
@@ -1549,12 +1560,13 @@ async function myTasks_(id) {
       textTo: textTo.length ? textTo.map(person) : (type === 'text' && phone ? [person(phone)] : []),
       callTo: type === 'call' && phone ? person(phone) : null,
       completedAt: completed ? isoLocal_(completed) : '',
+      waitingOn: (w => (w ? { taskId: w['TASK ID'], title: w['TITLE'] } : null))(waitingOn_(r, byId)),
     };
   };
   const mine = data.filter(r => phoneToId_(r['ASSIGNED']) === id);
   const open = mine.filter(r => String(r['COMPLETED']).toUpperCase() !== 'TRUE');
   const time = r => { const w = taskWhen_(r); return w ? w.getTime() : 0; };
-  const due = r => time(r) <= now;
+  const due = r => time(r) <= now && !waitingOn_(r, byId);
   const doneTime = r => { const w = taskWhen_(r, 'COMPLETED DATE'); return w ? w.getTime() : time(r); };
   return {
     ok: true,
@@ -1566,8 +1578,9 @@ async function myTasks_(id) {
 }
 
 // Admins: a new task from the home page's New Task form. body: { type, assignedTo (10 digits), title, description,
-// textTo ([10 digits], Send Text), message (Send Text), callTo (10 digits, Call), date (YYYY-MM-DD), time (HH:MM, 24h) }.
-// It shows on the assigned account's Current Tasks once its date and time (Phoenix) have passed.
+// textTo ([10 digits], Send Text), message (Send Text), callTo (10 digits, Call), date (YYYY-MM-DD), time (HH:MM, 24h),
+// contingentOn (a TASK ID, optional) }. It shows on the assigned account's Current Tasks once its date and time
+// (Phoenix) have passed and, if it's contingent, once that task is completed.
 const TASK_TYPES = ['General', 'Send Text', 'Call', 'Errand'];
 async function adminCreateTask_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
@@ -1584,6 +1597,11 @@ async function adminCreateTask_(account, body) {
   const when = new Date(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
   if (isNaN(when) || when.getMonth() !== +d[2] - 1) return { ok: false, error: 'bad_when' };
   const task = { 'ASSIGNED': assigned, 'SECTION': type, 'TYPE': type, 'TITLE': title, 'DESCRIPTION': description, 'DATE': when };
+  if (body.contingentOn) {
+    const before = (await taskRows_()).filter(r => r['TASK ID'] === String(body.contingentOn))[0];
+    if (!before || String(before['COMPLETED']).toUpperCase() === 'TRUE') return { ok: false, error: 'bad_contingent' };
+    task['CONTINGENT'] = before['TASK ID'];
+  }
   if (type === 'Send Text') {
     const phones = [];
     (Array.isArray(body.textTo) ? body.textTo : []).forEach(p => { const n = phoneToId_(p); if (phones.indexOf(n) < 0) phones.push(n); });
@@ -1601,6 +1619,30 @@ async function adminCreateTask_(account, body) {
   }
   await addTasks_([task]);
   return { ok: true };
+}
+
+// Admins: every task that isn't completed yet (anyone's), for the New Task form's "Contingent" question:
+// [{ taskId, title, description, assignedTo, assignedName, when, waitingOn }], soonest first
+async function adminOpenTasks_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const data = await taskRows_();
+  const byId = {};
+  data.forEach(r => { byId[r['TASK ID']] = r; });
+  const names = {};
+  (await rows('accounts')).forEach(a => { names[phoneToId_(a['ACCOUNT ID'])] = fullName_(a); });
+  const time = r => { const w = taskWhen_(r); return w ? w.getTime() : 0; };
+  return {
+    ok: true,
+    tasks: data.filter(r => String(r['COMPLETED']).toUpperCase() !== 'TRUE').sort((a, b) => time(a) - time(b)).map(r => {
+      const w = taskWhen_(r);
+      const waiting = waitingOn_(r, byId);
+      const assigned = phoneToId_(r['ASSIGNED']);
+      return {
+        taskId: r['TASK ID'], title: r['TITLE'], description: r['DESCRIPTION'], assignedTo: assigned, assignedName: names[assigned] || '',
+        when: w ? isoLocal_(w) : '', waitingOn: waiting ? { taskId: waiting['TASK ID'], title: waiting['TITLE'] } : null,
+      };
+    }),
+  };
 }
 
 // "Clear this task": marks one of the signed-in account's own tasks COMPLETED. Signature tasks close themselves

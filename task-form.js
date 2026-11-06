@@ -1,6 +1,7 @@
 // "New Task" pop-up for the home page's Current Tasks card (admins). One question at a time, with Back / Next:
 // the task's type, who it's for, its title and description, who to text and the message (Send Text) or who to call
-// (Call), and when it should show up: immediately, or a day and time in the future. The answers go to submit(answers).
+// (Call), and when it should show up: immediately, a day and time in the future, or once another task (still open) is
+// completed ("Contingent"). The answers go to submit(answers).
 // Uses the same pop-up as the other forms: a card on wide screens, a swipe-up sheet on phones.
 import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
 
@@ -59,6 +60,9 @@ const CSS = `
 .task-dialog .tf-person[aria-pressed="true"] .tf-check { background: var(--olive); border-color: var(--olive); }
 .task-dialog .tf-person[aria-pressed="true"] .tf-check svg { opacity: 1; }
 @media (hover: hover) { .task-dialog .tf-person:hover, .task-dialog .tf-choice[aria-pressed="false"]:hover { border-color: var(--navy); } }
+.task-dialog .tf-choices.is-stacked { grid-template-columns: 1fr; }
+.task-dialog .tf-person-name.is-wrapping { white-space: normal; }
+.task-dialog .tf-empty { padding: 14px 4px; font-size: 0.95rem; opacity: 0.75; }
 /* Day: a calendar */
 .task-dialog .tf-cal { max-width: 360px; padding: 12px; background: var(--white); border: 2px solid var(--navy); border-radius: 20px; box-shadow: 4px 4px 0 var(--navy); }
 .task-dialog .tf-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -108,7 +112,9 @@ const TYPES = [
 const WHENS = [
     { value: 'now', main: 'Immediately', sub: 'Shows up right away', icon: ICON('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>') },
     { value: 'future', main: 'In the future', sub: 'Pick a day and time', icon: ICON('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>') },
+    { value: 'contingent', main: 'Contingent', sub: 'Once another task is completed', icon: ICON('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>') },
 ];
+const TASK_ICON = ICON('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 11h6M9 15h4"/>');
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const formatPhone = id => (id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id);
@@ -138,7 +144,9 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
         '<div class="tf-list is-multi" data-list="textTo" role="group" aria-labelledby="tf-q-textTo"></div>' + phoneBox('tf-text-other', 'Other phone number'))
     + step('message', 'What should the text say?', 'Line breaks and blank lines are kept.', '<textarea id="tf-message" rows="9" maxlength="2000" aria-labelledby="tf-q-message"></textarea>')
     + step('callTo', 'Who should be called?', '', '<div class="tf-list" data-list="callTo" role="group" aria-labelledby="tf-q-callTo"></div>' + phoneBox('tf-call-other', 'Phone number'))
-    + step('when', 'When should it show up?', '', '<div class="tf-choices" data-choices="when">' + WHENS.map(w => choice(w.value, w.main, w.sub, w.icon)).join('') + '</div>')
+    + step('when', 'When should it show up?', '', '<div class="tf-choices is-stacked" data-choices="when">' + WHENS.map(w => choice(w.value, w.main, w.sub, w.icon)).join('') + '</div>')
+    + step('contingent', 'Which task has to be completed first?', 'It shows up once that task is completed.',
+        '<div class="tf-list" data-tasks role="group" aria-labelledby="tf-q-contingent"></div>')
     + step('date', 'Which day?', '', '<div class="tf-cal"><div class="tf-cal-head">'
         + '<button type="button" class="tf-cal-nav" data-cal-prev aria-label="Previous month">' + PREV + '</button>'
         + '<span class="tf-cal-title" data-cal-title></span>'
@@ -155,11 +163,12 @@ let built = null;
 
 /**
  * Opens the New Task pop-up. me: the signed-in admin's 10-digit ID; accounts: [{ id, name }] (everyone);
- * submit(answers) must resolve once the task is saved (or throw).
+ * openTasks(): resolves to the tasks not completed yet ([{ taskId, title, assignedTo, assignedName, when, waitingOn }]),
+ * for the "Contingent" question; submit(answers) must resolve once the task is saved (or throw).
  */
-export function openTaskForm({ me, accounts, submit }) {
+export function openTaskForm({ me, accounts, openTasks, submit }) {
     if (!built) built = build();
-    built.open({ me, accounts, submit });
+    built.open({ me, accounts, openTasks, submit });
 }
 
 function build() {
@@ -190,7 +199,8 @@ function build() {
 
     // Which questions are asked, in order (the Text / Call / day and time questions only when they apply)
     const steps = () => ['type', 'assigned', 'title', 'description']
-        .concat(a.type === 'Send Text' ? ['textTo', 'message'] : [], a.type === 'Call' ? ['callTo'] : [], ['when'], a.when === 'future' ? ['date', 'time'] : []);
+        .concat(a.type === 'Send Text' ? ['textTo', 'message'] : [], a.type === 'Call' ? ['callTo'] : [], ['when'],
+            a.when === 'future' ? ['date', 'time'] : [], a.when === 'contingent' ? ['contingent'] : []);
 
     // --- Big choices: tap to pick; a pick moves on to the next question ---
     dialog.querySelectorAll('[data-choices]').forEach(group => group.addEventListener('click', e => {
@@ -248,6 +258,39 @@ function build() {
         const d = digitsOf(input.value).replace(/^1(?=\d{10})/, '').slice(0, 10);
         input.value = d.length > 6 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : d.length > 3 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : d;
     }));
+
+    // --- Contingent: which open task this one waits for (it can be one that's waiting on another task itself) ---
+    let openTasks = null;
+    const shortWhen = iso => {
+        const d = new Date(iso);
+        return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + timeLabel(d.getHours() * 60 + d.getMinutes());
+    };
+    function drawTasks() {
+        const box = $('[data-tasks]');
+        if (openTasks === null) { box.innerHTML = '<p class="tf-empty">Loading tasks…</p>'; return; }
+        if (openTasks === false) { box.innerHTML = '<p class="tf-empty">We couldn’t load the tasks. Go back and try again.</p>'; return; }
+        if (!openTasks.length) { box.innerHTML = '<p class="tf-empty">There are no open tasks to wait on.</p>'; return; }
+        box.innerHTML = openTasks.map(t => {
+            const who = t.assignedTo === ctx.me ? 'Me' : t.assignedName || formatPhone(t.assignedTo || '');
+            const status = t.waitingOn ? 'Waiting on “' + t.waitingOn.title + '”'
+                : t.when && new Date(t.when) > new Date() ? 'Shows ' + shortWhen(t.when) : 'Current';
+            return person(t.taskId, t.title, who + ' · ' + status, TASK_ICON).replace('class="tf-person-name"', 'class="tf-person-name is-wrapping"');
+        }).join('');
+        box.querySelectorAll('.tf-person').forEach(b => b.setAttribute('aria-pressed', String(a.contingentOn === b.dataset.value)));
+    }
+    function loadOpenTasks() {
+        openTasks = null;
+        Promise.resolve(ctx.openTasks ? ctx.openTasks() : [])
+            .then(list => { openTasks = list || []; }, err => { console.error(err); openTasks = false; })
+            .then(() => { if (current === 'contingent') drawTasks(); });
+    }
+    $('[data-tasks]').addEventListener('click', e => {
+        const b = e.target.closest('.tf-person');
+        if (!b) return;
+        a.contingentOn = b.dataset.value;
+        message.textContent = '';
+        drawTasks();
+    });
 
     // --- Day: a calendar (today on); picking a day moves on to the time ---
     let shown = new Date();
@@ -343,6 +386,7 @@ function build() {
         if (id === 'when') return a.when ? true : problem(null, 'Please choose when it should show up.');
         if (id === 'date') return a.date ? true : problem(null, 'Please pick a day.');
         if (id === 'time') return a.time !== undefined ? true : problem(null, 'Please pick a time.');
+        if (id === 'contingent') return a.contingentOn ? true : problem(null, 'Please choose the task that has to be completed first.');
         return true;
     }
     function show(id, direction) {
@@ -357,6 +401,7 @@ function build() {
         $('[data-bar]').style.width = Math.round((n / list.length) * 100) + '%';
         if (id === 'date') { shown = new Date((a.date || new Date()).getFullYear(), (a.date || new Date()).getMonth(), 1); drawCalendar(); }
         if (id === 'time') drawTimes();
+        if (id === 'contingent') { if (openTasks === false) loadOpenTasks(); drawTasks(); }
         showFooter();
         scroller.scrollTop = 0;
         if (id === 'time') scrollTimes();
@@ -392,7 +437,7 @@ function build() {
     form.addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('is-invalid'); message.textContent = ''; });
 
     async function save() {
-        // Immediately: now (it shows on their Current Tasks right away)
+        // Immediately or Contingent: now (it shows on their Current Tasks right away, or once the other task is completed)
         const when = a.when === 'future' ? new Date(a.date.getFullYear(), a.date.getMonth(), a.date.getDate(), 0, a.time) : new Date();
         const answers = {
             type: a.type, assignedTo: a.assigned, title: a.title, description: a.description || '',
@@ -403,6 +448,7 @@ function build() {
             answers.message = a.message;
         }
         if (a.type === 'Call') answers.callTo = a.callTo === 'other' ? digitsOf($('#tf-call-other').value) : a.callTo;
+        if (a.when === 'contingent') answers.contingentOn = a.contingentOn;
         saving = true;
         nextBtn.disabled = true;
         nextBtn.classList.add('is-loading');
@@ -433,6 +479,7 @@ function build() {
             message.textContent = '';
             // Starts on the type, for "Me", showing up immediately
             a = { assigned: ctx.me, when: 'now' };
+            loadOpenTasks();
             drawLists();
             drawChoices();
             drawPicks();

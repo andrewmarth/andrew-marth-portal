@@ -1597,7 +1597,8 @@
                 + (list.length ? '<ul class="tasks">' + list.map(t => taskItem(t, { note: note(t), done })).join('') + '</ul>'
                     : '<p class="task-history-empty">' + empty + '</p>') + '</div>';
             document.getElementById('task-history').innerHTML =
-                section('Upcoming', upcoming, 'Nothing coming up.', t => (t.when ? 'Due ' + whenLabel(t.when) : ''), false)
+                section('Upcoming', upcoming, 'Nothing coming up.', t => (t.waitingOn ? 'Waiting on “' + t.waitingOn.title + '”'
+                    + (t.when && new Date(t.when) > new Date() ? ' · Due ' + whenLabel(t.when) : '') : t.when ? 'Due ' + whenLabel(t.when) : ''), false)
                 + section('Completed', completed, 'Nothing completed yet.', t => (t.completedAt ? 'Done ' + whenLabel(t.completedAt) : ''), true);
         }
         const historyToggle = document.getElementById('task-history-toggle');
@@ -1613,6 +1614,12 @@
             openTaskForm({
                 me: phoneToId(currentUser.phoneNumber),
                 accounts: adminData.accounts,
+                // For the "Contingent" question: every task not completed yet
+                openTasks: async () => {
+                    const json = await api({ action: 'adminOpenTasks' });
+                    if (!json.ok || !Array.isArray(json.tasks)) throw new Error(json.error || 'Request failed');
+                    return json.tasks;
+                },
                 submit: async answers => {
                     const json = await api({ action: 'adminCreateTask', ...answers });
                     if (!json.ok) throw new Error(json.error || 'Request failed');
