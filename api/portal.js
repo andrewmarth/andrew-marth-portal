@@ -165,6 +165,7 @@ export async function handle(body, query) {
     if (body.action === 'updateTransaction') return await changeTransaction_(id, account, body, false);
     if (body.action === 'deleteTransaction') return await changeTransaction_(id, account, body, true);
     if (body.action === 'addTransaction') return await addTransaction_(id, account, body);
+    if (body.action === 'saveRentSplit') return await saveRentSplit_(id, account, body);
     if (body.action === 'markTransactionPaid') return await settleTransaction_(id, account, body, true);
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
@@ -540,7 +541,9 @@ function cumEntries_(list, id) {
             amount: String(cumRound_(-inline.reduce((s, i) => s + i.amount, 0))),
             lines: inline.map(i => ({ description: i.description || 'Item ' + i.n, amount: cumRound_(-i.amount) })),
             // Every line item as it's saved, for the edit menu (split percent as 0-100)
-            items: t.items.map(i => ({ n: i.n, description: i.description, amount: i.amount, splitId: i.splitId, percent: i.splitId ? cumRound_(i.percent * 100) : '', separate: i.separate, separateDate: i.separateDate })),
+            items: t.items.map(i => ({ n: i.n, description: i.description, amount: i.amount, splitId: i.splitId, percent: i.splitId ? cumRound_(i.percent * 100) : '', separate: i.separate, separateDate: i.separateDate, separatePaid: i.separatePaid })),
+            // Blank: their share comes in on the rent's date
+            splitDate: t.splitDate,
           }));
         }
       }
@@ -603,7 +606,22 @@ async function settleTransaction_(id, account, body, paid) {
     const c = paid ? cells.paid : cells.date;
     if (!c) throw new Error('Transactions are missing a ' + (paid ? 'paid' : 'date') + ' column');
     const target = data.rows.find(t => t.rowNumber === entry.row);
-    await update('cumTransactions', target.docId, { [c]: paid ? true : date });
+    const fields = { [c]: paid ? true : date };
+    // Moving the payment itself: the splits and separately paid items that were following its date (their own date
+    // is blank) stay on the old date, so they keep their own catch-up question instead of moving along with it
+    if (!paid && entry.part === 'main') {
+      const d = String(target.date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      const old = d ? new Date(Number(d[3]), Number(d[1]) - 1, Number(d[2])) : null;
+      if (old) {
+        const hasSplits = target.items.some(i => i.splitId && i.splitId !== target.accountId && i.percent);
+        if (hasSplits && data.col.splitDate && !target.splitDate) fields[data.col.splitDate] = old;
+        target.items.forEach(i => {
+          const ic = data.col.items[i.n - 1];
+          if (i.separate && !i.separateDate && ic && ic.separateDate) fields[ic.separateDate] = old;
+        });
+      }
+    }
+    await update('cumTransactions', target.docId, fields);
     return { ok: true };
   });
 }
@@ -700,6 +718,80 @@ async function addTransaction_(id, account, body) {
     fields[col.description] = description;
     fields[col.amount] = Math.round((kind === 'expense' ? -size : size) * 100) / 100;
     fields[col.type] = typeText;
+    const made = await add('cumTransactions', fields);
+    return { ok: true, row: made.order };
+  });
+}
+
+// Add (no body.row) or edit (body.row + body.original { date, description }) one of this account's rent splits: a "Rent"
+// transaction made of line items, each split with another account by a percent and paid with the rent or on its own day.
+// body: { description, date (YYYY-MM-DD), splitDate (YYYY-MM-DD, or '' for the rent's date),
+//         items: [{ n (its number when editing, else blank), description, amount (negative for a credit),
+//                   splitId (10 digits or ''), percent (0-100), separate (true/false), separateDate (YYYY-MM-DD) }] }
+// The items are saved as RENT ITEM 1..n in the order given; columns past the last item are cleared. Paid checkboxes stay.
+async function saveRentSplit_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const day = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; };
+  const date = day(body.date);
+  if (!date) return { ok: false, error: 'invalid_date' };
+  const splitDate = String(body.splitDate || '').trim() === '' ? '' : day(body.splitDate);
+  if (splitDate === null) return { ok: false, error: 'invalid_date' };
+  const description = cleanText_(body.description, 100);
+  if (!description) return { ok: false, error: 'invalid_description' };
+  const list = Array.isArray(body.items) ? body.items : [];
+  if (!list.length || list.length > CUM_LINE_ITEMS) return { ok: false, error: 'invalid_items' };
+  const items = [];
+  for (const it of list) {
+    const d = cleanText_((it || {}).description, 100);
+    if (!d) return { ok: false, error: 'invalid_item_description' };
+    const amount = Number(String(it.amount).replace(/[$,\s]/g, ''));
+    if (String(it.amount).trim() === '' || !isFinite(amount) || amount === 0 || Math.abs(amount) > 100000000) return { ok: false, error: 'invalid_item_amount' };
+    const percent = it.percent == null || String(it.percent).trim() === '' ? 0 : Number(it.percent);
+    if (!isFinite(percent) || percent < 0 || percent > 100) return { ok: false, error: 'invalid_split_percent' };
+    const splitId = percent > 0 ? phoneToId_(it.splitId || '') : '';
+    if (percent > 0 && (splitId.length !== 10 || splitId === id)) return { ok: false, error: 'invalid_split_id' };
+    const separate = it.separate === true;
+    const separateDate = separate ? day(it.separateDate) : '';
+    if (separateDate === null) return { ok: false, error: 'invalid_separate_date' };
+    items.push({ n: Number(it.n) || 0, description: d, amount: Math.round(amount * 100) / 100, splitId, percent: percent / 100, separate, separateDate });
+  }
+  return withLock('cumTransactions', async () => {
+    const data = await cumTransactionRows_();
+    const col = data.col;
+    if (!col.type || !col.splitDate || col.items.some(c => !c.description || !c.amount || !c.splitId || !c.percent || !c.separate || !c.separateDate || !c.separatePaid)) {
+      throw new Error('Transactions are missing a rent split column');
+    }
+    let target = null;
+    if (body.row) {
+      target = data.rows.filter(t => t.rowNumber === Number(body.row))[0];
+      if (!target || target.accountId !== id || !target.items.length) return { ok: false, error: 'not_found' };
+      const original = body.original || {};
+      if (String(original.date).trim() !== target.date || String(original.description).trim() !== target.description) return { ok: false, error: 'changed' };
+    }
+    const fields = {};
+    fields[col.date] = date;
+    fields[col.description] = description;
+    fields[col.splitDate] = splitDate;
+    col.items.forEach((c, k) => {
+      const it = items[k];
+      // A separately paid item that was already paid stays paid (when it's still the same item, paid separately)
+      const before = it && target ? target.items.filter(i => i.n === it.n)[0] : null;
+      fields[c.description] = it ? it.description : '';
+      fields[c.amount] = it ? it.amount : '';
+      fields[c.splitId] = it ? it.splitId : '';
+      fields[c.percent] = it && it.splitId ? it.percent : '';
+      fields[c.separate] = it ? it.separate : '';
+      fields[c.separateDate] = it ? it.separateDate : '';
+      fields[c.separatePaid] = it ? (it.separate ? !!(before && before.separate && before.separatePaid) : false) : '';
+    });
+    if (target) {
+      await update('cumTransactions', target.docId, fields);
+      return { ok: true, row: target.rowNumber };
+    }
+    fields[col.id] = id;
+    fields[col.amount] = '';
+    fields[col.type] = (data.rows.filter(t => t.type.toLowerCase() === 'rent')[0] || {}).type || 'Rent';
+    if (col.paid) fields[col.paid] = false;
     const made = await add('cumTransactions', fields);
     return { ok: true, row: made.order };
   });

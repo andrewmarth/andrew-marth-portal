@@ -171,7 +171,8 @@ export function openTaskForm({ me, accounts, openTasks, submit }) {
     built.open({ me, accounts, openTasks, submit });
 }
 
-function build() {
+// The one-question-at-a-time styles (also used by the CUM page's Add / Rent Split form: a dialog with class "task-dialog")
+export function ensureStepFormStyles() {
     ensureDialogStyles();
     if (!document.getElementById('task-form-css')) {
         const style = document.createElement('style');
@@ -179,6 +180,10 @@ function build() {
         style.textContent = CSS;
         document.head.append(style);
     }
+}
+
+function build() {
+    ensureStepFormStyles();
     const dialog = document.createElement('dialog');
     dialog.className = 'income-dialog task-dialog';
     dialog.setAttribute('aria-labelledby', 'task-dialog-title');
