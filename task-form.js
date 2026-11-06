@@ -1,115 +1,154 @@
-// "New Task" pop-up for the home page's Current Tasks card (admins).
-// Asks for the task's type, who it's for, its title and description, who to text (and the message) or who to call,
-// and when it should show up; then hands the answers to submit(answers).
-// Uses the same pop-up and dropdowns as the New Property form: a card on wide screens, a swipe-up sheet on phones.
-import { lockPageScroll } from '/income-editor.js';
-import { ensurePickerStyles, multiPicker, singlePicker } from '/new-property.js';
+// "New Task" pop-up for the home page's Current Tasks card (admins). One question at a time, with Back / Next:
+// the task's type, who it's for, its title and description, who to text and the message (Send Text) or who to call
+// (Call), and when it should show up: immediately, or a day and time in the future. The answers go to submit(answers).
+// Uses the same pop-up as the other forms: a card on wide screens, a swipe-up sheet on phones.
+import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
 
-const TYPES = ['General', 'Send Text', 'Call', 'Errand'];
-const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const CSS = `
-.task-dialog .type-picker { margin-bottom: 0; }
-.task-dialog .type-picker label { display: flex; align-items: center; justify-content: center; margin: 0; min-height: 44px; font-size: 0.92rem; text-align: center; line-height: 1.15; }
-.task-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; }
-.task-dialog .field[hidden], .task-dialog .tf-other[hidden], .task-dialog [data-for][hidden] { display: none; }
-.task-dialog .tf-other { margin-top: 10px; }
-.task-dialog textarea {
-    width: 100%; min-height: calc(9 * 1.5em + 28px); padding: 14px 20px; resize: vertical;
-    border: 2px solid var(--navy); border-radius: 22px; background-color: #f7f4f0;
-    font-family: inherit; font-size: 1.05rem; line-height: 1.5; color: var(--brown);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+.task-dialog .tf-progress { padding: 0 28px; margin-bottom: 14px; }
+.task-dialog .tf-progress-text { font-size: 0.82rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: var(--olive); }
+.task-dialog .tf-bar { height: 6px; margin-top: 8px; border-radius: 999px; background: #ece5db; overflow: hidden; }
+.task-dialog .tf-bar span { display: block; height: 100%; border-radius: inherit; background: var(--olive); transition: width 0.3s ease; }
+.task-dialog .tf-step { padding: 18px 0 10px 0; }
+.task-dialog .tf-step[hidden] { display: none; }
+.task-dialog .tf-step.is-entering { animation: tf-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes tf-in { from { opacity: 0; transform: translateX(14px); } }
+@media (prefers-reduced-motion: reduce) { .task-dialog .tf-step.is-entering { animation: none; } }
+.task-dialog .tf-question { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.35rem; line-height: 1.2; margin-bottom: 6px; }
+.task-dialog .tf-hint { font-size: 0.9rem; opacity: 0.7; margin-bottom: 14px; }
+.task-dialog .tf-step input[type="text"], .task-dialog textarea {
+    width: 100%; min-height: 54px; padding: 12px 20px; border: 2px solid var(--navy); border-radius: 999px; background-color: #f7f4f0;
+    font-family: inherit; font-size: 1.05rem; color: var(--brown); transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
-.task-dialog textarea:focus { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
-.task-dialog textarea.is-invalid { border-color: var(--rust); background-color: #fdf2f2; }
-/* When: a date button that opens a calendar, then hour / minute / AM-PM */
-.task-dialog .tf-date { position: relative; }
-.task-dialog .tf-cal {
-    display: none; max-width: 340px; margin-top: 8px; padding: 12px; background: var(--white);
-    border: 2px solid var(--navy); border-radius: 20px; box-shadow: 4px 4px 0 var(--navy);
+.task-dialog textarea { min-height: calc(9 * 1.5em + 28px); padding: 14px 20px; border-radius: 22px; line-height: 1.5; resize: vertical; }
+.task-dialog .tf-step input[type="text"]:focus, .task-dialog textarea:focus { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+.task-dialog .is-invalid { border-color: var(--rust) !important; background-color: #fdf2f2 !important; }
+.task-dialog .tf-other { margin-top: 12px; }
+.task-dialog .tf-other[hidden] { display: none; }
+.task-dialog .tf-other label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+/* Big choices (task type, immediately / future) */
+.task-dialog .tf-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.task-dialog .tf-choice {
+    display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 16px 10px 10px; text-align: left;
+    border: 2px solid rgba(14, 42, 59, 0.35); border-radius: 18px; background: #f7f4f0; color: var(--brown);
+    font-family: inherit; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
-.task-dialog .tf-date.is-open .tf-cal { display: block; }
+.task-dialog .tf-choice small { display: block; font-size: 0.82rem; font-weight: normal; opacity: 0.75; }
+.task-dialog .tf-choice-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: #ece5db; color: var(--tan); }
+.task-dialog .tf-choice-icon svg { width: 20px; height: 20px; }
+.task-dialog .tf-choice[aria-pressed="true"] { background: var(--olive); border-color: var(--olive); color: var(--cream); }
+.task-dialog .tf-choice[aria-pressed="true"] .tf-choice-icon { background: var(--cream); color: var(--olive); }
+.task-dialog .tf-choice:focus-visible, .task-dialog .tf-person:focus-visible, .task-dialog .tf-time:focus-visible, .task-dialog .tf-cal-day:focus-visible, .task-dialog .tf-cal-nav:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+/* People lists */
+.task-dialog .tf-list { display: flex; flex-direction: column; gap: 8px; }
+.task-dialog .tf-person {
+    display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 14px 8px 8px; text-align: left; width: 100%;
+    border: 2px solid rgba(14, 42, 59, 0.2); border-radius: 16px; background: #f7f4f0; color: var(--brown); font-family: inherit; cursor: pointer;
+}
+.task-dialog .tf-person-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #ece5db; color: var(--tan); }
+.task-dialog .tf-person-icon svg { width: 19px; height: 19px; }
+.task-dialog .tf-person-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
+.task-dialog .tf-person-name { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-dialog .tf-person-sub { font-size: 0.85rem; opacity: 0.7; }
+.task-dialog .tf-check { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(14, 42, 59, 0.35); display: inline-flex; align-items: center; justify-content: center; color: var(--cream); }
+.task-dialog .tf-list.is-multi .tf-check { border-radius: 8px; }
+.task-dialog .tf-check svg { width: 15px; height: 15px; opacity: 0; }
+.task-dialog .tf-person[aria-pressed="true"] { border-color: var(--olive); background: #eef0e6; }
+.task-dialog .tf-person[aria-pressed="true"] .tf-check { background: var(--olive); border-color: var(--olive); }
+.task-dialog .tf-person[aria-pressed="true"] .tf-check svg { opacity: 1; }
+@media (hover: hover) { .task-dialog .tf-person:hover, .task-dialog .tf-choice[aria-pressed="false"]:hover { border-color: var(--navy); } }
+/* Day: a calendar */
+.task-dialog .tf-cal { max-width: 360px; padding: 12px; background: var(--white); border: 2px solid var(--navy); border-radius: 20px; box-shadow: 4px 4px 0 var(--navy); }
 .task-dialog .tf-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .task-dialog .tf-cal-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.05rem; }
-.task-dialog .tf-cal-nav {
-    width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--navy); background: #f7f4f0; color: var(--olive);
-    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-}
+.task-dialog .tf-cal-nav { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--navy); background: #f7f4f0; color: var(--olive); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.task-dialog .tf-cal-nav:disabled { opacity: 0.35; cursor: default; }
 .task-dialog .tf-cal-nav svg { width: 16px; height: 16px; }
 .task-dialog .tf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .task-dialog .tf-cal-dow { text-align: center; font-size: 0.75rem; font-weight: bold; opacity: 0.6; padding: 4px 0; }
-.task-dialog .tf-cal-day {
-    width: 38px; height: 38px; justify-self: center; border: none; border-radius: 50%; background: transparent; color: var(--brown);
-    font-family: inherit; font-size: 0.95rem; cursor: pointer;
-}
+.task-dialog .tf-cal-day { width: 40px; height: 40px; justify-self: center; border: none; border-radius: 50%; background: transparent; color: var(--brown); font-family: inherit; font-size: 0.95rem; cursor: pointer; }
+.task-dialog .tf-cal-day:disabled { opacity: 0.3; cursor: default; }
 .task-dialog .tf-cal-day.is-today { box-shadow: inset 0 0 0 2px var(--tan); font-weight: bold; }
 .task-dialog .tf-cal-day.is-picked { background: var(--olive); color: var(--cream); font-weight: bold; }
-.task-dialog .tf-cal-day:focus-visible, .task-dialog .tf-cal-nav:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-@media (hover: hover) { .task-dialog .tf-cal-day:not(.is-picked):hover, .task-dialog .tf-cal-nav:hover { background: #f4efe8; } }
-.task-dialog .tf-time { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px; align-items: start; }
-.task-dialog .tf-time .type-picker { min-height: 54px; align-items: center; }
-@media (max-width: 600px) { .task-dialog .tf-time { grid-template-columns: 1fr 1fr; } .task-dialog .tf-time .type-picker { grid-column: 1 / -1; } }
+@media (hover: hover) { .task-dialog .tf-cal-day:not(.is-picked):not(:disabled):hover, .task-dialog .tf-cal-nav:not(:disabled):hover { background: #f4efe8; } }
+/* Time: every 15 minutes, one tap */
+.task-dialog .tf-times { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-height: 300px; overflow-y: auto; padding: 4px 6px 4px 2px; scroll-padding: 8px; }
+.task-dialog .tf-time {
+    min-height: 44px; padding: 6px 4px; border: 2px solid rgba(14, 42, 59, 0.25); border-radius: 999px; background: #f7f4f0; color: var(--brown);
+    font-family: inherit; font-size: 0.92rem; font-weight: bold; cursor: pointer; white-space: nowrap;
+}
+.task-dialog .tf-time.is-hour { border-color: rgba(14, 42, 59, 0.5); }
+.task-dialog .tf-time:disabled { opacity: 0.3; cursor: default; }
+.task-dialog .tf-time[aria-pressed="true"] { background: var(--olive); border-color: var(--olive); color: var(--cream); }
+@media (hover: hover) { .task-dialog .tf-time:not(:disabled):not([aria-pressed="true"]):hover { border-color: var(--navy); } }
+.task-dialog .tf-picked { margin-top: 12px; font-size: 0.92rem; font-weight: bold; color: var(--olive); }
+@media (max-width: 600px) {
+    .task-dialog .tf-progress { padding: 0 20px; }
+    .task-dialog .tf-choices { grid-template-columns: 1fr; }
+    .task-dialog .tf-times { grid-template-columns: repeat(3, 1fr); max-height: 260px; }
+    .task-dialog .tf-cal { max-width: none; }
+}
 `;
 
+const ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
-const PHONE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>';
-const CLOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-const CAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>';
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const PERSON_ICON = ICON('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>');
+const OTHER_ICON = ICON('<path d="M12 5v14"/><path d="M5 12h14"/>');
 const PREV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>';
 const NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+const TYPES = [
+    { value: 'General', sub: 'Something to do', icon: ICON('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/>') },
+    { value: 'Send Text', sub: 'A text with the message ready', icon: ICON('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') },
+    { value: 'Call', sub: 'Call someone', icon: ICON('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>') },
+    { value: 'Errand', sub: 'Somewhere to go', icon: ICON('<path d="M5 17h14l-1.5-6.5A2 2 0 0 0 15.6 9H8.4a2 2 0 0 0-1.9 1.5Z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/><path d="M9 9V6h6v3"/>') },
+];
+const WHENS = [
+    { value: 'now', main: 'Immediately', sub: 'Shows up right away', icon: ICON('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>') },
+    { value: 'future', main: 'In the future', sub: 'Pick a day and time', icon: ICON('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>') },
+];
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const formatPhone = id => (id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id);
 const digitsOf = v => String(v || '').replace(/\D/g, '');
 const pad = n => String(n).padStart(2, '0');
 const isoDate = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const sameDay = (a, b) => a && b && dayStart(a).getTime() === dayStart(b).getTime();
+const timeLabel = mins => ((Math.floor(mins / 60) % 12) || 12) + ':' + pad(mins % 60) + ' ' + (mins < 720 ? 'AM' : 'PM');
 
-const yesNo = (name, a, b) => '<div class="type-picker yes-no">'
-    + '<input type="radio" name="' + name + '" id="' + name + '-a" value="' + a + '"><label for="' + name + '-a">' + a + '</label>'
-    + '<input type="radio" name="' + name + '" id="' + name + '-b" value="' + b + '"><label for="' + name + '-b">' + b + '</label></div>';
-const phoneBox = (id, label) => '<div class="tf-other" hidden><label for="' + id + '" class="field-label">' + label + '</label>'
+const choice = (value, main, sub, icon) => '<button type="button" class="tf-choice" data-value="' + escapeHtml(value) + '" aria-pressed="false">'
+    + '<span class="tf-choice-icon">' + icon + '</span><span>' + escapeHtml(main) + '<small>' + escapeHtml(sub) + '</small></span></button>';
+const step = (id, question, hint, body) => '<section class="tf-step" data-step="' + id + '" hidden>'
+    + '<h3 class="tf-question" id="tf-q-' + id + '">' + question + '</h3>' + (hint ? '<p class="tf-hint">' + hint + '</p>' : '') + body + '</section>';
+const phoneBox = (id, label) => '<div class="tf-other" hidden><label for="' + id + '">' + label + '</label>'
     + '<input id="' + id + '" type="text" inputmode="tel" autocomplete="off" maxlength="14" placeholder="(480) 555-0123"></div>';
 
 const DIALOG_HTML = '<form class="income-form" novalidate>'
     + '<div class="dialog-head"><h2 id="task-dialog-title">New Task</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
-    + '<p class="muted">The task shows on their Current Tasks once its date and time arrive.</p>'
+    + '<div class="tf-progress"><span class="tf-progress-text" data-progress></span><div class="tf-bar"><span data-bar></span></div></div>'
     + '<div class="dialog-scroll">'
-    + '<fieldset class="income-section"><div class="section-head"><h3>Task</h3></div><div class="type-fields">'
-        + '<div class="field span-2"><span class="field-label">Task Type</span><div class="type-picker" data-type>'
-            + TYPES.map((t, i) => '<input type="radio" name="tf-type" id="tf-type-' + i + '" value="' + t + '"><label for="tf-type-' + i + '">' + t + '</label>').join('')
-        + '</div></div>'
-        + '<div class="field span-2"><span class="field-label" id="tf-assigned-label">Assigned To</span><div data-assigned></div></div>'
-        + '<div class="field span-2"><label for="tf-title">Task Title</label><input id="tf-title" type="text" maxlength="100" autocomplete="off" placeholder="Call the lender"></div>'
-        + '<div class="field span-2"><label for="tf-description">Task Description</label><input id="tf-description" type="text" maxlength="300" autocomplete="off" placeholder="A few words about it"></div>'
-    + '</div></fieldset>'
-    + '<fieldset class="income-section" data-for="Send Text"><div class="section-head"><h3>Text</h3></div><div class="type-fields">'
-        + '<div class="field span-2"><span class="field-label" id="tf-text-label">Who To Text</span><div data-text-to></div>'
-            + phoneBox('tf-text-other', 'Other Phone Number') + '</div>'
-        + '<div class="field span-2"><label for="tf-message">Message</label><textarea id="tf-message" rows="9" maxlength="2000" placeholder="Hi! Just checking in..."></textarea></div>'
-    + '</div></fieldset>'
-    + '<fieldset class="income-section" data-for="Call"><div class="section-head"><h3>Call</h3></div><div class="type-fields">'
-        + '<div class="field span-2"><span class="field-label" id="tf-call-label">Who To Call</span><div data-call-to></div>'
-            + phoneBox('tf-call-other', 'Phone Number') + '</div>'
-    + '</div></fieldset>'
-    + '<fieldset class="income-section"><div class="section-head"><h3>When</h3></div><div class="type-fields">'
-        + '<div class="field span-2"><span class="field-label" id="tf-date-label">Date</span>'
-            + '<div class="tf-date mp"><button type="button" class="mp-btn sp-btn" data-date-btn aria-haspopup="dialog" aria-expanded="false" aria-labelledby="tf-date-label">'
-            + '<span class="mp-text"><span class="mp-main" data-date-text></span></span></button>'
-            + '<div class="tf-cal" role="dialog" aria-label="Pick a date"><div class="tf-cal-head">'
-                + '<button type="button" class="tf-cal-nav" data-cal-prev aria-label="Previous month">' + PREV + '</button>'
-                + '<span class="tf-cal-title" data-cal-title></span>'
-                + '<button type="button" class="tf-cal-nav" data-cal-next aria-label="Next month">' + NEXT + '</button></div>'
-                + '<div class="tf-cal-grid" data-cal-grid></div></div></div></div>'
-        + '<div class="field span-2"><span class="field-label" id="tf-time-label">Time</span><div class="tf-time">'
-            + '<div data-hour></div><div data-minute></div>' + yesNo('tf-ampm', 'AM', 'PM') + '</div></div>'
-    + '</div></fieldset>'
+    + step('type', 'What kind of task is it?', '', '<div class="tf-choices" data-choices="type">' + TYPES.map(t => choice(t.value, t.value, t.sub, t.icon)).join('') + '</div>')
+    + step('assigned', 'Who is it for?', '', '<div class="tf-list" data-list="assigned" role="group" aria-labelledby="tf-q-assigned"></div>')
+    + step('title', 'What’s the task?', 'A short title, like “Call the lender”.', '<input id="tf-title" type="text" maxlength="100" autocomplete="off" aria-labelledby="tf-q-title">')
+    + step('description', 'Any details?', 'Optional: a few words about it.', '<input id="tf-description" type="text" maxlength="300" autocomplete="off" aria-labelledby="tf-q-description">')
+    + step('textTo', 'Who should get the text?', 'Pick everyone it goes to. More than one makes a group text.',
+        '<div class="tf-list is-multi" data-list="textTo" role="group" aria-labelledby="tf-q-textTo"></div>' + phoneBox('tf-text-other', 'Other phone number'))
+    + step('message', 'What should the text say?', 'Line breaks and blank lines are kept.', '<textarea id="tf-message" rows="9" maxlength="2000" aria-labelledby="tf-q-message"></textarea>')
+    + step('callTo', 'Who should be called?', '', '<div class="tf-list" data-list="callTo" role="group" aria-labelledby="tf-q-callTo"></div>' + phoneBox('tf-call-other', 'Phone number'))
+    + step('when', 'When should it show up?', '', '<div class="tf-choices" data-choices="when">' + WHENS.map(w => choice(w.value, w.main, w.sub, w.icon)).join('') + '</div>')
+    + step('date', 'Which day?', '', '<div class="tf-cal"><div class="tf-cal-head">'
+        + '<button type="button" class="tf-cal-nav" data-cal-prev aria-label="Previous month">' + PREV + '</button>'
+        + '<span class="tf-cal-title" data-cal-title></span>'
+        + '<button type="button" class="tf-cal-nav" data-cal-next aria-label="Next month">' + NEXT + '</button></div>'
+        + '<div class="tf-cal-grid" data-cal-grid></div></div>')
+    + step('time', 'What time?', '', '<div class="tf-times" data-times role="group" aria-labelledby="tf-q-time"></div><p class="tf-picked" data-picked></p>')
     + '</div>'
     + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
-        + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
-        + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Add Task</button></div></div>'
+        + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-back>Cancel</button>'
+        + '<button type="submit" class="btn" data-next><span class="btn-spinner" aria-hidden="true"></span><span data-next-text>Next</span></button></div></div>'
     + '</form>';
 
 let built = null;
@@ -124,7 +163,7 @@ export function openTaskForm({ me, accounts, submit }) {
 }
 
 function build() {
-    ensurePickerStyles();
+    ensureDialogStyles();
     if (!document.getElementById('task-form-css')) {
         const style = document.createElement('style');
         style.id = 'task-form-css';
@@ -132,7 +171,7 @@ function build() {
         document.head.append(style);
     }
     const dialog = document.createElement('dialog');
-    dialog.className = 'income-dialog property-dialog task-dialog';
+    dialog.className = 'income-dialog task-dialog';
     dialog.setAttribute('aria-labelledby', 'task-dialog-title');
     dialog.innerHTML = DIALOG_HTML;
     document.body.append(dialog);
@@ -140,151 +179,235 @@ function build() {
     const $ = sel => dialog.querySelector(sel);
     const form = $('form');
     const message = $('.form-message');
-    const saveBtn = $('[data-save]');
+    const nextBtn = $('[data-next]');
+    const backBtn = $('[data-back]');
+    const scroller = $('.dialog-scroll');
     let ctx = null;
     let saving = false;
-    const others = () => (ctx ? ctx.accounts.filter(a => a.id !== ctx.me) : []);
-    const everyone = () => (ctx ? ctx.accounts : []);
+    // The answers so far
+    let a = {};
+    let current = 'type';
 
-    // --- Type: shows the Text or Call questions ---
-    const typeValue = () => (form.querySelector('input[name="tf-type"]:checked') || {}).value || '';
-    const showType = () => dialog.querySelectorAll('[data-for]').forEach(s => { s.hidden = s.dataset.for !== typeValue(); });
-    form.querySelectorAll('input[name="tf-type"]').forEach(r => r.addEventListener('change', showType));
+    // Which questions are asked, in order (the Text / Call / day and time questions only when they apply)
+    const steps = () => ['type', 'assigned', 'title', 'description']
+        .concat(a.type === 'Send Text' ? ['textTo', 'message'] : [], a.type === 'Call' ? ['callTo'] : [], ['when'], a.when === 'future' ? ['date', 'time'] : []);
 
-    // --- People ---
-    const assigned = singlePicker($('[data-assigned]'), { labelId: 'tf-assigned-label', placeholder: 'Choose...', icon: PERSON_ICON });
-    const textOther = $('#tf-text-other');
-    const textTo = multiPicker($('[data-text-to]'), {
-        labelId: 'tf-text-label',
-        placeholder: 'Choose who to text...',
-        items: () => [{ id: 'other', name: 'Other', sub: 'Type in a phone number' }].concat(everyone()),
-        canAdd: () => true,
-        onChange: () => { textOther.closest('.tf-other').hidden = !textTo.value().includes('other'); },
+    // --- Big choices: tap to pick; a pick moves on to the next question ---
+    dialog.querySelectorAll('[data-choices]').forEach(group => group.addEventListener('click', e => {
+        const b = e.target.closest('.tf-choice');
+        if (!b) return;
+        a[group.dataset.choices] = b.dataset.value;
+        drawChoices();
+        message.textContent = '';
+        // "Immediately" is the last question, so it waits for Add Task
+        if (!(group.dataset.choices === 'when' && b.dataset.value === 'now')) setTimeout(() => go(1), 180);
+        else showFooter();
+    }));
+    const drawChoices = () => dialog.querySelectorAll('[data-choices]').forEach(group => group.querySelectorAll('.tf-choice')
+        .forEach(b => b.setAttribute('aria-pressed', String(a[group.dataset.choices] === b.dataset.value))));
+
+    // --- People lists: one person (Assigned To, Who To Call) or several (Who To Text); "Other" asks for a number ---
+    const person = (value, name, sub, icon) => '<button type="button" class="tf-person" data-value="' + escapeHtml(value) + '" aria-pressed="false">'
+        + '<span class="tf-person-icon">' + icon + '</span><span class="tf-person-text"><span class="tf-person-name">' + escapeHtml(name) + '</span>'
+        + (sub ? '<span class="tf-person-sub">' + escapeHtml(sub) + '</span>' : '') + '</span><span class="tf-check">' + CHECK + '</span></button>';
+    function drawLists() {
+        const me = ctx.accounts.find(x => x.id === ctx.me);
+        const others = ctx.accounts.filter(x => x.id !== ctx.me);
+        const row = x => person(x.id, x.name || formatPhone(x.id), x.name ? formatPhone(x.id) : '', PERSON_ICON);
+        $('[data-list="assigned"]').innerHTML = person(ctx.me, 'Me', me ? me.name : formatPhone(ctx.me), PERSON_ICON) + others.map(row).join('');
+        const other = person('other', 'Other', 'Type in a phone number', OTHER_ICON);
+        $('[data-list="textTo"]').innerHTML = other + ctx.accounts.map(row).join('');
+        $('[data-list="callTo"]').innerHTML = other + ctx.accounts.map(row).join('');
+    }
+    const picked = list => (list === 'textTo' ? a.textTo || [] : a[list] ? [a[list]] : []);
+    const drawPicks = () => dialog.querySelectorAll('[data-list]').forEach(list => {
+        list.querySelectorAll('.tf-person').forEach(b => b.setAttribute('aria-pressed', String(picked(list.dataset.list).includes(b.dataset.value))));
+        const box = list.parentElement.querySelector('.tf-other');
+        if (box) box.hidden = !picked(list.dataset.list).includes('other');
     });
-    const callOther = $('#tf-call-other');
-    const callTo = singlePicker($('[data-call-to]'), {
-        labelId: 'tf-call-label', placeholder: 'Choose who to call...', icon: PHONE_ICON,
-        onChange: value => { callOther.closest('.tf-other').hidden = value !== 'other'; },
-    });
+    dialog.querySelectorAll('[data-list]').forEach(list => list.addEventListener('click', e => {
+        const b = e.target.closest('.tf-person');
+        if (!b) return;
+        const v = b.dataset.value;
+        message.textContent = '';
+        if (list.dataset.list === 'textTo') {
+            const now = a.textTo || [];
+            a.textTo = now.includes(v) ? now.filter(x => x !== v) : now.concat([v]);
+            drawPicks();
+            if (v === 'other' && a.textTo.includes('other')) setTimeout(() => $('#tf-text-other').focus(), 50);
+            return;
+        }
+        a[list.dataset.list] = v;
+        drawPicks();
+        if (v === 'other') setTimeout(() => $('#tf-call-other').focus(), 50);
+        else setTimeout(() => go(1), 180);
+    }));
     // Phone numbers: digits only, shown as (480) 555-0123
-    [textOther, callOther].forEach(input => input.addEventListener('input', () => {
+    ['#tf-text-other', '#tf-call-other'].forEach(sel => $(sel).addEventListener('input', e => {
+        const input = e.target;
         const d = digitsOf(input.value).replace(/^1(?=\d{10})/, '').slice(0, 10);
-        input.value = d.length > 6 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6)
-            : d.length > 3 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : d;
+        input.value = d.length > 6 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : d.length > 3 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : d;
     }));
 
-    // --- When: a calendar for the date, then hour, minute and AM/PM ---
-    const dateWrap = $('.tf-date');
-    const dateBtn = $('[data-date-btn]');
-    let picked = new Date();
+    // --- Day: a calendar (today on); picking a day moves on to the time ---
     let shown = new Date();
-    const drawDateText = () => {
-        $('[data-date-text]').textContent = picked.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    };
     function drawCalendar() {
         const year = shown.getFullYear(), month = shown.getMonth();
+        const today = dayStart(new Date());
         $('[data-cal-title]').textContent = MONTHS[month] + ' ' + year;
+        $('[data-cal-prev]').disabled = year === today.getFullYear() && month === today.getMonth();
         const first = new Date(year, month, 1).getDay();
         const days = new Date(year, month + 1, 0).getDate();
-        const today = new Date();
         let html = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => '<span class="tf-cal-dow">' + d + '</span>').join('');
         for (let i = 0; i < first; i++) html += '<span></span>';
         for (let d = 1; d <= days; d++) {
             const day = new Date(year, month, d);
-            html += '<button type="button" class="tf-cal-day' + (sameDay(day, today) ? ' is-today' : '') + (sameDay(day, picked) ? ' is-picked' : '')
-                + '" data-day="' + d + '" aria-label="' + escapeHtml(day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })) + '"'
-                + (sameDay(day, picked) ? ' aria-pressed="true"' : '') + '>' + d + '</button>';
+            const on = sameDay(day, a.date);
+            html += '<button type="button" class="tf-cal-day' + (sameDay(day, today) ? ' is-today' : '') + (on ? ' is-picked' : '') + '" data-day="' + d + '"'
+                + (day < today ? ' disabled' : '') + (on ? ' aria-pressed="true"' : '')
+                + ' aria-label="' + escapeHtml(day.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })) + '">' + d + '</button>';
         }
         $('[data-cal-grid]').innerHTML = html;
     }
-    const openCal = () => { shown = new Date(picked.getFullYear(), picked.getMonth(), 1); drawCalendar(); dateWrap.classList.add('is-open'); dateBtn.setAttribute('aria-expanded', 'true'); };
-    const closeCal = () => { dateWrap.classList.remove('is-open'); dateBtn.setAttribute('aria-expanded', 'false'); };
-    dateBtn.addEventListener('click', () => (dateWrap.classList.contains('is-open') ? closeCal() : openCal()));
     $('[data-cal-prev]').addEventListener('click', () => { shown = new Date(shown.getFullYear(), shown.getMonth() - 1, 1); drawCalendar(); });
     $('[data-cal-next]').addEventListener('click', () => { shown = new Date(shown.getFullYear(), shown.getMonth() + 1, 1); drawCalendar(); });
     $('[data-cal-grid]').addEventListener('click', e => {
         const b = e.target.closest('[data-day]');
-        if (!b) return;
-        picked = new Date(shown.getFullYear(), shown.getMonth(), Number(b.dataset.day));
-        drawDateText();
-        closeCal();
-        dateBtn.focus();
-    });
-    dateWrap.addEventListener('keydown', e => { if (e.key === 'Escape' && dateWrap.classList.contains('is-open')) { e.preventDefault(); e.stopPropagation(); closeCal(); dateBtn.focus(); } });
-    document.addEventListener('pointerdown', e => { if (!dateWrap.contains(e.target)) closeCal(); });
-    const hour = singlePicker($('[data-hour]'), { labelId: 'tf-time-label', placeholder: 'Hour', icon: CLOCK_ICON });
-    const minute = singlePicker($('[data-minute]'), { labelId: 'tf-time-label', placeholder: 'Min', icon: CLOCK_ICON });
-    hour.setItems(Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), main: String(i + 1) })));
-    minute.setItems(MINUTES.map(m => ({ value: m, main: ':' + m })));
-    // The next whole hour (from 11 PM on, the time stays 11 PM today)
-    function setDefaultWhen() {
-        const now = new Date();
-        const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.min(now.getHours() + 1, 23), 0);
-        picked = new Date(next.getFullYear(), next.getMonth(), next.getDate());
-        drawDateText();
-        hour.setValue(String((next.getHours() % 12) || 12));
-        minute.setValue('00');
-        form.querySelectorAll('input[name="tf-ampm"]').forEach(r => { r.checked = r.value === (next.getHours() < 12 ? 'AM' : 'PM'); });
-    }
-
-    // --- Close / save ---
-    const close = () => { if (!saving) dialog.close(); };
-    dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
-    dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
-    dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    const clear = e => { if (e.target.classList) e.target.classList.remove('is-invalid'); message.textContent = ''; };
-    form.addEventListener('input', clear);
-    form.addEventListener('change', clear);
-    const problem = (el, text) => {
-        if (el) { el.classList.add('is-invalid'); el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center' }); }
-        message.textContent = text;
-        return true;
-    };
-
-    function answers() {
-        const type = typeValue();
-        const h = Number(hour.value()) % 12 + ((form.querySelector('input[name="tf-ampm"]:checked') || {}).value === 'PM' ? 12 : 0);
-        const out = {
-            type,
-            assignedTo: assigned.value(),
-            title: $('#tf-title').value.trim(),
-            description: $('#tf-description').value.trim(),
-            date: isoDate(picked),
-            time: pad(h) + ':' + minute.value(),
-        };
-        if (type === 'Send Text') {
-            out.textTo = textTo.value().filter(id => id !== 'other').concat(textTo.value().includes('other') ? [digitsOf(textOther.value)] : []);
-            out.message = $('#tf-message').value;
-        }
-        if (type === 'Call') out.callTo = callTo.value() === 'other' ? digitsOf(callOther.value) : callTo.value();
-        return out;
-    }
-    function validate(a) {
-        if (!a.type) return problem(form.querySelector('[data-type] label'), 'Please choose the task type.');
-        if (!a.assignedTo) return problem(assigned.button, 'Please choose who the task is for.');
-        if (!a.title) return problem($('#tf-title'), 'Please give the task a title.');
-        if (a.type === 'Send Text') {
-            if (!textTo.value().length) return problem($('[data-text-to] .mp-btn'), 'Please choose who to text.');
-            if (textTo.value().includes('other') && digitsOf(textOther.value).length !== 10) return problem(textOther, 'Please enter a 10-digit phone number.');
-            if (!a.message.trim()) return problem($('#tf-message'), 'Please write the message.');
-        }
-        if (a.type === 'Call') {
-            if (!callTo.value()) return problem(callTo.button, 'Please choose who to call.');
-            if (callTo.value() === 'other' && digitsOf(callOther.value).length !== 10) return problem(callOther, 'Please enter a 10-digit phone number.');
-        }
-        if (!hour.value() || !minute.value() || !form.querySelector('input[name="tf-ampm"]:checked')) return problem(hour.button, 'Please choose the time.');
-        return false;
-    }
-    form.addEventListener('submit', async e => {
-        e.preventDefault();
+        if (!b || b.disabled) return;
+        a.date = new Date(shown.getFullYear(), shown.getMonth(), Number(b.dataset.day));
+        // A time already gone by on that day is dropped
+        if (a.time !== undefined && isPast(a.time)) a.time = undefined;
         message.textContent = '';
-        const a = answers();
-        if (validate(a)) return;
+        drawCalendar();
+        setTimeout(() => go(1), 180);
+    });
+
+    // --- Time: every 15 minutes, one tap (times already past are greyed out for today) ---
+    const isPast = mins => sameDay(a.date, new Date()) && new Date(a.date.getFullYear(), a.date.getMonth(), a.date.getDate(), 0, mins) <= new Date();
+    function drawTimes() {
+        let html = '';
+        for (let m = 0; m < 1440; m += 15) {
+            html += '<button type="button" class="tf-time' + (m % 60 ? '' : ' is-hour') + '" data-mins="' + m + '" aria-pressed="' + (a.time === m) + '"'
+                + (isPast(m) ? ' disabled' : '') + '>' + timeLabel(m) + '</button>';
+        }
+        $('[data-times]').innerHTML = html;
+        drawPickedTime();
+    }
+    const drawPickedTime = () => {
+        $('[data-picked]').textContent = a.date && a.time !== undefined
+            ? 'Shows up ' + a.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ' at ' + timeLabel(a.time) : '';
+    };
+    $('[data-times]').addEventListener('click', e => {
+        const b = e.target.closest('.tf-time');
+        if (!b || b.disabled) return;
+        a.time = Number(b.dataset.mins);
+        message.textContent = '';
+        $('[data-times]').querySelectorAll('.tf-time').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        drawPickedTime();
+    });
+    // Opens scrolled to the picked time, or else 9:00 AM (or the next hour, if that's later today)
+    function scrollTimes() {
+        const grid = $('[data-times]');
+        let target = a.time;
+        if (target === undefined) {
+            target = 540;
+            if (sameDay(a.date, new Date())) target = Math.max(target, Math.min(1425, (new Date().getHours() + 1) * 60));
+        }
+        const b = grid.querySelector('[data-mins="' + target + '"]');
+        if (b) grid.scrollTop = b.offsetTop - grid.offsetTop - 8;
+    }
+
+    // --- Moving between questions ---
+    const problem = (el, text) => {
+        if (el) { el.classList.add('is-invalid'); el.focus({ preventScroll: true }); }
+        message.textContent = text;
+        return false;
+    };
+    // Whether the current question is answered well enough to move on (saving what was typed)
+    function check(id) {
+        if (id === 'type') return a.type ? true : problem(null, 'Please choose the type of task.');
+        if (id === 'assigned') return a.assigned ? true : problem(null, 'Please choose who the task is for.');
+        if (id === 'title') { a.title = $('#tf-title').value.trim(); return a.title ? true : problem($('#tf-title'), 'Please give the task a title.'); }
+        if (id === 'description') { a.description = $('#tf-description').value.trim(); return true; }
+        if (id === 'textTo') {
+            if (!(a.textTo || []).length) return problem(null, 'Please choose who to text.');
+            if (a.textTo.includes('other') && digitsOf($('#tf-text-other').value).length !== 10) return problem($('#tf-text-other'), 'Please enter a 10-digit phone number.');
+            return true;
+        }
+        if (id === 'message') { a.message = $('#tf-message').value; return a.message.trim() ? true : problem($('#tf-message'), 'Please write the message.'); }
+        if (id === 'callTo') {
+            if (!a.callTo) return problem(null, 'Please choose who to call.');
+            if (a.callTo === 'other' && digitsOf($('#tf-call-other').value).length !== 10) return problem($('#tf-call-other'), 'Please enter a 10-digit phone number.');
+            return true;
+        }
+        if (id === 'when') return a.when ? true : problem(null, 'Please choose when it should show up.');
+        if (id === 'date') return a.date ? true : problem(null, 'Please pick a day.');
+        if (id === 'time') return a.time !== undefined ? true : problem(null, 'Please pick a time.');
+        return true;
+    }
+    function show(id, direction) {
+        current = id;
+        dialog.querySelectorAll('.tf-step').forEach(s => {
+            s.hidden = s.dataset.step !== id;
+            s.classList.toggle('is-entering', s.dataset.step === id && direction > 0);
+        });
+        const list = steps();
+        const n = list.indexOf(id) + 1;
+        $('[data-progress]').textContent = 'Question ' + n + ' of ' + list.length;
+        $('[data-bar]').style.width = Math.round((n / list.length) * 100) + '%';
+        if (id === 'date') { shown = new Date((a.date || new Date()).getFullYear(), (a.date || new Date()).getMonth(), 1); drawCalendar(); }
+        if (id === 'time') drawTimes();
+        showFooter();
+        scroller.scrollTop = 0;
+        if (id === 'time') scrollTimes();
+        const field = { title: '#tf-title', description: '#tf-description', message: '#tf-message' }[id];
+        if (field) setTimeout(() => $(field).focus(), 60);
+    }
+    function showFooter() {
+        const list = steps();
+        const last = list.indexOf(current) === list.length - 1;
+        $('[data-next-text]').textContent = last ? 'Add Task' : 'Next';
+        backBtn.textContent = list.indexOf(current) === 0 ? 'Cancel' : 'Back';
+    }
+    function go(direction) {
+        message.textContent = '';
+        dialog.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        const list = steps();
+        const i = list.indexOf(current);
+        if (direction > 0) {
+            if (!check(current)) return;
+            if (i === list.length - 1) { save(); return; }
+            show(list[i + 1], 1);
+        } else {
+            if (i === 0) { close(); return; }
+            show(list[i - 1], -1);
+        }
+    }
+    backBtn.addEventListener('click', () => go(-1));
+    form.addEventListener('submit', e => { e.preventDefault(); if (!saving) go(1); });
+    // Enter in a one-line box moves on (the message box keeps Enter for new lines)
+    form.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target.matches('input[type="text"]')) { e.preventDefault(); if (!saving) go(1); }
+    });
+    form.addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('is-invalid'); message.textContent = ''; });
+
+    async function save() {
+        // Immediately: now (it shows on their Current Tasks right away)
+        const when = a.when === 'future' ? new Date(a.date.getFullYear(), a.date.getMonth(), a.date.getDate(), 0, a.time) : new Date();
+        const answers = {
+            type: a.type, assignedTo: a.assigned, title: a.title, description: a.description || '',
+            date: isoDate(when), time: pad(when.getHours()) + ':' + pad(when.getMinutes()),
+        };
+        if (a.type === 'Send Text') {
+            answers.textTo = a.textTo.filter(x => x !== 'other').concat(a.textTo.includes('other') ? [digitsOf($('#tf-text-other').value)] : []);
+            answers.message = a.message;
+        }
+        if (a.type === 'Call') answers.callTo = a.callTo === 'other' ? digitsOf($('#tf-call-other').value) : a.callTo;
         saving = true;
-        saveBtn.disabled = true;
-        saveBtn.classList.add('is-loading');
+        nextBtn.disabled = true;
+        nextBtn.classList.add('is-loading');
         try {
-            await ctx.submit(a);
+            await ctx.submit(answers);
             saving = false;
             dialog.close();
         } catch (err) {
@@ -292,10 +415,15 @@ function build() {
             message.textContent = 'We couldn’t add the task. Please try again.';
         } finally {
             saving = false;
-            saveBtn.disabled = false;
-            saveBtn.classList.remove('is-loading');
+            nextBtn.disabled = false;
+            nextBtn.classList.remove('is-loading');
         }
-    });
+    }
+
+    const close = () => { if (!saving) dialog.close(); };
+    dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+    dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+    dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
 
     return {
         open(next) {
@@ -303,22 +431,14 @@ function build() {
             form.reset();
             dialog.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
             message.textContent = '';
-            form.querySelector('input[name="tf-type"][value="General"]').checked = true;
-            showType();
-            const me = ctx.accounts.find(a => a.id === ctx.me);
-            assigned.setItems([{ value: ctx.me, main: 'Me', secondary: me ? me.name : formatPhone(ctx.me) }]
-                .concat(others().map(a => ({ value: a.id, main: a.name || formatPhone(a.id), secondary: a.name ? formatPhone(a.id) : '' }))));
-            assigned.setValue(ctx.me);
-            textTo.reset();
-            textOther.closest('.tf-other').hidden = true;
-            callTo.setItems([{ value: 'other', main: 'Other', secondary: 'Type in a phone number' }]
-                .concat(everyone().map(a => ({ value: a.id, main: a.name || formatPhone(a.id), secondary: a.name ? formatPhone(a.id) : '' }))));
-            callOther.closest('.tf-other').hidden = true;
-            closeCal();
-            setDefaultWhen();
+            // Starts on the type, for "Me", showing up immediately
+            a = { assigned: ctx.me, when: 'now' };
+            drawLists();
+            drawChoices();
+            drawPicks();
+            show('type', 0);
             dialog.showModal();
             lockPageScroll(dialog);
-            $('.dialog-scroll').scrollTop = 0;
         },
     };
 }
