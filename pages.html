@@ -2624,7 +2624,10 @@
                 saveBtn.classList.add('is-loading');
                 setMessage('', '');
                 try {
-                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields: draft });
+                    // The API marks the HOA disclosure fee as seller-paid itself (and won't take that column from here)
+                    const fields = { ...draft };
+                    delete fields['WHO PAYS DISCLOSURE FEE'];
+                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields });
                     if (!json.ok) throw new Error(json.error);
                     data.page = json.page;
                     // Reload the people list so incomes and credit scores match the new purchasers
