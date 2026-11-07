@@ -19,9 +19,10 @@ const PAGE_CASH_COLUMN = 'CASH PURCHASE';
 // PAGES columns admins can edit from the page's Settings card, and the kind of value each one takes:
 //   money / int: whole numbers (no commas)   rate: a decimal like 0.03 for 3%   bool: TRUE / FALSE
 //   date: m/d/yyyy   payer: Buyer or Seller   text: any short text   [list]: one of those values
+//   cents: a number that may have up to 2 decimals (like 2.5 baths)
 const PAGE_SETTING_FIELDS = {
   'PURCHASE PRICE': 'money', 'SELLER CREDIT': 'rate', 'PROPERTY TYPE': ['Single Family', 'Townhome', 'Condo', 'Manufactured'],
-  'SQFT': 'int', 'YEAR BUILT': 'int', 'HAS POOL': 'bool', 'YEARLY TAXES': 'money',
+  'SQFT': 'int', 'BEDS': 'int', 'BATHS': 'cents', 'YEAR BUILT': 'int', 'HAS POOL': 'bool', 'YEARLY TAXES': 'money',
   'CENSUS DESIGNATION': ['Low', 'Moderate', 'Middle', 'Upper'], 'OFFER ACCEPTANCE DATE': 'date', 'ESCROW DURATION': 'int',
   'EARNEST MONEY DEPOSIT': 'money', 'GIFT FUNDS': 'money',
   'RETAIL LTV': 'rate', 'LENDER POINTS PURCHASED': 'rate', 'PREPAID MI APPLIED': 'bool',

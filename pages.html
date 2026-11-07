@@ -542,6 +542,106 @@
         }
         @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
 
+        /* --- Seller Net: the house card, rising into the hero. One navy line drawing; gold only for window light,
+           which comes on once the net sheet is ready (.is-lit). --- */
+        body.house-view .hero-content { display: none; }
+        body.house-view header { padding-bottom: 160px; }
+        body.house-view main { margin-top: -168px; }
+        /* --roof-h: roof height; --eave: how far the roof hangs past the walls; --chim-w: chimney width */
+        .house-card { position: relative; width: calc(100% - 6px); --roof-h: clamp(92px, 15vw, 118px); --eave: 16px; --chim-w: clamp(30px, 5vw, 40px); --light: #ffd98a; }
+        /* Roof, chimney and walls are one shape with one shadow */
+        .house-shape { filter: drop-shadow(6px 6px 0 var(--navy)); }
+        .house-roof { position: relative; height: var(--roof-h); margin: 0 calc(-1 * var(--eave)); z-index: 2; }
+        .roof-shape { position: absolute; inset: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); pointer-events: none; }
+        /* Tan roof with an ink border */
+        .roof-edge { background: var(--navy); }
+        .roof-face { inset: 3px 5px 2px 5px; background: var(--tan); }
+        /* The address, in the gable */
+        .chimney {
+            position: absolute; left: 71%; top: 6%; width: var(--chim-w); height: 62%;
+            border: 2px solid var(--navy); border-top: 0; background: var(--tan);
+        }
+        .chimney::before { content: ''; position: absolute; left: -8px; right: -8px; top: -10px; height: 10px; border: 2px solid var(--navy); background: var(--tan); border-radius: 3px; }
+        /* Smoke sits outside the shape (so it has no shadow), over the chimney's top */
+        .smoke {
+            position: absolute; z-index: 3; width: 0; height: 0; pointer-events: none;
+            left: calc(0.71 * (100% + 2 * var(--eave)) - var(--eave) + var(--chim-w) / 2);
+            top: calc(var(--roof-h) * 0.06 - 14px);
+        }
+        .smoke span {
+            position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%;
+            background: rgba(233, 226, 216, 0.85); filter: blur(1px); opacity: 0;
+            animation: smoke-rise 4.8s ease-out infinite;
+        }
+        .smoke span:nth-child(2) { animation-delay: 1.2s; }
+        .smoke span:nth-child(3) { animation-delay: 2.4s; }
+        .smoke span:nth-child(4) { animation-delay: 3.6s; }
+        @keyframes smoke-rise {
+            0% { transform: translate(0, 0) scale(0.35); opacity: 0; }
+            15% { opacity: 0.85; }
+            60% { opacity: 0.45; }
+            100% { transform: translate(34px, -110px) scale(2.1); opacity: 0; }
+        }
+        .house-body {
+            position: relative; z-index: 1;
+            background: var(--white); border: 2px solid var(--navy); border-top: 0;
+            padding: 22px 30px 0 30px; text-align: center;
+        }
+        /* 4 Beds | 2.5 Baths | 2,140 Sq Ft */
+        .house-street { font-size: clamp(1.6rem, 5.5vw, 2.3rem); line-height: 1.1; color: var(--navy); overflow-wrap: anywhere; }
+        .house-city { margin-top: 4px; color: var(--navy); opacity: 0.6; }
+        .house-stats { margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 16px; color: var(--navy); font-size: 0.95rem; }
+        .house-stats b { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.1rem; font-weight: 800; }
+        .house-stats i { width: 5px; height: 5px; border-radius: 50%; background: var(--navy); opacity: 0.3; }
+        /* Window | the numbers | window */
+        .house-facade { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 20px; margin-top: 26px; }
+        .proceeds-label { display: block; font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+        .proceeds-value { display: block; margin-top: 4px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(2.2rem, 7vw, 3.2rem); line-height: 1; color: var(--navy); font-variant-numeric: tabular-nums; }
+        .house-sale { margin-top: 10px; color: var(--navy); opacity: 0.7; font-size: 0.95rem; }
+        .house-sale b { font-variant-numeric: tabular-nums; }
+        .proceeds-value.is-tbd { letter-spacing: 3px; }
+        .proceeds-value.is-tbd { opacity: 0.35; }
+        /* Windows: dark until the numbers are in, then the lights come on one by one */
+        .house-window {
+            position: relative; background-color: #e3e7ea;
+            transition: background-color 0.9s ease, box-shadow 0.9s ease;
+        }
+        .house-window { width: 64px; height: 72px; border-radius: 12px; }
+        .house-window::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            background: var(--light);
+            opacity: 0; transition: opacity 0.9s ease;
+        }
+        .is-lit .house-window::before { opacity: 1; animation: lamp-flicker 6s ease-in-out infinite; }
+        .is-lit .house-window { box-shadow: 0 0 22px rgba(255, 200, 110, 0.55); }
+        .is-lit .lamp-1, .is-lit .lamp-1::before { transition-delay: 0.3s; }
+        .is-lit .lamp-3, .is-lit .lamp-3::before { transition-delay: 1s; }
+        .is-lit .lamp-3::before { animation-delay: 3s; }
+        @keyframes lamp-flicker { 0%, 100% { opacity: 1; } 45% { opacity: 0.8; } 50% { opacity: 0.92; } 55% { opacity: 0.78; } }
+        /* Front door on the ground line */
+        .house-door {
+            position: relative; width: 66px; height: 100px; margin: 26px auto 0 auto;
+            border-radius: 33px 33px 0 0; background: var(--navy);
+        }
+        .house-door::after { content: ''; position: absolute; right: 9px; top: 58px; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+        @media (max-width: 560px) {
+            body.house-view header { padding-bottom: 150px; }
+            body.house-view main { margin-top: -146px; }
+            .house-card { --eave: 12px; --roof-h: 92px; }
+            .house-body { padding: 18px 16px 0 16px; }
+            .house-stats { font-size: 0.85rem; gap: 6px 12px; }
+            .house-stats b { font-size: 1rem; }
+            .house-facade { gap: 10px; margin-top: 22px; }
+            .house-window { width: 40px; height: 48px; border-radius: 10px; }
+            .proceeds-label { font-size: 0.66rem; letter-spacing: 1px; }
+            .proceeds-value { font-size: 1.9rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .smoke span { animation: none; opacity: 0; }
+            .is-lit .house-window::before { animation: none; }
+            .house-window, .house-window::before { transition: none; }
+        }
+
         /* --- Scroll Reveal --- */
         .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
         .reveal.is-visible { opacity: 1; transform: none; }
@@ -1072,6 +1172,33 @@
             </div>
         </section>
 
+        <!-- 1. Seller Net: the home, drawn as a house (its lights come on once the net sheet is ready) -->
+        <section class="house-card reveal" id="house-card" hidden>
+            <div class="smoke" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <div class="house-shape">
+                <div class="house-roof">
+                    <div class="chimney" aria-hidden="true"></div>
+                    <div class="roof-shape roof-edge" aria-hidden="true"></div>
+                    <div class="roof-shape roof-face" aria-hidden="true"></div>
+                </div>
+                <div class="house-body">
+                    <h1 class="house-street" id="house-street"></h1>
+                    <p class="house-city" id="house-city"></p>
+                    <p class="house-stats" id="house-stats"></p>
+                    <div class="house-facade">
+                        <span class="house-window lamp-1" aria-hidden="true"></span>
+                        <div class="house-numbers">
+                            <span class="proceeds-label">Proceeds From The Sale</span>
+                            <span class="proceeds-value" id="house-proceeds">TBD</span>
+                            <p class="house-sale">Sale Price <b id="house-price">TBD</b></p>
+                        </div>
+                        <span class="house-window lamp-3" aria-hidden="true"></span>
+                    </div>
+                    <div class="house-door" aria-hidden="true"></div>
+                </div>
+            </div>
+        </section>
+
         <!-- 2. Escrow breakdown -->
         <section class="main-card reveal" id="escrow-card" hidden>
             <span class="card-eyebrow" id="escrow-eyebrow">Cash To Close</span>
@@ -1136,6 +1263,12 @@
                 <span class="field-label" id="lender-label">Lender</span>
                 <div id="lender-picker"></div>
             </div>
+            </div>
+
+            <!-- Seller Net only: the home itself -->
+            <div class="settings-section" id="property-section" hidden>
+                <h3 class="money-section-title">Property</h3>
+                <div class="settings-grid" id="property-fields"></div>
             </div>
 
             <div class="settings-section">
@@ -1747,6 +1880,9 @@
             need('Seller Credit To Buyer', 'SELLER CREDIT');
             need('Property Type', 'PROPERTY TYPE');
             need('Year Built', 'YEAR BUILT');
+            need('Beds', 'BEDS');
+            need('Baths', 'BATHS');
+            need('Sqft', 'SQFT');
             need('Yearly Taxes', 'YEARLY TAXES');
             need('Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             need('Escrow Duration', 'ESCROW DURATION');
@@ -2068,13 +2204,49 @@
         // Seller Net pages share the Settings card (and its save) with buyer breakdowns
         const isSellerNet = () => text(data && data.pageType).toLowerCase() === 'seller net';
 
+        // Seller Net: the house card. Sale price and proceeds are "TBD" until the net sheet is ready; then the lights
+        // come on and (the first time) the numbers count up.
+        let houseCounted = false;
+        function renderHouse(page, result, ready) {
+            document.getElementById('house-street').textContent = text(col(page, 'STREET ADDRESS')) || 'Your Home';
+            document.getElementById('house-city').textContent = [text(col(page, 'CITY')), [text(col(page, 'STATE')), text(col(page, 'ZIP'))].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+            const beds = text(col(page, 'BEDS'));
+            const baths = text(col(page, 'BATHS'));
+            const sqft = text(col(page, 'SQFT'));
+            const stat = (value, one, many) => '<span><b>' + escapeHtml(value || '–') + '</b> ' + (num(value) === 1 ? one : many) + '</span>';
+            document.getElementById('house-stats').innerHTML = [stat(beds, 'Bed', 'Beds'), stat(baths, 'Bath', 'Baths'), stat(sqft === '' ? '' : withCommas(digits(sqft)), 'Sq Ft', 'Sq Ft')].join('<i aria-hidden="true"></i>');
+            document.getElementById('house-card').classList.toggle('is-lit', ready);
+            const price = toDollars(result.price);
+            const net = toDollars(result.net);
+            const fmt = n => (n < 0 ? '−' : '') + wholeMoney.format(Math.abs(n));
+            const boxes = [['house-price', price], ['house-proceeds', net]];
+            boxes.forEach(([id, n]) => {
+                const box = document.getElementById(id);
+                box.classList.toggle('is-tbd', !ready);
+                box.textContent = ready ? fmt(n) : 'TBD';
+            });
+            if (!ready) return;
+            // The first time the numbers are in, they count up as the lights come on
+            if (!houseCounted && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                const start = performance.now();
+                const tick = now => {
+                    const k = Math.min(1, (now - start) / 1600);
+                    const ease = 1 - Math.pow(1 - k, 3);
+                    boxes.forEach(([id, n]) => { document.getElementById(id).textContent = fmt(Math.round(n * ease)); });
+                    if (k < 1) requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            }
+            houseCounted = true;
+        }
+
         function update() {
             // Seller Net: the numbers with any unsaved settings edits
             if (isSellerNet()) {
                 const page = { ...data.page, ...draft };
                 const result = calculateSellerNet(page);
-                renderProperty(page, result);
-                if (!text(col(page, 'CITY'))) document.getElementById('hero-sub').textContent = 'Estimated proceeds from selling this home.';
+                const missing = sellerNetMissing(page);
+                renderHouse(page, result, !missing.client.length && !missing.agent.length);
                 renderEscrow(result);
                 renderNetWaiting(page);
                 return;
@@ -2600,6 +2772,21 @@
             f.body.append(box.wrap);
             parent.append(f.wrap);
         }
+        // A number that can have a decimal (like 2.5 baths), up to 2 places
+        function decimalField(parent, label, column, opts = {}) {
+            const f = fieldShell(label, { key: column, ...opts });
+            const box = textBox({
+                value: text(current(column)), placeholder: '0', inputmode: 'decimal',
+                onInput: i => {
+                    const t = i.value.trim();
+                    const ok = t === '' || /^(\d+\.?\d{0,2}|\.\d{1,2})$/.test(t);
+                    fieldBad(column, ok ? '' : 'Please enter a number, like 2 or 2.5.');
+                    if (ok) setDraft(column, t === '' ? '' : String(Number(t))); else settingsEdited();
+                },
+            });
+            f.body.append(box.wrap);
+            parent.append(f.wrap);
+        }
         function percentField(parent, label, column, opts = {}) {
             const f = fieldShell(label, { key: column, ...opts });
             const box = textBox({
@@ -2971,12 +3158,18 @@
             document.getElementById('loan-payoff-section').hidden = false;
             document.getElementById('loan-title').textContent = 'Payoff Fees';
 
+            document.getElementById('property-section').hidden = false;
+            const home = document.getElementById('property-fields');
+            choiceField(home, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
+            wholeField(home, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
+            wholeField(home, 'Beds', 'BEDS');
+            decimalField(home, 'Baths', 'BATHS');
+            wholeField(home, 'Sqft', 'SQFT', { commas: true, suffix: 'sq ft' });
+            moneyField(home, 'Yearly Taxes', 'YEARLY TAXES');
+
             const sale = document.getElementById('purchase-fields');
             moneyField(sale, 'Sale Price', 'PURCHASE PRICE');
             percentField(sale, 'Seller Credit To Buyer', 'SELLER CREDIT');
-            choiceField(sale, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
-            wholeField(sale, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
-            moneyField(sale, 'Yearly Taxes', 'YEARLY TAXES');
             dateField(sale, 'Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             wholeField(sale, 'Escrow Duration', 'ESCROW DURATION', { suffix: 'days' });
 
@@ -3381,7 +3574,9 @@
                 setupSellerFields();
             }
             statusCard.hidden = true;
-            [propertyCard, escrowCard].forEach(c => { c.hidden = false; });
+            // The house card takes the hero's place
+            document.body.classList.add('house-view');
+            [document.getElementById('house-card'), escrowCard].forEach(c => { c.hidden = false; });
             loanCard.hidden = !data.isAdmin;
             initReveal();
         }
