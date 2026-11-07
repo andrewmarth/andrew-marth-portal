@@ -53,6 +53,7 @@ const PAGE_SETTING_FIELDS = {
   'PREPAYMENT PENALTY %': 'rate', 'PREPAYMENT PENALTY $': 'money',
   'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
   'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
+  'LISTING STATUS': ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'],
 };
 
 // Checks one submitted setting. Returns the value to write, or null if it isn't allowed. Blank is always allowed.
@@ -394,8 +395,58 @@ async function updatePageAccess_(id, account, body) {
     fields[PAGE_ROLE_COLUMNS[i]] = person ? person.type : '';
   });
   if (!isSellerNet) fields[PAGE_LENDER_COLUMN] = lender || '';
+  // Seller Net: the other versions (found before saving, while they still have the same sellers as this one)
+  const siblings = isSellerNet ? await otherVersions_(found) : [];
   await update('pages', found.docId, fields);
+  if (siblings.length) await shareGlobalSettings_(siblings, fields, people.filter(p => p.type === 'Seller'));
   return { ok: true, page: (await findPage_(body.pageId)).row };
+}
+
+// --- Seller Net versions ---
+// Versions of a Seller Net page are the pages with the same PAGE TYPE, the same home (addressKey_) and the same
+// sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
+// everything else (Version Settings) belongs to one version.
+const SELLER_NET_GLOBAL_FIELDS = () => ['LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
+  'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE'].concat(CLIENT_INPUT_FIELDS);
+
+// The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
+function sellerKey_(page) {
+  const ids = PAGE_PEOPLE_COLUMNS.map((col, i) => String(page[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() === 'collaborator' ? '' : phoneToId_(page[col]))
+    .filter(Boolean);
+  return [...new Set(ids)].sort().join(',');
+}
+function versionKey_(page) {
+  return [String(page['PAGE TYPE'] || '').trim().toLowerCase(), addressKey_(page), sellerKey_(page)].join('#');
+}
+// Every version of this page, itself included
+async function sellerNetVersions_(page) {
+  const key = versionKey_(page);
+  return (await rows('pages')).filter(p => String(p['PAGE ID'] || '').trim() && versionKey_(p) === key);
+}
+async function otherVersions_(found) {
+  return (await sellerNetVersions_(found.row)).filter(p => p._id !== found.docId);
+}
+
+// Copies the Global Settings in fields to the other versions. sellers (when given): the new sellers, who replace
+// each version's own; its collaborators stay (minus anyone who is now a seller), up to six people in all.
+async function shareGlobalSettings_(siblings, fields, sellers) {
+  const shared = {};
+  SELLER_NET_GLOBAL_FIELDS().forEach(c => { if (Object.prototype.hasOwnProperty.call(fields, c)) shared[c] = fields[c]; });
+  for (const p of siblings) {
+    const own = Object.assign({}, shared);
+    if (sellers) {
+      const sellerIds = sellers.map(s => s.id);
+      const collaborators = PAGE_PEOPLE_COLUMNS.map((col, i) => ({ id: phoneToId_(p[col]), role: String(p[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() }))
+        .filter(x => x.id && x.role === 'collaborator' && !sellerIds.includes(x.id))
+        .map(x => ({ id: x.id, type: 'Collaborator' }));
+      const people = sellers.concat(collaborators).slice(0, PAGE_PEOPLE_COLUMNS.length);
+      PAGE_PEOPLE_COLUMNS.forEach((col, i) => {
+        own[col] = people[i] ? people[i].id : '';
+        own[PAGE_ROLE_COLUMNS[i]] = people[i] ? people[i].type : '';
+      });
+    }
+    if (Object.keys(own).length) await update('pages', p._id, own);
+  }
 }
 
 // Seller Net "Client Input": what the seller fills in themselves (their loan and HOA). Anyone on the page (or an admin)
@@ -418,7 +469,12 @@ async function saveClientInput_(id, account, body) {
     if (value === null) return { ok: false, error: 'invalid_value', field: column };
     fields[column] = value;
   }
-  if (Object.keys(fields).length) await update('pages', found.docId, fields);
+  if (Object.keys(fields).length) {
+    // These are Global Settings, so every version of the page gets them
+    const siblings = await otherVersions_(found);
+    await update('pages', found.docId, fields);
+    if (siblings.length) await shareGlobalSettings_(siblings, fields, null);
+  }
   return { ok: true, page: (await findPage_(body.pageId)).row };
 }
 
@@ -2075,6 +2131,10 @@ async function pageData_(id, account, pageId) {
     accounts: isAdmin ? await accountChoices_() : null,
   };
   if (result.pageType.toLowerCase() === 'buyer breakdown') await addBuyerBreakdownData_(result, page);
+  // Seller Net: every version the viewer can see (this one included), for the version dropdown
+  if (result.pageType.toLowerCase() === 'seller net') {
+    result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
+  }
   return result;
 }
 
