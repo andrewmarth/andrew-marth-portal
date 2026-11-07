@@ -896,7 +896,6 @@
         .net-waiting h3 { margin: 0 0 8px 0; font-size: 1.15rem; }
         .net-waiting p { margin: 0 0 14px 0; line-height: 1.5; }
         .net-waiting .net-waiting-agent { margin: 14px 0 0 0; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-size: 0.85rem; color: var(--olive); }
-        .net-waiting .net-missing { margin: 14px 0 0 0; font-size: 0.8rem; opacity: 0.7; }
         /* The seller's Client Input pop-up: a $ in front of amounts, "%" / "months" after */
         .client-dialog .cl-box { position: relative; max-width: 300px; }
         .client-dialog .cl-money::before { content: '$'; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
@@ -975,6 +974,11 @@
         #loan-card .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
         #loan-card .field.editable.is-changed .view-row .vv { color: var(--gold); }
         #loan-card .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
+        /* Missing (Seller Net): the same look as Edited, in red */
+        .missing-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(224, 96, 79, 0.25); color: #f2b8a8; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .field.editable.is-missing .missing-tag { display: inline-block; }
+        #loan-card .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
+        #loan-card .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
         /* The open editor stays light, so its inputs read the same as before */
         /* (the #loan-card row padding would otherwise win over the editor's own padding) */
         #loan-card .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
@@ -1001,7 +1005,7 @@
             .view-row .vk { grid-column: 1; }
             .view-row .vv { grid-column: 1; text-align: left; opacity: 0.85; }
             .view-row .edit-btn { grid-column: 2; grid-row: 1 / span 3; }
-            .view-row .edited-tag { grid-column: 1; justify-self: start; }
+            .view-row .edited-tag, .view-row .missing-tag { grid-column: 1; justify-self: start; }
         }
     </style>
 </head>
@@ -1717,13 +1721,28 @@
         }
 
         // Seller Net: which inputs are still blank. client: the seller's own questions (Client Input) that apply;
-        // agent: everything else the numbers need (Other Loan Payoff Fees and the HOA Other Fee are optional, and the
-        // HOA fees only count when there's an HOA). Labels, for the admin's list.
-        function sellerNetMissing(page) {
-            const get = c => text(col(page, c));
+        // agent: everything else the numbers need (the HOA fees only when there's an HOA). rows: the Settings card
+        // rows holding them, by name. get(column) reads a value (default: the saved page).
+        function sellerNetMissing(page, get = c => text(col(page, c))) {
             const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && get(p.column) === '').map(p => p.label);
+            const rows = new Set();
+            if (client.length) rows.add('Client Input');
+            // Loan Type and Loan Term are in Agent Input too; HOA yes / no has its own row
+            if (client.some(l => l === 'Loan Type' || l === 'Loan Term')) rows.add('Agent Input');
+            if (client.includes('HOA')) rows.add('HOA');
+            // Everything needs a value (0 counts): each label is listed when any of its columns is blank
             const agent = [];
-            const need = (label, ...columns) => { if (columns.every(c => get(c) === '')) agent.push(label); };
+            const ROW_OF = { 'Original Loan Amount': 'Agent Input', 'Original Loan Date': 'Agent Input' };
+            const need = (label, ...columns) => {
+                if (!columns.some(c => get(c) === '')) return;
+                agent.push(label);
+                const row = label.replace(/ (\(Estimated \/ Final\)|%|\$)$/, '');
+                rows.add(ROW_OF[row] || row);
+            };
+            const fee = (label, column, ...more) => {
+                need(label, column, ...more);
+                need(label + ' (Estimated / Final)', column + ' STATUS');
+            };
             need('Sale Price', 'PURCHASE PRICE');
             need('Seller Credit To Buyer', 'SELLER CREDIT');
             need('Property Type', 'PROPERTY TYPE');
@@ -1733,18 +1752,28 @@
             need('Escrow Duration', 'ESCROW DURATION');
             need('Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
             need('Original Loan Date', 'ORIGINAL LOAN DATE');
-            need('Recording Fee', 'RECORDING FEE');
-            need('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
+            fee('Recording Fee', 'RECORDING FEE');
+            fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
+            need('Other Loan Payoff Fees %', 'OTHER LOAN PAYOFF FEES %');
+            need('Other Loan Payoff Fees $', 'OTHER LOAN PAYOFF FEES $');
+            need('Other Loan Payoff Fees (Estimated / Final)', 'OTHER LOAN PAYOFF FEES STATUS');
             need('Escrow Fee', 'ESCROW FEE RATE');
             need('Owners Title Insurance', 'OWNERS TITLE RATE');
             if (get('HAS HOA') === 'Yes') {
-                need('HOA Transfer Fee', 'HOA TRANSFER FEE');
-                need('HOA Cap Fee', 'HOA CAP FEE');
-                need('HOA Disclosure Fee', 'HOA DISCLOSURE FEE');
+                need('HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
+                need('HOA Transfer Fee (Estimated / Final)', 'HOA TRANSFER FEE STATUS');
+                need('HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
+                need('HOA Cap Fee (Estimated / Final)', 'HOA CAP FEE STATUS');
+                fee('HOA Disclosure Fee', 'HOA DISCLOSURE FEE');
+                need('HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
+                fee('HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES');
+                fee('HOA Master Dues', 'HOA MASTER MONTHLY DUES');
             }
-            need('Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $');
-            need('Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $');
-            return { client, agent };
+            need('Buyers Agent Commission %', 'SELLER PAID BUYER COMMISSION %');
+            need('Buyers Agent Commission $', 'SELLER PAID BUYER COMMISSION $');
+            need('Listing Agent Commission %', 'LISTING AGENT COMMISSION %');
+            need('Listing Agent Commission $', 'LISTING AGENT COMMISSION $');
+            return { client, agent, rows };
         }
         // Seller Net: while anything is missing, the numbers are hidden and this says what's holding them up: a button for
         // the seller's own questions, and "Waiting on Andrew Marth" for the rest
@@ -1755,12 +1784,11 @@
             const box = document.getElementById('net-waiting');
             box.hidden = !waiting;
             if (!waiting) { box.innerHTML = ''; return; }
-            // The seller's questions come first; "Waiting on Andrew Marth" (and, for admins, what's missing) only once they're answered
+            // The seller's questions come first; "Waiting on Andrew Marth" only once they're answered
             box.innerHTML = '<h3>Your Net Sheet Isn’t Ready Yet</h3>'
                 + (missing.client.length
                     ? '<p>We need a few details about your loan and HOA to finish it.</p><button type="button" class="btn" data-client-input>Add Your Loan Details</button>'
-                    : '<p class="net-waiting-agent">Waiting on Andrew Marth</p>'
-                        + (data.isAdmin ? '<p class="net-missing">Missing: ' + escapeHtml(missing.agent.join(', ')) + '</p>' : ''));
+                    : '<p class="net-waiting-agent">Waiting on Andrew Marth</p>');
         }
         document.getElementById('net-waiting').addEventListener('click', e => {
             if (!e.target.closest('[data-client-input]')) return;
@@ -2600,7 +2628,7 @@
             parent.append(f.wrap);
         }
         // HOA fee with a Buyer / Seller toggle on the same line
-        function feeWithPayer(parent, label, feeColumn, payerColumn, status) {
+        function feeWithPayer(parent, label, feeColumn, payerColumn, opts = {}) {
             const f = fieldShell(label, { span: true });
             const row = el('div', 'pair');
             const box = textBox({
@@ -2608,10 +2636,13 @@
                 onInput: i => setDraft(feeColumn, digits(i.value)),
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
-            const payer = /^seller$/i.test(current(payerColumn)) ? 'Seller' : 'Buyer';
-            row.append(box.wrap, segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payer, v => setDraft(payerColumn, v), label + ' paid by'));
+            // Seller Net (opts.required): blank picks neither, so it has to be answered. Buyer Breakdown: blank is Buyer.
+            const payerOf = () => (/^seller$/i.test(current(payerColumn)) ? 'Seller' : /^buyer$/i.test(current(payerColumn)) || !opts.required ? 'Buyer' : '');
+            const payerSeg = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payerOf(), v => setDraft(payerColumn, v), label + ' paid by');
+            row.append(box.wrap, payerSeg);
             f.body.append(row);
-            if (status) statusToggle(f, status);
+            const syncStatus = opts.status ? statusToggle(f, opts.status) : null;
+            f.wrap.syncInputs = () => { box.input.value = withCommas(wholeDollars(current(feeColumn))); setSeg(payerSeg, payerOf()); if (syncStatus) syncStatus(); };
             parent.append(f.wrap);
         }
         // Optional % and $ boxes side by side
@@ -2955,7 +2986,7 @@
             const payoffs = document.getElementById('loan-fields');
             moneyField(payoffs, 'Recording Fee', 'RECORDING FEE', { status: 'RECORDING FEE STATUS' });
             moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE', { status: 'PAYOFF STATEMENT FEE STATUS' });
-            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance, a flat amount, or both. Both are optional.', 'OTHER LOAN PAYOFF FEES STATUS');
+            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance and a flat amount. Enter 0 for none.', 'OTHER LOAN PAYOFF FEES STATUS');
 
             const misc = document.getElementById('misc-fields');
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
@@ -2971,15 +3002,15 @@
             hoaField.wrap.syncInputs = () => setSeg(hoaSeg, current('HAS HOA'));
             misc.append(hoaField.wrap);
             const hoaStart = misc.children.length;
-            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', 'HOA TRANSFER FEE STATUS');
-            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', 'HOA CAP FEE STATUS');
+            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', { status: 'HOA TRANSFER FEE STATUS', required: true });
+            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', { status: 'HOA CAP FEE STATUS', required: true });
             moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.', status: 'HOA DISCLOSURE FEE STATUS' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
-            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
+            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE', { required: true });
             moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
             moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month', status: 'HOA MASTER MONTHLY DUES STATUS' });
             hoaFields = [...misc.children].slice(hoaStart);
-            percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price, a flat amount, or both. Both are optional.');
-            percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
+            percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.');
+            percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price and a flat amount. Enter 0 for none.');
 
             validateSettings();
             makeEditable(loanCard);
@@ -3029,6 +3060,7 @@
                 });
                 const tag = el('span', 'edited-tag', 'Edited');
                 row.insertBefore(tag, value);
+                row.insertBefore(el('span', 'missing-tag', 'Missing'), value);
                 editableFields.push({ field, value, saved: null });
             });
             refreshDisplays();
@@ -3070,6 +3102,15 @@
             });
             return parts.join(' \u00b7 ');
         }
+        // Seller Net: settings the net sheet still needs (by what's entered so far) are marked red, with a Missing tag
+        function markMissingRows() {
+            const seller = data && data.page && text(data.pageType).toLowerCase() === 'seller net';
+            const rows = seller ? sellerNetMissing(data.page, c => text(current(c))).rows : new Set();
+            editableFields.forEach(({ field }) => {
+                const name = field.querySelector('.view-row .vk');
+                field.classList.toggle('is-missing', !!name && rows.has(name.textContent) && field.style.display !== 'none' && !field.hidden);
+            });
+        }
         function refreshDisplays() {
             // Closed settings show what's in the draft (Client Input can change the HOA dues)
             editableFields.forEach(({ field }) => { if (field.syncInputs && !field.classList.contains('is-editing')) field.syncInputs(); });
@@ -3081,6 +3122,7 @@
                 // Edited = different from the saved value (changing it back clears this)
                 field.classList.toggle('is-changed', saved !== null && text !== saved);
             });
+            markMissingRows();
         }
         // Talks to the Portal API as the signed-in person
         async function api(payload) {
