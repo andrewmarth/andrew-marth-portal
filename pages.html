@@ -718,6 +718,23 @@
         .money-list .v.is-debit { color: #b3392f; }
         .money-list .v.is-zero { opacity: 0.45; }
         .fine-note { margin-top: 14px; font-size: 0.85rem; line-height: 1.5; opacity: 0.75; }
+        /* Admin "How The Numbers Work" card: each step with its formula under it, and the result line in bold */
+        .math-intro { margin: -4px 0 22px 0; font-size: 0.92rem; opacity: 0.75; }
+        .math-list .v { font-weight: normal; }
+        .math-list .k { font-weight: normal; }
+        .math-list .k small { margin-top: 2px; }
+        .math-list li.is-result { border-top: 2px solid var(--navy); }
+        .math-list li.is-result .k, .math-list li.is-result .v { font-weight: bold; }
+        .math-list li.is-result .v.is-credit { color: #2f7d4a; }
+        .math-list li.is-result .v.is-debit { color: #b3392f; }
+        .math-schedule { margin-top: 4px; }
+        .math-schedule summary { cursor: pointer; padding: 10px 2px; font-weight: bold; color: var(--rust); }
+        .math-table-wrap { max-height: 340px; overflow: auto; border: 1px solid rgba(78, 81, 62, 0.2); border-radius: 12px; }
+        .math-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+        .math-table th, .math-table td { padding: 8px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid rgba(78, 81, 62, 0.12); }
+        .math-table th:first-child, .math-table td:first-child { text-align: left; }
+        .math-table th { position: sticky; top: 0; background: #f6f2ec; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; }
+        .math-table tr:last-child td { border-bottom: none; }
         .fine-note.is-alert { opacity: 1; padding: 12px 14px; border-radius: 14px; background: #fdf6e9; border: 1px solid rgba(192, 144, 80, 0.5); }
 
         /* Payment & Approval card */
@@ -1061,15 +1078,24 @@
         .problem-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         /* Settings card: brown with soft gold and rust glows (same as the home page's My Buyers card) */
-        #loan-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
-        #loan-card::before,
-        #loan-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
-        #loan-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
-        #loan-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
-        #loan-card > * { position: relative; z-index: 1; }
-        #loan-card .card-eyebrow { color: var(--gold); }
-        #loan-card h2 { color: var(--cream); }
-        #loan-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        #loan-card, #math-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        #loan-card::before, #math-card::before,
+        #loan-card::after, #math-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        #loan-card::before, #math-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        #loan-card::after, #math-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        #loan-card > *, #math-card > * { position: relative; z-index: 1; }
+        #loan-card .card-eyebrow, #math-card .card-eyebrow { color: var(--gold); }
+        #loan-card h2, #math-card h2 { color: var(--cream); }
+        #loan-card .money-section-title, #math-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        /* How The Numbers Work, on the same brown */
+        #math-card .money-list li { border-bottom-color: rgba(233, 226, 216, 0.15); }
+        #math-card .math-list li.is-result { border-top-color: rgba(233, 226, 216, 0.5); }
+        #math-card .math-list li.is-result .v.is-credit { color: #9fd8a9; }
+        #math-card .math-list li.is-result .v.is-debit { color: #f2b8a8; }
+        #math-card .math-schedule summary { color: var(--gold); }
+        #math-card .math-table-wrap { border-color: rgba(233, 226, 216, 0.25); }
+        #math-card .math-table th { background: #5c3836; color: var(--gold); }
+        #math-card .math-table th, #math-card .math-table td { border-bottom-color: rgba(233, 226, 216, 0.12); }
         #loan-card .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
         #loan-card .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
         #loan-card .field.editable.is-changed .view-row .vv { color: var(--gold); }
@@ -1307,6 +1333,14 @@
                     Save Settings
                 </button>
             </div>
+        </section>
+
+        <!-- 5. Seller Net, admins only: how the loan payoff, HOA dues prorations and property taxes are worked out -->
+        <section class="main-card reveal" id="math-card" hidden>
+            <span class="card-eyebrow">Admin Only</span>
+            <h2>How The Numbers Work</h2>
+            <p class="math-intro">Step by step, for the escrow breakdown lines that are calculated. Includes any unsaved settings edits.</p>
+            <div id="math-list"></div>
         </section>
     </main>
 
@@ -1611,7 +1645,9 @@
             let rate = num(col(page, 'LOAN INTEREST RATE'));
             if (rate > 1) rate /= 100; // "6.5" means 6.5%
             const months = num(col(page, 'LOAN TERM MONTHS'));
-            if (!balance || !from || !date || !originalDate || !months) return { balance, warning: balance && date ? 'Couldn\'t project this to the closing date, so the balance entered is shown' : '' };
+            // (the details are for the admin "How The Numbers Work" card)
+            const details = { known, start: balance, from, original, originalDate, rate, months, date };
+            if (!balance || !from || !date || !originalDate || !months) return { balance, details, warning: balance && date ? 'Couldn\'t project this to the closing date, so the balance entered is shown' : '' };
             const r = rate / 12;
             // Fixed monthly payment: from the original amount, or (without one) from the known balance over the months left
             const firstDue = new Date(originalDate.getFullYear(), originalDate.getMonth() + 2, 1);
@@ -1619,8 +1655,15 @@
             const paidBy = d => { let k = 0; while (k < months && dueDate(k) <= d) k++; return k; };
             const amortized = (amount, n) => !n ? amount : r ? amount * r / (1 - Math.pow(1 + r, -n)) : amount / n;
             const payment = original ? amortized(original, months) : amortized(balance, months - paidBy(from));
-            for (let k = paidBy(from); k < paidBy(date); k++) balance = Math.max(0, balance * (1 + r) - payment);
-            return { balance, warning: '' };
+            const schedule = [];
+            for (let k = paidBy(from); k < paidBy(date); k++) {
+                const interest = balance * r;
+                const next = Math.max(0, balance + interest - payment);
+                schedule.push({ number: k + 1, date: dueDate(k), interest, principal: balance - next, balance: next });
+                balance = next;
+            }
+            Object.assign(details, { projected: true, payment, firstDue, paidBefore: paidBy(from), schedule });
+            return { balance, details, warning: '' };
         }
 
         function calculateSellerNet(page) {
@@ -1636,6 +1679,7 @@
             // Property taxes: the buyer breakdown's credit, as a charge to the seller
             const yearlyTaxes = num(col(page, 'YEARLY TAXES'));
             let taxCharge = 0;
+            let tax = null;
             if (closing) {
                 const year = closing.getFullYear();
                 const yearDays = new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
@@ -1643,6 +1687,7 @@
                 const sellerShare = yearlyTaxes * sellerDays / yearDays;
                 const firstHalfPaid = closing >= new Date(year, 9, 1) ? yearlyTaxes / 2 : 0;
                 taxCharge = Math.max(0, sellerShare - firstHalfPaid);
+                tax = { year, yearDays, sellerDays, sellerShare, firstHalfPaid };
             }
 
             const loan = loanBalanceOn(page, closing);
@@ -1695,6 +1740,8 @@
             const sum = list => round2(list.reduce((s, l) => s + l.amount, 0));
             return {
                 sellerNet: true, lines, acceptance, closing, yearlyTaxes, price,
+                // For the admin "How The Numbers Work" card
+                math: { escrowDays: num(col(page, 'ESCROW DURATION')), daysInMonth, daysLeft, tax, taxCharge, loan: loan.details, loanWarning: loan.warning, principal },
                 payoffs: sum(lines.filter(l => l.payoff)),
                 costs: sum(lines.filter(l => !l.payoff && l.label !== 'Sale Price')),
                 net: sum(lines),
@@ -1762,6 +1809,117 @@
                 + row('Loan Payoffs', result.payoffs)
                 + '<li class="is-total"><span class="k">' + (net < 0 ? 'Seller Owes At Closing' : 'Estimated Net To Seller') + '</span><span class="v">'
                 + wholeMoney.format(Math.abs(net)) + '</span></li>';
+        }
+
+        // Seller Net, admins only: each calculated escrow line, step by step (with any unsaved settings edits)
+        function renderMath(page, result) {
+            const m = result.math;
+            const cents = n => money.format(n);
+            const pct = n => (Math.round(n * 1e6) / 1e4) + '%';
+            const lineAmount = label => (result.lines.find(l => l.label === label) || {}).amount || 0;
+            const shortDate = d => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set';
+            // A step: label, its value and (under the label) how it's worked out
+            const step = (k, v, how) => '<li><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '')
+                + '</span><span class="v">' + escapeHtml(v) + '</span></li>';
+            const resultRow = (k, amount, how) => {
+                const shown = toDollars(amount);
+                const cls = shown > 0 ? ' is-credit' : shown < 0 ? ' is-debit' : '';
+                return '<li class="is-result"><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '')
+                    + '</span><span class="v' + cls + '">' + signedMoney(amount) + '</span></li>';
+            };
+            const warn = w => '<li><span class="k"><small class="is-warning">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small></span></li>';
+            const section = (title, rows, extra = '') => '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(title)
+                + '</h3><ul class="money-list math-list">' + rows.join('') + '</ul>' + extra + '</section>';
+            const closing = result.closing;
+            const noClosing = 'Needs the Offer Acceptance Date and Escrow Duration to find the closing date';
+
+            // The closing date (the prorations count from it)
+            const dates = [
+                step('Offer Acceptance Date', fmtDate(result.acceptance)),
+                step('Escrow Duration', m.escrowDays + ' days'),
+                step('Projected Closing Date', fmtDate(closing), 'Offer acceptance date + escrow duration'),
+            ];
+
+            // 1. Principal Loan Amount
+            const L = m.loan;
+            const loanRows = [
+                step('Starting Balance', cents(L.start), L.known
+                    ? 'Loan Principal Balance, as of ' + fmtDate(L.from)
+                    : 'No principal balance entered, so this starts from the Original Loan Amount on ' + fmtDate(L.originalDate)),
+                step('Interest Rate', pct(L.rate) + ' a year', L.rate ? pct(L.rate / 12) + ' a month (yearly rate ÷ 12)' : ''),
+                step('Loan Term', L.months + ' months'),
+            ];
+            let schedule = '';
+            if (L.projected) {
+                const n = L.schedule.length;
+                const sum = key => L.schedule.reduce((s, p) => s + p[key], 0);
+                loanRows.push(
+                    step('Monthly Payment', cents(L.payment), L.original
+                        ? 'Principal and interest: the fixed payment on the ' + cents(L.original) + ' original loan over ' + L.months + ' months at ' + pct(L.rate)
+                        : 'Principal and interest: the fixed payment on the ' + cents(L.start) + ' balance over the ' + (L.months - L.paidBefore) + ' months left at ' + pct(L.rate)),
+                    step('First Payment Due', fmtDate(L.firstDue), 'Payments are due on the 1st, starting the second month after the ' + fmtDate(L.originalDate) + ' loan date'),
+                );
+                if (L.known) loanRows.push(step('Payments Before The Starting Balance', String(L.paidBefore), 'Payments due on or before ' + fmtDate(L.from) + ' (already in that balance)'));
+                loanRows.push(
+                    step('Payments Until Closing', String(n), n
+                        ? 'Due ' + shortDate(L.schedule[0].date) + (n > 1 ? ' through ' + shortDate(L.schedule[n - 1].date) : '') + ' (after ' + shortDate(L.from) + ', on or before closing)'
+                        : 'No payments come due between ' + shortDate(L.from) + ' and closing'),
+                );
+                if (n) loanRows.push(
+                    step('Interest In Those Payments', cents(sum('interest')), 'Each month: the balance × the monthly rate'),
+                    step('Principal Paid Down', '−' + cents(sum('principal')), 'Each month: the payment − that month\'s interest'),
+                );
+                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'),
+                    'Starting balance − principal paid down = ' + cents(m.principal) + ', the projected balance on ' + fmtDate(closing)));
+                if (n) schedule = '<details class="math-schedule"><summary>Payment by payment (' + n + ')</summary><div class="math-table-wrap"><table class="math-table">'
+                    + '<thead><tr><th>Due</th><th>Interest</th><th>Principal</th><th>Balance</th></tr></thead><tbody>'
+                    + L.schedule.map(p => '<tr><td>' + escapeHtml(shortDate(p.date)) + '</td><td>' + cents(p.interest) + '</td><td>' + cents(p.principal) + '</td><td>' + cents(p.balance) + '</td></tr>').join('')
+                    + '</tbody></table></div></details>';
+            } else {
+                loanRows.push(warn(m.loanWarning || (!L.start ? 'No loan balance entered' : 'Needs the loan dates, term and closing date to project the balance')));
+                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'), 'The balance entered, not projected'));
+            }
+
+            // 2 & 3. HOA dues prorations: the seller is credited for the dues already paid for the rest of the closing month
+            const hoa = (title, column) => {
+                const dues = num(col(page, column));
+                const rows = [step('Monthly Dues', cents(dues))];
+                if (!closing) return section(title, rows.concat(warn(noClosing), resultRow(title, lineAmount(title))));
+                const monthName = closing.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                const lastDay = new Date(closing.getFullYear(), closing.getMonth() + 1, 0);
+                const daily = dues / m.daysInMonth;
+                rows.push(
+                    step('Days In ' + monthName, String(m.daysInMonth)),
+                    step('Daily Dues', cents(daily), cents(dues) + ' ÷ ' + m.daysInMonth + ' days'),
+                    step('Days Credited', String(m.daysLeft), shortDate(closing) + ' through ' + shortDate(lastDay) + ', closing day included'),
+                    resultRow(title, lineAmount(title), cents(daily) + ' × ' + m.daysLeft + ' days, credited to the seller'),
+                );
+                return section(title, rows);
+            };
+
+            // 4. Property Taxes Credit: the seller's share of this year's taxes, less the first half once it's due
+            const taxRows = [step('Yearly Taxes', cents(result.yearlyTaxes))];
+            if (!closing || !m.tax) taxRows.push(warn(noClosing), resultRow('Property Taxes Credit', lineAmount('Property Taxes Credit')));
+            else {
+                const t = m.tax;
+                const dayBefore = new Date(closing.getFullYear(), closing.getMonth(), closing.getDate() - 1);
+                taxRows.push(
+                    step('Seller\'s Days', String(t.sellerDays), 'January 1 through ' + shortDate(dayBefore) + ' (the day before closing)'),
+                    step('Days In ' + t.year, String(t.yearDays)),
+                    step('Seller\'s Share', cents(t.sellerShare), cents(result.yearlyTaxes) + ' × ' + t.sellerDays + ' ÷ ' + t.yearDays),
+                    step('First Half Already Paid', '−' + cents(t.firstHalfPaid), t.firstHalfPaid
+                        ? 'Half the yearly taxes: closing is on or after October 1, when the first half comes due'
+                        : 'Closing is before October 1, so the first half isn\'t due yet'),
+                    resultRow('Property Taxes Credit', lineAmount('Property Taxes Credit'),
+                        t.sellerShare - t.firstHalfPaid < 0 ? 'Share − first half is below $0, so nothing is charged' : 'Seller\'s share − first half paid, charged to the seller'),
+                );
+            }
+
+            document.getElementById('math-list').innerHTML = section('Closing Date', dates)
+                + section('Principal Loan Amount', loanRows, schedule)
+                + hoa('Primary HOA Dues Proration', 'HOA PRIMARY MONTHLY DUES')
+                + hoa('Master HOA Dues Proration', 'HOA MASTER MONTHLY DUES')
+                + section('Property Taxes Credit', taxRows);
         }
 
         // Cash Breakdown: amounts the buyer puts in, in whole dollars (a refund shows as a minus)
@@ -2249,6 +2407,7 @@
                 renderHouse(page, result, !missing.client.length && !missing.agent.length);
                 renderEscrow(result);
                 renderNetWaiting(page);
+                if (data.isAdmin) renderMath(page, result);
                 return;
             }
             const product = data.loanProducts[loanIndex] || {};
@@ -3581,6 +3740,7 @@
             document.body.classList.add('house-view');
             [document.getElementById('house-card'), escrowCard].forEach(c => { c.hidden = false; });
             loanCard.hidden = !data.isAdmin;
+            document.getElementById('math-card').hidden = !data.isAdmin;
             initReveal();
         }
 
