@@ -661,6 +661,7 @@ let providerPausedUntil = {};     // provider name -> epoch ms; kept in state.js
 let providerUsage = {};           // provider name -> { remaining, limit, at }; kept in state.json
 let creditsUsed = 0;              // RapidAPI requests spent on the email being handled (history log)
 let requestsThisRun = {};         // provider name -> { count, last }: requests spent this run (added to wholesaleStatus)
+let headersLogged = {};           // provider name -> true once this instance has logged its usage headers
 let stateLoaded = false;          // usage is only written once state.json (the RapidAPI-reported usage) is loaded
 
 class OutOfRequestsError extends Error {}
@@ -693,8 +694,10 @@ async function getPropertyFacts(street, city, state, zip, unit) {
       console.log(`Property facts: ${address} not found on ${p.name}.`);
     } catch (e) {
       if (e instanceof OutOfRequestsError) {
-        providerPausedUntil[p.name] = Date.now() + QUOTA_PAUSE_HOURS * 3600000;
-        console.log(`${p.name} is out of requests (${e.message}); skipping it for ${QUOTA_PAUSE_HOURS} hours.`);
+        // Until its quota resets, when RapidAPI said when; otherwise try again in a day
+        const resetAt = (providerUsage[p.name] || {}).resetAt;
+        providerPausedUntil[p.name] = resetAt > Date.now() ? resetAt : Date.now() + QUOTA_PAUSE_HOURS * 3600000;
+        console.log(`${p.name} is out of requests (${e.message}); skipping it until ${formatStoredDateTime(new Date(providerPausedUntil[p.name]))}.`);
       } else {
         console.log(`Property facts lookup on ${p.name} failed for ${address}: ${e.message}`);
       }
@@ -725,11 +728,29 @@ function cacheMaxAgeMs(entry) {
 }
 
 /** Remembers the latest "requests left" (and plan limit, when sent) RapidAPI reported for a provider. */
-function recordUsage(name, remaining, limitHeader) {
+function recordUsage(name, remaining, limitHeader, resetHeader) {
   const prev = providerUsage[name] || {};
+  // x-ratelimit-requests-reset: seconds until the quota starts over
+  const resetSeconds = resetHeader !== null && resetHeader !== undefined && resetHeader !== '' ? Number(resetHeader) : NaN;
+  const resetAt = Number.isFinite(resetSeconds) && resetSeconds >= 0 ? Date.now() + resetSeconds * 1000 : prev.resetAt ?? null;
   const limit = limitHeader !== null && limitHeader !== undefined && limitHeader !== ''
     ? Number(limitHeader) : prev.limit ?? null;
-  providerUsage[name] = { remaining, limit, at: Date.now() };
+  providerUsage[name] = { remaining, limit, at: Date.now(), resetAt };
+}
+
+/**
+ * Run at the start of every run (right after state.json loads): an API whose quota has reset since RapidAPI last
+ * reported it starts over at 0 used, and is no longer skipped for being out of requests. No request is spent: the
+ * reset time came with the last response. The next reset time comes with the next response.
+ */
+function rollOverResetQuotas() {
+  const now = Date.now();
+  for (const [name, u] of Object.entries(providerUsage)) {
+    if (!u || !u.resetAt || u.resetAt > now) continue;
+    console.log(`${name}: its quota reset at ${formatStoredDateTime(new Date(u.resetAt))}; starting over at 0 used.`);
+    providerUsage[name] = { remaining: u.limit ?? null, limit: u.limit ?? null, at: u.resetAt, resetAt: null };
+    delete providerPausedUntil[name];
+  }
 }
 
 /**
@@ -742,6 +763,8 @@ function recordUsage(name, remaining, limitHeader) {
  *                         REQUESTS THIS MONTH for an API that doesn't report it. USAGE SOURCE says which
  *                         ("RapidAPI" / "Counted") and USAGE AS OF when RapidAPI reported it.
  *   CAP                 - the plan's limit: set by hand, or the limit RapidAPI reports.
+ *   RESETS AT           - when RapidAPI said the quota starts over (blank when unknown). Once it passes, the next
+ *                         run sets USAGE back to 0 without spending a request (see rollOverResetQuotas).
  *   LAST REQUEST, PAUSED UNTIL (blank unless it's out of requests), CHECKED AT (this run).
  * Times are text "YYYY-MM-DD HH:MM:SS", Phoenix time, the way the portal stores them. A missing document is created.
  */
@@ -772,6 +795,8 @@ async function updateUsageStatus() {
       const reported = providerUsage[p.name] || (paused ? { remaining: 0, limit: null, at: Date.now() } : null);
       const cap = Number(String(old.CAP ?? '').replace(/[^\d.]/g, ''));
       const limit = reported && reported.limit != null ? reported.limit : cap;
+      if (reported && reported.remaining == null && Number.isFinite(limit)) reported.remaining = limit; // just reset
+      values['RESETS AT'] = reported && reported.resetAt ? formatStoredDateTime(new Date(reported.resetAt)) : '';
       if (reported && Number.isFinite(limit) && limit > 0 && Number.isFinite(reported.remaining)) {
         values.USAGE = Math.round(Math.max(0, limit - reported.remaining));
         values['USAGE SOURCE'] = 'RapidAPI';
@@ -967,16 +992,22 @@ async function rapidApiGet(host, name, path, params) {
     }
     const remaining = res.headers.get('x-ratelimit-requests-remaining');
     const limit = res.headers.get('x-ratelimit-requests-limit');
+    const reset = res.headers.get('x-ratelimit-requests-reset');
+    if (!headersLogged[name]) {
+      headersLogged[name] = true;
+      const rate = [...res.headers.entries()].filter(([k]) => /ratelimit|quota/i.test(k)).map(([k, v]) => `${k}: ${v}`);
+      console.log(`${name} usage headers: ${rate.length ? rate.join(', ') : 'none'}`);
+    }
     if (remaining !== null) {
-      console.log(`${name} requests left this period: ${remaining}`);
-      recordUsage(name, Number(remaining), limit);
+      console.log(`${name} requests left this period: ${remaining}` + (reset !== null ? ` (resets in ${Math.round(Number(reset) / 3600)} hours)` : ''));
+      recordUsage(name, Number(remaining), limit, reset);
     }
     const body = await res.text();
     if (res.ok) return JSON.parse(body);
     // 429 is either the monthly quota (stop using this provider) or a per-second limit (wait, retry).
     // 403 means not subscribed / plan disabled: treat like no requests left.
     if (res.status === 403 || (res.status === 429 && /quota|exceeded|month/i.test(body))) {
-      if (/quota|exceeded|month/i.test(body)) recordUsage(name, 0, limit);
+      if (/quota|exceeded|month/i.test(body)) recordUsage(name, 0, limit, reset);
       throw new OutOfRequestsError(`HTTP ${res.status}: ${body.slice(0, 200)}`);
     }
     if ((res.status === 429 || res.status >= 500) && attempt < 2) {
@@ -1193,6 +1224,7 @@ async function loadState() {
     propertyCache = state.propertyCache || {};
     providerPausedUntil = state.providerPausedUntil || {};
     providerUsage = state.providerUsage || {};
+    rollOverResetQuotas();
     stateLoaded = true;
     return state;
   } catch (e) {

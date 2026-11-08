@@ -1127,6 +1127,7 @@ async function adminUsage_(account) {
       name: d.id, usage: num(f['USAGE']), cap: num(f['CAP']), source: str(f['USAGE SOURCE']), usageAsOf: str(f['USAGE AS OF']),
       requestsThisMonth: num(f['REQUESTS THIS MONTH']), countMonth: str(f['COUNT MONTH']), countedSince: str(f['COUNTED SINCE']),
       lastRequest: str(f['LAST REQUEST']), pausedUntil: str(f['PAUSED UNTIL']), checkedAt: str(f['CHECKED AT']),
+      resetsAt: str(f['RESETS AT']),
     };
   }).sort((a, b) => place(a.name) - place(b.name) || a.name.localeCompare(b.name));
   return { ok: true, propertyApis };
