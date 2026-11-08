@@ -41,7 +41,7 @@ const PAGE_SETTING_FIELDS = {
   // Seller Net pages: the seller's loan payoff and the listing agent's commission
   'ORIGINAL LOAN AMOUNT': 'money', 'ORIGINAL LOAN DATE': 'date', 'LOAN INTEREST RATE': 'rate', 'LOAN TERM MONTHS': 'int',
   'LOAN PRINCIPAL BALANCE': 'money', 'PRINCIPAL LOAN BALANCE DATE': 'date',
-  'LOAN TYPE': ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other'],
+  'LOAN TYPE': ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other', 'No Loan'],
   'ORIGINAL PREPAID MORTGAGE INSURANCE': 'money',
   'PREPAYMENT PENALTY': ['Yes', 'No', 'Unknown'],
   'PREPAYMENT PENALTY TYPE': ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'],
@@ -2022,12 +2022,13 @@ async function propertyFacts_(account, body) {
 // Seller Net: everything the net sheet needs that isn't the seller's own (Client Input) or asked above (address, type,
 // sale price), sent by the New Seller Net form as body.fields and checked as in PAGE_SETTING_FIELDS. All are required.
 // (The HOA fees are only needed once the seller says there's an HOA, so they're filled in later from Settings.)
-const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
-  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE',
+// LOAN TYPE "No Loan": the loan payoff answers (SELLER_NET_LOAN_FIELDS) aren't asked, and aren't saved.
+const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE',
   'RECORDING FEE', 'RECORDING FEE STATUS', 'PAYOFF STATEMENT FEE', 'PAYOFF STATEMENT FEE STATUS',
-  'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS',
-  'ESCROW FEE RATE', 'OWNERS TITLE RATE', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
-  'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $'];
+  'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS'];
+const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
+  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'LOAN TYPE'].concat(SELLER_NET_LOAN_FIELDS, ['ESCROW FEE RATE', 'OWNERS TITLE RATE', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
+  'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $']);
 
 // Admins only: a new Buyer Breakdown page for a buyer (or, with pageType "Seller Net", a Seller Net page for a seller),
 // from the home page's New Property form.
@@ -2081,7 +2082,9 @@ async function createProperty_(account, body) {
   // Seller Net from the New Seller Net form: every required answer, checked
   const asked = {};
   if (isSellerNet && body.fields) {
+    const noLoan = cleanSetting_(PAGE_SETTING_FIELDS['LOAN TYPE'], body.fields['LOAN TYPE']) === 'No Loan';
     for (const column of SELLER_NET_CREATE_FIELDS) {
+      if (noLoan && SELLER_NET_LOAN_FIELDS.includes(column)) continue;
       const v = cleanSetting_(PAGE_SETTING_FIELDS[column], body.fields[column]);
       if (v === null) return { ok: false, error: 'invalid_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };
       if (v === '') return { ok: false, error: 'missing_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };

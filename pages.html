@@ -1682,8 +1682,11 @@
                 tax = { year, yearDays, sellerDays, sellerShare, firstHalfPaid };
             }
 
-            const loan = loanBalanceOn(page, closing);
+            // No loan: every payoff line is $0 (and so hidden), whatever older answers are still on the page
+            const noLoan = hasNoLoan(c => text(col(page, c)));
+            const loan = noLoan ? { balance: 0, details: { noLoan: true }, warning: '' } : loanBalanceOn(page, closing);
             const principal = loan.balance;
+            const payoffFee = column => (noLoan ? 0 : num(col(page, column)));
             // HOA fees only count when the seller pays them (a blank WHO PAYS means the seller)
             // No HOA: its fees don't count (they're hidden in the settings)
             const noHoaHere = text(col(page, 'HAS HOA')) === 'No';
@@ -1708,10 +1711,10 @@
                 { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -(price * sellerPct) },
 
                 { section: 'Payoffs', payoff: true, label: 'Principal Loan Amount', amount: -principal, note: closing && principal && !loan.warning ? 'Projected balance on ' + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
-                { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -num(col(page, 'RECORDING FEE')) },
-                { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -num(col(page, 'PAYOFF STATEMENT FEE')) },
-                { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: -(penaltyPct + penaltyDollars) },
-                { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
+                { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -payoffFee('RECORDING FEE') },
+                { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -payoffFee('PAYOFF STATEMENT FEE') },
+                { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: noLoan ? 0 : -(penaltyPct + penaltyDollars) },
+                { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: noLoan ? 0 : -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
 
                 // The buyer breakdown's prorations, the other way around
                 { section: 'Prorations', label: 'Primary HOA Dues Proration', amount: num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
@@ -1835,7 +1838,7 @@
 
             // 1. Principal Loan Amount
             const L = m.loan;
-            const loanRows = [
+            const loanRows = L.noLoan ? [step('Loan Type', 'No Loan', 'The seller has no loan, so there\'s nothing to pay off')] : [
                 step('Starting Balance', cents(L.start), L.known
                     ? 'Loan Principal Balance, as of ' + fmtDate(L.from)
                     : 'No principal balance entered, so this starts from the Original Loan Amount on ' + fmtDate(L.originalDate)),
@@ -1843,7 +1846,9 @@
                 step('Loan Term', L.months + ' months'),
             ];
             let schedule = '';
-            if (L.projected) {
+            if (L.noLoan) {
+                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'), 'No loan to pay off'));
+            } else if (L.projected) {
                 const n = L.schedule.length;
                 const sum = key => L.schedule.reduce((s, p) => s + p[key], 0);
                 loanRows.push(
@@ -2037,13 +2042,16 @@
             need('Yearly Taxes', 'YEARLY TAXES');
             need('Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             need('Escrow Duration', 'ESCROW DURATION');
-            need('Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
-            need('Original Loan Date', 'ORIGINAL LOAN DATE');
-            fee('Recording Fee', 'RECORDING FEE');
-            fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
-            need('Other Loan Payoff Fees %', 'OTHER LOAN PAYOFF FEES %');
-            need('Other Loan Payoff Fees $', 'OTHER LOAN PAYOFF FEES $');
-            need('Other Loan Payoff Fees (Estimated / Final)', 'OTHER LOAN PAYOFF FEES STATUS');
+            // No loan: nothing to pay off
+            if (!hasNoLoan(get)) {
+                need('Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
+                need('Original Loan Date', 'ORIGINAL LOAN DATE');
+                fee('Recording Fee', 'RECORDING FEE');
+                fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
+                need('Other Loan Payoff Fees %', 'OTHER LOAN PAYOFF FEES %');
+                need('Other Loan Payoff Fees $', 'OTHER LOAN PAYOFF FEES $');
+                need('Other Loan Payoff Fees (Estimated / Final)', 'OTHER LOAN PAYOFF FEES STATUS');
+            }
             need('Escrow Fee', 'ESCROW FEE RATE');
             need('Owners Title Insurance', 'OWNERS TITLE RATE');
             if (get('HAS HOA') === 'Yes') {
@@ -3258,7 +3266,12 @@
         }
 
         // The kind of loan the seller is paying off
-        const LOAN_TYPES = ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other'];
+        // No Loan: nothing to pay off, so none of the loan questions or payoff fees are asked and the payoffs are $0
+        const LOAN_TYPES = ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other', 'No Loan'];
+        const hasNoLoan = get => get('LOAN TYPE') === 'No Loan';
+        // Seller Net: the payoff fee settings, hidden when there's no loan
+        let loanFeeFields = [];
+        const showLoanFeeFields = () => loanFeeFields.forEach(w => { w.style.display = hasNoLoan(current) ? 'none' : ''; });
         // No HOA (or no master association): its dues are $0, and that's final. put(column, value) writes a value.
         const noDues = (column, put = SETTINGS_IO.put) => { put(column, '0'); put(column + ' STATUS', 'Final'); };
         function noHoa(put = SETTINGS_IO.put) {
@@ -3274,18 +3287,19 @@
         // written with put(column, value). Used by the settings card and by the client's own pop-up.
         function clientInputParts(get, put) {
             const type = () => get('LOAN TYPE');
+            const loan = () => type() !== 'No Loan';
             const hardMoney = () => type() === 'Hard Money';
-            const penalty = () => get('PREPAYMENT PENALTY') === 'Yes';
+            const penalty = () => loan() && get('PREPAYMENT PENALTY') === 'Yes';
             const penaltyType = () => get('PREPAYMENT PENALTY TYPE');
             const hoa = () => get('HAS HOA') === 'Yes';
             return [
                 { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
-                { label: 'Current Principal Balance', column: 'LOAN PRINCIPAL BALANCE', kind: 'money', short: 'Balance' },
-                { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'date', short: 'on' },
-                { label: 'Loan Interest Rate', column: 'LOAN INTEREST RATE', kind: 'rate' },
-                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months' },
+                { label: 'Current Principal Balance', column: 'LOAN PRINCIPAL BALANCE', kind: 'money', short: 'Balance', show: loan },
+                { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'date', short: 'on', show: loan },
+                { label: 'Loan Interest Rate', column: 'LOAN INTEREST RATE', kind: 'rate', show: loan },
+                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months', show: loan },
                 { label: 'Original Prepaid Mortgage Insurance', column: 'ORIGINAL PREPAID MORTGAGE INSURANCE', kind: 'money', short: 'Prepaid MI', show: () => ['FHA', 'VA', 'Other'].includes(type()) },
-                { label: 'Prepayment Penalty', column: 'PREPAYMENT PENALTY', kind: 'seg', options: ['Yes', 'No', 'Unknown'], short: 'Prepayment Penalty:' },
+                { label: 'Prepayment Penalty', column: 'PREPAYMENT PENALTY', kind: 'seg', options: ['Yes', 'No', 'Unknown'], short: 'Prepayment Penalty:', show: loan },
                 { label: 'Prepayment Penalty Type', column: 'PREPAYMENT PENALTY TYPE', kind: 'choice', icon: 'cash', options: ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'], short: 'Type:', show: penalty },
                 { label: 'Prepayment Penalty %', column: 'PREPAYMENT PENALTY %', kind: 'rate', short: 'Penalty', show: () => penalty() && ['Percent Of Loan Amount', 'Both'].includes(penaltyType()) },
                 { label: 'Prepayment Penalty $', column: 'PREPAYMENT PENALTY $', kind: 'money', short: 'Penalty', show: () => penalty() && ['Flat Dollar Amount', 'Both'].includes(penaltyType()) },
@@ -3307,10 +3321,11 @@
 
         // Seller Net: the seller's loan as two line items, each edited all at once. Loan Type and Loan Term are in both.
         function loanPayoffFields(parent) {
+            const loan = () => !hasNoLoan(SETTINGS_IO.get);
             groupField(parent, 'Agent Input', [
-                { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money' },
-                { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from' },
-                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months' },
+                { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
+                { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
+                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months', show: loan },
                 { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
             ]);
             groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
@@ -3396,9 +3411,11 @@
 
             // (The prepayment penalty is in Client Input)
             const payoffs = document.getElementById('loan-fields');
+            const payoffStart = payoffs.children.length;
             moneyField(payoffs, 'Recording Fee', 'RECORDING FEE', { status: 'RECORDING FEE STATUS' });
             moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE', { status: 'PAYOFF STATEMENT FEE STATUS' });
             percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance and a flat amount. Enter 0 for none.', 'OTHER LOAN PAYOFF FEES STATUS');
+            loanFeeFields = [...payoffs.children].slice(payoffStart);
 
             const misc = document.getElementById('misc-fields');
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
@@ -3528,6 +3545,7 @@
             // Closed settings show what's in the draft (Client Input can change the HOA dues)
             editableFields.forEach(({ field }) => { if (field.syncInputs && !field.classList.contains('is-editing')) field.syncInputs(); });
             showHoaFields();
+            showLoanFeeFields();
             editableFields.forEach(({ field, value, saved }) => {
                 const text = displayOf(field);
                 value.textContent = text || 'Not set';
