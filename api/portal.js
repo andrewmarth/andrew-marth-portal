@@ -13,6 +13,9 @@ const PAGE_ACCESS_COLUMNS = PAGE_PEOPLE_COLUMNS.concat([PAGE_LENDER_COLUMN]);
 // Whether each of those six people is a "Purchaser" or a "Collaborator" (blank counts as Purchaser)
 const PAGE_ROLE_COLUMNS = ['PRIMARY ACCOUNT TYPE', 'ALT ACCOUNT TYPE 1', 'ALT ACCOUNT TYPE 2', 'ALT ACCOUNT TYPE 3',
   'ALT ACCOUNT TYPE 4', 'ALT ACCOUNT TYPE 5'];
+// Seller Net: each of those six people's title when they sign for an LLC or trust (blank for collaborators)
+const PAGE_SIGNER_COLUMNS = ['PRIMARY SIGNER TITLE', 'ALT SIGNER TITLE 1', 'ALT SIGNER TITLE 2', 'ALT SIGNER TITLE 3',
+  'ALT SIGNER TITLE 4', 'ALT SIGNER TITLE 5'];
 // TRUE when the buyer is paying cash (no loan)
 const PAGE_CASH_COLUMN = 'CASH PURCHASE';
 
@@ -54,6 +57,8 @@ const PAGE_SETTING_FIELDS = {
   'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
   'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
   'LISTING STATUS': ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'],
+  // Seller Net: who is selling (the signer titles come in separately, as body.signerTitles)
+  'SELLER TYPE': ['Individual(s)', 'LLC', 'Trust'], 'LLC NAME': 'text', 'TRUST NAME': 'text',
 };
 
 // Checks one submitted setting. Returns the value to write, or null if it isn't allowed. Blank is always allowed.
@@ -366,6 +371,9 @@ async function updatePageAccess_(id, account, body) {
     });
   };
   addAll(body.purchasers, isSellerNet ? 'Seller' : 'Purchaser');
+  // Seller Net: each seller's title for signing for the LLC or trust, from { accountId: title }
+  const titles = body.signerTitles && typeof body.signerTitles === 'object' ? body.signerTitles : {};
+  if (isSellerNet) people.forEach(p => { p.title = cleanText_(titles[p.id], 60); });
   addAll(body.collaborators, 'Collaborator');
   if (!people.some(p => p.type !== 'Collaborator')) return { ok: false, error: 'need_one_purchaser' };
   if (people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
@@ -393,6 +401,7 @@ async function updatePageAccess_(id, account, body) {
     const person = people[i];
     fields[col] = person ? person.id : '';
     fields[PAGE_ROLE_COLUMNS[i]] = person ? person.type : '';
+    if (isSellerNet) fields[PAGE_SIGNER_COLUMNS[i]] = person && person.type === 'Seller' ? person.title : '';
   });
   if (!isSellerNet) fields[PAGE_LENDER_COLUMN] = lender || '';
   // Seller Net: the other versions (found before saving, while they still have the same sellers as this one)
@@ -406,7 +415,7 @@ async function updatePageAccess_(id, account, body) {
 // Versions of a Seller Net page are the pages with the same PAGE TYPE, the same home (addressKey_) and the same
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
-const SELLER_NET_GLOBAL_FIELDS = () => ['LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
+const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
   'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
@@ -443,6 +452,7 @@ async function shareGlobalSettings_(siblings, fields, sellers) {
       PAGE_PEOPLE_COLUMNS.forEach((col, i) => {
         own[col] = people[i] ? people[i].id : '';
         own[PAGE_ROLE_COLUMNS[i]] = people[i] ? people[i].type : '';
+        own[PAGE_SIGNER_COLUMNS[i]] = people[i] && people[i].type === 'Seller' ? people[i].title || '' : '';
       });
     }
     if (Object.keys(own).length) await update('pages', p._id, own);

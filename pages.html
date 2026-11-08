@@ -1022,6 +1022,11 @@
         .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
         .sub-label { display: block; margin: 0 0 6px 6px; font-size: 0.82rem; font-weight: bold; opacity: 0.8; }
         @media (max-width: 600px) { .sub-grid { grid-template-columns: 1fr; } }
+        /* Sellers: seller type, the LLC / trust name and each seller's signer title, under the picker */
+        .seller-extras { display: grid; gap: 14px; margin-top: 16px; }
+        .signer-list { display: grid; gap: 10px; }
+        .signer-name { display: block; margin: 0 0 4px 6px; font-size: 0.82rem; opacity: 0.7; }
+        .seller-extras .field-help { margin-top: 0; }
         .field-help a { color: var(--tan); font-weight: bold; }
         .field-error { margin: 6px 0 0 6px; font-size: 0.85rem; font-weight: bold; color: #b3392f; }
         .field-error + .field-help, .field-help + .field-error { margin-top: 4px; }
@@ -1418,6 +1423,9 @@
         let pickedCash = false;
         // Set by the settings card so a Loan Product change turns on its Save button
         let onSettingsChanged = () => {};
+        // Seller Net: the Sellers picker (for the signer titles), and a hook for when its choices change
+        let peoplePicker = null;
+        let onPeopleChanged = () => {};
         let currentUser = null;
 
         // --- Reading saved values ---
@@ -2741,6 +2749,15 @@
         const PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3', 'ALT ACCOUNT ID 4', 'ALT ACCOUNT ID 5'];
         const TYPE_COLUMNS = ['PRIMARY ACCOUNT TYPE', 'ALT ACCOUNT TYPE 1', 'ALT ACCOUNT TYPE 2', 'ALT ACCOUNT TYPE 3', 'ALT ACCOUNT TYPE 4', 'ALT ACCOUNT TYPE 5'];
         const MAX_PEOPLE = 6;
+        // Seller Net: each person's title when signing for an LLC or trust, beside their ACCOUNT ID column
+        const SIGNER_COLUMNS = ['PRIMARY SIGNER TITLE', 'ALT SIGNER TITLE 1', 'ALT SIGNER TITLE 2', 'ALT SIGNER TITLE 3', 'ALT SIGNER TITLE 4', 'ALT SIGNER TITLE 5'];
+        // { accountId: title }, with any unsaved edits (kept in the draft as "SIGNER TITLES", sent separately on save)
+        function signerTitles() {
+            if ('SIGNER TITLES' in draft) return JSON.parse(draft['SIGNER TITLES']);
+            const titles = {};
+            PEOPLE_COLUMNS.forEach((c, i) => { const id = idOf(col(data.page, c)); if (id) titles[id] = text(col(data.page, SIGNER_COLUMNS[i])); });
+            return titles;
+        }
         // Blank type counts as a purchaser
         const isCollaborator = i => text(col(data.page, TYPE_COLUMNS[i])).toLowerCase() === 'collaborator';
         const idOf = v => { const d = text(v).replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? d.slice(1) : d; };
@@ -2787,6 +2804,7 @@
             });
             people.refresh();
             collaborators.refresh();
+            peoplePicker = people;
             const lender = makePicker({
                 mount: document.getElementById('lender-picker'),
                 labelId: 'lender-label',
@@ -2802,6 +2820,7 @@
                 // Each picker's limit and taken choices depend on the other one
                 people.refresh();
                 collaborators.refresh();
+                onPeopleChanged();
                 validateSettings();
                 setMessage('', '');
                 setSaveDisabled(!people.value().length || Object.keys(fieldErrors).length > 0);
@@ -2817,7 +2836,9 @@
                     // The API marks the HOA disclosure fee as seller-paid itself (and won't take that column from here)
                     const fields = { ...draft };
                     delete fields['WHO PAYS DISCLOSURE FEE'];
-                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields });
+                    delete fields['SIGNER TITLES'];
+                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields,
+                        signerTitles: isSellerNet() ? signerTitles() : undefined });
                     if (!json.ok) throw new Error(json.error);
                     data.page = json.page;
                     // Reload the people list so incomes and credit scores match the new purchasers
@@ -3339,10 +3360,58 @@
             groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
         }
 
+        // Sellers: Seller Type (Individual(s) / LLC / Trust); for an LLC or trust, its name and each seller's title
+        function sellerTypeQuestions() {
+            const field = document.getElementById('people-picker').closest('.field');
+            const extras = el('div', 'seller-extras');
+            field.querySelector('.field-help').after(extras);
+            const nameOf = id => { const a = (data.accounts || []).find(x => x.id === id); return (a && a.name) || phone(id); };
+            const sellers = () => (peoplePicker ? peoplePicker.value() : []);
+            const cell = label => { const c = el('div', 'sub-field'); c.append(el('span', 'sub-label', escapeHtml(label))); extras.append(c); return c; };
+            let shownFor = '';
+            function build() {
+                extras.innerHTML = '';
+                shownFor = sellers().join(',');
+                const type = current('SELLER TYPE');
+                cell('Seller Type').append(segToggle([['Individual(s)', 'Individual(s)'], ['LLC', 'LLC'], ['Trust', 'Trust']], type, v => { setDraft('SELLER TYPE', v); build(); }, 'Seller type'));
+                if (type !== 'LLC' && type !== 'Trust') return;
+                const nameColumn = type === 'LLC' ? 'LLC NAME' : 'TRUST NAME';
+                cell(type + ' Name').append(textBox({ value: current(nameColumn), inputmode: 'text', placeholder: type === 'LLC' ? 'e.g. Ludlow Holdings LLC' : 'e.g. The Smith Family Trust',
+                    onInput: i => setDraft(nameColumn, i.value) }).wrap);
+                const titles = cell('Authorized Signer Title');
+                const list = el('div', 'signer-list');
+                titles.append(list);
+                if (!sellers().length) { list.append(el('p', 'field-help', 'Choose the sellers first.')); return; }
+                sellers().forEach(id => {
+                    const row = el('div');
+                    row.append(el('span', 'signer-name', escapeHtml(nameOf(id))));
+                    row.append(textBox({ value: signerTitles()[id] || '', inputmode: 'text', placeholder: type === 'LLC' ? 'e.g. Managing Member' : 'e.g. Trustee',
+                        onInput: i => { const all = signerTitles(); all[id] = i.value; setDraft('SIGNER TITLES', JSON.stringify(all)); } }).wrap);
+                    list.append(row);
+                });
+            }
+            build();
+            // New or removed sellers get (or lose) a title box
+            onPeopleChanged = () => { if (sellers().join(',') !== shownFor) build(); };
+            // The closed row: "Seller Test, Jane Doe · LLC: Ludlow Holdings LLC (Managing Member, Member)"
+            field.dataset.display = 'group';
+            field.groupDisplay = () => {
+                const ids = sellers();
+                if (!ids.length) return '';
+                const type = current('SELLER TYPE');
+                const entity = type === 'LLC' || type === 'Trust';
+                const all = signerTitles();
+                const names = ids.map(id => nameOf(id) + (entity && all[id] ? ' (' + all[id] + ')' : '')).join(', ');
+                const entityName = type === 'LLC' ? current('LLC NAME') : type === 'Trust' ? current('TRUST NAME') : '';
+                return names + (type ? ' \u00b7 ' + type + (entityName ? ': ' + entityName : '') : '');
+            };
+        }
+
         // --- Seller Net settings: Sellers, the sale, the seller's loan payoff, and the seller's costs ---
         function setupSellerFields() {
             document.getElementById('people-label').textContent = 'Sellers';
             document.getElementById('global-people-fields').append(document.getElementById('people-picker').closest('.field'));
+            sellerTypeQuestions();
             document.getElementById('people-help').textContent = 'The owners selling this home.';
             document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren\'t selling. Up to 6 sellers and collaborators in total.';
             document.getElementById('lender-field').hidden = true;
