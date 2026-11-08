@@ -65,6 +65,7 @@ functions.http('processNewDeals', async (req, res) => {
 async function processNewDeals() {
   const started = Date.now();
   const state = await loadState();
+  await adoptNewerUsage();
   try {
     return await processWithState(state, started);
   } finally {
@@ -785,33 +786,44 @@ async function updateUsageStatus() {
       // A count that began part way through this month says so; a new month starts at its first day
       const since = sameMonth && old['COUNTED SINCE'] ? old['COUNTED SINCE']
         : old['COUNT MONTH'] ? month + '-01 00:00:00' : formatStoredDateTime(now);
-      const values = {
-        'REQUESTS THIS MONTH': requests, 'COUNT MONTH': month, 'COUNTED SINCE': since,
-        'CHECKED AT': formatStoredDateTime(now),
-        'LAST REQUEST': ran.last ? formatStoredDateTime(new Date(ran.last)) : old['LAST REQUEST'] || '',
-      };
+      // (The portal's New Seller Net form counts its requests on these documents too, so this month's count goes up
+      // by this run's requests rather than being set)
+      const transforms = [];
+      const values = { 'COUNT MONTH': month, 'COUNTED SINCE': since, 'CHECKED AT': formatStoredDateTime(now) };
+      if (sameMonth) transforms.push({ fieldPath: '`REQUESTS THIS MONTH`', increment: { integerValue: String(ran.count) } });
+      else values['REQUESTS THIS MONTH'] = requests;
+      const lastRequest = ran.last ? formatStoredDateTime(new Date(ran.last)) : '';
+      values['LAST REQUEST'] = [lastRequest, old['LAST REQUEST'] || ''].sort().pop();
       // RapidAPI's own numbers, when it sends them. A provider paused for being out of requests has used its whole limit.
       const paused = (providerPausedUntil[p.name] || 0) > Date.now();
       const reported = providerUsage[p.name] || (paused ? { remaining: 0, limit: null, at: Date.now() } : null);
       const cap = Number(String(old.CAP ?? '').replace(/[^\d.]/g, ''));
       const limit = reported && reported.limit != null ? reported.limit : cap;
       if (reported && reported.remaining == null && Number.isFinite(limit)) reported.remaining = limit; // just reset
-      values['RESETS AT'] = reported && reported.resetAt ? formatStoredDateTime(new Date(reported.resetAt)) : '';
-      if (reported && Number.isFinite(limit) && limit > 0 && Number.isFinite(reported.remaining)) {
+      const reportedAt = reported && reported.at ? formatStoredDateTime(new Date(reported.at)) : '';
+      const portalNewer = old['USAGE SOURCE'] === 'RapidAPI' && String(old['USAGE AS OF'] || '') > reportedAt;
+      if (portalNewer) {
+        // Leave USAGE, CAP, USAGE SOURCE, USAGE AS OF and RESETS AT as the portal wrote them
+      } else if (reported && Number.isFinite(limit) && limit > 0 && Number.isFinite(reported.remaining)) {
+        values['RESETS AT'] = reported.resetAt ? formatStoredDateTime(new Date(reported.resetAt)) : '';
         values.USAGE = Math.round(Math.max(0, limit - reported.remaining));
         values['USAGE SOURCE'] = 'RapidAPI';
-        values['USAGE AS OF'] = reported.at ? formatStoredDateTime(new Date(reported.at)) : '';
+        values['USAGE AS OF'] = reportedAt;
         if (reported.limit != null) values.CAP = Math.round(reported.limit);
       } else {
-        values.USAGE = requests;
+        // Counted: USAGE is this month's count
+        if (sameMonth && old['USAGE SOURCE'] === 'Counted') transforms.push({ fieldPath: 'USAGE', increment: { integerValue: String(ran.count) } });
+        else values.USAGE = requests;
         values['USAGE SOURCE'] = 'Counted';
         values['USAGE AS OF'] = formatStoredDateTime(now);
+        values['RESETS AT'] = '';
       }
       values['PAUSED UNTIL'] = paused ? formatStoredDateTime(new Date(providerPausedUntil[p.name])) : '';
       // Every field named in the mask is written; one left blank is removed
       writes.push({
         update: { name: docName('wholesaleStatus', p.status), fields: fsFields(values) },
         updateMask: { fieldPaths: Object.keys(values).map(k => (/^[A-Za-z_][A-Za-z_0-9]*$/.test(k) ? k : '`' + k + '`')) },
+        ...(transforms.length ? { updateTransforms: transforms } : {}),
       });
     }
     await commitWrites(writes);
@@ -821,6 +833,32 @@ async function updateUsageStatus() {
     requestsThisRun = {};
   } catch (e) {
     console.log(`Could not update the API usage: ${e.message}`); // never fails the run
+  }
+}
+
+/**
+ * The portal's New Seller Net form uses these APIs too, and writes what RapidAPI tells it to wholesaleStatus. Where
+ * that's newer than what this function last heard, it's taken up here (so an API the portal found has requests again
+ * isn't skipped). Times there are Phoenix time, which is always UTC-7.
+ */
+async function adoptNewerUsage() {
+  try {
+    const docs = {};
+    (await listDocuments('wholesaleStatus')).forEach(d => { docs[d.id] = d.data; });
+    for (const p of PROPERTY_PROVIDERS) {
+      const d = docs[p.status];
+      if (!d || d['USAGE SOURCE'] !== 'RapidAPI' || !d['USAGE AS OF']) continue;
+      const at = Date.parse(String(d['USAGE AS OF']).replace(' ', 'T') + '-07:00');
+      const mine = providerUsage[p.name] || {};
+      if (!Number.isFinite(at) || at <= (mine.at || 0) || !(Number(d.CAP) > 0)) continue;
+      const resetAt = d['RESETS AT'] ? Date.parse(String(d['RESETS AT']).replace(' ', 'T') + '-07:00') : NaN;
+      providerUsage[p.name] = { remaining: Math.max(0, Number(d.CAP) - Number(d.USAGE || 0)), limit: Number(d.CAP), at,
+        resetAt: Number.isFinite(resetAt) ? resetAt : mine.resetAt ?? null };
+      if (providerUsage[p.name].remaining > 0) delete providerPausedUntil[p.name];
+      console.log(`${p.name}: took up newer usage from the portal (${d.USAGE} of ${d.CAP} used as of ${d['USAGE AS OF']}).`);
+    }
+  } catch (e) {
+    console.log(`Could not read the portal's API usage: ${e.message}`);
   }
 }
 

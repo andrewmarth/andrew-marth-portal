@@ -4,6 +4,7 @@
 import { rows, row as getRow, columns, update, add, remove, withLock } from './lib/store.js';
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
+import { lookupPropertyFacts } from './lib/property-facts.js';
 
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
 const PAGE_PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3',
@@ -199,6 +200,8 @@ export async function handle(body, query) {
     if (body.action === 'adminUsage') return await adminUsage_(account);
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return await createProperty_(account, body);
+    // index.html's New Seller Net form (admins): beds, baths, sqft and taxes for an address, from the property APIs
+    if (body.action === 'propertyFacts') return await propertyFacts_(account, body);
     // pages.html (admins): copy the page into a new version
     if (body.action === 'createVersion') return await createVersion_(id, account, body);
     // pages.html (admins): change who can see the page
@@ -2006,6 +2009,26 @@ async function nextPageId_() {
 const PROPERTY_TYPES = ['Single Family', 'Townhome', 'Condo', 'Manufactured'];
 const CENSUS_DESIGNATIONS = ['Low', 'Moderate', 'Middle', 'Upper'];
 
+// Admins: what the property APIs know about an address (body.address: { street, city, state, zip })
+async function propertyFacts_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const a = body.address || {};
+  const address = { street: cleanText_(a.street, 120), city: cleanText_(a.city, 120), state: cleanText_(a.state, 20), zip: cleanText_(a.zip, 10) };
+  if (!address.street || !address.zip) return { ok: false, error: 'missing_address' };
+  const { facts, sources } = await lookupPropertyFacts(address);
+  return { ok: true, facts, sources };
+}
+
+// Seller Net: everything the net sheet needs that isn't the seller's own (Client Input) or asked above (address, type,
+// sale price), sent by the New Seller Net form as body.fields and checked as in PAGE_SETTING_FIELDS. All are required.
+// (The HOA fees are only needed once the seller says there's an HOA, so they're filled in later from Settings.)
+const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
+  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE',
+  'RECORDING FEE', 'RECORDING FEE STATUS', 'PAYOFF STATEMENT FEE', 'PAYOFF STATEMENT FEE STATUS',
+  'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS',
+  'ESCROW FEE RATE', 'OWNERS TITLE RATE', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
+  'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $'];
+
 // Admins only: a new Buyer Breakdown page for a buyer (or, with pageType "Seller Net", a Seller Net page for a seller),
 // from the home page's New Property form.
 // The buyer (seller) goes in PRIMARY, then any other purchasers (sellers), then collaborators (six people at most).
@@ -2055,6 +2078,17 @@ async function createProperty_(account, body) {
   const today = new Date();
   const dayOnly = (d, plus) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + (plus || 0));
 
+  // Seller Net from the New Seller Net form: every required answer, checked
+  const asked = {};
+  if (isSellerNet && body.fields) {
+    for (const column of SELLER_NET_CREATE_FIELDS) {
+      const v = cleanSetting_(PAGE_SETTING_FIELDS[column], body.fields[column]);
+      if (v === null) return { ok: false, error: 'invalid_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };
+      if (v === '') return { ok: false, error: 'missing_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };
+      asked[column] = v;
+    }
+  }
+
   // Seller Net: the sale, the HOA, and the seller's costs (the loan payoff is filled in later from Settings)
   const values = isSellerNet ? {
     'PAGE TYPE': 'Seller Net',
@@ -2085,6 +2119,7 @@ async function createProperty_(account, body) {
     'LISTING AGENT COMMISSION $': 0,
     'VERSION TITLE': 'Initial Version',
     'VERSION DATE': dayOnly(today, 0),
+    ...asked,
   } : {
     'PAGE TYPE': 'Buyer Breakdown',
     'STREET ADDRESS': street, 'CITY': city, 'STATE': state, 'ZIP': zip,

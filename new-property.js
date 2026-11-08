@@ -91,7 +91,8 @@ const wholeField = (id, label, { money, commas = true, max = 12, placeholder = '
     (money ? '<div class="money-wrap">' : '') + '<input id="' + id + '" class="' + (money ? 'money ' : '') + (commas ? 'commas' : 'digits') + '" type="text" inputmode="numeric" autocomplete="off" maxlength="' + max + '" placeholder="' + placeholder + '">' + (money ? '</div>' : ''));
 
 let placesPromise = null;
-function loadPlaces() {
+// Google Places, loaded once (also used by the New Seller Net form)
+export function loadPlaces() {
     if (placesPromise) return placesPromise;
     placesPromise = new Promise((resolve, reject) => {
         if (window.google && google.maps && google.maps.importLibrary) { google.maps.importLibrary('places').then(resolve, reject); return; }
@@ -167,6 +168,7 @@ export function multiPicker(mount, { labelId, placeholder, items, canAdd, onChan
         // Drop anything no longer allowed (e.g. a collaborator who was just made a purchaser)
         prune() { const ok = items(true).map(a => a.id); chosen = chosen.filter(id => ok.includes(id)); label(); if (root.classList.contains('is-open')) draw(); },
         reset() { chosen = []; close(); label(); },
+        set(ids) { chosen = (ids || []).slice(); label(); },
         setPlaceholder(text) { placeholder = text; label(); },
     };
 }

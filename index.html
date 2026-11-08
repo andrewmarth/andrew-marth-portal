@@ -986,6 +986,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK, phoneToId } from '/firebase-config.js';
         import { openNewPropertyForm } from '/new-property.js';
+        import { openNewSellerNetForm } from '/new-seller-net.js';
         import { openLoanProductForm } from '/loan-products.js';
         import { openTaskForm } from '/task-form.js';
 
@@ -1431,13 +1432,18 @@
                     add.innerHTML = '<span class="page-link-icon">' + PLUS_ICON + '</span>'
                         + '<span class="page-link-text"><span class="page-link-street">New Property</span><br><span class="page-link-sub"></span></span>';
                     add.querySelector('.page-link-sub').textContent = 'For ' + (seller.name || formatPhone(seller.id));
+                    // One question at a time, with beds / baths / sqft / taxes looked up from the property APIs
                     add.addEventListener('click', () => {
                         if (!adminData) return;
-                        openNewPropertyForm({
-                            seller: true,
+                        openNewSellerNetForm({
                             client: seller,
-                            buyers: adminData.sellers,
+                            sellers: adminData.sellers,
                             accounts: adminData.accounts,
+                            lookup: async address => {
+                                const json = await api({ action: 'propertyFacts', address });
+                                if (!json.ok) throw new Error(json.error || 'Lookup failed');
+                                return json;
+                            },
                             submit: createProperty,
                         });
                     });
