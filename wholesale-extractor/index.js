@@ -9,7 +9,7 @@
  * Everything it reads and writes besides the mail lives in the portal's Firestore database (project
  * andrew-marth-portal), reached as the function's own service account: the target zips (wholesaleZips),
  * the deals (wholesaleDeals), a history entry per email (wholesaleHistory) and each property API's
- * usage (wholesaleStatus). Gmail is read as SUBJECT_EMAIL through domain-wide delegation: the service
+ * usage (wholesaleStatus, written at the end of every run, even one that fails). Gmail is read as SUBJECT_EMAIL through domain-wide delegation: the service
  * account signs a JWT with the IAM Credentials API (no key file) and exchanges it for a token. Which
  * emails were already handled is kept in a JSON file in Cloud Storage.
  *
@@ -65,6 +65,14 @@ functions.http('processNewDeals', async (req, res) => {
 async function processNewDeals() {
   const started = Date.now();
   const state = await loadState();
+  try {
+    return await processWithState(state, started);
+  } finally {
+    await updateUsageStatus();
+  }
+}
+
+async function processWithState(state, started) {
   const processed = state.processed || {};
   // First run: start at START_AFTER_EPOCH if set (+3600 cancels the overlap below),
   // otherwise look back LOOKBACK_DAYS_FIRST_RUN days.
@@ -122,7 +130,6 @@ async function processNewDeals() {
   // Only advance the window when everything was handled, so failures/leftovers get retried.
   if (errors === 0 && !outOfTime) next.lastRunEpoch = runStart;
   await saveState(next);
-  await updateUsageStatus();
   await appendHistoryRows(history);
 
   return { emailsInWindow: ids.length, handled: results, errors, outOfTime };
@@ -142,14 +149,18 @@ async function testOnLatestEmail(write = false, resume = false) {
   if (write && processed[ids[0]]) {
     return { message: 'Newest email was already handled; nothing written.' };
   }
-  const msg = await getMessage(ids[0]);
-  const existing = resume ? await loadExistingRowKeys() : null;
-  const out = await handleMessage(msg, await loadAllowedZips(), write, existing);
-  if (write) {
-    processed[ids[0]] = Date.now();
-    await saveState({ ...state, processed });
+  try {
+    const msg = await getMessage(ids[0]);
+    const existing = resume ? await loadExistingRowKeys() : null;
+    const out = await handleMessage(msg, await loadAllowedZips(), write, existing);
+    if (write) {
+      processed[ids[0]] = Date.now();
+      await saveState({ ...state, processed });
+    }
+    return out;
+  } finally {
+    await updateUsageStatus();
   }
-  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -649,6 +660,8 @@ let propertyCache = {};           // address -> { facts (null = not found), at }
 let providerPausedUntil = {};     // provider name -> epoch ms; kept in state.json
 let providerUsage = {};           // provider name -> { remaining, limit, at }; kept in state.json
 let creditsUsed = 0;              // RapidAPI requests spent on the email being handled (history log)
+let requestsThisRun = {};         // provider name -> { count, last }: requests spent this run (added to wholesaleStatus)
+let stateLoaded = false;          // usage is only written once state.json (the RapidAPI-reported usage) is loaded
 
 class OutOfRequestsError extends Error {}
 
@@ -720,30 +733,67 @@ function recordUsage(name, remaining, limitHeader) {
 }
 
 /**
- * Writes each API's usage (requests used this period = limit - requests left) as USAGE on its wholesaleStatus
- * document (ID: the provider's `status` name). The limit comes from RapidAPI, or else that document's CAP. Only APIs
- * that have reported usage at least once are written; a missing document is created.
+ * Called at the end of every run (even one that fails): writes each property API's wholesaleStatus document
+ * (ID: the provider's `status` name), for the portal's Usage card.
+ *   REQUESTS THIS MONTH - requests this function has spent on it this calendar month (Phoenix time), counted by
+ *                         the function itself; COUNT MONTH is that month ("2026-11") and COUNTED SINCE when the
+ *                         count began (the start of the month, or the first run that counted).
+ *   USAGE               - requests used this period: what RapidAPI last reported (limit - requests left), or else
+ *                         REQUESTS THIS MONTH for an API that doesn't report it. USAGE SOURCE says which
+ *                         ("RapidAPI" / "Counted") and USAGE AS OF when RapidAPI reported it.
+ *   CAP                 - the plan's limit: set by hand, or the limit RapidAPI reports.
+ *   LAST REQUEST, PAUSED UNTIL (blank unless it's out of requests), CHECKED AT (this run).
+ * Times are text "YYYY-MM-DD HH:MM:SS", Phoenix time, the way the portal stores them. A missing document is created.
  */
 async function updateUsageStatus() {
+  if (!stateLoaded) return;
   try {
-    // A provider paused for being out of requests has used its whole limit.
-    const usageOf = p => providerUsage[p.name] ||
-      ((providerPausedUntil[p.name] || 0) > Date.now() ? { remaining: 0, limit: null } : null);
-    const known = PROPERTY_PROVIDERS.filter(p => p.status && usageOf(p));
-    if (!known.length) return;
-    const caps = {};
-    (await listDocuments('wholesaleStatus')).forEach(d => { caps[d.id] = d.data.CAP; });
+    const now = new Date();
+    const month = formatStoredDateTime(now).slice(0, 7);
+    const docs = {};
+    (await listDocuments('wholesaleStatus')).forEach(d => { docs[d.id] = d.data; });
     const writes = [];
-    for (const p of known) {
-      const u = usageOf(p);
-      const limit = u.limit ?? Number(String(caps[p.status] ?? '').replace(/[^\d.]/g, ''));
-      if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(u.remaining)) continue;
+    for (const p of PROPERTY_PROVIDERS) {
+      if (!p.status) continue;
+      const old = docs[p.status] || {};
+      const ran = requestsThisRun[p.name] || { count: 0, last: 0 };
+      const sameMonth = old['COUNT MONTH'] === month;
+      const requests = (sameMonth ? Number(old['REQUESTS THIS MONTH']) || 0 : 0) + ran.count;
+      // A count that began part way through this month says so; a new month starts at its first day
+      const since = sameMonth && old['COUNTED SINCE'] ? old['COUNTED SINCE']
+        : old['COUNT MONTH'] ? month + '-01 00:00:00' : formatStoredDateTime(now);
+      const values = {
+        'REQUESTS THIS MONTH': requests, 'COUNT MONTH': month, 'COUNTED SINCE': since,
+        'CHECKED AT': formatStoredDateTime(now),
+        'LAST REQUEST': ran.last ? formatStoredDateTime(new Date(ran.last)) : old['LAST REQUEST'] || '',
+      };
+      // RapidAPI's own numbers, when it sends them. A provider paused for being out of requests has used its whole limit.
+      const paused = (providerPausedUntil[p.name] || 0) > Date.now();
+      const reported = providerUsage[p.name] || (paused ? { remaining: 0, limit: null, at: Date.now() } : null);
+      const cap = Number(String(old.CAP ?? '').replace(/[^\d.]/g, ''));
+      const limit = reported && reported.limit != null ? reported.limit : cap;
+      if (reported && Number.isFinite(limit) && limit > 0 && Number.isFinite(reported.remaining)) {
+        values.USAGE = Math.round(Math.max(0, limit - reported.remaining));
+        values['USAGE SOURCE'] = 'RapidAPI';
+        values['USAGE AS OF'] = reported.at ? formatStoredDateTime(new Date(reported.at)) : '';
+        if (reported.limit != null) values.CAP = Math.round(reported.limit);
+      } else {
+        values.USAGE = requests;
+        values['USAGE SOURCE'] = 'Counted';
+        values['USAGE AS OF'] = formatStoredDateTime(now);
+      }
+      values['PAUSED UNTIL'] = paused ? formatStoredDateTime(new Date(providerPausedUntil[p.name])) : '';
+      // Every field named in the mask is written; one left blank is removed
       writes.push({
-        update: { name: docName('wholesaleStatus', p.status), fields: { USAGE: { integerValue: String(Math.round(Math.max(0, limit - u.remaining))) } } },
-        updateMask: { fieldPaths: ['USAGE'] },
+        update: { name: docName('wholesaleStatus', p.status), fields: fsFields(values) },
+        updateMask: { fieldPaths: Object.keys(values).map(k => (/^[A-Za-z_][A-Za-z_0-9]*$/.test(k) ? k : '`' + k + '`')) },
       });
     }
     await commitWrites(writes);
+    console.log(`API usage updated: ${PROPERTY_PROVIDERS.map(p => `${p.name} ${(requestsThisRun[p.name] || {}).count || 0} this run`).join(', ')}`);
+    // The same instance can serve the next run: start its count over (only once this one is written, so a failed
+    // write is carried into the next run instead of lost)
+    requestsThisRun = {};
   } catch (e) {
     console.log(`Could not update the API usage: ${e.message}`); // never fails the run
   }
@@ -909,7 +959,12 @@ async function rapidApiGet(host, name, path, params) {
       signal: AbortSignal.timeout(30000),
     });
     // RapidAPI turns away 429 (over a limit) and 403 (not subscribed) before the API: no credit spent.
-    if (res.status !== 429 && res.status !== 403) creditsUsed++;
+    if (res.status !== 429 && res.status !== 403) {
+      creditsUsed++;
+      const r = requestsThisRun[name] || (requestsThisRun[name] = { count: 0, last: 0 });
+      r.count++;
+      r.last = Date.now();
+    }
     const remaining = res.headers.get('x-ratelimit-requests-remaining');
     const limit = res.headers.get('x-ratelimit-requests-limit');
     if (remaining !== null) {
@@ -997,7 +1052,7 @@ const DEAL_COLUMNS = ['DATE SENT', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'STREET ADD
 // wholesaleHistory: one document per email a run handled
 const HISTORY_COLUMNS = ['DATE', 'EMAIL', 'COMPANY', 'INDIVIDUAL', 'EMAIL LINK', 'API USED', 'SUCCESS'];
 // wholesaleZips: one document per target zip (the zip is its ID); wholesaleStatus: one per property API (its name
-// is the ID, e.g. "REDFIN.COM DATA") with USAGE (requests used this period) and CAP (the plan's limit)
+// is the ID, e.g. "REDFIN.COM DATA"), see updateUsageStatus
 
 const TEXT_FIELDS = ['ZIP', 'UNIT NUMBER', 'ZIP CODE'];
 /** A plain value as a Firestore value (null for blank, which is left out). */
@@ -1138,9 +1193,10 @@ async function loadState() {
     propertyCache = state.propertyCache || {};
     providerPausedUntil = state.providerPausedUntil || {};
     providerUsage = state.providerUsage || {};
+    stateLoaded = true;
     return state;
   } catch (e) {
-    if (e.response && e.response.status === 404) return {};
+    if (e.response && e.response.status === 404) { stateLoaded = true; return {}; }
     throw e;
   }
 }

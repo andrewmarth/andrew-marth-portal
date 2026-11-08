@@ -432,6 +432,29 @@
         .yn input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
         .cf-saved { margin-top: 12px; min-height: 1.4em; font-weight: bold; color: #cfe3b5; }
         .client-empty { margin-top: 14px; opacity: 0.85; }
+
+        /* --- Usage (admins): one section per kind of usage --- */
+        .usage-section + .usage-section { margin-top: 28px; }
+        .usage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .usage-head .cf-group-title { margin: 0; }
+        .usage-checked { font-size: 0.82rem; opacity: 0.65; }
+        .usage-list { list-style: none; margin-top: 12px; display: grid; gap: 12px; }
+        .usage-item { padding: 16px 18px; border: 1px solid rgba(233, 226, 216, 0.18); border-radius: 18px; background: rgba(0, 0, 0, 0.14); }
+        .usage-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .usage-name { font-weight: bold; font-size: 1.02rem; }
+        .usage-pill { padding: 3px 11px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; background: rgba(207, 227, 181, 0.16); color: #cfe3b5; }
+        .usage-pill.is-out { background: rgba(242, 184, 168, 0.16); color: #f2b8a8; }
+        .usage-pill.is-idle { background: rgba(233, 226, 216, 0.12); color: rgba(233, 226, 216, 0.75); }
+        .usage-numbers { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+        .usage-used { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.8rem; font-weight: 800; line-height: 1; }
+        .usage-of { opacity: 0.75; }
+        .usage-left { margin-left: auto; font-weight: bold; color: var(--gold); }
+        .usage-bar { margin-top: 10px; height: 8px; border-radius: 999px; background: rgba(233, 226, 216, 0.14); overflow: hidden; }
+        .usage-bar span { display: block; height: 100%; border-radius: inherit; background: var(--gold); transform-origin: left; transition: transform 1s var(--ease); }
+        .usage-bar.is-high span { background: #e6a15f; }
+        .usage-bar.is-full span { background: #f2b8a8; }
+        .usage-notes { margin-top: 10px; display: grid; gap: 2px; font-size: 0.85rem; opacity: 0.75; }
+        .usage-foot { margin-top: 14px; font-size: 0.82rem; opacity: 0.6; }
         /* "Add New Client" (first in the dropdown) and its form */
         .client-picker-option.is-add .cp-main { color: var(--rust); }
         .client-picker-option.is-add > svg { color: var(--rust); }
@@ -743,6 +766,20 @@
             <div class="client-list" id="client-list" hidden></div>
             <p class="cf-saved" id="cf-saved" role="status"></p>
         </section>
+
+        <!-- Admins only: what the portal's services have used -->
+        <section class="main-card glow-card reveal" id="usage-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Usage</h2>
+            <div class="usage-section">
+                <div class="usage-head">
+                    <h3 class="cf-group-title">Property APIs</h3>
+                    <span class="usage-checked" id="usage-checked"></span>
+                </div>
+                <ul class="usage-list" id="property-api-usage"><li class="client-empty">Loading...</li></ul>
+                <p class="usage-foot">Beds, baths, sqft and taxes for the wholesale deals, tried in this order. The wholesale deal extractor updates these at the end of every run (every 5 minutes).</p>
+            </div>
+        </section>
     </main>
 
     <!-- Edit name pop-up -->
@@ -912,7 +949,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') await loadClients(user);
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); await loadClients(user); }
                     // Income & Debt is only for buyers
                     document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
                 }
@@ -1288,6 +1325,62 @@
             } catch (err) {
                 console.error(err);
                 mount.innerHTML = '<p class="client-empty">We couldn’t load the clients. Please refresh to try again.</p>';
+            }
+        }
+
+        // --- Usage (admins) ---
+        // Stored times are "YYYY-MM-DD HH:MM:SS", Phoenix time -> "Nov 8, 7:36 AM"
+        function usageTime(s) {
+            const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/);
+            if (!m) return '';
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = months[Number(m[2]) - 1] + ' ' + Number(m[3]);
+            if (m[4] === undefined) return day;
+            const h = Number(m[4]);
+            return day + ', ' + ((h % 12) || 12) + ':' + m[5] + ' ' + (h < 12 ? 'AM' : 'PM');
+        }
+        // "REDFIN.COM DATA" -> "Redfin.com Data"
+        const usageName = id => String(id).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()).replace(/\bApi\b/g, 'API').replace(/^Us\b/, 'US');
+        const count = n => Number(n || 0).toLocaleString('en-US');
+        const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        function usageItem(api) {
+            const used = api.usage ?? api.requestsThisMonth ?? 0;
+            const cap = api.cap;
+            const share = cap ? Math.min(1, used / cap) : 0;
+            const out = Boolean(api.pausedUntil) || (cap && used >= cap);
+            const status = out ? ['is-out', 'Out of requests'] : (used || api.lastRequest) ? ['', 'Active'] : ['is-idle', 'No requests yet'];
+            const notes = [];
+            if (api.source === 'RapidAPI') notes.push('As reported by RapidAPI' + (api.usageAsOf ? ' on ' + usageTime(api.usageAsOf) : '') + ' (its billing period)');
+            else if (api.source === 'Counted') notes.push('Counted by the extractor this month' + (api.countedSince && !/-01 00:00:00$/.test(api.countedSince) ? ', starting ' + usageTime(api.countedSince) : '') + ' (it doesn’t report usage)');
+            if (api.pausedUntil) notes.push('Skipped until ' + usageTime(api.pausedUntil) + ', then tried again');
+            if (api.lastRequest) notes.push('Last request ' + usageTime(api.lastRequest));
+            const li = document.createElement('li');
+            li.className = 'usage-item';
+            li.innerHTML =
+                '<div class="usage-top"><span class="usage-name">' + esc(usageName(api.name)) + '</span>' +
+                '<span class="usage-pill ' + status[0] + '">' + status[1] + '</span></div>' +
+                '<div class="usage-numbers"><span class="usage-used">' + count(used) + '</span>' +
+                '<span class="usage-of">' + (cap ? 'of ' + count(cap) + ' used' : 'used (no limit on file)') + '</span>' +
+                (cap ? '<span class="usage-left">' + count(Math.max(0, cap - used)) + ' left</span>' : '') + '</div>' +
+                (cap ? '<div class="usage-bar' + (share >= 1 ? ' is-full' : share >= 0.8 ? ' is-high' : '') + '"><span style="transform: scaleX(' + share + ')"></span></div>' : '') +
+                '<div class="usage-notes">' + notes.map(n => '<span>' + esc(n) + '</span>').join('') + '</div>';
+            return li;
+        }
+        async function loadUsage(user) {
+            document.getElementById('usage-card').hidden = false;
+            const list = document.getElementById('property-api-usage');
+            try {
+                const data = await callApi(user, { action: 'adminUsage' });
+                if (!data.ok) throw new Error(data.error);
+                const apis = data.propertyApis || [];
+                list.innerHTML = '';
+                if (!apis.length) list.innerHTML = '<li class="client-empty">No usage on file yet.</li>';
+                apis.forEach(api => list.append(usageItem(api)));
+                const checked = apis.map(a => a.checkedAt).filter(Boolean).sort().pop();
+                document.getElementById('usage-checked').textContent = checked ? 'Updated ' + usageTime(checked) : '';
+            } catch (err) {
+                console.error(err);
+                list.innerHTML = '<li class="client-empty">We couldn’t load the usage. Please refresh to try again.</li>';
             }
         }
 

@@ -195,6 +195,8 @@ export async function handle(body, query) {
     if (body.action === 'wholesalePhoto') return await wholesalePhoto_(account, body);
     if (body.action === 'wholesaleCover') return await wholesaleCover_(account, body);
     if (body.action === 'wholesaleCovers') return await wholesaleCovers_(account, body);
+    // settings.html: the admin Usage card
+    if (body.action === 'adminUsage') return await adminUsage_(account);
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return await createProperty_(account, body);
     // pages.html (admins): copy the page into a new version
@@ -1107,6 +1109,27 @@ async function wholesaleProperties_(account) {
   const result = { ok: true, properties };
   if (geoError && isAdmin_(account)) result.geoError = geoError;
   return result;
+}
+
+// The admin Usage card. propertyApis: each wholesaleStatus document (one per property API the wholesale deal
+// extractor uses, written by it at the end of every run), in the order the extractor tries them. Values are as
+// stored; times are text "YYYY-MM-DD HH:MM:SS", Phoenix time.
+const PROPERTY_API_ORDER = ['REDFIN.COM DATA', 'REALTOR SEARCH', 'REDFIN BASE', 'REALTOR API DATA', 'US REALTOR'];
+async function adminUsage_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const snap = await db.collection('wholesaleStatus').get();
+  const place = id => { const i = PROPERTY_API_ORDER.indexOf(id); return i < 0 ? PROPERTY_API_ORDER.length : i; };
+  const num = v => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const str = v => (v === undefined || v === null ? '' : String(v));
+  const propertyApis = snap.docs.map(d => {
+    const f = d.data();
+    return {
+      name: d.id, usage: num(f['USAGE']), cap: num(f['CAP']), source: str(f['USAGE SOURCE']), usageAsOf: str(f['USAGE AS OF']),
+      requestsThisMonth: num(f['REQUESTS THIS MONTH']), countMonth: str(f['COUNT MONTH']), countedSince: str(f['COUNTED SINCE']),
+      lastRequest: str(f['LAST REQUEST']), pausedUntil: str(f['PAUSED UNTIL']), checkedAt: str(f['CHECKED AT']),
+    };
+  }).sort((a, b) => place(a.name) - place(b.name) || a.name.localeCompare(b.name));
+  return { ok: true, propertyApis };
 }
 
 function canSeeWholesale_(account) {
