@@ -971,7 +971,7 @@
                 <select id="tc-preset">
                     <option value="wfg">WFG National Title (escrow and title)</option>
                     <option value="firstAmerican">First American Title (escrow and title)</option>
-                    <option value="fidelity">Fidelity National Title (escrow only)</option>
+                    <option value="fidelity">Fidelity National Title (escrow and title)</option>
                 </select>
                 <button type="button" class="btn btn-secondary tc-wfg" id="tc-wfg">Fill In</button>
             </div>
@@ -2052,8 +2052,8 @@
         };
         // Fidelity National Title's Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022 (Zone 1: Maricopa and Pinal)
         const FIDELITY_RATES = {
-            name: 'Fidelity National Title', manualDate: '2022-01-12',
-            notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). The filing has no title insurance rates: those are in Fidelity’s title rate manual.',
+            name: 'Fidelity National Title', manualDate: '2022-01-12', titleManualDate: '2026-07-29',
+            notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). Title insurance from Fidelity’s Arizona Schedule of Title Insurance Rates and Charges (SERFF FDLS-134996142, effective July 29, 2026), Zone 1 (Maricopa and Pinal): a homeowner’s owner’s policy (section 103, 110%) and an extended loan policy issued with it at 65% of the basic rate on the loan amount (section 208; on its own it’s 120%). Above $5,000,000 the basic rate adds $37.80 per $20,000 instead of $38.85. Refinances use section 216B (Zone 1, full coverage, ALTA 8.1, 9 and 22 included); a lender-program refinance with electronic ordering (216A) is cheaper: $360 / $540 / $660 / $800 up to $1,000,000. Over $1,000,000 a refinance is 50% of the applicable rate, which the table can’t show.',
             escrowTable: [[120000, 696], [140000, 728], [160000, 761], [180000, 793], [200000, 827], [220000, 855], [240000, 882], [260000, 911], [280000, 939], [300000, 966], [320000, 995], [340000, 1022], [360000, 1052], [380000, 1079], [400000, 1106], [420000, 1134], [440000, 1162], [460000, 1191], [480000, 1218], [500000, 1246], [520000, 1271], [540000, 1295], [560000, 1319], [580000, 1343], [600000, 1369], [620000, 1393], [640000, 1417], [660000, 1441], [680000, 1465], [700000, 1490], [720000, 1515], [740000, 1539], [760000, 1564], [780000, 1588], [800000, 1612], [820000, 1636], [840000, 1661], [860000, 1685], [880000, 1710], [900000, 1734], [920000, 1759], [940000, 1783], [960000, 1808], [980000, 1832], [1000000, 1856]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 21, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
@@ -2067,9 +2067,40 @@
                 { name: 'Manufactured Home Affidavit of Affixture (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
                 { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
                 { name: '1031 Exchange Accommodation', amount: 100, sellerShare: 1, when: 'Sometimes' },
+                // Title manual M: $25 per party
+                { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
+                { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
+                { name: 'Closing Protection Letter (lender)', amount: 25, sellerShare: 0, when: 'With a Loan' },
+                { name: 'Closing Protection Letter (refinance lender)', amount: 25, sellerShare: 0, when: 'Refinance' },
+                { name: 'Closing Protection Letter (refinance borrower)', amount: 25, sellerShare: 0, when: 'Refinance' },
             ],
-            refiEscrowFee: 350, refiRecordingFee: 100, vaSellerPays: true, loanEndorsementList: [],
-            titleTable: [], titleOverFee: null, titleOverPer: null, sellerOwnerShare: 1, titleDiscounts: [], refiTable: [],
+            refiEscrowFee: 350, refiRecordingFee: 100, vaSellerPays: true,
+            // Title manual Zone 1, above $1,000,000 add $38.85 per $20,000 (to $5,000,000)
+            titleTable: [[60000, 585], [80000, 695], [100000, 805], [120000, 869], [140000, 933], [160000, 998], [180000, 1062], [200000, 1125], [220000, 1189], [240000, 1253], [260000, 1317], [280000, 1381], [300000, 1445], [320000, 1495], [340000, 1547], [360000, 1597], [380000, 1647], [400000, 1698], [420000, 1749], [440000, 1800], [460000, 1850], [480000, 1902], [500000, 1952], [520000, 2002], [540000, 2054], [560000, 2104], [580000, 2155], [600000, 2205], [620000, 2256], [640000, 2307], [660000, 2357], [680000, 2409], [700000, 2459], [720000, 2510], [740000, 2561], [760000, 2611], [780000, 2662], [800000, 2712], [820000, 2765], [840000, 2814], [860000, 2864], [880000, 2916], [900000, 2966], [920000, 3017], [940000, 3068], [960000, 3119], [980000, 3169], [1000000, 3219]].map(([upTo, fee]) => ({ upTo, fee })),
+            titleOverFee: 38.85, titleOverPer: 20000,
+            ownerPolicyPercent: 1.1, sellerOwnerShare: 1,
+            // Section 208: an extended loan policy with a homeowner's policy is 65% of the basic rate on the loan amount
+            loanPolicyPercent: 1, simultaneousPercent: 0.65, simultaneousMinimum: 0,
+            // Section 902, lender's extended coverage
+            loanEndorsementList: [
+                { name: 'ALTA 8.1 Environmental Protection Lien', amount: 75, when: 'Every Loan' },
+                { name: 'ALTA 9 Restrictions, Encroachments, Minerals', amount: 0, when: 'Every Loan' },
+                { name: 'ALTA 4.1 Condominium', amount: 75, when: 'Condo' },
+                { name: 'ALTA 5.1 Planned Unit Development', amount: 75, when: 'HOA (PUD)' },
+                { name: 'ALTA 6 Variable Rate', amount: 75, when: 'Adjustable Rate' },
+                { name: 'ALTA 7.1 Manufactured Housing Unit Conversion', amount: 75, when: 'Manufactured Home' },
+            ],
+            // Chapter VIII
+            titleDiscounts: [
+                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2 },
+                { name: 'Investor, builder or real estate agent (a principal in the deal)', percent: 0.3 },
+                { name: 'First responder or military (active or retired)', percent: 0.3 },
+                { name: 'Church, non-profit or charity', percent: 0.3 },
+                { name: 'Corporate relocation (employee’s customary costs)', percent: 0.3 },
+            ],
+            // Section 216B, Zone 1 (ALTA 8.1, 9 and 22 included)
+            refiTable: [[100000, 500], [200000, 630], [300000, 800], [400000, 855], [500000, 980], [600000, 1105], [700000, 1230], [800000, 1360], [900000, 1485], [1000000, 1590]].map(([upTo, fee]) => ({ upTo, fee })),
+            refiOverFee: null, refiOverPer: null, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         const FILED_RATES = { wfg: WFG_RATES, firstAmerican: FIRST_AMERICAN_RATES, fidelity: FIDELITY_RATES };
         const tcCard = document.getElementById('title-card');
