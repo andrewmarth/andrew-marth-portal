@@ -1179,7 +1179,10 @@ async function resumeGemini_(account) {
 // (or fraction). Shares are decimals (0.5 = half). Written straight to Firestore (the tables are lists of maps).
 // Title insurance: OWNERS TITLE TABLE is the title rate manual's Basic Rate Table. The owner's policy is OWNERS POLICY
 // PERCENT of it (on the price); a buyer's loan policy is LOAN POLICY PERCENT of it (on the loan amount), times
-// SIMULTANEOUS LOAN PERCENT when issued with the owner's policy (at least SIMULTANEOUS LOAN MINIMUM), plus LOAN ENDORSEMENTS.
+// SIMULTANEOUS LOAN PERCENT when issued with the owner's policy (at least SIMULTANEOUS LOAN MINIMUM), plus the lender's
+// endorsements: LOAN ENDORSEMENT LIST [{ NAME, AMOUNT, WHEN }], WHEN saying which loans need it (every loan, a condo, a home in
+// an HOA, an adjustable rate, a manufactured home). VA SELLER PAYS BUYER FEES: on a VA loan the seller pays the buyer's share
+// of the escrow and recording fees.
 // Refinance: a flat REFINANCE ESCROW FEE and REFINANCE RECORDING FEE, and the loan policy from REFINANCE TITLE TABLE (its own
 // table, on the loan amount) times REFINANCE POLICY PERCENT, plus REFINANCE ENDORSEMENTS.
 const TITLE_MONEY_MAX = 100000000;
@@ -1210,7 +1213,8 @@ function titleTable_(list, name) {
   if (out.some((r, i) => i && r['UP TO'] === out[i - 1]['UP TO'])) return 'invalid_' + name;
   return out;
 }
-const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Refinance', 'Sometimes'];
+const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'];
+const TITLE_ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 
 function titleCompanyOut_(doc) {
   const f = doc.data();
@@ -1236,7 +1240,11 @@ function titleCompanyOut_(doc) {
     loanPolicyPercent: num(f['LOAN POLICY PERCENT']),
     simultaneousPercent: num(f['SIMULTANEOUS LOAN PERCENT']),
     simultaneousMinimum: num(f['SIMULTANEOUS LOAN MINIMUM']),
-    loanEndorsements: num(f['LOAN ENDORSEMENTS']),
+    // (pages saved before the list had one flat LOAN ENDORSEMENTS amount, for every loan)
+    loanEndorsementList: Array.isArray(f['LOAN ENDORSEMENT LIST'])
+      ? f['LOAN ENDORSEMENT LIST'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), when: String(d['WHEN'] || '') }))
+      : num(f['LOAN ENDORSEMENTS']) ? [{ name: 'Lender’s endorsements', amount: num(f['LOAN ENDORSEMENTS']), when: 'Every Loan' }] : [],
+    vaSellerPays: f['VA SELLER PAYS BUYER FEES'] === true,
     refiEscrowFee: num(f['REFINANCE ESCROW FEE']),
     refiRecordingFee: num(f['REFINANCE RECORDING FEE']),
     refiTable: table(f['REFINANCE TITLE TABLE']),
@@ -1280,7 +1288,7 @@ async function saveTitleCompany_(account, body) {
   const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable, 'REFINANCE TITLE TABLE': refiTable };
   const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
     loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
-    titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM', loanEndorsements: 'LOAN ENDORSEMENTS',
+    titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM',
     refiEscrowFee: 'REFINANCE ESCROW FEE', refiRecordingFee: 'REFINANCE RECORDING FEE', refiOverFee: 'REFINANCE TITLE OVER FEE',
     refiOverPer: 'REFINANCE TITLE OVER PER', refiEndorsements: 'REFINANCE ENDORSEMENTS' };
   for (const [k, col] of Object.entries(moneyFields)) {
@@ -1339,6 +1347,17 @@ async function saveTitleCompany_(account, body) {
     otherFees.push({ 'NAME': dn, 'AMOUNT': amount, 'SELLER SHARE': share, 'WHEN': when });
   }
   fields['OTHER FEES'] = otherFees;
+  const endorsements = [];
+  for (const d of (Array.isArray(c.loanEndorsementList) ? c.loanEndorsementList : []).slice(0, 30)) {
+    const dn = cleanText_(d && d.name, 100);
+    const amount = titleMoney_(d && d.amount);
+    if (!dn && amount === null) continue;
+    if (!dn || amount === null || Number.isNaN(amount) || !TITLE_ENDORSEMENT_WHEN.includes(d.when)) return { ok: false, error: 'invalid_endorsement' };
+    endorsements.push({ 'NAME': dn, 'AMOUNT': amount, 'WHEN': d.when });
+  }
+  fields['LOAN ENDORSEMENT LIST'] = endorsements;
+  fields['LOAN ENDORSEMENTS'] = FieldValue.delete();
+  fields['VA SELLER PAYS BUYER FEES'] = c.vaSellerPays === true;
 
   let id = String(c.id || '');
   if (id) {
