@@ -455,6 +455,17 @@
         .usage-bar.is-full span { background: #f2b8a8; }
         .usage-notes { margin-top: 10px; display: grid; gap: 2px; font-size: 0.85rem; opacity: 0.75; }
         .usage-foot { margin-top: 14px; font-size: 0.82rem; opacity: 0.6; }
+        .usage-foot a { color: var(--gold); }
+        .gemini-alert { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(242, 184, 168, 0.12); color: #f2b8a8; font-size: 0.9rem; }
+        .gemini-stats { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .gemini-stat { padding: 12px 14px; border-radius: 14px; background: rgba(233, 226, 216, 0.08); }
+        .gemini-stat .usage-used { font-size: 1.4rem; display: block; }
+        .gemini-stat span:last-child { font-size: 0.8rem; opacity: 0.75; }
+        .gemini-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .gemini-actions .btn { margin: 0; }
+        .gemini-msg { font-size: 0.85rem; color: var(--gold); }
+        .gemini-msg.is-error { color: #f2b8a8; }
+        @media (max-width: 520px) { .gemini-stats { grid-template-columns: 1fr; } }
         /* "Add New Client" (first in the dropdown) and its form */
         .client-picker-option.is-add .cp-main { color: var(--rust); }
         .client-picker-option.is-add > svg { color: var(--rust); }
@@ -779,6 +790,20 @@
                 <ul class="usage-list" id="property-api-usage"><li class="client-empty">Loading...</li></ul>
                 <p class="usage-foot">Beds, baths, sqft and taxes for the wholesale deals, tried in this order. The wholesale deal extractor updates these at the end of every run (every 5 minutes).</p>
             </div>
+        </section>
+
+        <!-- Admins only: the wholesale deal extractor's Gemini usage, and its out-of-credits failsafe -->
+        <section class="main-card glow-card reveal" id="gemini-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Gemini API</h2>
+            <div class="usage-item">
+                <div class="usage-top">
+                    <span class="usage-name" id="gemini-model">Wholesale deal extractor</span>
+                    <span class="usage-pill is-idle" id="gemini-pill">Loading</span>
+                </div>
+                <div id="gemini-body"><div class="usage-notes"><span>Loading...</span></div></div>
+            </div>
+            <p class="usage-foot">Gemini reads each wholesale deal email. If its prepaid credits run out, the extractor stops and checks again every hour. No emails are skipped: they're all read once the credits are back. Gemini doesn't share the credit balance; see it in <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</p>
         </section>
     </main>
 
@@ -1382,10 +1407,61 @@
                 apis.forEach(api => list.append(usageItem(api)));
                 const checked = apis.map(a => a.checkedAt).filter(Boolean).sort().pop();
                 document.getElementById('usage-checked').textContent = checked ? 'Updated ' + usageTime(checked) : '';
+                showGemini(user, data.gemini || null);
             } catch (err) {
                 console.error(err);
                 list.innerHTML = '<li class="client-empty">We couldn’t load the usage. Please refresh to try again.</li>';
             }
+        }
+
+        // --- Gemini API (admins) ---
+        function showGemini(user, g) {
+            const pill = document.getElementById('gemini-pill');
+            const body = document.getElementById('gemini-body');
+            document.getElementById('gemini-card').hidden = false;
+            if (!g) {
+                pill.className = 'usage-pill is-idle';
+                pill.textContent = 'No requests yet';
+                body.innerHTML = '<div class="usage-notes"><span>The extractor fills this in at the end of its next run.</span></div>';
+                return;
+            }
+            const out = g.status === 'Out of credits';
+            pill.className = 'usage-pill' + (out ? ' is-out' : g.status ? '' : ' is-idle');
+            pill.textContent = out ? 'Out of credits' : g.status || 'No requests yet';
+            if (g.model) document.getElementById('gemini-model').textContent = g.model;
+            const notes = [];
+            if (g.lastRequest) notes.push('Last request ' + usageTime(g.lastRequest));
+            if (g.lastError) notes.push('Last error' + (g.lastErrorAt ? ' (' + usageTime(g.lastErrorAt) + ')' : '') + ': ' + g.lastError);
+            const stat = (n, label) => '<div class="gemini-stat"><span class="usage-used">' + count(n) + '</span><span>' + label + '</span></div>';
+            const retryNote = g.pausedUntil ? 'checks again ' + usageTime(g.pausedUntil) : 'checks again on its next run (within 5 minutes)';
+            body.innerHTML =
+                (out ? '<p class="gemini-alert">Out of credits' + (g.outOfCreditsSince ? ' since ' + esc(usageTime(g.outOfCreditsSince)) : '')
+                    + '. The extractor is stopped and ' + esc(retryNote) + '. Add credits in Google AI Studio, then press Try Again Now.</p>' : '')
+                + '<div class="gemini-stats">' + stat(g.requestsThisMonth, 'requests this month') + stat(g.inputTokensThisMonth, 'input tokens this month')
+                + stat(g.outputTokensThisMonth, 'output tokens this month') + '</div>'
+                + '<div class="usage-notes">' + notes.map(n => '<span>' + esc(n) + '</span>').join('') + '</div>'
+                + (out ? '<div class="gemini-actions"><button type="button" class="btn" id="gemini-retry"><span class="btn-spinner" aria-hidden="true"></span>Try Again Now</button>'
+                    + '<span class="gemini-msg" id="gemini-msg" role="status"></span></div>' : '');
+            const retry = document.getElementById('gemini-retry');
+            if (!retry) return;
+            retry.addEventListener('click', async () => {
+                const msg = document.getElementById('gemini-msg');
+                retry.disabled = true;
+                retry.classList.add('is-loading');
+                msg.className = 'gemini-msg';
+                msg.textContent = '';
+                try {
+                    const data = await callApi(user, { action: 'resumeGemini' });
+                    if (!data.ok) throw new Error(data.error);
+                    msg.textContent = 'The extractor tries Gemini again on its next run (within 5 minutes). Refresh after that to see how it went.';
+                } catch (err) {
+                    console.error(err);
+                    retry.disabled = false;
+                    msg.className = 'gemini-msg is-error';
+                    msg.textContent = 'That didn’t go through. Please try again.';
+                }
+                retry.classList.remove('is-loading');
+            });
         }
 
         // --- New client: every question open at once ---

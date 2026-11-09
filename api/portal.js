@@ -5,6 +5,7 @@ import { rows, row as getRow, columns, update, add, remove, withLock } from './l
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
 import { lookupPropertyFacts } from './lib/property-facts.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
 const PAGE_PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3',
@@ -198,6 +199,7 @@ export async function handle(body, query) {
     if (body.action === 'wholesaleCovers') return await wholesaleCovers_(account, body);
     // settings.html: the admin Usage card
     if (body.action === 'adminUsage') return await adminUsage_(account);
+    if (body.action === 'resumeGemini') return await resumeGemini_(account);
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return await createProperty_(account, body);
     // index.html's New Seller Net form (admins): beds, baths, sqft and taxes for an address, from the property APIs
@@ -1133,7 +1135,30 @@ async function adminUsage_(account) {
       resetsAt: str(f['RESETS AT']),
     };
   }).sort((a, b) => place(a.name) - place(b.name) || a.name.localeCompare(b.name));
-  return { ok: true, propertyApis };
+  // The extractor's Gemini usage and out-of-credits pause (apiStatus/GEMINI, written at the end of every run)
+  const g = (await db.collection('apiStatus').doc('GEMINI').get()).data() || null;
+  const gemini = g && {
+    status: str(g['STATUS']), pausedUntil: str(g['PAUSED UNTIL']), outOfCreditsSince: str(g['OUT OF CREDITS SINCE']),
+    requestsThisMonth: num(g['REQUESTS THIS MONTH']), inputTokensThisMonth: num(g['INPUT TOKENS THIS MONTH']),
+    outputTokensThisMonth: num(g['OUTPUT TOKENS THIS MONTH']), countMonth: str(g['COUNT MONTH']),
+    lastRequest: str(g['LAST REQUEST']), lastError: str(g['LAST ERROR']), lastErrorAt: str(g['LAST ERROR AT']),
+    model: str(g['MODEL']), checkedAt: str(g['CHECKED AT']), retryRequestedAt: str(g['RETRY REQUESTED AT']),
+  };
+  return { ok: true, propertyApis, gemini };
+}
+
+// Settings > Gemini API > Try Again Now (after adding credits): ends the out-of-credits pause, so the extractor's
+// next run (within 5 minutes) tries Gemini again. If the credits are still used up, it pauses again.
+async function resumeGemini_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const p = {};
+  new Intl.DateTimeFormat('en-US', { timeZone: 'America/Phoenix', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).forEach(x => { p[x.type] = x.value; });
+  await db.collection('apiStatus').doc('GEMINI').set({
+    'PAUSED UNTIL': FieldValue.delete(),
+    'RETRY REQUESTED AT': `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`,
+  }, { merge: true });
+  return { ok: true };
 }
 
 function canSeeWholesale_(account) {

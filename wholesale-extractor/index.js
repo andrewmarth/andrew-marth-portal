@@ -64,12 +64,21 @@ functions.http('processNewDeals', async (req, res) => {
 
 async function processNewDeals() {
   const started = Date.now();
+  // Out of Gemini credits: every email would fail, so the run is skipped until the pause is over (or an admin
+  // presses Try Again Now on the portal's Settings page, which clears it)
+  const pausedUntil = await geminiPausedUntil();
+  if (pausedUntil) {
+    console.log(`Gemini is out of credits; skipping this run until ${pausedUntil}.`);
+    await updateGeminiStatus();
+    return { skipped: 'Gemini is out of credits', pausedUntil };
+  }
   const state = await loadState();
   await adoptNewerUsage();
   try {
     return await processWithState(state, started);
   } finally {
     await updateUsageStatus();
+    await updateGeminiStatus();
   }
 }
 
@@ -120,6 +129,8 @@ async function processWithState(state, started) {
         history.push(historyRow(id, msg, out, `Error: ${clean(String(e.message || e)).slice(0, 300)}`));
       }
       // Not marked processed, so it will be retried next run.
+      // Out of Gemini credits: the rest would fail the same way, so stop here (they're retried once it's back)
+      if (e instanceof GeminiOutOfCreditsError) break;
     }
   }
 
@@ -161,6 +172,7 @@ async function testOnLatestEmail(write = false, resume = false) {
     return out;
   } finally {
     await updateUsageStatus();
+    await updateGeminiStatus();
   }
 }
 
@@ -517,11 +529,95 @@ ${links.length ? links.map(l => `- ${l.text} -> ${l.url}`).join('\n') : '(none)'
   });
 
   const raw = await res.text();
+  // 402: the prepaid credits are used up (nothing is charged for it)
+  if (res.status === 402 || /credits are depleted|prepayment credits/i.test(raw)) {
+    let message = raw;
+    try { message = JSON.parse(raw).error.message || raw; } catch (e) { /* not JSON */ }
+    geminiRun.outOfCredits = clean(message).slice(0, 300);
+    throw new GeminiOutOfCreditsError(`Gemini is out of credits (HTTP ${res.status}): ${geminiRun.outOfCredits}`);
+  }
   if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${raw.slice(0, 500)}`);
   const data = JSON.parse(raw);
+  // Billed usage, for the portal's Gemini API card (thinking tokens are billed as output)
+  const used = data.usageMetadata || {};
+  geminiRun.requests += 1;
+  geminiRun.input += Number(used.promptTokenCount) || 0;
+  geminiRun.output += (Number(used.candidatesTokenCount) || 0) + (Number(used.thoughtsTokenCount) || 0);
+  geminiRun.last = Date.now();
   const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   if (!text) throw new Error('Gemini returned no content: ' + raw.slice(0, 500));
   return JSON.parse(text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Gemini usage and the out-of-credits failsafe                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The apiStatus/GEMINI document (the portal's Settings > Gemini API card), written at the end of every run:
+ *   STATUS              - "Active", or "Out of credits" once Gemini says the prepaid credits are used up.
+ *   PAUSED UNTIL        - while out of credits, runs are skipped until then (an hour at a time); then one email is
+ *                         tried, and if the credits are still used up it pauses again. The portal's Try Again Now
+ *                         clears it. OUT OF CREDITS SINCE: when it first ran out.
+ *   REQUESTS / INPUT TOKENS / OUTPUT TOKENS THIS MONTH - successful (billed) requests and their tokens this calendar
+ *                         month (Phoenix time); COUNT MONTH is that month ("2026-11").
+ *   LAST REQUEST, LAST ERROR (+ LAST ERROR AT), MODEL, CHECKED AT. Times are Phoenix time text, like the portal's.
+ */
+const GEMINI_PAUSE_MINUTES = 60;
+class GeminiOutOfCreditsError extends Error {}
+let geminiRun = { requests: 0, input: 0, output: 0, last: 0, outOfCredits: '' };
+
+/** When runs are paused for being out of credits ("YYYY-MM-DD HH:MM:SS"), or '' when they aren't. */
+async function geminiPausedUntil() {
+  try {
+    const doc = (await listDocuments('apiStatus')).find(d => d.id === 'GEMINI');
+    const until = doc ? String(doc.data['PAUSED UNTIL'] || '') : '';
+    return until > formatStoredDateTime(new Date()) ? until : '';
+  } catch (e) {
+    console.log(`Could not read the Gemini status: ${e.message}`);
+    return ''; // never stops a run by itself
+  }
+}
+
+async function updateGeminiStatus() {
+  try {
+    const now = new Date();
+    const stamp = formatStoredDateTime(now);
+    const month = stamp.slice(0, 7);
+    const old = ((await listDocuments('apiStatus')).find(d => d.id === 'GEMINI') || {}).data || {};
+    const sameMonth = old['COUNT MONTH'] === month;
+    const values = { 'CHECKED AT': stamp, 'MODEL': CONFIG.GEMINI_MODEL, 'COUNT MONTH': month };
+    const transforms = [];
+    const counts = { 'REQUESTS THIS MONTH': geminiRun.requests, 'INPUT TOKENS THIS MONTH': geminiRun.input, 'OUTPUT TOKENS THIS MONTH': geminiRun.output };
+    for (const [field, n] of Object.entries(counts)) {
+      if (sameMonth) transforms.push({ fieldPath: '`' + field + '`', increment: { integerValue: String(n) } });
+      else values[field] = n;
+    }
+    if (geminiRun.last) values['LAST REQUEST'] = formatStoredDateTime(new Date(geminiRun.last));
+    if (geminiRun.outOfCredits) {
+      values.STATUS = 'Out of credits';
+      values['PAUSED UNTIL'] = formatStoredDateTime(new Date(now.getTime() + GEMINI_PAUSE_MINUTES * 60000));
+      values['OUT OF CREDITS SINCE'] = old.STATUS === 'Out of credits' && old['OUT OF CREDITS SINCE'] ? old['OUT OF CREDITS SINCE'] : stamp;
+      values['LAST ERROR'] = geminiRun.outOfCredits;
+      values['LAST ERROR AT'] = stamp;
+      console.log(`Gemini is out of credits; runs are paused until ${values['PAUSED UNTIL']}.`);
+    } else if (geminiRun.requests) {
+      // It answered: the credits are back (or never ran out)
+      values.STATUS = 'Active';
+      values['PAUSED UNTIL'] = '';
+      values['OUT OF CREDITS SINCE'] = '';
+    }
+    await commitWrites([{
+      update: { name: docName('apiStatus', 'GEMINI'), fields: fsFields(values) },
+      // Every field named here is written; a blank one is removed
+      updateMask: { fieldPaths: Object.keys(values).map(k => (/^[A-Za-z_][A-Za-z_0-9]*$/.test(k) ? k : '`' + k + '`')) },
+      ...(transforms.length ? { updateTransforms: transforms } : {}),
+    }]);
+    // Counted once it's written (a failed write is carried into the next run)
+    geminiRun = { requests: 0, input: 0, output: 0, last: 0, outOfCredits: '' };
+  } catch (e) {
+    console.log(`Could not update the Gemini status: ${e.message}`); // never fails the run
+  }
 }
 
 /** Retries temporary errors (rate limit / overloaded) with increasing waits. */
