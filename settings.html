@@ -970,7 +970,7 @@
                 <label for="tc-preset">Start from a filing</label>
                 <select id="tc-preset">
                     <option value="wfg">WFG National Title (escrow and title)</option>
-                    <option value="firstAmerican">First American Title (escrow only)</option>
+                    <option value="firstAmerican">First American Title (escrow and title)</option>
                     <option value="fidelity">Fidelity National Title (escrow only)</option>
                 </select>
                 <button type="button" class="btn btn-secondary tc-wfg" id="tc-wfg">Fill In</button>
@@ -2009,8 +2009,8 @@
 
         // First American Title's Arizona Schedule of Escrow Fees, effective September 22, 2024 (Area A: Maricopa and Pinal)
         const FIRST_AMERICAN_RATES = {
-            name: 'First American Title', manualDate: '2024-09-22',
-            notes: 'Escrow fees from First American’s Arizona Schedule of Escrow Fees, effective September 22, 2024, Residential Area A (Maricopa and Pinal Counties). Recording services are included in the escrow fee for residential sales. The filing has no title insurance rates: those are in First American’s title rate manual.',
+            name: 'First American Title', manualDate: '2024-09-22', titleManualDate: '2026-07-29',
+            notes: 'Escrow fees from First American’s Arizona Schedule of Escrow Fees, effective September 22, 2024, Residential Area A (Maricopa and Pinal Counties). Recording services are included in the escrow fee for residential sales. Title insurance from First American’s Arizona Schedule of Title Insurance Rates (SERFF FACO-135003181, acknowledged July 29, 2026), Appendix A-1 (Maricopa, Pima and Pinal): an EAGLE owner’s policy (First American’s homeowner’s policy, 110%) and an extended loan policy issued with it, which First American prices at 65% of the basic rate on the loan amount (section F.2; a loan policy on its own is 120%). A refinance over $1,000,000 is 30% of the extended loan rate (120% of the basic rate), which the table above can’t show. First American charges for ALTA 9 ($100), and the EAGLE loan policy (140%) would include 4.1, 5.1, 6 and 8.1 at no charge.',
             escrowTable: [[100000, 1012], [120000, 1048], [140000, 1084], [160000, 1116], [180000, 1152], [200000, 1186], [220000, 1216], [240000, 1244], [260000, 1274], [280000, 1304], [300000, 1332], [320000, 1362], [340000, 1392], [360000, 1422], [380000, 1450], [400000, 1480], [420000, 1508], [440000, 1536], [460000, 1568], [480000, 1596], [500000, 1624], [520000, 1650], [540000, 1678], [560000, 1702], [580000, 1728], [600000, 1754], [620000, 1778], [640000, 1804], [660000, 1830], [680000, 1856], [700000, 1882], [720000, 1906], [740000, 1932], [760000, 1958], [780000, 1984], [800000, 2010], [820000, 2034], [840000, 2060], [860000, 2084], [880000, 2110], [900000, 2138], [920000, 2164], [940000, 2188], [960000, 2214], [980000, 2238], [1000000, 2264]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 22, escrowOverPer: 20000, cashSaleAddOn: 0, loanSaleAddOn: 250, sellerEscrowShare: 0.5,
             recordingFee: 0, sellerRecordingShare: 0.5,
@@ -2019,9 +2019,36 @@
                 { name: 'Reconveyance Tracking (lien release not ready at closing)', amount: 100, sellerShare: 1, when: 'Sometimes' },
                 { name: 'Mobile Home Affixture / Title Transfer', amount: 150, sellerShare: 0.5, when: 'Manufactured Home' },
                 { name: 'Holdback (up to 5 disbursements)', amount: 100, sellerShare: 0.5, when: 'Sometimes' },
+                // Title manual B.3(c): $25 per letter
+                { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
+                { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
+                { name: 'Closing Protection Letter (lender)', amount: 25, sellerShare: 0, when: 'With a Loan' },
+                { name: 'Closing Protection Letter (refinance lender)', amount: 25, sellerShare: 0, when: 'Refinance' },
+                { name: 'Closing Protection Letter (refinance borrower)', amount: 25, sellerShare: 0, when: 'Refinance' },
             ],
-            refiEscrowFee: 575, refiRecordingFee: 0, vaSellerPays: true, loanEndorsementList: [],
-            titleTable: [], titleOverFee: null, titleOverPer: null, sellerOwnerShare: 1, titleDiscounts: [], refiTable: [],
+            refiEscrowFee: 575, refiRecordingFee: 0, vaSellerPays: true,
+            // Title manual Appendix A-1, above $1,000,000 add $40 per $20,000
+            titleTable: [[100000, 844], [120000, 927], [140000, 989], [160000, 1067], [180000, 1151], [200000, 1234], [220000, 1290], [240000, 1345], [260000, 1408], [280000, 1477], [300000, 1546], [320000, 1600], [340000, 1657], [360000, 1712], [380000, 1768], [400000, 1823], [420000, 1877], [440000, 1934], [460000, 1988], [480000, 2045], [500000, 2100], [520000, 2155], [540000, 2211], [560000, 2265], [580000, 2320], [600000, 2379], [620000, 2433], [640000, 2489], [660000, 2543], [680000, 2600], [700000, 2655], [720000, 2709], [740000, 2765], [760000, 2819], [780000, 2877], [800000, 2932], [820000, 2986], [840000, 3042], [860000, 3097], [880000, 3152], [900000, 3209], [920000, 3263], [940000, 3320], [960000, 3374], [980000, 3429], [1000000, 3485]].map(([upTo, fee]) => ({ upTo, fee })),
+            titleOverFee: 40, titleOverPer: 20000,
+            ownerPolicyPercent: 1.1, sellerOwnerShare: 1,
+            // F.2: an extended loan policy issued with the owner's policy is 65% of the basic rate on the loan amount
+            loanPolicyPercent: 1, simultaneousPercent: 0.65, simultaneousMinimum: 0,
+            // Appendix B, lender's column
+            loanEndorsementList: [
+                { name: 'ALTA 8.1 Environmental Protection Lien', amount: 100, when: 'Every Loan' },
+                { name: 'ALTA 9 Restrictions, Encroachments, Minerals', amount: 100, when: 'Every Loan' },
+                { name: 'ALTA 4.1 Condominium', amount: 100, when: 'Condo' },
+                { name: 'ALTA 5.1 Planned Unit Development', amount: 100, when: 'HOA (PUD)' },
+                { name: 'ALTA 6 Variable Rate Mortgage', amount: 100, when: 'Adjustable Rate' },
+                { name: 'ALTA 7.1 Manufactured Housing – Conversion', amount: 100, when: 'Manufactured Home' },
+            ],
+            titleDiscounts: [
+                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35 },
+                { name: 'Investor (on the policies the investor pays for)', percent: 0.3 },
+            ],
+            // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
+            refiTable: [[250000, 500], [500000, 650], [750000, 800], [1000000, 950]].map(([upTo, fee]) => ({ upTo, fee })),
+            refiOverFee: null, refiOverPer: null, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         // Fidelity National Title's Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022 (Zone 1: Maricopa and Pinal)
         const FIDELITY_RATES = {
