@@ -24,6 +24,7 @@ const CSS = `
 .snw-dialog .snw-eyebrow { display: block; margin-bottom: 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
 .snw-dialog .snw-question { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.45rem; line-height: 1.2; color: var(--navy); }
 .snw-dialog .snw-help { margin: 8px 0 0 0; font-size: 0.92rem; opacity: 0.72; }
+.snw-dialog .snw-unit { margin-top: 14px; max-width: 220px; }
 .snw-dialog .snw-body { margin-top: 18px; display: grid; gap: 14px; }
 .snw-dialog .snw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 .snw-dialog .field input[type="date"] { font-family: inherit; font-size: 1rem; color: var(--brown); }
@@ -130,7 +131,7 @@ function build() {
     const STEPS = [
         { id: 'sellers', group: 'People', title: 'Who else is selling?', help: 'Anyone else on the title. Leave it empty if it’s just the seller.', kind: 'people', which: 'sellers' },
         { id: 'collaborators', group: 'People', title: 'Anyone else who should see this sheet?', help: 'Collaborators can view the page but aren’t selling. Up to six people in all.', kind: 'people', which: 'collaborators' },
-        { id: 'address', group: 'Property', title: 'What’s the property address?', kind: 'address' },
+        { id: 'address', group: 'Property', title: 'What’s the property address?', help: 'Add the unit number for a condo, townhome or apartment.', kind: 'address' },
         { id: 'type', group: 'Property', title: 'What kind of property is it?', kind: 'choice', key: 'propertyType', options: PROPERTY_TYPES, fact: 'propertyType' },
         { id: 'beds', group: 'Property', title: 'How many bedrooms?', kind: 'number', key: 'beds', format: 'int', fact: 'beds', placeholder: '3' },
         { id: 'baths', group: 'Property', title: 'How many bathrooms?', help: 'Half baths count as .5 (2.5 for two full and one half).', kind: 'number', key: 'baths', format: 'decimal', fact: 'baths', placeholder: '2' },
@@ -156,6 +157,9 @@ function build() {
     const shown = () => STEPS.filter(s => !s.show || s.show());
 
     // --- Pieces ---
+    // "Apt 4B", "#4b", "Unit 4B" -> "4B"
+    const cleanUnit = v => String(v || '').trim().replace(/^(#|(unit|apt|apartment|ste|suite|no\.?|number)\b)\s*#?\s*/i, '').replace(/\s+/g, '').toUpperCase();
+    const UNIT_AT_END = /^(.*?\S)\s*,?\s*((?:#|\b(?:unit|apt|apartment|ste|suite)\b\.?)\s*#?\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i;
     const field = (label, inner, id) => '<div class="field">' + (label ? '<label' + (id ? ' for="' + id + '"' : '') + '>' + esc(label) + '</label>' : '') + inner + '</div>';
     const input = (id, { format, placeholder = '', value = '', suffix } = {}) => {
         const mode = format === 'decimal' || format === 'percent' ? 'decimal' : 'numeric';
@@ -242,15 +246,20 @@ function build() {
         },
         address(step, body) {
             const ad = a.address || {};
-            body.innerHTML = '<div data-search>' + field('', '<input id="snw-address" type="text" placeholder="Start typing the address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="snw-address-list" aria-label="Property address" value="' + esc(ad.street || '') + '">')
+            // ad.line1: the street without the unit (ad.street has both, "123 Main St #4")
+            const line1 = ad.line1 ?? ad.street ?? '';
+            body.innerHTML = '<div data-search>' + field('', '<input id="snw-address" type="text" placeholder="Start typing the address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="snw-address-list" aria-label="Property address" value="' + esc(line1) + '">')
                 + '<div class="addr-suggestions" id="snw-address-list" role="listbox"></div>'
                 + '<p class="addr-selected"' + (ad.city ? '' : ' hidden') + '>' + CHECK_ICON + '<span>' + esc([ad.city, ((ad.state || '') + ' ' + (ad.zip || '')).trim()].filter(Boolean).join(', ')) + '</span></p></div>'
                 + '<div class="addr-manual" hidden>'
-                    + '<div class="field span-2" style="grid-column: 1 / -1"><label for="snw-street">Street Address</label><input id="snw-street" type="text" autocomplete="off" placeholder="123 Main St #4"></div>'
+                    + '<div class="field span-2" style="grid-column: 1 / -1"><label for="snw-street">Street Address</label><input id="snw-street" type="text" autocomplete="off" placeholder="123 Main St"></div>'
                     + field('City', '<input id="snw-city" type="text" autocomplete="off" placeholder="Phoenix">', 'snw-city')
                     + field('State', '<input id="snw-state" type="text" autocomplete="off" maxlength="20" placeholder="AZ">', 'snw-state')
                     + field('Zip', '<input id="snw-zip" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="85251">', 'snw-zip')
-                + '</div><button type="button" class="addr-toggle">Can’t find it? Enter the address manually</button>';
+                + '</div>'
+                + '<div class="snw-unit">' + field('Unit (optional)', '<input id="snw-unit" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="e.g. 204" value="' + esc(ad.unit || '') + '">', 'snw-unit') + '</div>'
+                + '<button type="button" class="addr-toggle">Can’t find it? Enter the address manually</button>';
+            const unitBox = body.querySelector('#snw-unit');
             const search = body.querySelector('#snw-address');
             const list = body.querySelector('.addr-suggestions');
             const selected = body.querySelector('.addr-selected');
@@ -258,7 +267,7 @@ function build() {
             const searchWrap = body.querySelector('[data-search]');
             const toggle = body.querySelector('.addr-toggle');
             const parts = { street: body.querySelector('#snw-street'), city: body.querySelector('#snw-city'), state: body.querySelector('#snw-state'), zip: body.querySelector('#snw-zip') };
-            let chosen = ad.city ? { ...ad } : null;
+            let chosen = ad.city ? { ...ad, street: line1 } : null;
             let places = null, session = null, results = [], highlighted = -1, timer = null, req = 0;
             const showManual = on => {
                 manual.hidden = !on;
@@ -316,9 +325,11 @@ function build() {
                     await place.fetchFields({ fields: ['addressComponents'] });
                     const get = (type, short) => { const c = (place.addressComponents || []).find(c => c.types.includes(type)); return c ? (short ? c.shortText : c.longText) : ''; };
                     const line1 = [get('street_number'), get('route', true)].filter(Boolean).join(' ');
+                    // Google's unit (when the suggestion had one) goes in the Unit box
                     const unit = get('subpremise');
+                    if (unit) unitBox.value = unit;
                     chosen = {
-                        street: line1 ? (unit ? line1 + ' #' + unit : line1) : search.value,
+                        street: line1 || search.value,
                         city: get('locality') || get('postal_town') || get('sublocality') || get('administrative_area_level_3'),
                         state: get('administrative_area_level_1', true),
                         zip: get('postal_code'),
@@ -359,7 +370,13 @@ function build() {
                     if (!addr) { search.classList.add('is-invalid'); return 'Please choose the address from the suggestions, or enter it manually.'; }
                     const missing = ['street', 'city', 'state', 'zip'].find(k => !addr[k]);
                     if (missing) { (manual.hidden ? search : parts[missing]).classList.add('is-invalid'); return 'Please fill in the full address (street, city, state and zip).'; }
-                    a.address = addr;
+                    // A unit typed into the street ("123 Main St Apt 4") moves to the Unit box
+                    let street = addr.street.replace(/\s+/g, ' ').trim();
+                    let unit = cleanUnit(unitBox.value);
+                    const inStreet = street.match(UNIT_AT_END);
+                    if (inStreet) { street = inStreet[1].replace(/[\s,]+$/, ''); unit = unit || cleanUnit(inStreet[2]); }
+                    // The page keeps the unit in the street address ("123 Main St #4"), like the property APIs expect
+                    a.address = { ...addr, line1: street, unit, street: unit ? street + ' #' + unit : street };
                     startLookup();
                     return '';
                 },

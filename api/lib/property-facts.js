@@ -31,7 +31,7 @@ class OutOfRequestsError extends Error {}
  */
 export async function lookupPropertyFacts(address) {
   const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
-  const m = clean(address.street).match(/^(.*?)\s*(?:#|\b(?:unit|apt|ste)\b\.?)\s*([\w-]+)$/i);
+  const m = clean(address.street).match(/^(.*?)[\s,]*(?:#|\b(?:unit|apt|apartment|ste|suite)\b\.?)\s*#?\s*([\w-]*\d[\w-]*|[a-z])$/i);
   const a = { street: m ? clean(m[1]) : clean(address.street), unit: m ? m[2] : '', city: clean(address.city), state: clean(address.state), zip: clean(address.zip).slice(0, 5) };
   const empty = { beds: '', baths: '', sqft: '', taxes: '', propertyType: '', yearBuilt: '' };
   if (!process.env.RAPIDAPI_KEY || !a.street || !a.zip) return { facts: empty, sources: [] };
@@ -149,8 +149,8 @@ async function realtorStyleLookup(a, host, status, search, detail) {
   const houseNumber = (a.street.match(/^\d+/) || [''])[0];
   const line = r => String(r.line || '').replace(/\s+/g, ' ').trim();
   const homes = ((ac.data && ac.data.autocomplete) || []).filter(r => r.area_type === 'address' && r.mpr_id && r.postal_code === a.zip && line(r).startsWith(`${houseNumber} `));
-  const hasUnit = r => /\b(unit|apt|ste)\b|#/i.test(r.line);
-  const unitRe = a.unit && new RegExp(`(\\b(unit|apt|ste)\\b|#)\\s*${String(a.unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  const hasUnit = r => /\b(unit|apt|apartment|ste|suite)\b|#/i.test(r.line);
+  const unitRe = a.unit && new RegExp(`(\\b(unit|apt|apartment|ste|suite)\\b|#)\\s*${String(a.unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
   const home = a.unit ? homes.find(r => unitRe.test(r.line)) : homes.find(r => !hasUnit(r));
   if (!home) return null;
   const d = detail.home((await rapidApiGet_(host, status, detail.path, { [detail.param]: home.mpr_id })).data || {}) || {};
