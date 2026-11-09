@@ -1177,6 +1177,9 @@ async function resumeGemini_(account) {
 // "Manual of Escrow and Settlement Services" and its title insurance rate manual). Tables are lists of
 // { 'UP TO': price, 'FEE': dollars }, lowest first; a price above the last row adds OVER TABLE FEE per OVER TABLE PER
 // (or fraction). Shares are decimals (0.5 = half). Written straight to Firestore (the tables are lists of maps).
+// Title insurance: OWNERS TITLE TABLE is the title rate manual's Basic Rate Table. The owner's policy is OWNERS POLICY
+// PERCENT of it (on the price); a buyer's loan policy is LOAN POLICY PERCENT of it (on the loan amount), times
+// SIMULTANEOUS LOAN PERCENT when issued with the owner's policy (at least SIMULTANEOUS LOAN MINIMUM), plus LOAN ENDORSEMENTS.
 const TITLE_MONEY_MAX = 100000000;
 function titleMoney_(v) {
   const s = String(v === null || v === undefined ? '' : v).replace(/[$,\s]/g, '');
@@ -1184,11 +1187,11 @@ function titleMoney_(v) {
   const n = Number(s);
   return isFinite(n) && n >= 0 && n <= TITLE_MONEY_MAX ? Math.round(n * 100) / 100 : NaN;
 }
-function titleShare_(v) {
+function titleShare_(v, max = 1) {
   const s = String(v === null || v === undefined ? '' : v).trim();
   if (s === '') return null;
   const n = Number(s);
-  return isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 1e6) / 1e6 : NaN;
+  return isFinite(n) && n >= 0 && n <= max ? Math.round(n * 1e6) / 1e6 : NaN;
 }
 // A rate table: [{ 'UP TO', 'FEE' }] sorted by price, or an error code
 function titleTable_(list, name) {
@@ -1205,7 +1208,7 @@ function titleTable_(list, name) {
   if (out.some((r, i) => i && r['UP TO'] === out[i - 1]['UP TO'])) return 'invalid_' + name;
   return out;
 }
-const TITLE_FEE_WHEN = ['Every Sale', 'Sometimes'];
+const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Sometimes'];
 
 function titleCompanyOut_(doc) {
   const f = doc.data();
@@ -1225,6 +1228,14 @@ function titleCompanyOut_(doc) {
     recordingFee: num(f['RECORDING SERVICE FEE']),
     sellerRecordingShare: num(f['SELLER SHARE OF RECORDING FEE']),
     discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
+    titleManualDate: String(f['TITLE MANUAL DATE'] || ''),
+    ownerPolicyPercent: num(f['OWNERS POLICY PERCENT']),
+    sellerOwnerShare: num(f['SELLER SHARE OF OWNERS POLICY']),
+    loanPolicyPercent: num(f['LOAN POLICY PERCENT']),
+    simultaneousPercent: num(f['SIMULTANEOUS LOAN PERCENT']),
+    simultaneousMinimum: num(f['SIMULTANEOUS LOAN MINIMUM']),
+    loanEndorsements: num(f['LOAN ENDORSEMENTS']),
+    titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
     otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
     titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
@@ -1258,14 +1269,18 @@ async function saveTitleCompany_(account, body) {
   const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable };
   const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
     loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
-    titleOverPer: 'OWNERS TITLE OVER TABLE PER' };
+    titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM', loanEndorsements: 'LOAN ENDORSEMENTS' };
   for (const [k, col] of Object.entries(moneyFields)) {
     const v = titleMoney_(c[k]);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
     fields[col] = v === null ? FieldValue.delete() : v;
   }
-  for (const [k, col] of Object.entries({ sellerEscrowShare: 'SELLER SHARE OF ESCROW FEE', sellerRecordingShare: 'SELLER SHARE OF RECORDING FEE' })) {
-    const v = titleShare_(c[k]);
+  // Shares are 0-100%; the policy percents of the basic rate can be more than 100% (110% for a homeowner's policy)
+  const shareFields = { sellerEscrowShare: ['SELLER SHARE OF ESCROW FEE', 1], sellerRecordingShare: ['SELLER SHARE OF RECORDING FEE', 1],
+    sellerOwnerShare: ['SELLER SHARE OF OWNERS POLICY', 1], ownerPolicyPercent: ['OWNERS POLICY PERCENT', 3],
+    loanPolicyPercent: ['LOAN POLICY PERCENT', 3], simultaneousPercent: ['SIMULTANEOUS LOAN PERCENT', 1] };
+  for (const [k, [col, max]] of Object.entries(shareFields)) {
+    const v = titleShare_(c[k], max);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
     fields[col] = v === null ? FieldValue.delete() : v;
   }
@@ -1275,6 +1290,9 @@ async function saveTitleCompany_(account, body) {
     if (hasFee !== hasPer || (hasPer && !(fields[per] > 0))) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
   }
   fields['RATE MANUAL DATE'] = manualDate || FieldValue.delete();
+  const titleManualDate = String(c.titleManualDate || '').trim();
+  if (titleManualDate && !/^\d{4}-\d{2}-\d{2}$/.test(titleManualDate)) return { ok: false, error: 'invalid_manual_date' };
+  fields['TITLE MANUAL DATE'] = titleManualDate || FieldValue.delete();
   const notes = String(c.notes || '').replace(/\r\n?/g, '\n').trim().replace(/^[=+\-@]+/, '').slice(0, 2000);
   fields['NOTES'] = notes || FieldValue.delete();
   const discounts = [];
@@ -1286,6 +1304,15 @@ async function saveTitleCompany_(account, body) {
     discounts.push({ 'NAME': dn, 'PERCENT': pct });
   }
   fields['DISCOUNTS'] = discounts;
+  const titleDiscounts = [];
+  for (const d of (Array.isArray(c.titleDiscounts) ? c.titleDiscounts : []).slice(0, 30)) {
+    const dn = cleanText_(d && d.name, 100);
+    const pct = titleShare_(d && d.percent);
+    if (!dn && pct === null) continue;
+    if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_title_discount' };
+    titleDiscounts.push({ 'NAME': dn, 'PERCENT': pct });
+  }
+  fields['TITLE DISCOUNTS'] = titleDiscounts;
   const otherFees = [];
   for (const d of (Array.isArray(c.otherFees) ? c.otherFees : []).slice(0, 50)) {
     const dn = cleanText_(d && d.name, 100);
