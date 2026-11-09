@@ -978,6 +978,9 @@
         .net-waiting { margin-top: 18px; padding: 22px 20px; border-radius: 20px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); text-align: center; }
         .net-waiting h3 { margin: 0 0 8px 0; font-size: 1.15rem; }
         .net-waiting p { margin: 0 0 14px 0; line-height: 1.5; }
+        .money-list .net-ask { display: block; margin: 4px 0 10px 0; padding: 16px 18px; border-radius: 18px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); text-align: center; }
+        .money-list .net-ask p { margin: 0 0 12px 0; line-height: 1.45; font-size: 0.95rem; }
+        .money-list .net-ask .btn { margin: 0; }
         .net-waiting .net-waiting-agent { margin: 14px 0 0 0; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-size: 0.85rem; color: var(--olive); }
         /* The seller's Client Input pop-up: a $ in front of amounts, "%" / "months" after */
         .client-dialog .cl-box { position: relative; max-width: 300px; }
@@ -1646,18 +1649,20 @@
         // (or, without one, ORIGINAL LOAN AMOUNT as of ORIGINAL LOAN DATE), then takes off the principal of each
         // monthly payment due after that and on or before the date. Payments are due on the 1st, starting the second
         // month after the loan date (a loan from March 15 is first due May 1), for LOAN TERM MONTHS, and are the
-        // fixed payment on the original amount at LOAN INTEREST RATE.
+        // fixed payment on the original amount at LOAN INTEREST RATE (until the seller enters it, the agent's
+        // ESTIMATED INTEREST RATE).
         function loanBalanceOn(page, date) {
             const known = text(col(page, 'LOAN PRINCIPAL BALANCE')) !== '';
             const original = num(col(page, 'ORIGINAL LOAN AMOUNT'));
             const originalDate = parseDate(col(page, 'ORIGINAL LOAN DATE'));
             const from = known ? parseDate(col(page, 'PRINCIPAL LOAN BALANCE DATE')) : originalDate;
             let balance = known ? num(col(page, 'LOAN PRINCIPAL BALANCE')) : original;
-            let rate = num(col(page, 'LOAN INTEREST RATE'));
+            const estimatedRate = text(col(page, 'LOAN INTEREST RATE')) === '';
+            let rate = num(col(page, estimatedRate ? 'ESTIMATED INTEREST RATE' : 'LOAN INTEREST RATE'));
             if (rate > 1) rate /= 100; // "6.5" means 6.5%
             const months = num(col(page, 'LOAN TERM MONTHS'));
             // (the details are for the admin "How The Numbers Work" card)
-            const details = { known, start: balance, from, original, originalDate, rate, months, date };
+            const details = { known, start: balance, from, original, originalDate, rate, estimatedRate, months, date };
             if (!balance || !from || !date || !originalDate || !months) return { balance, details, warning: balance && date ? 'Couldn\'t project this to the closing date, so the balance entered is shown' : '' };
             const r = rate / 12;
             // Fixed monthly payment: from the original amount, or (without one) from the known balance over the months left
@@ -1705,6 +1710,8 @@
             const noLoan = hasNoLoan(c => text(col(page, c)));
             const loan = noLoan ? { balance: 0, details: { noLoan: true }, warning: '' } : loanBalanceOn(page, closing);
             const principal = loan.balance;
+            // Until the seller enters their balance and rate, the balance is an estimate (from the original loan and the agent's rate)
+            const estimatedBalance = !noLoan && (!loan.details.known || loan.details.estimatedRate);
             const payoffFee = column => (noLoan ? 0 : num(col(page, column)));
             // HOA fees only count when the seller pays them (a blank WHO PAYS means the seller)
             // No HOA: its fees don't count (they're hidden in the settings)
@@ -1729,7 +1736,8 @@
                 { section: 'Financial', label: 'Sale Price', amount: price },
                 { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -(price * sellerPct) },
 
-                { section: 'Payoffs', payoff: true, label: 'Principal Loan Amount', amount: -principal, note: closing && principal && !loan.warning ? 'Projected balance on ' + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
+                { section: 'Payoffs', payoff: true, key: 'principal', label: estimatedBalance ? 'Estimated Principal Balance' : 'Principal Loan Amount', amount: -principal,
+                    note: closing && principal && !loan.warning ? (estimatedBalance ? 'Estimated balance on ' : 'Projected balance on ') + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
                 { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -payoffFee('RECORDING FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -payoffFee('PAYOFF STATEMENT FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: noLoan ? 0 : -(penaltyPct + penaltyDollars) },
@@ -1801,8 +1809,11 @@
                 const cls = shown > 0 ? ' is-credit' : shown < 0 ? ' is-debit' : ' is-zero';
                 const note = (l.note ? '<small>' + escapeHtml(l.note) + '</small>' : '')
                     + (l.warnings || []).map(w => '<small class="is-warning">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small>').join('');
-                return '<li><span class="k">' + escapeHtml(l.label) + note + '</span><span class="v' + cls + '">' + signedMoney(l.amount) + '</span></li>';
+                return '<li><span class="k">' + escapeHtml(l.label) + note + '</span><span class="v' + cls + '">' + signedMoney(l.amount) + '</span></li>'
+                    + (l.key === 'principal' && result.askClient ? clientAskHtml : '');
             };
+            const clientAskHtml = '<li class="net-ask"><p>Have your mortgage statement handy? Add your loan details for an exact payoff.</p>'
+                + '<button type="button" class="btn" data-client-input>Add Your Loan Details</button></li>';
             // One heading + list per section, in the order the lines are listed
             // Seller Net leaves out lines that come to $0 (the Sale Price always shows)
             const shownLines = result.lines.filter(l => !l.hidden && !(result.sellerNet && toDollars(l.amount) === 0 && l.label !== 'Sale Price'));
@@ -1810,7 +1821,9 @@
             document.getElementById('escrow-list').innerHTML = sections.map(name =>
                 '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
                 + '<ul class="money-list">' + shownLines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>'
-            ).join('');
+            ).join('')
+                // No loan line to put it under (no loan, or a $0 balance): the button goes after the breakdown
+                + (result.askClient && !shownLines.some(l => l.key === 'principal') ? '<ul class="money-list">' + clientAskHtml.replace('Add your loan details for an exact payoff', 'Add your loan and HOA details to finish your net sheet') + '</ul>' : '');
             if (result.sellerNet) renderSellerTotal(result);
             else renderCashBreakdown(result);
         }
@@ -1831,7 +1844,7 @@
             const m = result.math;
             const cents = n => money.format(n);
             const pct = n => (Math.round(n * 1e6) / 1e4) + '%';
-            const lineAmount = label => (result.lines.find(l => l.label === label) || {}).amount || 0;
+            const lineAmount = label => (result.lines.find(l => l.label === label || (label === 'Principal Loan Amount' && l.key === 'principal')) || {}).amount || 0;
             const shortDate = d => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set';
             // A step: label, its value and (under the label) how it's worked out
             const step = (k, v, how) => '<li><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '')
@@ -1861,7 +1874,8 @@
                 step('Starting Balance', cents(L.start), L.known
                     ? 'Loan Principal Balance, as of ' + fmtDate(L.from)
                     : 'No principal balance entered, so this starts from the Original Loan Amount on ' + fmtDate(L.originalDate)),
-                step('Interest Rate', pct(L.rate) + ' a year', L.rate ? pct(L.rate / 12) + ' a month (yearly rate ÷ 12)' : ''),
+                step(L.estimatedRate ? 'Estimated Interest Rate' : 'Interest Rate', pct(L.rate) + ' a year', (L.rate ? pct(L.rate / 12) + ' a month (yearly rate ÷ 12)' : '')
+                    + (L.estimatedRate ? (L.rate ? '. ' : '') + 'The agent\'s estimate, until the seller enters their rate' : '')),
                 step('Loan Term', L.months + ' months'),
             ];
             let schedule = '';
@@ -2031,6 +2045,8 @@
         // Seller Net: which inputs are still blank. client: the seller's own questions (Client Input) that apply;
         // agent: everything else the numbers need (the HOA fees only when there's an HOA). rows: the Settings card
         // rows holding them, by name. get(column) reads a value (default: the saved page).
+        // Only agent inputs hold the numbers back: without the seller's answers the loan balance is estimated from the
+        // original loan, the loan term and the agent's ESTIMATED INTEREST RATE.
         function sellerNetMissing(page, get = c => text(col(page, c))) {
             const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && get(p.column) === '').map(p => p.label);
             const rows = new Set();
@@ -2040,7 +2056,8 @@
             if (client.includes('HOA')) rows.add('HOA');
             // Everything needs a value (0 counts): each label is listed when any of its columns is blank
             const agent = [];
-            const ROW_OF = { 'Original Loan Amount': 'Agent Input', 'Original Loan Date': 'Agent Input' };
+            const ROW_OF = { 'Original Loan Amount': 'Agent Input', 'Original Loan Date': 'Agent Input', 'Loan Type': 'Agent Input',
+                'Loan Term': 'Agent Input', 'Estimated Interest Rate': 'Agent Input' };
             const need = (label, ...columns) => {
                 if (!columns.some(c => get(c) === '')) return;
                 agent.push(label);
@@ -2061,10 +2078,14 @@
             need('Yearly Taxes', 'YEARLY TAXES');
             need('Offer Acceptance Date', 'OFFER ACCEPTANCE DATE');
             need('Escrow Duration', 'ESCROW DURATION');
+            need('Loan Type', 'LOAN TYPE');
             // No loan: nothing to pay off
             if (!hasNoLoan(get)) {
                 need('Original Loan Amount', 'ORIGINAL LOAN AMOUNT');
                 need('Original Loan Date', 'ORIGINAL LOAN DATE');
+                need('Loan Term', 'LOAN TERM MONTHS');
+                // The agent's estimate stands in for the seller's rate until they enter it
+                if (get('LOAN INTEREST RATE') === '') need('Estimated Interest Rate', 'ESTIMATED INTEREST RATE');
                 fee('Recording Fee', 'RECORDING FEE');
                 fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
                 need('Other Loan Payoff Fees %', 'OTHER LOAN PAYOFF FEES %');
@@ -2089,11 +2110,11 @@
             need('Listing Agent Commission $', 'LISTING AGENT COMMISSION $');
             return { client, agent, rows };
         }
-        // Seller Net: while anything is missing, the numbers are hidden and this says what's holding them up: a button for
-        // the seller's own questions, and "Waiting on Andrew Marth" for the rest
+        // Seller Net: while an agent input is missing, the numbers are hidden and this says what's holding them up: a button
+        // for the seller's own questions, and "Waiting on Andrew Marth" for the rest
         function renderNetWaiting(page) {
             const missing = sellerNetMissing(page);
-            const waiting = missing.client.length > 0 || missing.agent.length > 0;
+            const waiting = missing.agent.length > 0;
             ['escrow-list', 'seller-total', 'seller-note'].forEach(id => { document.getElementById(id).hidden = waiting; });
             const box = document.getElementById('net-waiting');
             box.hidden = !waiting;
@@ -2104,11 +2125,12 @@
                     ? '<p>We need a few details about your loan and HOA to finish it.</p><button type="button" class="btn" data-client-input>Add Your Loan Details</button>'
                     : '<p class="net-waiting-agent">Waiting on Andrew Marth</p>');
         }
-        document.getElementById('net-waiting').addEventListener('click', e => {
+        // The seller's questions: from the waiting box, or the button under the estimated balance
+        ['net-waiting', 'escrow-list'].forEach(id => document.getElementById(id).addEventListener('click', e => {
             if (!e.target.closest('[data-client-input]')) return;
             if (!clientDialog) clientDialog = buildClientDialog();
             clientDialog.open();
-        });
+        }));
 
         // The seller's Client Input questions in a pop-up, one at a time (the same look as the CUM and New Task forms),
         // saved straight to the page. Questions that don't apply (by the answers so far) are skipped.
@@ -2424,7 +2446,8 @@
                 const page = { ...data.page, ...draft };
                 const result = calculateSellerNet(page);
                 const missing = sellerNetMissing(page);
-                renderHouse(page, result, !missing.client.length && !missing.agent.length);
+                result.askClient = missing.client.length > 0;
+                renderHouse(page, result, !missing.agent.length);
                 renderEscrow(result);
                 renderNetWaiting(page);
                 if (data.isAdmin) renderMath(page, result);
@@ -3204,6 +3227,7 @@
         // the values whenever it's opened. opts.io says where values are read and written: the settings draft by
         // default, or the client's own answers in the Client Input pop-up.
         const SETTINGS_IO = { get: c => current(c), put: (c, v) => { draft[c] = v; }, edited: () => settingsEdited(), bad: (k, m) => fieldBad(k, m) };
+        let groupVisibility = [];
         function groupField(parent, label, parts, opts = {}) {
             const io = opts.io || SETTINGS_IO;
             const key = opts.key || label.toUpperCase();
@@ -3227,6 +3251,8 @@
                 return v;
             };
             const visibility = () => { parts.forEach(p => { if (p.cell) p.cell.hidden = !shown(p); }); };
+            // An answer in one group can show or hide a box in another (the seller's rate hides the agent's estimate)
+            groupVisibility.push(visibility);
             function build() {
                 grid.innerHTML = '';
                 bad.clear();
@@ -3244,6 +3270,7 @@
                         cell.classList.remove('is-missing');
                         // Answers that change other boxes redraw them (not while typing in a box)
                         if (p.then && p.kind === 'seg') build(); else visibility();
+                        groupVisibility.forEach(fn => { if (fn !== visibility) fn(); });
                     };
                     if (p.kind === 'choice') {
                         const mount = el('div');
@@ -3345,6 +3372,7 @@
                 { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
                 { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
                 { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months', show: loan },
+                { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: () => loan() && SETTINGS_IO.get('LOAN INTEREST RATE') === '' },
                 { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
             ]);
             groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
@@ -3792,6 +3820,7 @@
             loanCard.innerHTML = settingsTemplate;
             homeCard.innerHTML = homeTemplate;
             listingCard.innerHTML = listingTemplate;
+            groupVisibility = [];
             draft = {};
             fieldErrors = {};
             settingsBlocks.length = 0;

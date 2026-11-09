@@ -148,6 +148,7 @@ function build() {
         { id: 'loanAmount', group: 'Loan Payoff', title: 'What was the original loan amount?', help: 'The seller’s mortgage when it was taken out.', kind: 'number', key: 'loanAmount', format: 'money', placeholder: '360,000', show: hasLoan },
         { id: 'loanDate', group: 'Loan Payoff', title: 'When was the loan taken out?', kind: 'date', key: 'loanDate', show: () => hasLoan() && Number(a.loanAmount) > 0 },
         { id: 'loanTerm', group: 'Loan Payoff', title: 'What was the original loan term?', kind: 'term', key: 'loanTermYears', show: () => hasLoan() && Number(a.loanAmount) > 0 },
+        { id: 'loanRate', group: 'Loan Payoff', title: 'What’s the estimated interest rate?', help: 'Used to estimate the loan balance until the seller enters their actual rate.', kind: 'number', key: 'estRate', format: 'percent', placeholder: '6.5', show: () => hasLoan() && Number(a.loanAmount) > 0 },
         { id: 'recording', group: 'Loan Payoff', title: 'Recording fee?', help: 'To record the loan’s release. Enter 0 for none.', kind: 'fee', key: 'recording', show: hasLoan },
         { id: 'payoffStatement', group: 'Loan Payoff', title: 'Payoff statement fee?', help: 'The lender’s fee for the payoff statement. Enter 0 for none.', kind: 'fee', key: 'payoffStatement', show: hasLoan },
         { id: 'otherPayoff', group: 'Loan Payoff', title: 'Any other loan payoff fees?', help: 'A percent of the loan balance and a flat amount. Enter 0 for none.', kind: 'split', key: 'otherPayoff', status: true, show: hasLoan },
@@ -155,7 +156,7 @@ function build() {
         { id: 'ownersTitle', group: 'Costs', title: 'Owner’s title insurance?', help: 'A percent of the sale price.', kind: 'number', key: 'ownersTitle', format: 'percent' },
         { id: 'buyersAgent', group: 'Costs', title: 'Buyer’s agent commission?', help: 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'buyersAgent' },
         { id: 'listingAgent', group: 'Costs', title: 'Listing agent commission?', help: 'A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'listingAgent' },
-        { id: 'review', group: 'Review', title: 'Look it over', help: 'Everything else (the seller’s loan balance and rate, the HOA) the seller fills in on the page.', kind: 'review' },
+        { id: 'review', group: 'Review', title: 'Look it over', help: 'Everything else (the seller’s loan balance and actual rate, the HOA) the seller fills in on the page.', kind: 'review' },
     ];
     const shown = () => STEPS.filter(s => !s.show || s.show());
 
@@ -515,7 +516,7 @@ function build() {
                 ['Loan Type', a.loanType, 'loanType'],
                 ...(hasLoan() ? [
                     ['Original Loan', Number(a.loanAmount) > 0 ? money(a.loanAmount) + ', ' + niceDate(a.loanDate) : money(0), 'loanAmount'],
-                    ...(Number(a.loanAmount) > 0 ? [['Loan Term', a.loanTermYears ? a.loanTermYears + ' years' : '', 'loanTerm']] : []),
+                    ...(Number(a.loanAmount) > 0 ? [['Loan Term', a.loanTermYears ? a.loanTermYears + ' years' : '', 'loanTerm'], ['Estimated Rate', pct(a.estRate), 'loanRate']] : []),
                     ['Recording Fee', fee(a.recording), 'recording'],
                     ['Payoff Statement Fee', fee(a.payoffStatement), 'payoffStatement'],
                     ['Other Payoff Fees', split(a.otherPayoff), 'otherPayoff'],
@@ -582,7 +583,7 @@ function build() {
             // Back to the review after a change (unless it opened a question that still needs an answer, like the loan date)
             if (fromReview) {
                 const list = shown();
-                const ANSWER = { loanAmount: 'loanAmount', loanDate: 'loanDate', loanTerm: 'loanTermYears', recording: 'recording', payoffStatement: 'payoffStatement', otherPayoff: 'otherPayoff' };
+                const ANSWER = { loanAmount: 'loanAmount', loanDate: 'loanDate', loanTerm: 'loanTermYears', loanRate: 'estRate', recording: 'recording', payoffStatement: 'payoffStatement', otherPayoff: 'otherPayoff' };
                 const unanswered = list.find(s => ANSWER[s.id] && (a[ANSWER[s.id]] === undefined || a[ANSWER[s.id]] === ''));
                 index = unanswered ? STEPS.indexOf(unanswered) : STEPS.findIndex(s => s.kind === 'review');
                 draw(1);
@@ -605,6 +606,7 @@ function build() {
                 // A $0 loan: the date and term don't matter, but the sheet wants them
                 'ORIGINAL LOAN AMOUNT': a.loanAmount, 'ORIGINAL LOAN DATE': mdy(noLoanDate ? isoDay(new Date()) : a.loanDate),
                 'LOAN TERM MONTHS': noLoanDate ? 360 : Number(a.loanTermYears) * 12,
+                'ESTIMATED INTEREST RATE': noLoanDate ? 0 : a.estRate,
                 'RECORDING FEE': a.recording.amount, 'RECORDING FEE STATUS': a.recording.status,
                 'PAYOFF STATEMENT FEE': a.payoffStatement.amount, 'PAYOFF STATEMENT FEE STATUS': a.payoffStatement.status,
                 'OTHER LOAN PAYOFF FEES %': a.otherPayoff.rate, 'OTHER LOAN PAYOFF FEES $': a.otherPayoff.amount, 'OTHER LOAN PAYOFF FEES STATUS': a.otherPayoff.status,
