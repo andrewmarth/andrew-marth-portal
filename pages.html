@@ -3228,6 +3228,8 @@
         // default, or the client's own answers in the Client Input pop-up.
         const SETTINGS_IO = { get: c => current(c), put: (c, v) => { draft[c] = v; }, edited: () => settingsEdited(), bad: (k, m) => fieldBad(k, m) };
         let groupVisibility = [];
+        // A loan term in months, as years for a box or summary: 360 -> "30", 30 -> "2.5" ('' when blank)
+        const termYears = v => { const m = Number(digits(v)); return m ? String(Math.round(m / 12 * 100) / 100) : ''; };
         function groupField(parent, label, parts, opts = {}) {
             const io = opts.io || SETTINGS_IO;
             const key = opts.key || label.toUpperCase();
@@ -3247,7 +3249,7 @@
                 if (p.kind === 'money') return money(p.column);
                 if (p.kind === 'date') return day(p.column);
                 if (p.kind === 'rate') return decimalToPercent(v) + '%';
-                if (p.kind === 'months') return digits(v) ? digits(v) + ' months' : '';
+                if (p.kind === 'months') return termYears(v) ? termYears(v) + ' years' : '';
                 return v;
             };
             const visibility = () => { parts.forEach(p => { if (p.cell) p.cell.hidden = !shown(p); }); };
@@ -3285,7 +3287,15 @@
                         } else if (p.kind === 'date') {
                             box = textBox({ type: 'date', value: toInputDate(io.get(p.column)), onInput: i => set(toSheetDate(i.value)) });
                         } else if (p.kind === 'months') {
-                            box = textBox({ value: digits(io.get(p.column)), suffix: 'months', placeholder: '0', onInput: i => set(digits(i.value)) });
+                            // Saved in months (LOAN TERM MONTHS), typed in years: "30" is 360 months, "2.5" is 30
+                            box = textBox({
+                                value: termYears(io.get(p.column)), suffix: 'years', placeholder: '30', inputmode: 'decimal',
+                                onInput: i => {
+                                    i.value = i.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+                                    const y = Number(i.value);
+                                    set(i.value.trim() === '' || !isFinite(y) ? '' : String(Math.round(y * 12)));
+                                },
+                            });
                         } else {
                             box = textBox({
                                 value: decimalToPercent(io.get(p.column)), suffix: '%', placeholder: '0', inputmode: 'decimal',
