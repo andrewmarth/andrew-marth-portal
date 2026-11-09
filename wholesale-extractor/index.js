@@ -663,6 +663,7 @@ let providerUsage = {};           // provider name -> { remaining, limit, at }; 
 let creditsUsed = 0;              // RapidAPI requests spent on the email being handled (history log)
 let requestsThisRun = {};         // provider name -> { count, last }: requests spent this run (added to wholesaleStatus)
 let headersLogged = {};           // provider name -> true once this instance has logged its usage headers
+let countedFullUntil = {};        // provider name -> epoch ms: a counted API used up until its billing period ends
 let stateLoaded = false;          // usage is only written once state.json (the RapidAPI-reported usage) is loaded
 
 class OutOfRequestsError extends Error {}
@@ -679,7 +680,7 @@ async function getPropertyFacts(street, city, state, zip, unit) {
   let askedAny = false;
   let found = null;
   for (const p of PROPERTY_PROVIDERS) {
-    if (!p.enabled() || (providerPausedUntil[p.name] || 0) > Date.now()) continue;
+    if (!p.enabled() || (providerPausedUntil[p.name] || 0) > Date.now() || (countedFullUntil[p.name] || 0) > Date.now()) continue;
     try {
       const facts = await p.lookup({ street: clean(street), city: clean(city), state: clean(state), zip, unit });
       askedAny = true;
@@ -811,12 +812,19 @@ async function updateUsageStatus() {
         values['USAGE AS OF'] = reportedAt;
         if (reported.limit != null) values.CAP = Math.round(reported.limit);
       } else {
-        // Counted: USAGE is this month's count
-        if (sameMonth && old['USAGE SOURCE'] === 'Counted') transforms.push({ fieldPath: 'USAGE', increment: { integerValue: String(ran.count) } });
-        else values.USAGE = requests;
+        // Counted. With a known billing period (RESETS AT, set from RapidAPI's dashboard) USAGE counts up until it
+        // ends, then starts over and the next period begins a month later; without one, USAGE is this month's count
+        const nowStamp = formatStoredDateTime(now);
+        const cycleEnd = old['USAGE SOURCE'] === 'Counted' ? String(old['RESETS AT'] || '') : '';
+        if (cycleEnd && cycleEnd > nowStamp) transforms.push({ fieldPath: 'USAGE', increment: { integerValue: String(ran.count) } });
+        else if (cycleEnd) { values.USAGE = ran.count; values['RESETS AT'] = nextCycle(cycleEnd, nowStamp); }
+        else {
+          if (sameMonth && old['USAGE SOURCE'] === 'Counted') transforms.push({ fieldPath: 'USAGE', increment: { integerValue: String(ran.count) } });
+          else values.USAGE = requests;
+          values['RESETS AT'] = '';
+        }
         values['USAGE SOURCE'] = 'Counted';
-        values['USAGE AS OF'] = formatStoredDateTime(now);
-        values['RESETS AT'] = '';
+        values['USAGE AS OF'] = nowStamp;
       }
       values['PAUSED UNTIL'] = paused ? formatStoredDateTime(new Date(providerPausedUntil[p.name])) : '';
       // Every field named in the mask is written; one left blank is removed
@@ -845,8 +853,17 @@ async function adoptNewerUsage() {
   try {
     const docs = {};
     (await listDocuments('wholesaleStatus')).forEach(d => { docs[d.id] = d.data; });
+    countedFullUntil = {};
     for (const p of PROPERTY_PROVIDERS) {
       const d = docs[p.status];
+      // A counted API that has used its whole limit is skipped until its billing period ends
+      if (d && d['USAGE SOURCE'] === 'Counted' && d['RESETS AT'] && Number(d.CAP) > 0 && Number(d.USAGE) >= Number(d.CAP)) {
+        const end = Date.parse(String(d['RESETS AT']).replace(' ', 'T') + '-07:00');
+        if (end > Date.now()) {
+          countedFullUntil[p.name] = end;
+          console.log(`${p.name}: ${d.USAGE} of ${d.CAP} used (counted); skipping it until ${d['RESETS AT']}.`);
+        }
+      }
       if (!d || d['USAGE SOURCE'] !== 'RapidAPI' || !d['USAGE AS OF']) continue;
       const at = Date.parse(String(d['USAGE AS OF']).replace(' ', 'T') + '-07:00');
       const mine = providerUsage[p.name] || {};
@@ -860,6 +877,23 @@ async function adoptNewerUsage() {
   } catch (e) {
     console.log(`Could not read the portal's API usage: ${e.message}`);
   }
+}
+
+// A counted API's billing period (RESETS AT, set from RapidAPI's dashboard) that has ended: the next one starts a month
+// later on the same day ("2026-11-27 00:00:00" -> "2026-12-27 00:00:00"), moved on until it's after now
+function nextCycle(end, now) {
+  const [day, time] = String(end).split(' ');
+  let [y, m] = day.split('-').map(Number);
+  const d = Number(day.split('-')[2]);
+  const pad = n => String(n).padStart(2, '0');
+  let out = String(end);
+  while (out <= now) {
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    out = `${y}-${pad(m)}-${pad(Math.min(d, last))} ${time || '00:00:00'}`;
+  }
+  return out;
 }
 
 /** Drops expired cache entries so state.json stays small. */

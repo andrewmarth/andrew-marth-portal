@@ -1351,6 +1351,7 @@
             const status = out ? ['is-out', 'Out of requests'] : (used || api.lastRequest) ? ['', 'Active'] : ['is-idle', 'No requests yet'];
             const notes = [];
             if (api.source === 'RapidAPI') notes.push('As reported by RapidAPI' + (api.usageAsOf ? ' on ' + usageTime(api.usageAsOf) : '') + ' (its billing period)');
+            else if (api.source === 'Counted' && api.resetsAt) notes.push('Counted by the portal and the extractor this billing period (it doesn’t report usage)');
             else if (api.source === 'Counted') notes.push('Counted by the extractor this month' + (api.countedSince && !/-01 00:00:00$/.test(api.countedSince) ? ', starting ' + usageTime(api.countedSince) : '') + ' (it doesn’t report usage)');
             if (api.resetsAt) notes.push('Resets ' + usageTime(api.resetsAt));
             else if (api.source === 'Counted') notes.push('Starts over on the 1st of each month');

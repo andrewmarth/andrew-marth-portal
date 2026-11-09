@@ -57,13 +57,15 @@ export async function lookupPropertyFacts(address) {
   return { facts, sources };
 }
 
-// Paused for being out of requests, or used up (by RapidAPI's count) and not yet reset
+// Paused for being out of requests, or used up (by RapidAPI's count, or by our own count for an API with a known
+// billing period) and not yet reset
 function skip_(s) {
   if (!s) return false;
   const now = phoenixStamp_(new Date());
   if (s['PAUSED UNTIL'] && String(s['PAUSED UNTIL']) > now) return true;
   const resetPassed = s['RESETS AT'] && String(s['RESETS AT']) <= now;
-  return s['USAGE SOURCE'] === 'RapidAPI' && Number(s.CAP) > 0 && Number(s.USAGE) >= Number(s.CAP) && !resetPassed;
+  const tracked = s['USAGE SOURCE'] === 'RapidAPI' || (s['USAGE SOURCE'] === 'Counted' && s['RESETS AT']);
+  return tracked && Number(s.CAP) > 0 && Number(s.USAGE) >= Number(s.CAP) && !resetPassed;
 }
 
 const fillBlanks_ = (facts, more) => {
@@ -205,13 +207,34 @@ async function recordRequest_(status, spent, remaining, limit, reset) {
       const seconds = reset === null || reset === '' ? NaN : Number(reset);
       if (Number.isFinite(seconds) && seconds >= 0) values['RESETS AT'] = phoenixStamp_(new Date(now.getTime() + seconds * 1000));
     } else if (spent && old['USAGE SOURCE'] !== 'RapidAPI') {
-      // An API that doesn't report usage: USAGE is the count
-      values.USAGE = sameMonth ? FieldValue.increment(1) : 1;
+      // An API that doesn't report usage: USAGE is the count. With a known billing period (RESETS AT) it counts up
+      // until that ends, then starts over; without one, it starts over each calendar month
+      const cycleEnd = old['USAGE SOURCE'] === 'Counted' ? String(old['RESETS AT'] || '') : '';
+      if (cycleEnd && cycleEnd <= stamp) { values.USAGE = 1; values['RESETS AT'] = nextCycle_(cycleEnd, stamp); }
+      else values.USAGE = cycleEnd || sameMonth ? FieldValue.increment(1) : 1;
       values['USAGE SOURCE'] = 'Counted';
       values['USAGE AS OF'] = stamp;
     }
     if (Object.keys(values).length) tx.set(ref, values, { merge: true });
   });
+}
+
+
+// A counted API's billing period (RESETS AT, set from RapidAPI's dashboard) that has ended: the next one starts a month
+// later on the same day ("2026-11-27 00:00:00" -> "2026-12-27 00:00:00"), moved on until it's after now
+function nextCycle_(end, now) {
+  const [day, time] = String(end).split(' ');
+  let [y, m] = day.split('-').map(Number);
+  const d = Number(day.split('-')[2]);
+  const pad = n => String(n).padStart(2, '0');
+  let out = String(end);
+  while (out <= now) {
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    out = `${y}-${pad(m)}-${pad(Math.min(d, last))} ${time || '00:00:00'}`;
+  }
+  return out;
 }
 
 // "2026-11-08 12:21:51", Phoenix time (how the portal and the extractor store times)
