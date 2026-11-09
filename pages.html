@@ -1362,6 +1362,7 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
+        import { saleFees } from '/title-fees.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1475,6 +1476,50 @@
             });
         }
 
+        // --- Title & Escrow ---
+        // A page's TITLE COMPANY prices its escrow and title fees from that company's filed rates (/title-fees.js, set up in
+        // Settings > Title Companies). Pages without one use the old ESCROW FEE RATE / OWNERS TITLE RATE / ALTA TITLE RATE.
+        const titleCompanies = () => (data && data.titleCompanies) || [];
+        const titleCompanyById = id => titleCompanies().find(c => c.id === id) || null;
+        const titleCompanyOf = page => titleCompanyById(text(col(page, 'TITLE COMPANY')));
+        const listOf = v => text(v).split('|').map(s => s.trim()).filter(Boolean);
+        // Condo, manufactured home, a home in an HOA (a planned unit development) or one without (for the lender's endorsements)
+        function titlePropertyKind(page) {
+            const type = text(col(page, 'PROPERTY TYPE'));
+            if (type === 'Condo') return 'condo';
+            if (type === 'Manufactured') return 'manufactured';
+            const hoa = text(col(page, 'HAS HOA'));
+            return hoa === 'Yes' || (hoa !== 'No' && num(col(page, 'HOA PRIMARY MONTHLY DUES')) > 0) ? 'hoa' : 'sfr';
+        }
+        // This sale's fees from its title company (null without one). loanAmount: the buyer's loan (0 for cash).
+        // loanName: the buyer's loan product (a VA product counts as a VA loan unless BUYER FINANCING says otherwise).
+        function titleSale(page, loanAmount, { sellerHasPayoff, loanName } = {}) {
+            const company = titleCompanyOf(page);
+            if (!company) return null;
+            const financing = text(col(page, 'BUYER FINANCING'));
+            const loanType = financing === 'VA Loan' || (!financing && /\bVA\b/i.test(loanName || '')) ? 'va' : financing === 'Adjustable Rate Loan' ? 'arm' : 'fixed';
+            return saleFees(company, num(col(page, 'PURCHASE PRICE')), loanAmount, {
+                property: titlePropertyKind(page), loanType, saleType: text(col(page, 'SALE TYPE')) || 'Standard',
+                secondLoan: num(col(page, 'SECOND LOAN AMOUNT')), sellerHasPayoff,
+                fincen: isTrue(col(page, 'FINCEN REPORT')), extraFees: listOf(col(page, 'EXTRA TITLE FEES')),
+                ownerPayer: text(col(page, 'WHO PAYS OWNERS POLICY')) || undefined,
+                sellerDiscount: text(col(page, 'SELLER ESCROW DISCOUNT')), buyerDiscount: text(col(page, 'BUYER ESCROW DISCOUNT')),
+                titleDiscount: text(col(page, 'OWNERS TITLE DISCOUNT')),
+            });
+        }
+        // One side's share as escrow breakdown lines (side: 'buyer' or 'seller'); the lender's endorsements are one line
+        const TITLE_LABELS = { escrow: 'Escrow Fee', recording: 'Recording Service Fee', owner: 'Owner’s Title Policy', loanPolicy: 'Lender’s Title Policy', fincen: 'FinCEN Report' };
+        function titleLines(sale, side, extra = {}) {
+            const mine = sale.items.filter(i => i[side] > 0.004);
+            const ends = mine.filter(i => i.kind === 'endorsement');
+            const lines = mine.filter(i => i.kind !== 'endorsement').map(i => ({
+                section: 'Title', ...extra, label: TITLE_LABELS[i.kind] || i.name, amount: -i[side],
+                note: i.kind === 'escrow' && i[side] < i.total - 0.004 ? (i.note ? i.note + '; ' : '') + (side === 'buyer' ? 'the buyer’s' : 'the seller’s') + ' share' : i.note,
+            }));
+            if (ends.length) lines.push({ section: 'Title', ...extra, label: 'Lender’s Title Endorsements', amount: -ends.reduce((s, i) => s + i[side], 0), note: ends.map(i => i.name.replace(/ \(both loans\)$/, '')).join(', ') });
+            return lines;
+        }
+
         function calculate(page, product, rateRow, creditScoreRaw) {
             const price = num(col(page, 'PURCHASE PRICE'));
             const pointsPurchased = num(col(page, 'LENDER POINTS PURCHASED'));
@@ -1543,6 +1588,7 @@
                 : enteredSellerPct > maxSellerPct
                     ? ['Limited to this loan\'s ' + percent(maxSellerPct) + ' maximum seller credit (' + percent(enteredSellerPct) + ' was entered)'] : [];
 
+            const buyerTitle = titleSale(page, isCash ? 0 : loan, { loanName: text(col(product, 'LOAN PRODUCT NAME')) });
             // HOA fees only count when the buyer pays them
             const hoaFee = (section, name, key) => {
                 const amount = num(col(page, 'HOA ' + key + ' FEE'));
@@ -1561,6 +1607,10 @@
                 { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit },
 
                 { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings },
+                // A second loan (a piggyback or down payment assistance loan) set in Title & Escrow: its proceeds (its payment
+                // isn't in the monthly cost)
+                { section: 'Loan', label: 'Second Loan Amount', amount: titleCompanyOf(page) ? num(col(page, 'SECOND LOAN AMOUNT')) : 0, note: 'Its payment isn’t in the monthly cost',
+                    hidden: !(titleCompanyOf(page) && num(col(page, 'SECOND LOAN AMOUNT')) > 0) },
                 // Seller credit can only help pay the prepaid MI when it isn't already financed into the loan
                 { section: 'Loan', cost: !miFinanced, label: 'Prepaid Mortgage Insurance', amount: -prepaidMI },
                 { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))) },
@@ -1577,8 +1627,11 @@
                 { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')) },
                 { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')) },
 
-                { section: 'Title', cost: true, label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
-                { section: 'Title', cost: true, label: 'ALTA Loan Policy Fee', amount: -(loan * num(col(page, 'ALTA TITLE RATE'))) },
+                // Escrow and title: the buyer's share from the title company (or, without one, the old rates)
+                ...(buyerTitle ? titleLines(buyerTitle, 'buyer', { cost: true }) : [
+                    { section: 'Title', cost: true, label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
+                    { section: 'Title', cost: true, label: 'ALTA Loan Policy Fee', amount: -(loan * num(col(page, 'ALTA TITLE RATE'))) },
+                ]),
 
                 { section: 'Miscellaneous', cost: true, label: 'Homeowners Insurance Premium', amount: -hoPremium },
                 hoaFee('Miscellaneous', 'HOA Transfer Fee', 'TRANSFER'),
@@ -1748,8 +1801,12 @@
                 { section: 'Prorations', label: 'Master HOA Dues Proration', amount: num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
                 { section: 'Prorations', label: 'Property Taxes Credit', amount: -taxCharge },
 
-                { section: 'Title', label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
-                { section: 'Title', label: 'Owners Title Insurance Fee', amount: -(price * num(col(page, 'OWNERS TITLE RATE'))) },
+                // Escrow and title: the seller's share from the title company (or, without one, the old rates). The buyer's
+                // loan is assumed to be 80% of the price (it only decides the loan add-on); BUYER FINANCING Cash is no loan.
+                ...((sellerTitle => sellerTitle ? titleLines(sellerTitle, 'seller') : [
+                    { section: 'Title', label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
+                    { section: 'Title', label: 'Owners Title Insurance Fee', amount: -(price * num(col(page, 'OWNERS TITLE RATE'))) },
+                ])(titleSale(page, text(col(page, 'BUYER FINANCING')) === 'Cash' ? 0 : price * 0.8, { sellerHasPayoff: !noLoan }))),
 
                 hoaFee('HOA Transfer Fee', 'TRANSFER'),
                 hoaFee('HOA Capital Improvement Fee', 'CAP'),
@@ -2092,8 +2149,14 @@
                 need('Other Loan Payoff Fees $', 'OTHER LOAN PAYOFF FEES $');
                 need('Other Loan Payoff Fees (Estimated / Final)', 'OTHER LOAN PAYOFF FEES STATUS');
             }
-            need('Escrow Fee', 'ESCROW FEE RATE');
-            need('Owners Title Insurance', 'OWNERS TITLE RATE');
+            if (get('TITLE COMPANY') === '') {
+                need('Escrow Fee', 'ESCROW FEE RATE');
+                need('Owners Title Insurance', 'OWNERS TITLE RATE');
+            } else if (!titleCompanyById(get('TITLE COMPANY'))) {
+                // The company was deleted from Settings
+                agent.push('Title Company');
+                rows.add('Title & Escrow');
+            }
             if (get('HAS HOA') === 'Yes') {
                 need('HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
                 need('HOA Transfer Fee (Estimated / Final)', 'HOA TRANSFER FEE STATUS');
@@ -3180,9 +3243,12 @@
             toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']]);
 
             const misc = document.getElementById('misc-fields');
+            titleEscrowField(misc, 'buyer');
+            const titleStart = misc.children.length;
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
             percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
             percentField(misc, 'ALTA Loan Policy Fee', 'ALTA TITLE RATE');
+            titleRateFields = [...misc.children].slice(titleStart);
             percentField(misc, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE');
             feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
             feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
@@ -3243,9 +3309,12 @@
             const money = c => (io.get(c) === '' ? '' : wholeMoney.format(Math.round(num(io.get(c)))));
             const day = c => { const d = parseDate(io.get(c)); return d ? fmtDate(d) : ''; };
             // How each kind shows in the summary line
+            const itemsOf = p => (typeof p.items === 'function' ? p.items() : p.items);
             const valueOf = p => {
                 const v = io.get(p.column);
-                if (v === '') return '';
+                if (v === '') return p.blank || '';
+                if (p.kind === 'multi') { const n = listOf(v).length; return n ? n + ' ' + (n === 1 ? p.one || 'item' : p.many || 'items') : ''; }
+                if (p.items) return (itemsOf(p).find(i => i.value === v) || {}).main || v;
                 if (p.kind === 'money') return money(p.column);
                 if (p.kind === 'date') return day(p.column);
                 if (p.kind === 'rate') return decimalToPercent(v) + '%';
@@ -3271,15 +3340,22 @@
                         io.edited();
                         cell.classList.remove('is-missing');
                         // Answers that change other boxes redraw them (not while typing in a box)
-                        if (p.then && p.kind === 'seg') build(); else visibility();
+                        if ((p.then && p.kind === 'seg') || p.rebuild) build(); else visibility();
                         groupVisibility.forEach(fn => { if (fn !== visibility) fn(); });
                     };
                     if (p.kind === 'choice') {
                         const mount = el('div');
                         cell.append(mount);
-                        makePicker({ mount, labelId: lab.id, items: p.options.map(v => ({ value: v, main: v, icon: p.icon || 'bank' })), selected: [io.get(p.column)], placeholder: 'Choose...', onChange: set });
+                        const items = p.items ? itemsOf(p).map(i => ({ icon: p.icon || 'bank', ...i })) : p.options.map(v => ({ value: v, main: v, icon: p.icon || 'bank' }));
+                        makePicker({ mount, labelId: lab.id, items, selected: [io.get(p.column)], placeholder: 'Choose...', onChange: set });
+                    } else if (p.kind === 'multi') {
+                        const mount = el('div');
+                        cell.append(mount);
+                        makePicker({ mount, labelId: lab.id, multiple: true, items: itemsOf(p), selected: listOf(io.get(p.column)),
+                            placeholder: p.placeholder || 'None', summary: n => n + ' selected', onChange: chosen => set(chosen.join(' | ')) });
                     } else if (p.kind === 'seg') {
-                        cell.append(segToggle(p.options.map(v => [v, v]), io.get(p.column), set, p.label));
+                        // (p.fallback: the answer a blank means, shown as picked)
+                        cell.append(segToggle(p.items ? itemsOf(p).map(i => [i.value, i.main]) : p.options.map(v => [v, v]), io.get(p.column) || (p.fallback ? p.fallback() : ''), set, p.label));
                     } else {
                         let box;
                         if (p.kind === 'money') {
@@ -3319,6 +3395,46 @@
             f.wrap.groupSync = build;
             f.wrap.groupDisplay = () => parts.filter(shown).map(p => { const v = valueOf(p); return v ? (p.short ? p.short + ' ' + v : v) : ''; }).filter(Boolean).join(' · ');
             return { wrap: f.wrap, invalid: () => bad.size > 0 };
+        }
+
+        // Title & Escrow (both page types): the title company, then this sale's details. side: 'buyer' or 'seller'.
+        let titleRateFields = [];
+        // The old rate fields only show for a page without a title company
+        const showTitleRateFields = () => titleRateFields.forEach(w => { w.style.display = current('TITLE COMPANY') ? 'none' : ''; });
+        function titleEscrowField(parent, side) {
+            const io = SETTINGS_IO;
+            const company = () => titleCompanyById(io.get('TITLE COMPANY'));
+            const has = () => Boolean(company());
+            // (A buyer's cash purchase is the Loan Product picker's "Cash" choice)
+            const cash = () => (side === 'buyer' ? cashSelected : io.get('BUYER FINANCING') === 'Cash');
+            const named = list => [{ value: '', main: 'None', icon: 'none' }].concat((list || []).filter(d => d.name).map(d => ({ value: d.name, main: d.name, secondary: Math.round((d.percent || 0) * 100) + '% off', icon: 'cash' })));
+            const parts = [
+                { label: 'Title Company', column: 'TITLE COMPANY', kind: 'choice', icon: 'bank', rebuild: true, blank: 'Percentages below',
+                    items: () => [{ value: '', main: 'None', secondary: 'Use the percentages below', icon: 'none' }].concat(titleCompanies().map(c => ({ value: c.id, main: c.name }))),
+                    // A company's own discounts don't carry over to another company
+                    then: () => ['SELLER ESCROW DISCOUNT', 'BUYER ESCROW DISCOUNT', 'OWNERS TITLE DISCOUNT', 'EXTRA TITLE FEES'].forEach(c => io.put(c, '')) },
+                { label: 'Sale Type', column: 'SALE TYPE', kind: 'seg', items: [['Standard', 'Standard'], ['Short Sale', 'Short Sale'], ['REO', 'REO']].map(([value, main]) => ({ value, main })), show: has, blank: 'Standard', fallback: () => 'Standard' },
+                { label: side === 'buyer' ? 'Buyer’s Loan' : 'Buyer’s Financing', column: 'BUYER FINANCING', kind: 'choice', icon: 'bank', short: '',
+                    items: (side === 'buyer' ? ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan'] : ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash']).map(v => ({ value: v, main: v })),
+                    show: () => has() && (side === 'seller' || !cash()), blank: side === 'buyer' ? 'Fixed Rate Loan' : '' },
+                ...(side === 'buyer' ? [{ label: 'Second Loan', column: 'SECOND LOAN AMOUNT', kind: 'money', short: 'Second Loan', show: () => has() && !cash() }] : []),
+                { label: 'Owner’s Policy Paid By', column: 'WHO PAYS OWNERS POLICY', kind: 'seg', short: 'Owner’s Policy:', items: [{ value: 'Seller', main: 'Seller' }, { value: 'Buyer', main: 'Buyer' }], show: has,
+                    // Blank: the company's custom (the seller in Arizona)
+                    fallback: () => (((company() || {}).sellerOwnerShare ?? 1) >= 0.5 ? 'Seller' : 'Buyer') },
+                { label: 'FinCEN Report', column: 'FINCEN REPORT', kind: 'seg', short: 'FinCEN:', items: [{ value: 'TRUE', main: 'Yes' }, { value: 'FALSE', main: 'No' }],
+                    show: () => has() && Boolean((company() || {}).fincenFee) && cash(), fallback: () => 'FALSE' },
+                { label: 'Owner’s Policy Discount', column: 'OWNERS TITLE DISCOUNT', kind: 'choice', short: 'Title discount:', items: () => named((company() || {}).titleDiscounts), show: () => has() && ((company() || {}).titleDiscounts || []).length > 0 },
+                { label: (side === 'buyer' ? 'Buyer’s' : 'Seller’s') + ' Escrow Discount', column: side === 'buyer' ? 'BUYER ESCROW DISCOUNT' : 'SELLER ESCROW DISCOUNT', kind: 'choice', short: 'Escrow discount:',
+                    items: () => named((company() || {}).discounts), show: () => has() && ((company() || {}).discounts || []).length > 0 },
+                { label: 'Other Fees That Apply', column: 'EXTRA TITLE FEES', kind: 'multi', one: 'other fee', many: 'other fees',
+                    items: () => ((company() || {}).otherFees || []).filter(f => f.when === 'Sometimes' && f.name).map(f => ({ value: f.name, main: f.name, secondary: wholeMoney.format(f.amount || 0) })),
+                    show: () => has() && ((company() || {}).otherFees || []).some(f => f.when === 'Sometimes') },
+            ];
+            groupField(parent, 'Title & Escrow', parts, {
+                help: side === 'buyer'
+                    ? 'The title company’s filed rates price the escrow fee, recording, title policies and endorsements. Condo, HOA and manufactured home endorsements follow the property.'
+                    : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. Buyer’s Financing is what you expect the buyer to use.',
+            });
         }
 
         // The kind of loan the seller is paying off
@@ -3476,8 +3592,11 @@
             loanFeeFields = [...payoffs.children].slice(payoffStart);
 
             const misc = document.getElementById('misc-fields');
+            titleEscrowField(misc, 'seller');
+            const titleStart = misc.children.length;
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
             percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
+            titleRateFields = [...misc.children].slice(titleStart);
             // HOA yes / no (also in Client Input): No hides the HOA fees below and sets the dues to $0 (final)
             const hoaField = fieldShell('HOA');
             const hoaSeg = segToggle([['Yes', 'Yes'], ['No', 'No']], current('HAS HOA'), v => {
@@ -3605,6 +3724,7 @@
             editableFields.forEach(({ field }) => { if (field.syncInputs && !field.classList.contains('is-editing')) field.syncInputs(); });
             showHoaFields();
             showLoanFeeFields();
+            showTitleRateFields();
             editableFields.forEach(({ field, value, saved }) => {
                 const text = displayOf(field);
                 value.textContent = text || 'Not set';

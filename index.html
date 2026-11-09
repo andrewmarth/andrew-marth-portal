@@ -1439,6 +1439,7 @@
                             client: seller,
                             sellers: adminData.sellers,
                             accounts: adminData.accounts,
+                            titleCompanies: adminData.titleCompanies,
                             lookup: async address => {
                                 const json = await api({ action: 'propertyFacts', address });
                                 if (!json.ok) throw new Error(json.error || 'Lookup failed');
@@ -1738,7 +1739,7 @@
                     if (data.loanProductFields) renderLoanProducts(data.myLoanProducts || [], data.loanProductFields);
                     // Only admins get the buyer list
                     if (data.buyers) {
-                        adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [] };
+                        adminData = { buyers: data.buyers, sellers: data.sellers || [], accounts: data.accounts || [], loanProducts: data.loanProducts || [], titleCompanies: data.titleCompanies || [] };
                         document.getElementById('signatures-card').hidden = false;
                         document.getElementById('new-task-btn').hidden = false;
                         renderNewClient();

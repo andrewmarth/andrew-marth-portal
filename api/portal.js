@@ -32,6 +32,11 @@ const PAGE_SETTING_FIELDS = {
   'EARNEST MONEY DEPOSIT': 'money', 'GIFT FUNDS': 'money',
   'RETAIL LTV': 'rate', 'LENDER POINTS PURCHASED': 'rate', 'PREPAID MI APPLIED': 'bool',
   'ESCROW FEE RATE': 'rate', 'OWNERS TITLE RATE': 'rate', 'ALTA TITLE RATE': 'rate', 'HOMEOWNERS INSURANCE RATE': 'rate',
+  // Title & Escrow: the title company (a titleCompanies document ID; blank uses the three rates above) and this sale's details
+  'TITLE COMPANY': 'id', 'SALE TYPE': ['Standard', 'Short Sale', 'REO'],
+  'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
+  'WHO PAYS OWNERS POLICY': 'payer', 'OWNERS TITLE DISCOUNT': 'text', 'SELLER ESCROW DISCOUNT': 'text', 'BUYER ESCROW DISCOUNT': 'text',
+  'FINCEN REPORT': 'bool', 'EXTRA TITLE FEES': 'list',
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
@@ -73,6 +78,9 @@ function cleanSetting_(kind, value) {
   if (kind === 'bool') return /^true$/i.test(raw) ? true : /^false$/i.test(raw) ? false : null;
   if (kind === 'payer') return /^buyer$/i.test(raw) ? 'Buyer' : /^seller$/i.test(raw) ? 'Seller' : null;
   if (kind === 'text') return cleanText_(raw, 100);
+  // A document ID, or a list of names joined by " | "
+  if (kind === 'id') return /^[A-Za-z0-9_-]{1,64}$/.test(raw) ? raw : null;
+  if (kind === 'list') return cleanText_(raw, 1000);
   if (kind === 'date') {
     const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     return m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31 ? (+m[1]) + '/' + (+m[2]) + '/' + m[3] : null;
@@ -1182,7 +1190,11 @@ async function resumeGemini_(account) {
 // SIMULTANEOUS LOAN PERCENT when issued with the owner's policy (at least SIMULTANEOUS LOAN MINIMUM), plus the lender's
 // endorsements: LOAN ENDORSEMENT LIST [{ NAME, AMOUNT, WHEN }], WHEN saying which loans need it (every loan, a condo, a home in
 // an HOA, an adjustable rate, a manufactured home). VA SELLER PAYS BUYER FEES: on a VA loan the seller pays the buyer's share
-// of the escrow and recording fees.
+// of the escrow and recording fees. FINCEN FEE (+ FINCEN EXTRA ENTITY FEE): a FinCEN report for an entity or trust buying with
+// cash. EXTRA LOAN ESCROW FEE / EXTRA LOAN POLICY FEE: per loan over one on a sale. CASH NO PAYOFF ADD ON: a cash sale's
+// add-on when the seller has no loan to pay off (blank: the cash sale add-on). SHORT SALE / REO ESCROW TABLE (+ OVER FEE,
+// OVER PER, SELLER SHARE): those sales' escrow fees, in place of the table and add-on (blank: the standard rate).
+// The pages' TITLE COMPANY setting is a company's document ID; the fee math is in /title-fees.js.
 // Refinance: a flat REFINANCE ESCROW FEE and REFINANCE RECORDING FEE, and the loan policy from REFINANCE TITLE TABLE (its own
 // table, on the loan amount) times REFINANCE POLICY PERCENT, plus REFINANCE ENDORSEMENTS.
 const TITLE_MONEY_MAX = 100000000;
@@ -1245,6 +1257,13 @@ function titleCompanyOut_(doc) {
       ? f['LOAN ENDORSEMENT LIST'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), when: String(d['WHEN'] || '') }))
       : num(f['LOAN ENDORSEMENTS']) ? [{ name: 'Lender’s endorsements', amount: num(f['LOAN ENDORSEMENTS']), when: 'Every Loan' }] : [],
     vaSellerPays: f['VA SELLER PAYS BUYER FEES'] === true,
+    fincenFee: num(f['FINCEN FEE']), fincenExtraFee: num(f['FINCEN EXTRA ENTITY FEE']),
+    extraLoanEscrowFee: num(f['EXTRA LOAN ESCROW FEE']), extraLoanPolicyFee: num(f['EXTRA LOAN POLICY FEE']),
+    cashNoPayoffAddOn: num(f['CASH NO PAYOFF ADD ON']),
+    shortSaleTable: table(f['SHORT SALE ESCROW TABLE']), shortSaleOverFee: num(f['SHORT SALE OVER FEE']),
+    shortSaleOverPer: num(f['SHORT SALE OVER PER']), shortSaleSellerShare: num(f['SHORT SALE SELLER SHARE']),
+    reoTable: table(f['REO ESCROW TABLE']), reoOverFee: num(f['REO OVER FEE']), reoOverPer: num(f['REO OVER PER']),
+    reoSellerShare: num(f['REO SELLER SHARE']),
     refiEscrowFee: num(f['REFINANCE ESCROW FEE']),
     refiRecordingFee: num(f['REFINANCE RECORDING FEE']),
     refiTable: table(f['REFINANCE TITLE TABLE']),
@@ -1285,12 +1304,20 @@ async function saveTitleCompany_(account, body) {
   if (typeof titleTable === 'string') return { ok: false, error: titleTable };
   const refiTable = titleTable_(c.refiTable, 'refi_table');
   if (typeof refiTable === 'string') return { ok: false, error: refiTable };
-  const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable, 'REFINANCE TITLE TABLE': refiTable };
+  const shortSaleTable = titleTable_(c.shortSaleTable, 'short_sale_table');
+  if (typeof shortSaleTable === 'string') return { ok: false, error: shortSaleTable };
+  const reoTable = titleTable_(c.reoTable, 'reo_table');
+  if (typeof reoTable === 'string') return { ok: false, error: reoTable };
+  const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable, 'REFINANCE TITLE TABLE': refiTable,
+    'SHORT SALE ESCROW TABLE': shortSaleTable, 'REO ESCROW TABLE': reoTable };
   const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
     loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
     titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM',
     refiEscrowFee: 'REFINANCE ESCROW FEE', refiRecordingFee: 'REFINANCE RECORDING FEE', refiOverFee: 'REFINANCE TITLE OVER FEE',
-    refiOverPer: 'REFINANCE TITLE OVER PER', refiEndorsements: 'REFINANCE ENDORSEMENTS' };
+    refiOverPer: 'REFINANCE TITLE OVER PER', refiEndorsements: 'REFINANCE ENDORSEMENTS',
+    fincenFee: 'FINCEN FEE', fincenExtraFee: 'FINCEN EXTRA ENTITY FEE', extraLoanEscrowFee: 'EXTRA LOAN ESCROW FEE',
+    extraLoanPolicyFee: 'EXTRA LOAN POLICY FEE', cashNoPayoffAddOn: 'CASH NO PAYOFF ADD ON',
+    shortSaleOverFee: 'SHORT SALE OVER FEE', shortSaleOverPer: 'SHORT SALE OVER PER', reoOverFee: 'REO OVER FEE', reoOverPer: 'REO OVER PER' };
   for (const [k, col] of Object.entries(moneyFields)) {
     const v = titleMoney_(c[k]);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
@@ -1300,7 +1327,7 @@ async function saveTitleCompany_(account, body) {
   const shareFields = { sellerEscrowShare: ['SELLER SHARE OF ESCROW FEE', 1], sellerRecordingShare: ['SELLER SHARE OF RECORDING FEE', 1],
     sellerOwnerShare: ['SELLER SHARE OF OWNERS POLICY', 1], ownerPolicyPercent: ['OWNERS POLICY PERCENT', 3],
     loanPolicyPercent: ['LOAN POLICY PERCENT', 3], simultaneousPercent: ['SIMULTANEOUS LOAN PERCENT', 1],
-    refiPolicyPercent: ['REFINANCE POLICY PERCENT', 3] };
+    refiPolicyPercent: ['REFINANCE POLICY PERCENT', 3], shortSaleSellerShare: ['SHORT SALE SELLER SHARE', 1], reoSellerShare: ['REO SELLER SHARE', 1] };
   for (const [k, [col, max]] of Object.entries(shareFields)) {
     const v = titleShare_(c[k], max);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
@@ -1308,7 +1335,7 @@ async function saveTitleCompany_(account, body) {
   }
   // "Add $20 per $20,000" needs both numbers (or neither)
   for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER'],
-    ['REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER']]) {
+    ['REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER'], ['SHORT SALE OVER FEE', 'SHORT SALE OVER PER'], ['REO OVER FEE', 'REO OVER PER']]) {
     const hasFee = typeof fields[fee] === 'number', hasPer = typeof fields[per] === 'number';
     if (hasFee !== hasPer || (hasPer && !(fields[per] > 0))) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
   }
@@ -2357,7 +2384,7 @@ const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'L
   'RECORDING FEE', 'RECORDING FEE STATUS', 'PAYOFF STATEMENT FEE', 'PAYOFF STATEMENT FEE STATUS',
   'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS'];
 const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
-  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'LOAN TYPE'].concat(SELLER_NET_LOAN_FIELDS, ['ESCROW FEE RATE', 'OWNERS TITLE RATE', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
+  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'LOAN TYPE'].concat(SELLER_NET_LOAN_FIELDS, ['TITLE COMPANY', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
   'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $']);
 
 // Admins only: a new Buyer Breakdown page for a buyer (or, with pageType "Seller Net", a Seller Net page for a seller),
@@ -2423,6 +2450,10 @@ async function createProperty_(account, body) {
   }
 
   // Seller Net: the sale, the HOA, and the seller's costs (the loan payoff is filled in later from Settings)
+  // The title company: the form's pick (Seller Net) or the first one (Buyer Breakdown); none on file keeps the old rates
+  const companies = await titleCompanyList_();
+  const defaultTitleCompany = companies.length ? companies[0].id : '';
+  if (isSellerNet && !companies.some(c => c.id === asked['TITLE COMPANY'])) return { ok: false, error: 'invalid_title_company' };
   const values = isSellerNet ? {
     'PAGE TYPE': 'Seller Net',
     // A new seller always starts out Nurturing
@@ -2438,10 +2469,11 @@ async function createProperty_(account, body) {
     'HOA OTHER FEE': whole(hoa.other),
     'HOA PRIMARY MONTHLY DUES': whole(hoa.primary),
     'HOA MASTER MONTHLY DUES': whole(hoa.master),
-    // Placeholders: the seller pays every HOA fee, and both commissions start at 2.5%
+    // Placeholders: the seller pays every HOA fee, and both commissions start at 2.5%; escrow and title come from the
+    // title company the form asks for, assuming a buyer with a fixed-rate loan
     'SELLER CREDIT': 0,
-    'ESCROW FEE RATE': 0.002,
-    'OWNERS TITLE RATE': 0.0045,
+    'SALE TYPE': 'Standard',
+    'BUYER FINANCING': 'Fixed Rate Loan',
     'WHO PAYS TRANSFER FEE': 'Seller',
     'WHO PAYS CAP FEE': 'Seller',
     'WHO PAYS DISCLOSURE FEE': 'Seller',
@@ -2475,9 +2507,9 @@ async function createProperty_(account, body) {
     'CENSUS DESIGNATION': census,
     // Placeholders
     'SELLER CREDIT': 0,
-    'ESCROW FEE RATE': 0.002,
-    'OWNERS TITLE RATE': 0,
-    'ALTA TITLE RATE': 0.004,
+    // Escrow and title come from the first title company (Settings), for a standard sale
+    ...(defaultTitleCompany ? { 'TITLE COMPANY': defaultTitleCompany, 'SALE TYPE': 'Standard' }
+      : { 'ESCROW FEE RATE': 0.002, 'OWNERS TITLE RATE': 0, 'ALTA TITLE RATE': 0.004 }),
     'HOMEOWNERS INSURANCE RATE': 0.0035,
     'RETAIL LTV': 0.8,
     'WHO PAYS TRANSFER FEE': 'Buyer',
@@ -2535,6 +2567,15 @@ async function pageData_(id, account, pageId) {
     accounts: isAdmin ? await accountChoices_() : null,
   };
   if (result.pageType.toLowerCase() === 'buyer breakdown') await addBuyerBreakdownData_(result, page);
+  // Buyer Breakdown and Seller Net: every title company's filed rates (they're public filings)
+  if (['buyer breakdown', 'seller net'].includes(result.pageType.toLowerCase())) {
+    try {
+      result.titleCompanies = (await titleCompanyList_()).map(({ notes, order, ...c }) => c);
+    } catch (err) {
+      console.error(err);
+      result.titleCompanies = [];
+    }
+  }
   // Seller Net: every version the viewer can see (this one included), for the version dropdown
   if (result.pageType.toLowerCase() === 'seller net') {
     result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
@@ -2612,6 +2653,7 @@ async function myPagesData_(id, account) {
     // "My Flippers": every FLIPPER BUYER account and every Flip page
     result.flippers = withRole('FLIPPER BUYER');
     result.flipperPages = pagesOfType('flip').map(withPeople);
+    result.titleCompanies = (await titleCompanyList_()).map(c => ({ id: c.id, name: c.name }));
     // Links are extra: if they can't be read, the page lists still load
     try {
       result.links = await adminLinks_();

@@ -152,8 +152,8 @@ function build() {
         { id: 'recording', group: 'Loan Payoff', title: 'Recording fee?', help: 'To record the loan’s release. Enter 0 for none.', kind: 'fee', key: 'recording', show: hasLoan },
         { id: 'payoffStatement', group: 'Loan Payoff', title: 'Payoff statement fee?', help: 'The lender’s fee for the payoff statement. Enter 0 for none.', kind: 'fee', key: 'payoffStatement', show: hasLoan },
         { id: 'otherPayoff', group: 'Loan Payoff', title: 'Any other loan payoff fees?', help: 'A percent of the loan balance and a flat amount. Enter 0 for none.', kind: 'split', key: 'otherPayoff', status: true, show: hasLoan },
-        { id: 'escrowFee', group: 'Costs', title: 'Escrow fee?', help: 'A percent of the sale price.', kind: 'number', key: 'escrowFee', format: 'percent' },
-        { id: 'ownersTitle', group: 'Costs', title: 'Owner’s title insurance?', help: 'A percent of the sale price.', kind: 'number', key: 'ownersTitle', format: 'percent' },
+        // (its choices are the title companies in Settings, filled in when the form opens)
+        { id: 'titleCompany', group: 'Costs', title: 'Which title company?', help: 'Its filed rates price the escrow fee, recording and owner’s title policy. You can change it on the page.', kind: 'choice', key: 'titleCompanyName', options: [] },
         { id: 'buyersAgent', group: 'Costs', title: 'Buyer’s agent commission?', help: 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'buyersAgent' },
         { id: 'listingAgent', group: 'Costs', title: 'Listing agent commission?', help: 'A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'listingAgent' },
         { id: 'review', group: 'Review', title: 'Look it over', help: 'Everything else (the seller’s loan balance and actual rate, the HOA) the seller fills in on the page.', kind: 'review' },
@@ -522,8 +522,7 @@ function build() {
                     ['Other Payoff Fees', split(a.otherPayoff), 'otherPayoff'],
                 ] : []),
                 ['Costs'],
-                ['Escrow Fee', pct(a.escrowFee), 'escrowFee'],
-                ['Owner’s Title', pct(a.ownersTitle), 'ownersTitle'],
+                ['Title Company', a.titleCompanyName, 'titleCompany'],
                 ['Buyer’s Agent', split(a.buyersAgent), 'buyersAgent'],
                 ['Listing Agent', split(a.listingAgent), 'listingAgent'],
             ];
@@ -611,7 +610,7 @@ function build() {
                 'PAYOFF STATEMENT FEE': a.payoffStatement.amount, 'PAYOFF STATEMENT FEE STATUS': a.payoffStatement.status,
                 'OTHER LOAN PAYOFF FEES %': a.otherPayoff.rate, 'OTHER LOAN PAYOFF FEES $': a.otherPayoff.amount, 'OTHER LOAN PAYOFF FEES STATUS': a.otherPayoff.status,
             } : {}),
-            'ESCROW FEE RATE': a.escrowFee, 'OWNERS TITLE RATE': a.ownersTitle,
+            'TITLE COMPANY': ((ctx.titleCompanies || []).find(c => c.name === a.titleCompanyName) || {}).id || '',
             'SELLER PAID BUYER COMMISSION %': a.buyersAgent.rate, 'SELLER PAID BUYER COMMISSION $': a.buyersAgent.amount,
             'LISTING AGENT COMMISSION %': a.listingAgent.rate, 'LISTING AGENT COMMISSION $': a.listingAgent.amount,
         };
@@ -643,12 +642,13 @@ function build() {
     return {
         open(next) {
             ctx = next;
+            STEPS.find(s => s.id === 'titleCompany').options = (ctx.titleCompanies || []).map(c => c.name);
             // Standard starting answers (each is still asked)
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             a = {
                 sellers: [], collaborators: [], credit: '0', acceptance: isoDay(tomorrow), escrowDays: '30',
-                escrowFee: '0.002', ownersTitle: '0.0045',
+                titleCompanyName: ((ctx.titleCompanies || [])[0] || {}).name || '',
                 buyersAgent: { rate: 0.025, amount: '0' }, listingAgent: { rate: 0.025, amount: '0' },
             };
             touched = {};
