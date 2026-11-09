@@ -25,6 +25,8 @@ const CSS = `
 .snw-dialog .snw-question { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.45rem; line-height: 1.2; color: var(--navy); }
 .snw-dialog .snw-help { margin: 8px 0 0 0; font-size: 0.92rem; opacity: 0.72; }
 .snw-dialog .snw-unit { margin-top: 14px; max-width: 220px; }
+.snw-dialog .snw-term-other { max-width: 220px; }
+.snw-dialog .snw-term-other[hidden] { display: none; }
 .snw-dialog .snw-body { margin-top: 18px; display: grid; gap: 14px; }
 .snw-dialog .snw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 .snw-dialog .field input[type="date"] { font-family: inherit; font-size: 1rem; color: var(--brown); }
@@ -145,6 +147,7 @@ function build() {
         { id: 'loanType', group: 'Loan Payoff', title: 'What kind of loan does the seller have?', help: 'Choose No Loan if the home is paid off.', kind: 'choice', key: 'loanType', options: LOAN_TYPES },
         { id: 'loanAmount', group: 'Loan Payoff', title: 'What was the original loan amount?', help: 'The seller’s mortgage when it was taken out.', kind: 'number', key: 'loanAmount', format: 'money', placeholder: '360,000', show: hasLoan },
         { id: 'loanDate', group: 'Loan Payoff', title: 'When was the loan taken out?', kind: 'date', key: 'loanDate', show: () => hasLoan() && Number(a.loanAmount) > 0 },
+        { id: 'loanTerm', group: 'Loan Payoff', title: 'What was the original loan term?', kind: 'term', key: 'loanTermYears', show: () => hasLoan() && Number(a.loanAmount) > 0 },
         { id: 'recording', group: 'Loan Payoff', title: 'Recording fee?', help: 'To record the loan’s release. Enter 0 for none.', kind: 'fee', key: 'recording', show: hasLoan },
         { id: 'payoffStatement', group: 'Loan Payoff', title: 'Payoff statement fee?', help: 'The lender’s fee for the payoff statement. Enter 0 for none.', kind: 'fee', key: 'payoffStatement', show: hasLoan },
         { id: 'otherPayoff', group: 'Loan Payoff', title: 'Any other loan payoff fees?', help: 'A percent of the loan balance and a flat amount. Enter 0 for none.', kind: 'split', key: 'otherPayoff', status: true, show: hasLoan },
@@ -420,6 +423,35 @@ function build() {
             el.setAttribute('aria-label', step.title);
             return { read() { if (!/^\d{4}-\d{2}-\d{2}$/.test(el.value)) { el.classList.add('is-invalid'); return 'Please choose a date.'; } a[step.key] = el.value; return ''; } };
         },
+        term(step, body) {
+            const years = a[step.key];
+            const preset = years === '30' || years === '15' ? years : years ? 'other' : '';
+            body.innerHTML = field('', '<select id="snw-term" aria-label="Original loan term"><option value="">Choose…</option>'
+                    + '<option value="30"' + (preset === '30' ? ' selected' : '') + '>30 years</option>'
+                    + '<option value="15"' + (preset === '15' ? ' selected' : '') + '>15 years</option>'
+                    + '<option value="other"' + (preset === 'other' ? ' selected' : '') + '>Other</option></select>')
+                + '<div class="snw-term-other"' + (preset === 'other' ? '' : ' hidden') + '>'
+                + field('Loan term', input('snw-term-years', { format: 'int', placeholder: '20', value: preset === 'other' ? years : '', suffix: 'years' }), 'snw-term-years') + '</div>';
+            const select = body.querySelector('#snw-term');
+            const other = body.querySelector('.snw-term-other');
+            const box = body.querySelector('#snw-term-years');
+            liveFormat(box, 'int');
+            select.addEventListener('change', () => {
+                select.classList.remove('is-invalid');
+                other.hidden = select.value !== 'other';
+                if (!other.hidden) box.focus();
+            });
+            return {
+                read() {
+                    if (!select.value) { select.classList.add('is-invalid'); return 'Please choose the loan term.'; }
+                    if (select.value !== 'other') { a[step.key] = select.value; return ''; }
+                    const v = Number(digits(box.value));
+                    if (!(v >= 1 && v <= 50)) { box.classList.add('is-invalid'); return 'Please enter the loan term in years (1 to 50).'; }
+                    a[step.key] = String(v);
+                    return '';
+                },
+            };
+        },
         fee(step, body) {
             const v = a[step.key] || {};
             body.innerHTML = field('Amount', input('snw-in', { format: 'money', placeholder: '0', value: commas(v.amount) }), 'snw-in') + statusChoice('snw-' + step.id + '-status', v.status);
@@ -483,6 +515,7 @@ function build() {
                 ['Loan Type', a.loanType, 'loanType'],
                 ...(hasLoan() ? [
                     ['Original Loan', Number(a.loanAmount) > 0 ? money(a.loanAmount) + ', ' + niceDate(a.loanDate) : money(0), 'loanAmount'],
+                    ...(Number(a.loanAmount) > 0 ? [['Loan Term', a.loanTermYears ? a.loanTermYears + ' years' : '', 'loanTerm']] : []),
                     ['Recording Fee', fee(a.recording), 'recording'],
                     ['Payoff Statement Fee', fee(a.payoffStatement), 'payoffStatement'],
                     ['Other Payoff Fees', split(a.otherPayoff), 'otherPayoff'],
@@ -549,7 +582,7 @@ function build() {
             // Back to the review after a change (unless it opened a question that still needs an answer, like the loan date)
             if (fromReview) {
                 const list = shown();
-                const ANSWER = { loanAmount: 'loanAmount', loanDate: 'loanDate', recording: 'recording', payoffStatement: 'payoffStatement', otherPayoff: 'otherPayoff' };
+                const ANSWER = { loanAmount: 'loanAmount', loanDate: 'loanDate', loanTerm: 'loanTermYears', recording: 'recording', payoffStatement: 'payoffStatement', otherPayoff: 'otherPayoff' };
                 const unanswered = list.find(s => ANSWER[s.id] && (a[ANSWER[s.id]] === undefined || a[ANSWER[s.id]] === ''));
                 index = unanswered ? STEPS.indexOf(unanswered) : STEPS.findIndex(s => s.kind === 'review');
                 draw(1);
@@ -569,8 +602,9 @@ function build() {
             'LOAN TYPE': a.loanType,
             // No Loan: none of the loan payoff answers
             ...(hasLoan() ? {
-                // A $0 loan: the date doesn't matter, but the sheet wants one
+                // A $0 loan: the date and term don't matter, but the sheet wants them
                 'ORIGINAL LOAN AMOUNT': a.loanAmount, 'ORIGINAL LOAN DATE': mdy(noLoanDate ? isoDay(new Date()) : a.loanDate),
+                'LOAN TERM MONTHS': noLoanDate ? 360 : Number(a.loanTermYears) * 12,
                 'RECORDING FEE': a.recording.amount, 'RECORDING FEE STATUS': a.recording.status,
                 'PAYOFF STATEMENT FEE': a.payoffStatement.amount, 'PAYOFF STATEMENT FEE STATUS': a.payoffStatement.status,
                 'OTHER LOAN PAYOFF FEES %': a.otherPayoff.rate, 'OTHER LOAN PAYOFF FEES $': a.otherPayoff.amount, 'OTHER LOAN PAYOFF FEES STATUS': a.otherPayoff.status,

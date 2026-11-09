@@ -2048,7 +2048,7 @@ async function propertyFacts_(account, body) {
 // sale price), sent by the New Seller Net form as body.fields and checked as in PAGE_SETTING_FIELDS. All are required.
 // (The HOA fees are only needed once the seller says there's an HOA, so they're filled in later from Settings.)
 // LOAN TYPE "No Loan": the loan payoff answers (SELLER_NET_LOAN_FIELDS) aren't asked, and aren't saved.
-const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE',
+const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS',
   'RECORDING FEE', 'RECORDING FEE STATUS', 'PAYOFF STATEMENT FEE', 'PAYOFF STATEMENT FEE STATUS',
   'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS'];
 const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
