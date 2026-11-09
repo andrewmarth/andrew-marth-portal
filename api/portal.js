@@ -2095,6 +2095,8 @@ async function createProperty_(account, body) {
   // Seller Net: the sale, the HOA, and the seller's costs (the loan payoff is filled in later from Settings)
   const values = isSellerNet ? {
     'PAGE TYPE': 'Seller Net',
+    // A new seller always starts out Nurturing
+    'LISTING STATUS': 'Nurturing',
     'STREET ADDRESS': street, 'CITY': city, 'STATE': state, 'ZIP': zip,
     'PROPERTY TYPE': propertyType,
     'YEAR BUILT': whole(body.yearBuilt),

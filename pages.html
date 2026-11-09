@@ -900,16 +900,16 @@
         }
         .picker-count { padding: 6px 14px 4px 14px; font-size: 0.78rem; font-weight: bold; opacity: 0.6; text-align: right; }
 
-        :is(#loan-card, #home-card) .field + .field { margin-top: 22px; }
+        :is(#loan-card, #home-card, #listing-card) .field + .field { margin-top: 22px; }
         /* Settings: each value on its own row with an edit (pencil) button */
-        :is(#loan-card, #home-card) .field.editable { margin-top: 0; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
-        :is(#loan-card, #home-card) .settings-section .field.editable:last-child { border-bottom: none; }
+        :is(#loan-card, #home-card, #listing-card) .field.editable { margin-top: 0; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        :is(#loan-card, #home-card, #listing-card) .settings-section .field.editable:last-child { border-bottom: none; }
         .view-row { display: flex; align-items: center; gap: 14px; }
         .view-row .vk { font-weight: bold; flex: 0 1 auto; }
         .view-row .vv { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
         .view-row .vv.is-empty { font-style: italic; opacity: 0.55; }
         .edited-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(192, 144, 80, 0.2); color: var(--rust); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-        :is(#loan-card, #home-card) .field.editable.is-changed { box-shadow: inset 4px 0 0 var(--gold); padding-left: 16px; background: linear-gradient(90deg, rgba(192, 144, 80, 0.08), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed { box-shadow: inset 4px 0 0 var(--gold); padding-left: 16px; background: linear-gradient(90deg, rgba(192, 144, 80, 0.08), transparent 60%); }
         .field.editable.is-changed .edited-tag { display: inline-block; }
         .field.editable.is-changed .view-row .vv { color: var(--rust); font-weight: bold; }
         .field.editable:not(.is-editing) > .field-label,
@@ -944,7 +944,7 @@
         .settings-section .money-section-title { margin-bottom: 4px; }
         .settings-grid { display: grid; grid-template-columns: 1fr; gap: 0; margin-top: 0; }
         .settings-section > .money-section-title + .settings-grid { margin-top: 0; }
-        :is(#loan-card, #home-card) .settings-grid .field + .field { margin-top: 0; }
+        :is(#loan-card, #home-card, #listing-card) .settings-grid .field + .field { margin-top: 0; }
         .settings-grid .span-2 { grid-column: 1 / -1; }
         .input-wrap { position: relative; }
         .set-input {
@@ -1054,15 +1054,15 @@
         .problem-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         /* Settings card: brown with soft gold and rust glows (same as the home page's My Buyers card) */
-        :is(#loan-card, #home-card), #math-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
-        :is(#loan-card, #home-card)::before, #math-card::before,
-        :is(#loan-card, #home-card)::after, #math-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
-        :is(#loan-card, #home-card)::before, #math-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
-        :is(#loan-card, #home-card)::after, #math-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
-        :is(#loan-card, #home-card) > *, #math-card > * { position: relative; z-index: 1; }
-        :is(#loan-card, #home-card) .card-eyebrow, #math-card .card-eyebrow { color: var(--gold); }
-        :is(#loan-card, #home-card) h2, #math-card h2 { color: var(--cream); }
-        :is(#loan-card, #home-card) .money-section-title, #math-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        :is(#loan-card, #home-card, #listing-card), #math-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before,
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card) > *, #math-card > * { position: relative; z-index: 1; }
+        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2 { color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card) .money-section-title, #math-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         /* How The Numbers Work, on the same brown */
         #math-card .money-list li { border-bottom-color: rgba(233, 226, 216, 0.15); }
         #math-card .math-list li.is-result { border-top-color: rgba(233, 226, 216, 0.5); }
@@ -1072,20 +1072,20 @@
         #math-card .math-table-wrap { border-color: rgba(233, 226, 216, 0.25); }
         #math-card .math-table th { background: #5c3836; color: var(--gold); }
         #math-card .math-table th, #math-card .math-table td { border-bottom-color: rgba(233, 226, 216, 0.12); }
-        :is(#loan-card, #home-card) .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
-        :is(#loan-card, #home-card) .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
-        :is(#loan-card, #home-card) .field.editable.is-changed .view-row .vv { color: var(--gold); }
-        :is(#loan-card, #home-card) .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card) .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed .view-row .vv { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card) .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
         /* Missing (Seller Net): the same look as Edited, in red */
         .missing-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(224, 96, 79, 0.25); color: #f2b8a8; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
         .field.editable.is-missing .missing-tag { display: inline-block; }
-        :is(#loan-card, #home-card) .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
-        :is(#loan-card, #home-card) .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
         /* The open editor stays light, so its inputs read the same as before */
-        /* (the :is(#loan-card, #home-card) row padding would otherwise win over the editor's own padding) */
-        :is(#loan-card, #home-card) .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
-        :is(#loan-card, #home-card) .access-message.is-error { color: #f2b8a8; }
-        :is(#loan-card, #home-card) .access-message.is-success { color: var(--gold); }
+        /* (the :is(#loan-card, #home-card, #listing-card) row padding would otherwise win over the editor's own padding) */
+        :is(#loan-card, #home-card, #listing-card) .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
+        :is(#loan-card, #home-card, #listing-card) .access-message.is-error { color: #f2b8a8; }
+        :is(#loan-card, #home-card, #listing-card) .access-message.is-success { color: var(--gold); }
         button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
         button.btn:disabled { opacity: 0.55; cursor: default; transform: none; }
         .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
@@ -1267,6 +1267,23 @@
             </div>
         </section>
 
+        <!-- Seller Net, admins only: where the listing stands (saves together with the other settings cards) -->
+        <section class="main-card reveal" id="listing-card" hidden>
+            <span class="card-eyebrow">Admin Only</span>
+            <h2>Property Status</h2>
+            <p class="card-intro">Where this listing stands. The same on every version of this net sheet.</p>
+            <div class="settings-section">
+                <div class="settings-grid" id="listing-fields"></div>
+            </div>
+            <div class="access-actions">
+                <p class="access-message" id="listing-message" role="status"></p>
+                <button type="button" class="btn" id="listing-save" disabled>
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Status
+                </button>
+            </div>
+        </section>
+
         <!-- 5. Inputs (admins only): which loan product the numbers use -->
         <section class="main-card reveal" id="loan-card" hidden>
             <span class="card-eyebrow">The Inputs</span>
@@ -1352,6 +1369,7 @@
         const propertyCard = document.getElementById('property-card');
         const loanCard = document.getElementById('loan-card');
         const homeCard = document.getElementById('home-card');
+        const listingCard = document.getElementById('listing-card');
         const escrowCard = document.getElementById('escrow-card');
         const paymentCard = document.getElementById('payment-card');
         const signOutBtn = document.getElementById('sign-out');
@@ -1365,6 +1383,7 @@
         // The Settings card as first written, so it can be rebuilt for another version
         const settingsTemplate = loanCard.innerHTML;
         const homeTemplate = homeCard.innerHTML;
+        const listingTemplate = listingCard.innerHTML;
 
         const FALLBACK_CREDIT_SCORE = 720;
         const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -2728,9 +2747,9 @@
         const phone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
         function setupAccessPickers() {
             const accounts = data.accounts || [];
-            // Settings and (Seller Net) Property & Loan each have a Save button; both save every edit
-            const saveBtns = [document.getElementById('access-save'), document.getElementById('home-save')];
-            const messages = [document.getElementById('access-message'), document.getElementById('home-message')];
+            // Settings and (Seller Net) Global Settings and Property Status each have a Save button; each saves every edit
+            const saveBtns = ['access-save', 'home-save', 'listing-save'].map(id => document.getElementById(id));
+            const messages = ['access-message', 'home-message', 'listing-message'].map(id => document.getElementById(id));
             const setMessage = (msg, kind) => messages.forEach(m => { m.textContent = msg; m.className = 'access-message' + (msg ? ' is-' + kind : ''); });
             const setSaveDisabled = off => saveBtns.forEach(b => { b.disabled = off; });
 
@@ -3391,9 +3410,10 @@
             document.getElementById('purchase-title').textContent = 'Sale';
             document.getElementById('loan-title').textContent = 'Payoff Fees';
 
-            const home = document.getElementById('property-fields');
-            choiceField(home, 'Listing Status', 'LISTING STATUS',
+            // Listing Status has its own card
+            choiceField(document.getElementById('listing-fields'), 'Listing Status', 'LISTING STATUS',
                 ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'].map(v => ({ value: v, main: v, icon: 'home' })));
+            const home = document.getElementById('property-fields');
             choiceField(home, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
             wholeField(home, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
             wholeField(home, 'Beds', 'BEDS');
@@ -3443,6 +3463,7 @@
 
             validateSettings();
             makeEditable(homeCard);
+            makeEditable(listingCard);
             makeEditable(loanCard);
         }
 
@@ -3770,6 +3791,7 @@
         function rebuildSettings() {
             loanCard.innerHTML = settingsTemplate;
             homeCard.innerHTML = homeTemplate;
+            listingCard.innerHTML = listingTemplate;
             draft = {};
             fieldErrors = {};
             settingsBlocks.length = 0;
@@ -3828,6 +3850,7 @@
             document.body.classList.add('house-view');
             [document.getElementById('house-card'), escrowCard].forEach(c => { c.hidden = false; });
             homeCard.hidden = !data.isAdmin;
+            listingCard.hidden = !data.isAdmin;
             loanCard.hidden = !data.isAdmin;
             document.getElementById('math-card').hidden = !data.isAdmin;
             initReveal();
