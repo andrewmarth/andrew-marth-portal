@@ -17,6 +17,7 @@ You can edit it by hand in the Firebase console.
 | `cumTransactions`, `cumBalances` | Cash flow transactions and bank balances | automatic |
 | `wholesaleDeals` | Wholesale deals from email (the flip map) | automatic |
 | `links` | The admin Links card (TITLE, DESCRIPTION, SECTION, LINK) | automatic |
+| `marketingPoints` | The admin Marketing Points card (TITLE, DESCRIPTION, LINK, LINK TEXT, and IMAGE DRIVE FILE ID / IMAGE NAME for a picture in the Marketing Points Drive folder) | automatic |
 | `tasks` | Current Tasks (ASSIGNED is the account) | the TASK ID |
 | `signatures` | One per signer of each document sent for signature | automatic |
 | `documents` | One per signed PDF filed to Drive (CATEGORY says which log) | automatic |

@@ -200,6 +200,11 @@ export async function handle(body, query) {
     // settings.html: the admin Usage card
     if (body.action === 'adminUsage') return await adminUsage_(account);
     if (body.action === 'resumeGemini') return await resumeGemini_(account);
+    // settings.html: the admin Marketing Points card (points to customize a seller page with; images go to Drive)
+    if (body.action === 'marketingPoints') return await marketingPoints_(account);
+    if (body.action === 'saveMarketingPoint') return await saveMarketingPoint_(account, body);
+    if (body.action === 'deleteMarketingPoint') return await deleteMarketingPoint_(account, body);
+    if (body.action === 'marketingPointImage') return await marketingPointImage_(account, body);
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return await createProperty_(account, body);
     // index.html's New Seller Net form (admins): beds, baths, sqft and taxes for an address, from the property APIs
@@ -1159,6 +1164,89 @@ async function resumeGemini_(account) {
     'RETRY REQUESTED AT': `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`,
   }, { merge: true });
   return { ok: true };
+}
+
+// --- Marketing Points (settings.html, admins) ---
+// One marketingPoints document per point: TITLE, DESCRIPTION, LINK and LINK TEXT (optional) and an optional image, saved in the
+// Marketing Points Drive folder (IMAGE DRIVE FILE ID, IMAGE NAME). In the order they were added.
+const MARKETING_FOLDER_ID = process.env.MARKETING_FOLDER_ID || '1Z4PRK8FDbLXMJNUQ-Iyf056X0hJjL-UX';
+const MARKETING_IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic', 'image/heif': 'heif' };
+const MARKETING_IMAGE_MAX = 10 * 1024 * 1024;
+
+async function marketingPointList_() {
+  return (await rows('marketingPoints')).map(r => ({
+    id: r._id,
+    title: String(r['TITLE'] || '').trim(),
+    description: String(r['DESCRIPTION'] || '').trim(),
+    link: String(r['LINK'] || '').trim(),
+    linkText: String(r['LINK TEXT'] || '').trim(),
+    imageId: String(r['IMAGE DRIVE FILE ID'] || '').trim(),
+    imageName: String(r['IMAGE NAME'] || '').trim(),
+  }));
+}
+
+async function marketingPoints_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  return { ok: true, points: await marketingPointList_() };
+}
+
+// Adds a point (no id) or changes one. image: { name, type, data (base64) } for a new picture; removeImage: true drops
+// the picture from the point (the file stays in the Drive folder).
+async function saveMarketingPoint_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const title = cleanText_(body.title, 100);
+  // The description keeps its line breaks
+  const description = String(body.description || '').replace(/\r\n?/g, '\n').split('\n')
+    .map(l => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().replace(/^[=+\-@]+/, '').slice(0, 2000);
+  let link = String(body.link || '').trim().slice(0, 500);
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  if (!title) return { ok: false, error: 'missing_title' };
+  if (!description) return { ok: false, error: 'missing_description' };
+  if (link && !/^https?:\/\/[^\s/.]+(\.[^\s/.]+)+(\/\S*)?$/i.test(link)) return { ok: false, error: 'invalid_link' };
+  // The words shown as the link (blank: the page shows the web address)
+  const linkText = cleanText_(body.linkText, 100);
+  if (linkText && !link) return { ok: false, error: 'missing_link' };
+
+  const existing = body.id ? await getRow('marketingPoints', String(body.id)) : null;
+  if (body.id && !existing) return { ok: false, error: 'not_found' };
+
+  const fields = { 'TITLE': title, 'DESCRIPTION': description, 'LINK': link, 'LINK TEXT': linkText };
+  if (body.image && body.image.data) {
+    const type = String(body.image.type || '').toLowerCase();
+    const ext = MARKETING_IMAGE_TYPES[type];
+    if (!ext) return { ok: false, error: 'invalid_image' };
+    const bytes = Buffer.from(String(body.image.data), 'base64');
+    if (!bytes.length || bytes.length > MARKETING_IMAGE_MAX) return { ok: false, error: 'image_too_big' };
+    const safeTitle = title.replace(/[\\/:*?"<>|]+/g, '').slice(0, 60).trim() || 'Marketing Point';
+    const name = safeTitle + ' ' + new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }) + '.' + ext;
+    const file = await createDriveFile(MARKETING_FOLDER_ID, name, type, bytes);
+    fields['IMAGE DRIVE FILE ID'] = file.id;
+    fields['IMAGE NAME'] = name;
+  } else if (body.removeImage) {
+    fields['IMAGE DRIVE FILE ID'] = '';
+    fields['IMAGE NAME'] = '';
+  }
+  let id = existing ? existing._id : '';
+  if (existing) await update('marketingPoints', id, fields);
+  else id = (await add('marketingPoints', fields)).id;
+  return { ok: true, id, points: await marketingPointList_() };
+}
+
+// Deletes a point (its picture stays in the Drive folder)
+async function deleteMarketingPoint_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const existing = body.id ? await getRow('marketingPoints', String(body.id)) : null;
+  if (!existing) return { ok: false, error: 'not_found' };
+  await remove('marketingPoints', existing._id);
+  return { ok: true, points: await marketingPointList_() };
+}
+
+// A point's picture, web-sized (only pictures that belong to a point)
+async function marketingPointImage_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const imageId = String(body.imageId || '');
+  if (!imageId || !(await marketingPointList_()).some(p => p.imageId === imageId)) return { ok: false, error: 'not_found' };
+  return wholesaleImage_(imageId, Math.min(1600, Math.max(200, Number(body.width) || 640)));
 }
 
 function canSeeWholesale_(account) {

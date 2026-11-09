@@ -702,6 +702,14 @@
   "PROPERTY TYPE",
   "MARKUP"
  ],
+ "marketingPoints": [
+  "TITLE",
+  "DESCRIPTION",
+  "LINK",
+  "LINK TEXT",
+  "IMAGE DRIVE FILE ID",
+  "IMAGE NAME"
+ ],
  "links": [
   "TITLE",
   "DESCRIPTION",

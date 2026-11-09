@@ -465,6 +465,57 @@
         .gemini-actions .btn { margin: 0; }
         .gemini-msg { font-size: 0.85rem; color: var(--gold); }
         .gemini-msg.is-error { color: #f2b8a8; }
+
+        /* --- Marketing Points (admins) --- */
+        .mp-intro { margin-top: 6px; font-size: 0.92rem; opacity: 0.8; }
+        .mp-list { list-style: none; margin-top: 16px; display: grid; gap: 12px; }
+        .mp-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px; border: 1px solid rgba(233, 226, 216, 0.18); border-radius: 18px; background: rgba(0, 0, 0, 0.14); }
+        .mp-thumb { flex: 0 0 auto; width: 76px; height: 76px; border-radius: 12px; background: rgba(233, 226, 216, 0.1); overflow: hidden; display: flex; align-items: center; justify-content: center; color: rgba(233, 226, 216, 0.45); }
+        .mp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mp-thumb svg { width: 26px; height: 26px; }
+        .mp-text { flex: 1; min-width: 0; }
+        .mp-title { font-weight: bold; font-size: 1.02rem; overflow-wrap: anywhere; }
+        .mp-desc { margin-top: 4px; font-size: 0.9rem; opacity: 0.8; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .mp-link { display: inline-block; margin-top: 6px; max-width: 100%; font-size: 0.85rem; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+        .mp-item .cf-edit { align-self: center; }
+        .mp-foot { margin-top: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .mp-foot .btn { margin: 0; }
+        .mp-foot .btn svg { width: 18px; height: 18px; }
+        .mp-foot .cf-saved { margin: 0; }
+        .mp-dialog { max-width: 540px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .mp-fields { display: grid; gap: 16px; margin-top: 14px; }
+        .mp-optional { font-weight: normal; opacity: 0.65; }
+        .mp-hint { display: block; margin: 6px 0 0 6px; font-size: 0.82rem; opacity: 0.7; }
+        .mp-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .field textarea {
+            width: 100%; min-height: 110px; padding: 14px 20px; resize: vertical;
+            border: 2px solid var(--navy); border-radius: 22px; background: #f7f4f0;
+            font-family: inherit; font-size: 1.05rem; line-height: 1.45; color: var(--brown);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .field textarea:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+        .field .is-invalid { border-color: var(--rust); background: #fdf2f2; }
+        .mp-image { display: grid; gap: 10px; }
+        .mp-preview { border: 2px solid var(--navy); border-radius: 18px; overflow: hidden; background: #f2ede6; }
+        .mp-preview[hidden] { display: none; }
+        .mp-preview img { display: block; width: 100%; max-height: 240px; object-fit: contain; }
+        .mp-image-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .mp-image-actions .btn { margin: 0; min-height: 44px; padding: 8px 20px; font-size: 0.95rem; cursor: pointer; }
+        .mp-image-actions .btn[hidden] { display: none; }
+        .mp-image #mp-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .mp-choose:has(+ #mp-file:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
+        .mp-image-note { font-size: 0.85rem; opacity: 0.7; margin-left: 6px; }
+        .mp-image-note:empty { display: none; }
+        .mp-actions { align-items: center; }
+        .mp-delete { margin-right: auto; padding: 8px 4px; border: none; background: none; font-family: inherit; font-size: 0.95rem; font-weight: bold; color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+        .mp-delete[hidden] { display: none; }
+        .mp-delete:disabled { opacity: 0.5; cursor: wait; }
+        @media (max-width: 600px) {
+            .mp-item { gap: 12px; padding: 12px; }
+            .mp-thumb { width: 60px; height: 60px; }
+            .mp-dialog { max-height: calc(100dvh - 24px); }
+            .mp-actions .mp-delete { margin: 6px auto 0 auto; }
+        }
         @media (max-width: 520px) { .gemini-stats { grid-template-columns: 1fr; } }
         /* "Add New Client" (first in the dropdown) and its form */
         .client-picker-option.is-add .cp-main { color: var(--rust); }
@@ -805,7 +856,75 @@
             </div>
             <p class="usage-foot">Gemini reads each wholesale deal email. If its prepaid credits run out, the extractor stops and checks again every hour. No emails are skipped: they're all read once the credits are back. Gemini doesn't share the credit balance; see it in <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</p>
         </section>
+
+        <!-- Admins only: marketing points to customize a seller page with -->
+        <section class="main-card glow-card reveal" id="marketing-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Marketing Points</h2>
+            <p class="mp-intro">Points you can add to a seller's page. Each has a title and description, and can have a link and an image.</p>
+            <ul class="mp-list" id="mp-list"><li class="client-empty">Loading...</li></ul>
+            <div class="mp-foot">
+                <button type="button" class="btn" id="mp-add" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    Add Marketing Point
+                </button>
+                <span class="cf-saved" id="mp-saved" role="status"></span>
+            </div>
+            <p class="usage-foot">Images are saved in the <a href="https://drive.google.com/drive/folders/1Z4PRK8FDbLXMJNUQ-Iyf056X0hJjL-UX" target="_blank" rel="noopener">Marketing Points Drive folder</a>.</p>
+        </section>
     </main>
+
+    <!-- Add / edit a marketing point pop-up (admins) -->
+    <dialog class="edit-dialog mp-dialog" id="mp-dialog" aria-labelledby="mp-dialog-title">
+        <form class="dialog-inner" id="mp-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="mp-dialog-title">New Marketing Point</h2>
+                <button type="button" class="close-btn" data-close-mp aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <div class="mp-fields">
+                <div class="field">
+                    <label for="mp-title">Title</label>
+                    <input id="mp-title" type="text" maxlength="100" autocomplete="off" autocapitalize="words" placeholder="Professional Photography">
+                </div>
+                <div class="field">
+                    <label for="mp-description">Description</label>
+                    <textarea id="mp-description" rows="4" maxlength="2000" placeholder="What this means for the seller"></textarea>
+                </div>
+                <div class="field">
+                    <label for="mp-link">Link <span class="mp-optional">(optional)</span></label>
+                    <input id="mp-link" type="url" inputmode="url" maxlength="500" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://">
+                </div>
+                <div class="field">
+                    <label for="mp-link-text">Link Text <span class="mp-optional">(optional)</span></label>
+                    <input id="mp-link-text" type="text" maxlength="100" autocomplete="off" placeholder="See our photo gallery">
+                    <span class="mp-hint">The words shown as the link. Leave blank to show the web address.</span>
+                </div>
+                <div class="field">
+                    <span class="mp-label" id="mp-image-label">Image <span class="mp-optional">(optional)</span></span>
+                    <div class="mp-image" id="mp-image">
+                        <div class="mp-preview" id="mp-preview" hidden><img id="mp-preview-img" alt=""></div>
+                        <div class="mp-image-actions">
+                            <label class="btn btn-secondary mp-choose" for="mp-file" id="mp-choose">Choose Image</label>
+                            <input id="mp-file" type="file" accept="image/*" aria-labelledby="mp-image-label mp-choose">
+                            <button type="button" class="btn btn-secondary" id="mp-remove-image" hidden>Remove</button>
+                        </div>
+                        <span class="mp-image-note" id="mp-image-note"></span>
+                    </div>
+                </div>
+            </div>
+            <p class="form-message" id="mp-message" role="alert"></p>
+            <div class="form-actions mp-actions">
+                <button type="button" class="mp-delete" id="mp-delete" hidden>Delete</button>
+                <button type="button" class="btn btn-secondary" data-close-mp>Cancel</button>
+                <button type="submit" class="btn" id="mp-save">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save
+                </button>
+            </div>
+        </form>
+    </dialog>
 
     <!-- Edit name pop-up -->
     <dialog class="edit-dialog" id="name-dialog" aria-labelledby="name-dialog-title">
@@ -974,7 +1093,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); await loadClients(user); }
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); await loadClients(user); }
                     // Income & Debt is only for buyers
                     document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
                 }
@@ -1463,6 +1582,263 @@
                 retry.classList.remove('is-loading');
             });
         }
+
+        // --- Marketing Points (admins) ---
+        const mpCard = document.getElementById('marketing-card');
+        const mpList = document.getElementById('mp-list');
+        const mpAdd = document.getElementById('mp-add');
+        const mpSaved = document.getElementById('mp-saved');
+        const mpDialog = document.getElementById('mp-dialog');
+        const mpForm = document.getElementById('mp-form');
+        const mpTitle = document.getElementById('mp-title');
+        const mpDesc = document.getElementById('mp-description');
+        const mpLink = document.getElementById('mp-link');
+        const mpLinkText = document.getElementById('mp-link-text');
+        const mpFile = document.getElementById('mp-file');
+        const mpPreview = document.getElementById('mp-preview');
+        const mpPreviewImg = document.getElementById('mp-preview-img');
+        const mpChoose = document.getElementById('mp-choose');
+        const mpRemoveImage = document.getElementById('mp-remove-image');
+        const mpImageNote = document.getElementById('mp-image-note');
+        const mpMessage = document.getElementById('mp-message');
+        const mpSave = document.getElementById('mp-save');
+        const mpDelete = document.getElementById('mp-delete');
+        const IMAGE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>';
+        let mpUser = null;
+        let mpPoints = [];
+        let mpEditing = null; // the point being edited, or null for a new one
+        let mpImage = null;   // { name, type, data } a newly chosen image
+        let mpImageRemoved = false;
+        let mpBusy = false;
+        const mpImageCache = {}; // Drive file ID -> data: URL
+        const MP_ERRORS = {
+            missing_title: 'Please enter a title.',
+            missing_description: 'Please enter a description.',
+            invalid_link: 'That link doesn’t look right.',
+            missing_link: 'Please add the link for the link text.',
+            invalid_image: 'That image type isn’t supported. Please choose a JPG, PNG, WebP, GIF or HEIC.',
+            image_too_big: 'That image is too big. Please choose one under 10 MB.',
+        };
+
+        async function mpImageUrl(imageId, width) {
+            const key = imageId + '|' + width;
+            if (!mpImageCache[key]) {
+                mpImageCache[key] = callApi(mpUser, { action: 'marketingPointImage', imageId, width }).then(data => {
+                    if (!data.ok) throw new Error(data.error);
+                    return 'data:' + data.type + ';base64,' + data.data;
+                }).catch(err => { delete mpImageCache[key]; throw err; });
+            }
+            return mpImageCache[key];
+        }
+
+        function renderMarketing() {
+            if (!mpPoints.length) { mpList.innerHTML = '<li class="client-empty">No marketing points yet.</li>'; return; }
+            mpList.innerHTML = mpPoints.map((p, i) => {
+                let host = '';
+                try { host = p.link ? new URL(p.link).host.replace(/^www\./, '') + new URL(p.link).pathname.replace(/\/$/, '') : ''; } catch (e) { host = p.link; }
+                return '<li class="mp-item" data-mp="' + i + '">'
+                    + '<div class="mp-thumb">' + IMAGE_ICON + '</div>'
+                    + '<div class="mp-text"><div class="mp-title">' + esc(p.title) + '</div>'
+                    + '<div class="mp-desc">' + esc(p.description) + '</div>'
+                    + (p.link ? '<a class="mp-link" href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.linkText || host) + '</a>' : '') + '</div>'
+                    + '<button type="button" class="cf-edit" data-mp-edit="' + i + '" aria-label="Edit ' + esc(p.title) + '" title="Edit">' + PENCIL_ICON + '</button></li>';
+            }).join('');
+            // Pictures load after the list
+            mpPoints.forEach((p, i) => {
+                if (!p.imageId) return;
+                const thumb = mpList.querySelector('[data-mp="' + i + '"] .mp-thumb');
+                mpImageUrl(p.imageId, 240).then(url => {
+                    thumb.innerHTML = '<img alt="">';
+                    thumb.firstChild.src = url;
+                }).catch(err => console.error(err));
+            });
+        }
+
+        async function loadMarketing(user) {
+            mpUser = user;
+            mpCard.hidden = false;
+            try {
+                const data = await callApi(user, { action: 'marketingPoints' });
+                if (!data.ok) throw new Error(data.error);
+                mpPoints = data.points || [];
+                renderMarketing();
+                mpAdd.disabled = false;
+            } catch (err) {
+                console.error(err);
+                mpList.innerHTML = '<li class="client-empty">We couldn’t load the marketing points. Please refresh to try again.</li>';
+            }
+        }
+
+        function mpShowImage(src, note) {
+            mpPreview.hidden = !src;
+            if (src) mpPreviewImg.src = src; else mpPreviewImg.removeAttribute('src');
+            mpChoose.textContent = src ? 'Replace Image' : 'Choose Image';
+            mpRemoveImage.hidden = !src;
+            mpImageNote.textContent = note || '';
+        }
+
+        function openMarketing(point) {
+            mpEditing = point || null;
+            mpImage = null;
+            mpImageRemoved = false;
+            mpFile.value = '';
+            mpSaved.textContent = '';
+            mpMessage.textContent = '';
+            mpForm.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            document.getElementById('mp-dialog-title').textContent = point ? 'Edit Marketing Point' : 'New Marketing Point';
+            mpTitle.value = point ? point.title : '';
+            mpDesc.value = point ? point.description : '';
+            mpLink.value = point ? point.link : '';
+            mpLinkText.value = point ? point.linkText || '' : '';
+            mpDelete.hidden = !point;
+            mpShowImage('', '');
+            if (point && point.imageId) {
+                mpImageNote.textContent = 'Loading image...';
+                mpImageUrl(point.imageId, 1000).then(url => {
+                    if (mpEditing === point && !mpImage && !mpImageRemoved) mpShowImage(url, '');
+                }).catch(() => { if (mpEditing === point && !mpImage && !mpImageRemoved) mpShowImage('', 'The image couldn’t be loaded. Choose one to replace it.'); });
+            }
+            mpDialog.showModal();
+            mpTitle.focus();
+        }
+        mpAdd.addEventListener('click', () => openMarketing(null));
+        mpList.addEventListener('click', e => {
+            const edit = e.target.closest('[data-mp-edit]');
+            if (edit) openMarketing(mpPoints[Number(edit.dataset.mpEdit)]);
+        });
+
+        // Unsaved changes: ask before closing
+        const mpDirty = () => Boolean(mpImage) || mpImageRemoved
+            || mpTitle.value.trim() !== (mpEditing ? mpEditing.title : '')
+            || mpDesc.value.trim() !== (mpEditing ? mpEditing.description : '')
+            || mpLink.value.trim() !== (mpEditing ? mpEditing.link : '')
+            || mpLinkText.value.trim() !== (mpEditing ? mpEditing.linkText || '' : '');
+        function closeMarketing(force) {
+            if (mpBusy) return;
+            if (!force && mpDirty() && !window.confirm('Discard your changes?')) return;
+            mpDialog.close();
+        }
+        mpForm.querySelectorAll('[data-close-mp]').forEach(b => b.addEventListener('click', () => closeMarketing(false)));
+        mpDialog.addEventListener('cancel', e => { e.preventDefault(); closeMarketing(false); });
+        mpForm.addEventListener('input', e => { e.target.classList.remove('is-invalid'); mpMessage.textContent = ''; });
+
+        // A chosen picture: big ones are shrunk to 2400px on the long side (a JPG, or a PNG if it was one) before saving
+        const readAsDataUrl = blob => new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(blob);
+        });
+        async function prepareImage(file) {
+            const MAX_SIDE = 2400;
+            let blob = file;
+            let type = (file.type || '').toLowerCase();
+            if (!type && /\.hei[cf]$/i.test(file.name)) type = 'image/heic';
+            try {
+                const bitmap = await createImageBitmap(file);
+                const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+                // HEIC (when the browser can read it), big pictures and big files become a smaller JPG / PNG
+                if (scale < 1 || file.size > 3 * 1024 * 1024 || /hei[cf]/.test(type)) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(bitmap.width * scale);
+                    canvas.height = Math.round(bitmap.height * scale);
+                    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                    const outType = type === 'image/png' ? 'image/png' : 'image/jpeg';
+                    const out = await new Promise(resolve => canvas.toBlob(resolve, outType, 0.88));
+                    if (out && (out.size < file.size || /hei[cf]/.test(type))) { blob = out; type = outType; }
+                }
+                bitmap.close && bitmap.close();
+            } catch (err) { /* the browser can't read it (e.g. HEIC outside Safari): send it as it is */ }
+            const dataUrl = await readAsDataUrl(blob);
+            const name = file.name.replace(/\.[^.]+$/, '') + '.' + ({ 'image/jpeg': 'jpg', 'image/png': 'png' }[type] || (file.name.split('.').pop() || 'jpg'));
+            return { name, type, size: blob.size, data: dataUrl.slice(dataUrl.indexOf(',') + 1), preview: /hei[cf]/.test(type) ? '' : dataUrl };
+        }
+        mpFile.addEventListener('change', async () => {
+            const file = mpFile.files && mpFile.files[0];
+            if (!file) return;
+            mpMessage.textContent = '';
+            if (!/^image\//.test(file.type) && !/\.hei[cf]$/i.test(file.name)) { mpMessage.textContent = 'Please choose an image file.'; mpFile.value = ''; return; }
+            mpImageNote.textContent = 'Preparing image...';
+            try {
+                const img = await prepareImage(file);
+                if (img.size > 10 * 1024 * 1024) { mpImageNote.textContent = ''; mpMessage.textContent = MP_ERRORS.image_too_big; mpFile.value = ''; return; }
+                mpImage = { name: img.name, type: img.type, data: img.data };
+                mpImageRemoved = false;
+                mpShowImage(img.preview, img.preview ? '' : file.name + ' (no preview in this browser)');
+                if (!img.preview) { mpPreview.hidden = true; mpRemoveImage.hidden = false; mpChoose.textContent = 'Replace Image'; }
+            } catch (err) {
+                console.error(err);
+                mpImageNote.textContent = '';
+                mpMessage.textContent = 'We couldn’t read that image. Please try another one.';
+            }
+            mpFile.value = '';
+        });
+        mpRemoveImage.addEventListener('click', () => {
+            mpImage = null;
+            mpImageRemoved = Boolean(mpEditing && mpEditing.imageId);
+            mpShowImage('', '');
+        });
+
+        function mpSetBusy(busy, btn) {
+            mpBusy = busy;
+            mpForm.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = busy; });
+            mpChoose.style.pointerEvents = busy ? 'none' : '';
+            if (btn) btn.classList.toggle('is-loading', busy);
+        }
+
+        mpForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (mpBusy) return;
+            const fail = (el, text) => { if (el) { el.classList.add('is-invalid'); el.focus(); } mpMessage.textContent = text; };
+            const title = mpTitle.value.trim();
+            const description = mpDesc.value.trim();
+            let link = mpLink.value.trim();
+            const linkText = mpLinkText.value.trim();
+            if (!title) return fail(mpTitle, MP_ERRORS.missing_title);
+            if (!description) return fail(mpDesc, MP_ERRORS.missing_description);
+            if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+            if (link && !/^https?:\/\/[^\s/.]+(\.[^\s/.]+)+(\/\S*)?$/i.test(link)) return fail(mpLink, MP_ERRORS.invalid_link);
+            if (linkText && !link) return fail(mpLink, MP_ERRORS.missing_link);
+            if (mpEditing && !mpDirty()) { mpDialog.close(); return; }
+            mpSetBusy(true, mpSave);
+            try {
+                const payload = { action: 'saveMarketingPoint', title, description, link, linkText };
+                if (mpEditing) payload.id = mpEditing.id;
+                if (mpImage) payload.image = mpImage;
+                else if (mpImageRemoved) payload.removeImage = true;
+                const data = await callApi(mpUser, payload);
+                if (!data.ok) throw new Error(data.error);
+                mpPoints = data.points || [];
+                mpSetBusy(false, mpSave);
+                mpDialog.close();
+                renderMarketing();
+                mpSaved.textContent = (mpEditing ? 'Saved ' : 'Added ') + title + '.';
+            } catch (err) {
+                console.error(err);
+                mpSetBusy(false, mpSave);
+                mpMessage.textContent = MP_ERRORS[err.message] || 'We couldn’t save that. Please try again.';
+            }
+        });
+
+        mpDelete.addEventListener('click', async () => {
+            if (mpBusy || !mpEditing) return;
+            if (!window.confirm('Delete "' + mpEditing.title + '"? This can’t be undone (its image stays in the Drive folder).')) return;
+            mpSetBusy(true);
+            try {
+                const data = await callApi(mpUser, { action: 'deleteMarketingPoint', id: mpEditing.id });
+                if (!data.ok) throw new Error(data.error);
+                mpPoints = data.points || [];
+                const title = mpEditing.title;
+                mpSetBusy(false);
+                mpDialog.close();
+                renderMarketing();
+                mpSaved.textContent = 'Deleted ' + title + '.';
+            } catch (err) {
+                console.error(err);
+                mpSetBusy(false);
+                mpMessage.textContent = 'We couldn’t delete that. Please try again.';
+            }
+        });
 
         // --- New client: every question open at once ---
         const digitsOnly = v => String(v || '').replace(/\D/g, '');
