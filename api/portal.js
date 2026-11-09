@@ -1180,6 +1180,8 @@ async function resumeGemini_(account) {
 // Title insurance: OWNERS TITLE TABLE is the title rate manual's Basic Rate Table. The owner's policy is OWNERS POLICY
 // PERCENT of it (on the price); a buyer's loan policy is LOAN POLICY PERCENT of it (on the loan amount), times
 // SIMULTANEOUS LOAN PERCENT when issued with the owner's policy (at least SIMULTANEOUS LOAN MINIMUM), plus LOAN ENDORSEMENTS.
+// Refinance: a flat REFINANCE ESCROW FEE and REFINANCE RECORDING FEE, and the loan policy from REFINANCE TITLE TABLE (its own
+// table, on the loan amount) times REFINANCE POLICY PERCENT, plus REFINANCE ENDORSEMENTS.
 const TITLE_MONEY_MAX = 100000000;
 function titleMoney_(v) {
   const s = String(v === null || v === undefined ? '' : v).replace(/[$,\s]/g, '');
@@ -1208,7 +1210,7 @@ function titleTable_(list, name) {
   if (out.some((r, i) => i && r['UP TO'] === out[i - 1]['UP TO'])) return 'invalid_' + name;
   return out;
 }
-const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Sometimes'];
+const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Refinance', 'Sometimes'];
 
 function titleCompanyOut_(doc) {
   const f = doc.data();
@@ -1235,6 +1237,13 @@ function titleCompanyOut_(doc) {
     simultaneousPercent: num(f['SIMULTANEOUS LOAN PERCENT']),
     simultaneousMinimum: num(f['SIMULTANEOUS LOAN MINIMUM']),
     loanEndorsements: num(f['LOAN ENDORSEMENTS']),
+    refiEscrowFee: num(f['REFINANCE ESCROW FEE']),
+    refiRecordingFee: num(f['REFINANCE RECORDING FEE']),
+    refiTable: table(f['REFINANCE TITLE TABLE']),
+    refiOverFee: num(f['REFINANCE TITLE OVER FEE']),
+    refiOverPer: num(f['REFINANCE TITLE OVER PER']),
+    refiPolicyPercent: num(f['REFINANCE POLICY PERCENT']),
+    refiEndorsements: num(f['REFINANCE ENDORSEMENTS']),
     titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
     otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
@@ -1266,10 +1275,14 @@ async function saveTitleCompany_(account, body) {
   if (!escrowTable.length) return { ok: false, error: 'missing_escrow_table' };
   const titleTable = titleTable_(c.titleTable, 'title_table');
   if (typeof titleTable === 'string') return { ok: false, error: titleTable };
-  const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable };
+  const refiTable = titleTable_(c.refiTable, 'refi_table');
+  if (typeof refiTable === 'string') return { ok: false, error: refiTable };
+  const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable, 'REFINANCE TITLE TABLE': refiTable };
   const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
     loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
-    titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM', loanEndorsements: 'LOAN ENDORSEMENTS' };
+    titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM', loanEndorsements: 'LOAN ENDORSEMENTS',
+    refiEscrowFee: 'REFINANCE ESCROW FEE', refiRecordingFee: 'REFINANCE RECORDING FEE', refiOverFee: 'REFINANCE TITLE OVER FEE',
+    refiOverPer: 'REFINANCE TITLE OVER PER', refiEndorsements: 'REFINANCE ENDORSEMENTS' };
   for (const [k, col] of Object.entries(moneyFields)) {
     const v = titleMoney_(c[k]);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
@@ -1278,14 +1291,16 @@ async function saveTitleCompany_(account, body) {
   // Shares are 0-100%; the policy percents of the basic rate can be more than 100% (110% for a homeowner's policy)
   const shareFields = { sellerEscrowShare: ['SELLER SHARE OF ESCROW FEE', 1], sellerRecordingShare: ['SELLER SHARE OF RECORDING FEE', 1],
     sellerOwnerShare: ['SELLER SHARE OF OWNERS POLICY', 1], ownerPolicyPercent: ['OWNERS POLICY PERCENT', 3],
-    loanPolicyPercent: ['LOAN POLICY PERCENT', 3], simultaneousPercent: ['SIMULTANEOUS LOAN PERCENT', 1] };
+    loanPolicyPercent: ['LOAN POLICY PERCENT', 3], simultaneousPercent: ['SIMULTANEOUS LOAN PERCENT', 1],
+    refiPolicyPercent: ['REFINANCE POLICY PERCENT', 3] };
   for (const [k, [col, max]] of Object.entries(shareFields)) {
     const v = titleShare_(c[k], max);
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
     fields[col] = v === null ? FieldValue.delete() : v;
   }
   // "Add $20 per $20,000" needs both numbers (or neither)
-  for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER']]) {
+  for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER'],
+    ['REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER']]) {
     const hasFee = typeof fields[fee] === 'number', hasPer = typeof fields[per] === 'number';
     if (hasFee !== hasPer || (hasPer && !(fields[per] > 0))) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
   }

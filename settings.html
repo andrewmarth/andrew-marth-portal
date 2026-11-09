@@ -472,6 +472,10 @@
         .tc-lead { margin: 10px 0 12px 0; font-size: 0.92rem; }
         .tc-wfg { margin: 0 0 6px 0; min-height: 42px; padding: 8px 18px; font-size: 0.92rem; border: 2px solid var(--navy); }
         .tc-wfg[hidden] { display: none; }
+        .tc-fill { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+        .tc-fill label { font-size: 0.9rem; font-weight: bold; }
+        .tc-fill select { flex: 1 1 220px; min-height: 42px; padding: 6px 14px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; font-size: 0.95rem; color: var(--brown); }
+        .tc-fill .tc-wfg { margin: 0; }
         .tc-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(79, 45, 44, 0.15); }
         .tc-section h3 { font-size: 1.12rem; margin: 0 0 4px 0; }
         .tc-help { margin: 0 0 12px 0; font-size: 0.88rem; line-height: 1.45; opacity: 0.78; }
@@ -511,7 +515,9 @@
         .tc-try-out li.is-sub { opacity: 0.7; font-size: 0.86rem; }
         .tc-try-out li.tc-try-total { margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(79, 45, 44, 0.2); font-size: 1rem; }
         .tc-try-out li.tc-try-total + .tc-try-total { margin-top: 0; padding-top: 0; border-top: none; }
+        .tc-try-out li.tc-try-head { margin-top: 14px; font-weight: bold; }
         .tc-help-date { max-width: 240px; margin-bottom: 14px; }
+        .tc-sub { margin: 18px 0 8px 2px; font-size: 0.95rem; }
         @media (max-width: 600px) {
             .tc-row.is-fee { grid-template-columns: 1fr 1fr; }
             .tc-row.is-fee.is-head { display: none; }
@@ -952,7 +958,15 @@
                 </button>
             </div>
             <p class="muted tc-lead">Title companies file their fees with the state. Find the company's <b>Manual of Escrow and Settlement Services</b> (escrow fees) and its <b>title insurance rate manual</b> (the owner's policy), and copy the numbers below.</p>
-            <button type="button" class="btn btn-secondary tc-wfg" id="tc-wfg">Fill In WFG’s Filed Rates</button>
+            <div class="tc-fill">
+                <label for="tc-preset">Start from a filing</label>
+                <select id="tc-preset">
+                    <option value="wfg">WFG National Title (escrow and title)</option>
+                    <option value="firstAmerican">First American Title (escrow only)</option>
+                    <option value="fidelity">Fidelity National Title (escrow only)</option>
+                </select>
+                <button type="button" class="btn btn-secondary tc-wfg" id="tc-wfg">Fill In</button>
+            </div>
             <div id="tc-body"></div>
             <p class="form-message" id="tc-message" role="alert"></p>
             <div class="form-actions mp-actions">
@@ -1956,7 +1970,13 @@
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (lender)', amount: 25, sellerShare: 0, when: 'With a Loan' },
+                { name: 'Closing Protection Letter (refinance lender)', amount: 25, sellerShare: 0, when: 'Refinance' },
+                { name: 'Closing Protection Letter (refinance borrower)', amount: 25, sellerShare: 0, when: 'Refinance' },
             ],
+            // Escrow manual 4.5 and 5.6; title manual 5.2 (endorsements included)
+            refiEscrowFee: 400, refiRecordingFee: 100,
+            refiTable: [[250000, 425], [500000, 575], [750000, 720], [1000000, 860]].map(([upTo, fee]) => ({ upTo, fee })),
+            refiOverFee: 5.4, refiOverPer: 10000, refiPolicyPercent: 1, refiEndorsements: 0,
             // Title rate manual section 3.1, above $1,000,000 add $18 per $10,000
             titleTable: [[50000, 525], [70000, 696], [100000, 756], [110000, 812], [120000, 849], [130000, 883], [140000, 915], [150000, 947], [160000, 979], [170000, 1011], [180000, 1043], [190000, 1077], [200000, 1109], [210000, 1140], [220000, 1169], [230000, 1200], [240000, 1229], [250000, 1258], [260000, 1288], [270000, 1317], [280000, 1347], [290000, 1377], [300000, 1378], [310000, 1407], [320000, 1438], [330000, 1465], [340000, 1495], [350000, 1555], [360000, 1583], [370000, 1614], [380000, 1643], [390000, 1673], [400000, 1702], [410000, 1729], [420000, 1753], [430000, 1780], [440000, 1806], [450000, 1834], [460000, 1855], [470000, 1880], [480000, 1907], [490000, 1934], [500000, 1958], [510000, 1981], [520000, 2008], [530000, 2032], [540000, 2058], [550000, 2083], [560000, 2107], [570000, 2134], [580000, 2158], [590000, 2184], [600000, 2207], [610000, 2238], [620000, 2259], [630000, 2272], [640000, 2285], [650000, 2309], [660000, 2335], [670000, 2386], [680000, 2410], [690000, 2435], [700000, 2460], [710000, 2488], [720000, 2511], [730000, 2537], [740000, 2561], [750000, 2587], [760000, 2612], [770000, 2638], [780000, 2662], [790000, 2688], [800000, 2714], [810000, 2738], [820000, 2764], [830000, 2788], [840000, 2813], [850000, 2839], [860000, 2864], [870000, 2890], [880000, 2913], [890000, 2940], [900000, 2965], [910000, 2990], [920000, 3015], [930000, 3041], [940000, 3066], [950000, 3091], [960000, 3117], [970000, 3141], [980000, 3164], [990000, 3189], [1000000, 3214]].map(([upTo, fee]) => ({ upTo, fee })),
             titleOverFee: 18, titleOverPer: 10000,
@@ -1967,6 +1987,45 @@
                 { name: 'Investor buying a residential property', percent: 0.3 },
             ],
         };
+
+        // First American Title's Arizona Schedule of Escrow Fees, effective September 22, 2024 (Area A: Maricopa and Pinal)
+        const FIRST_AMERICAN_RATES = {
+            name: 'First American Title', manualDate: '2024-09-22',
+            notes: 'Escrow fees from First American’s Arizona Schedule of Escrow Fees, effective September 22, 2024, Residential Area A (Maricopa and Pinal Counties). Recording services are included in the escrow fee for residential sales. The filing has no title insurance rates: those are in First American’s title rate manual.',
+            escrowTable: [[100000, 1012], [120000, 1048], [140000, 1084], [160000, 1116], [180000, 1152], [200000, 1186], [220000, 1216], [240000, 1244], [260000, 1274], [280000, 1304], [300000, 1332], [320000, 1362], [340000, 1392], [360000, 1422], [380000, 1450], [400000, 1480], [420000, 1508], [440000, 1536], [460000, 1568], [480000, 1596], [500000, 1624], [520000, 1650], [540000, 1678], [560000, 1702], [580000, 1728], [600000, 1754], [620000, 1778], [640000, 1804], [660000, 1830], [680000, 1856], [700000, 1882], [720000, 1906], [740000, 1932], [760000, 1958], [780000, 1984], [800000, 2010], [820000, 2034], [840000, 2060], [860000, 2084], [880000, 2110], [900000, 2138], [920000, 2164], [940000, 2188], [960000, 2214], [980000, 2238], [1000000, 2264]].map(([upTo, fee]) => ({ upTo, fee })),
+            escrowOverFee: 22, escrowOverPer: 20000, cashSaleAddOn: 0, loanSaleAddOn: 250, sellerEscrowShare: 0.5,
+            recordingFee: 0, sellerRecordingShare: 0.5,
+            discounts: [{ name: 'Investor (certifies they invest in real estate)', percent: 0.3 }],
+            otherFees: [
+                { name: 'Reconveyance Tracking (lien release not ready at closing)', amount: 100, sellerShare: 1, when: 'Sometimes' },
+                { name: 'Mobile Home Affixture / Title Transfer', amount: 150, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Holdback (up to 5 disbursements)', amount: 100, sellerShare: 0.5, when: 'Sometimes' },
+            ],
+            refiEscrowFee: 575, refiRecordingFee: 0,
+            titleTable: [], titleOverFee: null, titleOverPer: null, sellerOwnerShare: 1, titleDiscounts: [], refiTable: [],
+        };
+        // Fidelity National Title's Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022 (Zone 1: Maricopa and Pinal)
+        const FIDELITY_RATES = {
+            name: 'Fidelity National Title', manualDate: '2022-01-12',
+            notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). The filing has no title insurance rates: those are in Fidelity’s title rate manual.',
+            escrowTable: [[120000, 696], [140000, 728], [160000, 761], [180000, 793], [200000, 827], [220000, 855], [240000, 882], [260000, 911], [280000, 939], [300000, 966], [320000, 995], [340000, 1022], [360000, 1052], [380000, 1079], [400000, 1106], [420000, 1134], [440000, 1162], [460000, 1191], [480000, 1218], [500000, 1246], [520000, 1271], [540000, 1295], [560000, 1319], [580000, 1343], [600000, 1369], [620000, 1393], [640000, 1417], [660000, 1441], [680000, 1465], [700000, 1490], [720000, 1515], [740000, 1539], [760000, 1564], [780000, 1588], [800000, 1612], [820000, 1636], [840000, 1661], [860000, 1685], [880000, 1710], [900000, 1734], [920000, 1759], [940000, 1783], [960000, 1808], [980000, 1832], [1000000, 1856]].map(([upTo, fee]) => ({ upTo, fee })),
+            escrowOverFee: 21, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
+            recordingFee: 125, sellerRecordingShare: 0.5,
+            discounts: [
+                { name: 'Investor (their share only)', percent: 0.3 },
+                { name: 'First responder or military (active or retired)', percent: 0.3 },
+                { name: 'Corporate relocation (employee’s share)', percent: 0.3 },
+            ],
+            otherFees: [
+                { name: 'Manufactured Home Title Transfer (per unit)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Manufactured Home Affidavit of Affixture (per unit)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
+                { name: '1031 Exchange Accommodation', amount: 100, sellerShare: 1, when: 'Sometimes' },
+            ],
+            refiEscrowFee: 350, refiRecordingFee: 100,
+            titleTable: [], titleOverFee: null, titleOverPer: null, sellerOwnerShare: 1, titleDiscounts: [], refiTable: [],
+        };
+        const FILED_RATES = { wfg: WFG_RATES, firstAmerican: FIRST_AMERICAN_RATES, fidelity: FIDELITY_RATES };
         const tcCard = document.getElementById('title-card');
         const tcList = document.getElementById('tc-list');
         const tcAdd = document.getElementById('tc-add');
@@ -2014,6 +2073,15 @@
                 ...titlePolicies(c, price, loanAmount),
             };
         }
+        // A refinance of loanAmount: { escrow, recording, policy (null without a table), endorsements, fees, total }
+        function refiQuote(c, loanAmount) {
+            if (!(loanAmount > 0)) return null;
+            const table = tableFee(c.refiTable, c.refiOverFee, c.refiOverPer, loanAmount);
+            const policy = table === null ? null : Math.ceil(table * (c.refiPolicyPercent ?? 1));
+            const fees = (c.otherFees || []).filter(f => f.when === 'Refinance' && f.amount);
+            const escrow = c.refiEscrowFee || 0, recording = c.refiRecordingFee || 0, endorsements = c.refiEndorsements || 0;
+            return { escrow, recording, policy, endorsements, fees, total: escrow + recording + (policy || 0) + endorsements + fees.reduce((s, f) => s + f.amount, 0) };
+        }
         // Owner's policy = basic rate x owner's percent; loan policy = basic rate on the loan x loan percent x the
         // simultaneous percent (at least the minimum). Fractions of a dollar round up.
         function titlePolicies(c, price, loanAmount) {
@@ -2036,6 +2104,8 @@
                 if (q) lines.push('On a $500,000 sale with a buyer’s loan: ' + dollars(q.loan) + ' escrow fee (' + dollars(q.sellerLoan) + ' for the seller)');
                 const longDate = d => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                 lines.push(q && q.owner !== null ? 'Owner’s title policy: ' + dollars(q.owner) + (q.loanPolicy !== null ? '; lender’s policy on a $400,000 loan: ' + dollars(q.loanPolicy) : '') : 'No title insurance rates yet');
+                const refi = refiQuote(c, 400000);
+                if (refi && (c.refiEscrowFee || refi.policy !== null)) lines.push('Refinance of a $400,000 loan: ' + dollars(refi.total) + (refi.policy === null ? ' (escrow and recording only)' : ''));
                 if (c.manualDate) lines.push('Escrow rates effective ' + longDate(c.manualDate));
                 if (c.titleManualDate) lines.push('Title rates effective ' + longDate(c.titleManualDate));
                 return '<li class="mp-item tc-item"><div class="mp-text"><div class="mp-title">' + esc(c.name) + '</div>'
@@ -2069,7 +2139,7 @@
         const feeRow = (f = {}) => '<div class="tc-row is-fee" data-row><input type="text" class="tc-fee-name" data-k="name" aria-label="Fee name" placeholder="FIRPTA Filing Service Fee" value="' + esc(f.name || '') + '">'
             + tcBox('money', 'data-k="amount" aria-label="Amount" placeholder="125"', f.amount)
             + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
-            + '<select data-k="when" aria-label="When it applies">' + ['Every Sale', 'With a Loan', 'Sometimes'].map(w => '<option' + ((f.when || 'Sometimes') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
+            + '<select data-k="when" aria-label="When it applies">' + ['Every Sale', 'With a Loan', 'Refinance', 'Sometimes'].map(w => '<option' + ((f.when || 'Sometimes') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
             + '<button type="button" class="tc-remove" data-remove aria-label="Remove fee">' + REMOVE_ICON + '</button></div>';
         const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
 
@@ -2099,7 +2169,7 @@
                     '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
                     + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
 
-                + section('Other Fees', 'Extra charges from the escrow manual’s Miscellaneous Fees (WFG section 5) and the title manual (closing protection letters, WFG title section 12). <b>Every Sale</b> fees go on every sheet; <b>With a Loan</b> only when the buyer has a loan; <b>Sometimes</b> only in certain cases (a foreign seller’s FIRPTA filing, a manufactured home). Seller pays: the seller’s share; the buyer pays the rest.',
+                + section('Other Fees', 'Extra charges from the escrow manual’s Miscellaneous Fees (WFG section 5) and the title manual (closing protection letters, WFG title section 12). <b>Every Sale</b> fees go on every sheet; <b>With a Loan</b> only when the buyer has a loan; <b>Refinance</b> only on a refinance (the borrower pays); <b>Sometimes</b> only in certain cases (a foreign seller’s FIRPTA filing, a manufactured home). Seller pays: the seller’s share; the buyer pays the rest.',
                     '<div class="tc-table" data-table="fees"><div class="tc-row is-fee is-head"><span>Fee</span><span>Amount</span><span>Seller pays</span><span>When</span><span></span></div>'
                     + (c.otherFees || []).map(feeRow).join('') + '</div><button type="button" class="tc-add-row" data-add="fees">+ Add Fee</button>')
 
@@ -2123,6 +2193,17 @@
                 + section('Title Discounts', 'Percent off the owner’s policy for buyers or sellers who qualify. WFG: a <b>reissue rate</b> of 80% when the seller’s own owner’s policy is less than 5 years old (section 4.4, at least the lesser of $840 or the basic rate), and 70% for an investor (section 10.2).',
                     '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
                     + (c.titleDiscounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
+
+                + section('Refinance', 'A loan with no sale (the owner refinances); the borrower pays everything. The escrow manual has a flat <b>loan escrow</b> fee (WFG 4.5: $400) and recording fee (WFG 5.6: $100). The title rate manual has a separate, cheaper <b>refinance loan policy</b> table on the loan amount (WFG 5.2, which already includes the usual endorsements; an expanded coverage policy is 110%).',
+                    '<div class="tc-grid">' + tcField('Refinance escrow fee', tcBox('money', 'id="tc-refi-escrow" placeholder="400"', c.refiEscrowFee))
+                    + tcField('Refinance recording fee', tcBox('money', 'id="tc-refi-recording" placeholder="100"', c.refiRecordingFee)) + '</div>'
+                    + '<h4 class="tc-sub">Refinance loan policy</h4>'
+                    + '<div class="tc-table" data-table="refi"><div class="tc-row is-head"><span>Loan amount up to</span><span>Premium</span><span></span></div>'
+                    + (c.refiTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="refi">+ Add Row</button>'
+                    + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-refi-over-fee" aria-label="Add this much" placeholder="5.40"', c.refiOverFee)
+                    + ' for every ' + tcBox('money', 'id="tc-refi-over-per" aria-label="For every" placeholder="10,000"', c.refiOverPer) + '</div>'
+                    + '<div class="tc-grid" style="margin-top:12px">' + tcField('Percent of the table', tcBox('pct', 'id="tc-refi-pct" placeholder="100"', c.refiPolicyPercent))
+                    + tcField('Lender’s endorsements', tcBox('money', 'id="tc-refi-endorse" placeholder="0"', c.refiEndorsements)) + '</div>')
 
                 + section('Notes', '', '<div class="field"><textarea id="tc-notes" rows="3" maxlength="2000" placeholder="Where these rates came from">' + esc(c.notes || '') + '</textarea></div>')
 
@@ -2152,6 +2233,9 @@
                 titleManualDate: val('tc-title-date'), ownerPolicyPercent: parsePct(val('tc-owner-pct')), sellerOwnerShare: parsePct(val('tc-owner-share')),
                 loanPolicyPercent: parsePct(val('tc-loan-pct')), simultaneousPercent: parsePct(val('tc-simul-pct')),
                 simultaneousMinimum: parseMoney(val('tc-simul-min')), loanEndorsements: parseMoney(val('tc-endorse')), titleDiscounts: rowsOf('titleDiscounts'),
+                refiEscrowFee: parseMoney(val('tc-refi-escrow')), refiRecordingFee: parseMoney(val('tc-refi-recording')), refiTable: rowsOf('refi'),
+                refiOverFee: parseMoney(val('tc-refi-over-fee')), refiOverPer: parseMoney(val('tc-refi-over-per')),
+                refiPolicyPercent: parsePct(val('tc-refi-pct')), refiEndorsements: parseMoney(val('tc-refi-endorse')),
             };
         }
 
@@ -2183,7 +2267,19 @@
                 + (hasLoan ? row('Lender’s title policy (buyer)', q.loanPolicy === null ? 'No basic rate table yet' : dollars(q.loanPolicy)) : '')
                 + (hasLoan && q.endorsements ? row('Lender’s endorsements (buyer)', dollars(q.endorsements)) : '')
                 + '<li class="tc-try-total"><span>Seller pays</span><b>' + dollars(sellerTotal) + '</b></li>'
-                + '<li class="tc-try-total"><span>Buyer pays</span><b>' + dollars(buyerTotal) + '</b></li>';
+                + '<li class="tc-try-total"><span>Buyer pays</span><b>' + dollars(buyerTotal) + '</b></li>'
+                + refiTryHtml(c, loanAmount, row);
+        }
+        function refiTryHtml(c, loanAmount, row) {
+            const r = refiQuote(c, loanAmount);
+            if (!r) return '';
+            return '<li class="tc-try-head">Refinancing a ' + esc(dollars(loanAmount)) + ' loan instead</li>'
+                + row('Refinance escrow fee', dollars(r.escrow))
+                + (r.recording ? row('Recording fee', dollars(r.recording)) : '')
+                + row('Lender’s title policy', r.policy === null ? 'No refinance table yet' : dollars(r.policy))
+                + (r.endorsements ? row('Lender’s endorsements', dollars(r.endorsements)) : '')
+                + r.fees.map(f => row(f.name, dollars(f.amount))).join('')
+                + '<li class="tc-try-total"><span>Borrower pays</span><b>' + dollars(r.total) + '</b></li>';
         }
 
         function openTitleCompany(c) {
@@ -2203,8 +2299,9 @@
         tcList.addEventListener('click', e => { const b = e.target.closest('[data-tc-edit]'); if (b) openTitleCompany(tcCompanies[Number(b.dataset.tcEdit)]); });
         tcWfg.addEventListener('click', () => {
             const typed = readTitleForm();
-            if (JSON.stringify(typed) !== tcStart && !window.confirm('Replace what you’ve entered with WFG’s rates?')) return;
-            drawTitleForm(WFG_RATES);
+            const preset = FILED_RATES[document.getElementById('tc-preset').value];
+            if ((tcEditing || JSON.stringify(typed) !== tcStart) && !window.confirm('Replace everything in this form with ' + preset.name + '’s filed rates?')) return;
+            drawTitleForm(preset);
             tcMessage.textContent = '';
         });
         tcBody.addEventListener('click', e => {
@@ -2247,6 +2344,9 @@
             invalid_escrow_over_table_fee: 'Fill in both numbers for the escrow fee above the table (or neither).',
             invalid_owners_title_over_table_fee: 'Fill in both numbers for the basic rate above the table (or neither).',
             invalid_title_discount: 'Each title discount needs a name and a percent from 0 to 100.',
+            invalid_refi_table: 'Each refinance policy row needs a loan amount and a premium (and no two rows can have the same amount).',
+            invalid_refinance_title_over_fee: 'Fill in both numbers for the refinance policy above the table (or neither).',
+            invalid_refiPolicyPercent: 'The refinance policy percent must be 0 to 300%.',
             invalid_ownerPolicyPercent: 'The owner’s policy percent must be 0 to 300%.',
             invalid_loanPolicyPercent: 'The loan policy percent must be 0 to 300%.',
             invalid_simultaneousPercent: 'The simultaneous issue percent must be 0 to 100%.',
