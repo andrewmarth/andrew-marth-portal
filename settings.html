@@ -466,6 +466,56 @@
         .gemini-msg { font-size: 0.85rem; color: var(--gold); }
         .gemini-msg.is-error { color: #f2b8a8; }
 
+        /* --- Title Companies (admins) --- */
+        .tc-item .mp-desc { -webkit-line-clamp: unset; display: block; }
+        .edit-dialog.tc-dialog { max-width: 680px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .tc-lead { margin: 10px 0 12px 0; font-size: 0.92rem; }
+        .tc-wfg { margin: 0 0 6px 0; min-height: 42px; padding: 8px 18px; font-size: 0.92rem; border: 2px solid var(--navy); }
+        .tc-wfg[hidden] { display: none; }
+        .tc-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(79, 45, 44, 0.15); }
+        .tc-section h3 { font-size: 1.12rem; margin: 0 0 4px 0; }
+        .tc-help { margin: 0 0 12px 0; font-size: 0.88rem; line-height: 1.45; opacity: 0.78; }
+        .tc-help b { font-weight: 700; }
+        .tc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .tc-dialog .field input, .tc-dialog .field select { min-height: 46px; padding: 8px 16px; font-size: 1rem; }
+        .tc-dialog .field select { width: 100%; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font-family: inherit; color: var(--brown); }
+        .tc-box { position: relative; display: flex; align-items: center; }
+        .tc-box input { width: 100%; }
+        .tc-box.is-money input { padding-left: 30px; }
+        .tc-box.is-money::before { content: '$'; position: absolute; left: 15px; font-weight: bold; opacity: 0.6; pointer-events: none; }
+        .tc-box.is-pct input { padding-right: 34px; }
+        .tc-box.is-pct::after { content: '%'; position: absolute; right: 16px; font-weight: bold; opacity: 0.6; pointer-events: none; }
+        .tc-sentence { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.95rem; }
+        .tc-sentence .tc-box { width: 140px; }
+        .tc-table { display: grid; gap: 8px; }
+        .tc-row { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
+        .tc-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
+        .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
+        .tc-row.is-discount { grid-template-columns: 2fr 1fr 40px; }
+        .tc-row input, .tc-row select, .tc-sentence input { width: 100%; min-height: 42px; padding: 6px 12px; border: 2px solid var(--navy); border-radius: 12px; background: #f7f4f0; font-family: inherit; font-size: 0.95rem; color: var(--brown); }
+        .tc-row .tc-box.is-money input, .tc-sentence .tc-box.is-money input { padding-left: 24px; }
+        .tc-row .tc-box.is-money::before, .tc-sentence .tc-box.is-money::before { left: 11px; }
+        .tc-row .tc-box.is-pct input { padding-right: 26px; }
+        .tc-row .tc-box.is-pct::after { right: 11px; }
+        .tc-row input:focus, .tc-row select:focus, .tc-sentence input:focus { outline: none; background: var(--white); border-color: var(--tan); box-shadow: 0 0 0 3px rgba(192, 144, 80, 0.22); }
+        .tc-row .is-invalid { border-color: var(--rust); background: #fdf2f2; }
+        .tc-remove { width: 36px; height: 36px; border: none; border-radius: 50%; background: #f2ede6; color: var(--brown); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .tc-remove svg { width: 15px; height: 15px; }
+        .tc-add-row { margin-top: 8px; padding: 6px 2px; border: none; background: none; font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+        .tc-try { margin-top: 22px; padding: 16px 18px; border-radius: 18px; background: #f2ede6; }
+        .tc-try h3 { font-size: 1rem; margin: 0 0 10px 0; }
+        .tc-try .tc-sentence .tc-box { width: 170px; }
+        .tc-try-out { margin: 12px 0 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 0.92rem; }
+        .tc-try-out li { display: flex; justify-content: space-between; gap: 12px; }
+        .tc-try-out li b { white-space: nowrap; }
+        .tc-try-out li.is-sub { opacity: 0.7; font-size: 0.86rem; }
+        @media (max-width: 600px) {
+            .tc-row.is-fee { grid-template-columns: 1fr 1fr; }
+            .tc-row.is-fee.is-head { display: none; }
+            .tc-row.is-fee .tc-fee-name { grid-column: 1 / -1; }
+            .edit-dialog.tc-dialog { max-height: calc(100dvh - 24px); }
+        }
+
         /* --- Marketing Points (admins) --- */
         .mp-intro { margin-top: 6px; font-size: 0.92rem; opacity: 0.8; }
         .mp-list { list-style: none; margin-top: 16px; display: grid; gap: 12px; }
@@ -482,7 +532,7 @@
         .mp-foot .btn { margin: 0; }
         .mp-foot .btn svg { width: 18px; height: 18px; }
         .mp-foot .cf-saved { margin: 0; }
-        .mp-dialog { max-width: 540px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .edit-dialog.mp-dialog { max-width: 540px; max-height: calc(100dvh - 40px); overflow-y: auto; }
         .mp-fields { display: grid; gap: 16px; margin-top: 14px; }
         .mp-optional { font-weight: normal; opacity: 0.65; }
         .mp-hint { display: block; margin: 6px 0 0 6px; font-size: 0.82rem; opacity: 0.7; }
@@ -513,7 +563,7 @@
         @media (max-width: 600px) {
             .mp-item { gap: 12px; padding: 12px; }
             .mp-thumb { width: 60px; height: 60px; }
-            .mp-dialog { max-height: calc(100dvh - 24px); }
+            .edit-dialog.mp-dialog { max-height: calc(100dvh - 24px); }
             .mp-actions .mp-delete { margin: 6px auto 0 auto; }
         }
         @media (max-width: 520px) { .gemini-stats { grid-template-columns: 1fr; } }
@@ -872,7 +922,46 @@
             </div>
             <p class="usage-foot">Images are saved in the <a href="https://drive.google.com/drive/folders/1Z4PRK8FDbLXMJNUQ-Iyf056X0hJjL-UX" target="_blank" rel="noopener">Marketing Points Drive folder</a>.</p>
         </section>
+
+        <!-- Admins only: each title company's filed escrow and title fees -->
+        <section class="main-card glow-card reveal" id="title-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Title Companies</h2>
+            <p class="mp-intro">Each title company's escrow and title fees, as filed with the state.</p>
+            <ul class="mp-list" id="tc-list"><li class="client-empty">Loading...</li></ul>
+            <div class="mp-foot">
+                <button type="button" class="btn" id="tc-add" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    Add Title Company
+                </button>
+                <span class="cf-saved" id="tc-saved" role="status"></span>
+            </div>
+        </section>
     </main>
+
+    <!-- Add / edit a title company pop-up (admins) -->
+    <dialog class="edit-dialog tc-dialog" id="tc-dialog" aria-labelledby="tc-dialog-title">
+        <form class="dialog-inner" id="tc-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="tc-dialog-title">New Title Company</h2>
+                <button type="button" class="close-btn" data-close-tc aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted tc-lead">Title companies file their fees with the state. Find the company's <b>Manual of Escrow and Settlement Services</b> (escrow fees) and its <b>title insurance rate manual</b> (the owner's policy), and copy the numbers below.</p>
+            <button type="button" class="btn btn-secondary tc-wfg" id="tc-wfg">Fill In WFG’s Filed Rates</button>
+            <div id="tc-body"></div>
+            <p class="form-message" id="tc-message" role="alert"></p>
+            <div class="form-actions mp-actions">
+                <button type="button" class="mp-delete" id="tc-delete" hidden>Delete</button>
+                <button type="button" class="btn btn-secondary" data-close-tc>Cancel</button>
+                <button type="submit" class="btn" id="tc-save">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save
+                </button>
+            </div>
+        </form>
+    </dialog>
 
     <!-- Add / edit a marketing point pop-up (admins) -->
     <dialog class="edit-dialog mp-dialog" id="mp-dialog" aria-labelledby="mp-dialog-title">
@@ -1093,7 +1182,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); await loadClients(user); }
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); loadTitleCompanies(user); await loadClients(user); }
                     // Income & Debt is only for buyers
                     document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
                 }
@@ -1837,6 +1926,312 @@
                 console.error(err);
                 mpSetBusy(false);
                 mpMessage.textContent = 'We couldn’t delete that. Please try again.';
+            }
+        });
+
+        // --- Title Companies (admins) ---
+        // WFG National Title's Arizona Manual of Escrow and Settlement Services, effective October 1, 2024
+        const WFG_RATES = {
+            name: 'WFG National Title', manualDate: '2024-10-01',
+            notes: 'From WFG’s Arizona Manual of Escrow and Settlement Services, effective October 1, 2024. Owner’s title insurance is in WFG’s separate title insurance rate manual.',
+            escrowTable: [[100000, 650], [150000, 720], [200000, 790], [250000, 860], [300000, 930], [350000, 1000], [400000, 1070], [450000, 1140],
+                [500000, 1210], [550000, 1280], [600000, 1350], [650000, 1420], [700000, 1470], [750000, 1520], [800000, 1570], [850000, 1620],
+                [900000, 1670], [950000, 1720], [1000000, 1770]].map(([upTo, fee]) => ({ upTo, fee })),
+            escrowOverFee: 20, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
+            recordingFee: 125, sellerRecordingShare: 0.5,
+            discounts: [
+                { name: 'Senior (60 or older)', percent: 0.2 },
+                { name: 'Realtor, military, veteran, public servant or investor', percent: 0.3 },
+                { name: 'Church, non-profit or corporate relocation', percent: 0.3 },
+            ],
+            otherFees: [
+                { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'FIRPTA Filing Service Fee', amount: 125, sellerShare: 1, when: 'Sometimes' },
+                { name: 'Manufactured Home Title Transfer / Affixture', amount: 200, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
+            ],
+            titleTable: [], titleOverFee: null, titleOverPer: null,
+        };
+        const tcCard = document.getElementById('title-card');
+        const tcList = document.getElementById('tc-list');
+        const tcAdd = document.getElementById('tc-add');
+        const tcSaved = document.getElementById('tc-saved');
+        const tcDialog = document.getElementById('tc-dialog');
+        const tcForm = document.getElementById('tc-form');
+        const tcBody = document.getElementById('tc-body');
+        const tcMessage = document.getElementById('tc-message');
+        const tcSave = document.getElementById('tc-save');
+        const tcDelete = document.getElementById('tc-delete');
+        const tcWfg = document.getElementById('tc-wfg');
+        let tcUser = null;
+        let tcCompanies = [];
+        let tcEditing = null;
+        let tcBusy = false;
+        let tcStart = '';
+        const REMOVE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        const dollars = n => { const v = Math.round(Number(n || 0) * 100) / 100; return '$' + v.toLocaleString('en-US', Number.isInteger(v) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+        const moneyText = v => (v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 }));
+        const pctText = v => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 1e6) / 1e4));
+        const parseMoney = s => { const t = String(s || '').replace(/[$,\s]/g, ''); return t === '' ? null : Number(t); };
+        const parsePct = s => { const t = String(s || '').replace(/[%\s]/g, ''); return t === '' ? null : Number(t) / 100; };
+
+        // The fee for a price from a rate table: the first row it fits under, else the last row plus the over-table charge
+        function tableFee(table, overFee, overPer, price) {
+            const rows = (table || []).filter(r => r.upTo > 0 && r.fee !== null).sort((a, b) => a.upTo - b.upTo);
+            if (!rows.length || !(price > 0)) return null;
+            const row = rows.find(r => price <= r.upTo);
+            if (row) return row.fee;
+            const last = rows[rows.length - 1];
+            return last.fee + (overFee && overPer ? Math.ceil((price - last.upTo) / overPer) * overFee : 0);
+        }
+        // What a sale costs at this company: { escrow, cash, loan, sellerCash, sellerLoan, recording, sellerRecording, title }
+        function titleQuote(c, price) {
+            const base = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price);
+            if (base === null) return null;
+            const share = c.sellerEscrowShare ?? 0.5;
+            const cash = base + (c.cashSaleAddOn || 0);
+            const loan = base + (c.loanSaleAddOn || 0);
+            return {
+                base, cash, loan, sellerCash: Math.ceil(cash * share), sellerLoan: Math.ceil(loan * share),
+                recording: c.recordingFee || 0, sellerRecording: (c.recordingFee || 0) * (c.sellerRecordingShare ?? 0.5),
+                title: tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, price),
+            };
+        }
+
+        function renderTitleCompanies() {
+            if (!tcCompanies.length) { tcList.innerHTML = '<li class="client-empty">No title companies yet.</li>'; return; }
+            tcList.innerHTML = tcCompanies.map((c, i) => {
+                const q = titleQuote(c, 500000);
+                const lines = [];
+                if (q) lines.push('On a $500,000 sale with a buyer’s loan: ' + dollars(q.loan) + ' escrow fee (' + dollars(q.sellerLoan) + ' for the seller)');
+                lines.push(c.titleTable.length ? 'Owner’s title insurance on file' : 'No owner’s title insurance rates yet');
+                if (c.manualDate) lines.push('Rates effective ' + new Date(c.manualDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
+                return '<li class="mp-item tc-item"><div class="mp-text"><div class="mp-title">' + esc(c.name) + '</div>'
+                    + '<div class="mp-desc">' + lines.map(esc).join('<br>') + '</div></div>'
+                    + '<button type="button" class="cf-edit" data-tc-edit="' + i + '" aria-label="Edit ' + esc(c.name) + '" title="Edit">' + PENCIL_ICON + '</button></li>';
+            }).join('');
+        }
+        async function loadTitleCompanies(user) {
+            tcUser = user;
+            tcCard.hidden = false;
+            try {
+                const data = await callApi(user, { action: 'titleCompanies' });
+                if (!data.ok) throw new Error(data.error);
+                tcCompanies = data.companies || [];
+                renderTitleCompanies();
+                tcAdd.disabled = false;
+            } catch (err) {
+                console.error(err);
+                tcList.innerHTML = '<li class="client-empty">We couldn’t load the title companies. Please refresh to try again.</li>';
+            }
+        }
+
+        // --- The pop-up ---
+        const tcBox = (kind, attrs, value) => '<div class="tc-box is-' + kind + '"><input type="text" inputmode="decimal" autocomplete="off" ' + attrs
+            + ' value="' + esc(kind === 'pct' ? pctText(value) : moneyText(value)) + '"></div>';
+        const tcField = (label, inner) => '<div class="field"><label>' + esc(label) + '</label>' + inner + '</div>';
+        const tableRow = (r = {}) => '<div class="tc-row" data-row>' + tcBox('money', 'data-k="upTo" aria-label="Sale price up to" placeholder="100,000"', r.upTo)
+            + tcBox('money', 'data-k="fee" aria-label="Fee" placeholder="650"', r.fee) + '<button type="button" class="tc-remove" data-remove aria-label="Remove row">' + REMOVE_ICON + '</button></div>';
+        const discountRow = (d = {}) => '<div class="tc-row is-discount" data-row><input type="text" data-k="name" aria-label="Discount name" placeholder="Senior (60 or older)" value="' + esc(d.name || '') + '">'
+            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent) + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
+        const feeRow = (f = {}) => '<div class="tc-row is-fee" data-row><input type="text" class="tc-fee-name" data-k="name" aria-label="Fee name" placeholder="FIRPTA Filing Service Fee" value="' + esc(f.name || '') + '">'
+            + tcBox('money', 'data-k="amount" aria-label="Amount" placeholder="125"', f.amount)
+            + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
+            + '<select data-k="when" aria-label="When it applies">' + ['Every Sale', 'Sometimes'].map(w => '<option' + ((f.when || 'Sometimes') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
+            + '<button type="button" class="tc-remove" data-remove aria-label="Remove fee">' + REMOVE_ICON + '</button></div>';
+        const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
+
+        function drawTitleForm(c) {
+            tcBody.innerHTML =
+                '<div class="tc-grid" style="margin-top:14px">' + tcField('Company Name', '<input type="text" id="tc-name" maxlength="100" placeholder="WFG National Title" value="' + esc(c.name || '') + '">')
+                + tcField('Rates Effective', '<input type="date" id="tc-date" value="' + esc(c.manualDate || '') + '">') + '</div>'
+
+                + section('Escrow Fee', 'From the <b>Basic Escrow Rate Schedule</b> (WFG section 2.1, the <b>Standard</b> column). Each row is the fee for a sale price up to that amount. Add one row per line of the table.',
+                    '<div class="tc-table" data-table="escrow"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
+                    + (c.escrowTable && c.escrowTable.length ? c.escrowTable : [{}]).map(tableRow).join('') + '</div>'
+                    + '<button type="button" class="tc-add-row" data-add="escrow">+ Add Row</button>'
+                    + '<p class="tc-help" style="margin-top:14px">Above the last row, the fee goes up (WFG: “Add $20 per each $20,000 or fraction thereof”):</p>'
+                    + '<div class="tc-sentence">Add ' + tcBox('money', 'id="tc-esc-over-fee" aria-label="Add this much" placeholder="20"', c.escrowOverFee)
+                    + ' for every ' + tcBox('money', 'id="tc-esc-over-per" aria-label="For every" placeholder="20,000"', c.escrowOverPer) + ' or part of it</div>')
+
+                + section('Bundled Sale Add-On', 'A resale’s escrow fee is the table amount <b>plus</b> a flat add-on that covers couriers, wires, payoff processing and e-documents (WFG 4.1.1 and 4.1.2). It’s more when the buyer has a loan.',
+                    '<div class="tc-grid">' + tcField('Cash sale adds', tcBox('money', 'id="tc-cash" placeholder="200"', c.cashSaleAddOn))
+                    + tcField('Sale with a buyer’s loan adds', tcBox('money', 'id="tc-loan" placeholder="400"', c.loanSaleAddOn)) + '</div>')
+
+                + section('Who Pays', 'Escrow and recording fees are usually split 50/50 between buyer and seller unless the contract says otherwise (WFG 3.2 and 5.6).',
+                    '<div class="tc-grid">' + tcField('Seller’s share of the escrow fee', tcBox('pct', 'id="tc-seller-share" placeholder="50"', c.sellerEscrowShare))
+                    + tcField('Recording service fee', tcBox('money', 'id="tc-recording" placeholder="125"', c.recordingFee))
+                    + tcField('Seller’s share of recording', tcBox('pct', 'id="tc-recording-share" placeholder="50"', c.sellerRecordingShare)) + '</div>')
+
+                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6). Only one discount applies at a time, to that person’s share.',
+                    '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
+                    + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
+
+                + section('Other Fees', 'Extra charges from the manual’s Miscellaneous Fees (WFG section 5). <b>Every Sale</b> fees go on every net sheet; <b>Sometimes</b> fees only apply in certain cases (a foreign seller’s FIRPTA filing, a manufactured home).',
+                    '<div class="tc-table" data-table="fees"><div class="tc-row is-fee is-head"><span>Fee</span><span>Amount</span><span>Seller pays</span><span>When</span><span></span></div>'
+                    + (c.otherFees || []).map(feeRow).join('') + '</div><button type="button" class="tc-add-row" data-add="fees">+ Add Fee</button>')
+
+                + section('Owner’s Title Insurance <span class="mp-optional">(optional)</span>', 'Not in the escrow manual: it’s in the company’s <b>title insurance rate manual</b>, also filed with the state. The seller usually pays the owner’s policy in Arizona. Leave this empty until you have it.',
+                    '<div class="tc-table" data-table="title"><div class="tc-row is-head"><span>Sale price up to</span><span>Premium</span><span></span></div>'
+                    + (c.titleTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="title">+ Add Row</button>'
+                    + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-title-over-fee" aria-label="Add this much" placeholder="0"', c.titleOverFee)
+                    + ' for every ' + tcBox('money', 'id="tc-title-over-per" aria-label="For every" placeholder="10,000"', c.titleOverPer) + '</div>')
+
+                + section('Notes', '', '<div class="field"><textarea id="tc-notes" rows="3" maxlength="2000" placeholder="Where these rates came from">' + esc(c.notes || '') + '</textarea></div>')
+
+                + '<div class="tc-try"><h3>Try It</h3><div class="tc-sentence">On a sale price of ' + tcBox('money', 'id="tc-try-price" aria-label="Sale price" placeholder="500,000"', 500000) + '</div><ul class="tc-try-out" id="tc-try-out"></ul></div>';
+            updateTitleTry();
+        }
+
+        // The form -> a company (numbers parsed; blank rows dropped by the API)
+        function readTitleForm() {
+            const val = id => document.getElementById(id).value;
+            const rowsOf = name => [...tcBody.querySelectorAll('[data-table="' + name + '"] [data-row]')].map(row => {
+                const o = {};
+                row.querySelectorAll('[data-k]').forEach(i => {
+                    const k = i.dataset.k;
+                    o[k] = k === 'name' || k === 'when' ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                });
+                return o;
+            });
+            return {
+                id: tcEditing ? tcEditing.id : '', name: val('tc-name').trim(), manualDate: val('tc-date'), notes: val('tc-notes').trim(),
+                escrowTable: rowsOf('escrow'), escrowOverFee: parseMoney(val('tc-esc-over-fee')), escrowOverPer: parseMoney(val('tc-esc-over-per')),
+                cashSaleAddOn: parseMoney(val('tc-cash')), loanSaleAddOn: parseMoney(val('tc-loan')),
+                sellerEscrowShare: parsePct(val('tc-seller-share')), recordingFee: parseMoney(val('tc-recording')), sellerRecordingShare: parsePct(val('tc-recording-share')),
+                discounts: rowsOf('discounts'), otherFees: rowsOf('fees'),
+                titleTable: rowsOf('title'), titleOverFee: parseMoney(val('tc-title-over-fee')), titleOverPer: parseMoney(val('tc-title-over-per')),
+            };
+        }
+
+        function updateTitleTry() {
+            const out = document.getElementById('tc-try-out');
+            if (!out) return;
+            const c = readTitleForm();
+            const price = parseMoney(document.getElementById('tc-try-price').value);
+            const q = titleQuote(c, price);
+            if (!q) { out.innerHTML = '<li class="is-sub">Fill in the escrow fee table and a sale price to see the fees.</li>'; return; }
+            const row = (k, v, sub) => '<li' + (sub ? ' class="is-sub"' : '') + '><span>' + esc(k) + '</span><b>' + esc(v) + '</b></li>';
+            const every = (c.otherFees || []).filter(f => f.when === 'Every Sale' && f.amount);
+            const best = Math.max(0, ...(c.discounts || []).map(d => d.percent || 0));
+            out.innerHTML = row('Escrow fee from the table', dollars(q.base), true)
+                + row('With a buyer’s loan', dollars(q.loan) + ' (seller ' + dollars(q.sellerLoan) + ')')
+                + row('Cash sale', dollars(q.cash) + ' (seller ' + dollars(q.sellerCash) + ')')
+                + (best ? row('Seller’s share with the biggest discount (' + pctText(best) + '% off)', dollars(Math.ceil(q.sellerLoan * (1 - best))) + ' with a loan', true) : '')
+                + (q.recording ? row('Recording service fee', dollars(q.recording) + ' (seller ' + dollars(q.sellerRecording) + ')') : '')
+                + every.map(f => row(f.name, dollars(f.amount) + ' (seller ' + dollars(f.amount * (f.sellerShare ?? 0.5)) + ')')).join('')
+                + row('Owner’s title insurance', q.title === null ? 'Not on file' : dollars(q.title));
+        }
+
+        function openTitleCompany(c) {
+            tcEditing = c || null;
+            tcSaved.textContent = '';
+            tcMessage.textContent = '';
+            document.getElementById('tc-dialog-title').textContent = c ? 'Edit ' + c.name : 'New Title Company';
+            tcDelete.hidden = !c;
+            tcWfg.hidden = Boolean(c);
+            drawTitleForm(c || { sellerEscrowShare: 0.5, sellerRecordingShare: 0.5 });
+            tcStart = JSON.stringify(readTitleForm());
+            tcDialog.showModal();
+            tcDialog.scrollTop = 0;
+            document.getElementById('tc-name').focus();
+        }
+        tcAdd.addEventListener('click', () => openTitleCompany(null));
+        tcList.addEventListener('click', e => { const b = e.target.closest('[data-tc-edit]'); if (b) openTitleCompany(tcCompanies[Number(b.dataset.tcEdit)]); });
+        tcWfg.addEventListener('click', () => {
+            const typed = readTitleForm();
+            if (JSON.stringify(typed) !== tcStart && !window.confirm('Replace what you’ve entered with WFG’s rates?')) return;
+            drawTitleForm(WFG_RATES);
+            tcMessage.textContent = '';
+        });
+        tcBody.addEventListener('click', e => {
+            const add = e.target.closest('[data-add]');
+            if (add) {
+                const table = tcBody.querySelector('[data-table="' + add.dataset.add + '"]');
+                table.insertAdjacentHTML('beforeend', add.dataset.add === 'discounts' ? discountRow() : add.dataset.add === 'fees' ? feeRow() : tableRow());
+                table.lastElementChild.querySelector('input').focus();
+                return;
+            }
+            const remove = e.target.closest('[data-remove]');
+            if (remove) { remove.closest('[data-row]').remove(); updateTitleTry(); }
+        });
+        tcBody.addEventListener('input', e => {
+            e.target.classList.remove('is-invalid');
+            tcMessage.textContent = '';
+            if (e.target.closest('.tc-box')) e.target.value = e.target.value.replace(/[^\d.,]/g, '');
+            updateTitleTry();
+        });
+        tcBody.addEventListener('change', updateTitleTry);
+        tcBody.addEventListener('focusout', e => {
+            const box = e.target.closest('.tc-box.is-money');
+            if (box && e.target.value.trim() !== '') { const n = parseMoney(e.target.value); if (isFinite(n)) e.target.value = moneyText(n); }
+        });
+
+        const tcDirty = () => JSON.stringify(readTitleForm()) !== tcStart;
+        function closeTitleCompany() {
+            if (tcBusy) return;
+            if (tcDirty() && !window.confirm('Discard your changes?')) return;
+            tcDialog.close();
+        }
+        tcForm.querySelectorAll('[data-close-tc]').forEach(b => b.addEventListener('click', closeTitleCompany));
+        tcDialog.addEventListener('cancel', e => { e.preventDefault(); closeTitleCompany(); });
+
+        const TC_ERRORS = {
+            missing_name: 'Please enter the company’s name.',
+            missing_escrow_table: 'Please fill in at least one row of the escrow fee table.',
+            invalid_escrow_table: 'Each escrow fee row needs a sale price and a fee (and no two rows can have the same price).',
+            invalid_title_table: 'Each owner’s title row needs a sale price and a premium (and no two rows can have the same price).',
+            invalid_escrow_over_table_fee: 'Fill in both numbers for the escrow fee above the table (or neither).',
+            invalid_owners_title_over_table_fee: 'Fill in both numbers for owner’s title above the table (or neither).',
+            invalid_discount: 'Each discount needs a name and a percent from 0 to 100.',
+            invalid_other_fee: 'Each other fee needs a name, an amount and the seller’s share (0 to 100%).',
+            invalid_sellerEscrowShare: 'The seller’s share of the escrow fee must be 0 to 100%.',
+            invalid_sellerRecordingShare: 'The seller’s share of recording must be 0 to 100%.',
+        };
+        function tcSetBusy(busy, btn) {
+            tcBusy = busy;
+            tcForm.querySelectorAll('input, textarea, select, button').forEach(el => { el.disabled = busy; });
+            if (btn) btn.classList.toggle('is-loading', busy);
+        }
+        tcForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (tcBusy) return;
+            const c = readTitleForm();
+            if (!c.name) { document.getElementById('tc-name').classList.add('is-invalid'); document.getElementById('tc-name').focus(); tcMessage.textContent = TC_ERRORS.missing_name; return; }
+            if (!c.escrowTable.some(r => r.upTo > 0 && r.fee !== null)) { tcMessage.textContent = TC_ERRORS.missing_escrow_table; return; }
+            if (tcEditing && !tcDirty()) { tcDialog.close(); return; }
+            tcSetBusy(true, tcSave);
+            try {
+                const data = await callApi(tcUser, { action: 'saveTitleCompany', company: c });
+                if (!data.ok) throw new Error(data.error);
+                tcCompanies = data.companies || [];
+                tcSetBusy(false, tcSave);
+                tcDialog.close();
+                renderTitleCompanies();
+                tcSaved.textContent = (tcEditing ? 'Saved ' : 'Added ') + c.name + '.';
+            } catch (err) {
+                console.error(err);
+                tcSetBusy(false, tcSave);
+                tcMessage.textContent = TC_ERRORS[err.message] || (String(err.message).startsWith('invalid_') ? 'One of the numbers doesn’t look right. Please check it.' : 'We couldn’t save that. Please try again.');
+            }
+        });
+        tcDelete.addEventListener('click', async () => {
+            if (tcBusy || !tcEditing) return;
+            if (!window.confirm('Delete ' + tcEditing.name + ' and all its fees? This can’t be undone.')) return;
+            tcSetBusy(true);
+            try {
+                const data = await callApi(tcUser, { action: 'deleteTitleCompany', id: tcEditing.id });
+                if (!data.ok) throw new Error(data.error);
+                tcCompanies = data.companies || [];
+                const name = tcEditing.name;
+                tcSetBusy(false);
+                tcDialog.close();
+                renderTitleCompanies();
+                tcSaved.textContent = 'Deleted ' + name + '.';
+            } catch (err) {
+                console.error(err);
+                tcSetBusy(false);
+                tcMessage.textContent = 'We couldn’t delete that. Please try again.';
             }
         });
 

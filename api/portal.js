@@ -207,6 +207,10 @@ export async function handle(body, query) {
     if (body.action === 'saveMarketingPoint') return await saveMarketingPoint_(account, body);
     if (body.action === 'deleteMarketingPoint') return await deleteMarketingPoint_(account, body);
     if (body.action === 'marketingPointImage') return await marketingPointImage_(account, body);
+    // settings.html: the admin Title Companies card (each company's filed escrow and title fees)
+    if (body.action === 'titleCompanies') return await titleCompanies_(account);
+    if (body.action === 'saveTitleCompany') return await saveTitleCompany_(account, body);
+    if (body.action === 'deleteTitleCompany') return await deleteTitleCompany_(account, body);
     // Home page (admins): add a new property for a buyer
     if (body.action === 'createProperty') return await createProperty_(account, body);
     // index.html's New Seller Net form (admins): beds, baths, sqft and taxes for an address, from the property APIs
@@ -1166,6 +1170,156 @@ async function resumeGemini_(account) {
     'RETRY REQUESTED AT': `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`,
   }, { merge: true });
   return { ok: true };
+}
+
+// --- Title Companies (settings.html, admins) ---
+// One titleCompanies document per title / escrow company: its fees as filed with the state (Arizona: the company's
+// "Manual of Escrow and Settlement Services" and its title insurance rate manual). Tables are lists of
+// { 'UP TO': price, 'FEE': dollars }, lowest first; a price above the last row adds OVER TABLE FEE per OVER TABLE PER
+// (or fraction). Shares are decimals (0.5 = half). Written straight to Firestore (the tables are lists of maps).
+const TITLE_MONEY_MAX = 100000000;
+function titleMoney_(v) {
+  const s = String(v === null || v === undefined ? '' : v).replace(/[$,\s]/g, '');
+  if (s === '') return null;
+  const n = Number(s);
+  return isFinite(n) && n >= 0 && n <= TITLE_MONEY_MAX ? Math.round(n * 100) / 100 : NaN;
+}
+function titleShare_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim();
+  if (s === '') return null;
+  const n = Number(s);
+  return isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 1e6) / 1e6 : NaN;
+}
+// A rate table: [{ 'UP TO', 'FEE' }] sorted by price, or an error code
+function titleTable_(list, name) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const r of list.slice(0, 100)) {
+    const upTo = titleMoney_(r && r.upTo);
+    const fee = titleMoney_(r && r.fee);
+    if (upTo === null && fee === null) continue;
+    if (!(upTo > 0) || fee === null || isNaN(fee)) return 'invalid_' + name;
+    out.push({ 'UP TO': upTo, 'FEE': fee });
+  }
+  out.sort((a, b) => a['UP TO'] - b['UP TO']);
+  if (out.some((r, i) => i && r['UP TO'] === out[i - 1]['UP TO'])) return 'invalid_' + name;
+  return out;
+}
+const TITLE_FEE_WHEN = ['Every Sale', 'Sometimes'];
+
+function titleCompanyOut_(doc) {
+  const f = doc.data();
+  const num = v => (typeof v === 'number' ? v : v === undefined || v === null || v === '' ? null : Number(v));
+  const table = t => (Array.isArray(t) ? t.map(r => ({ upTo: num(r['UP TO']), fee: num(r['FEE']) })) : []);
+  return {
+    id: doc.id,
+    name: String(f['NAME'] || ''),
+    manualDate: String(f['RATE MANUAL DATE'] || ''),
+    notes: String(f['NOTES'] || ''),
+    escrowTable: table(f['ESCROW RATE TABLE']),
+    escrowOverFee: num(f['ESCROW OVER TABLE FEE']),
+    escrowOverPer: num(f['ESCROW OVER TABLE PER']),
+    cashSaleAddOn: num(f['CASH SALE ADD ON']),
+    loanSaleAddOn: num(f['LOAN SALE ADD ON']),
+    sellerEscrowShare: num(f['SELLER SHARE OF ESCROW FEE']),
+    recordingFee: num(f['RECORDING SERVICE FEE']),
+    sellerRecordingShare: num(f['SELLER SHARE OF RECORDING FEE']),
+    discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
+    otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
+    titleTable: table(f['OWNERS TITLE TABLE']),
+    titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
+    titleOverPer: num(f['OWNERS TITLE OVER TABLE PER']),
+    order: Number(f._order) || 0,
+  };
+}
+async function titleCompanyList_() {
+  const snap = await db.collection('titleCompanies').get();
+  return snap.docs.map(titleCompanyOut_).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+}
+
+async function titleCompanies_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  return { ok: true, companies: await titleCompanyList_() };
+}
+
+// Adds a company (no id) or replaces one's fees. body.company: the card's form, as titleCompanyOut_ gives it.
+async function saveTitleCompany_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const c = body.company || {};
+  const name = cleanText_(c.name, 100);
+  if (!name) return { ok: false, error: 'missing_name' };
+  const manualDate = String(c.manualDate || '').trim();
+  if (manualDate && !/^\d{4}-\d{2}-\d{2}$/.test(manualDate)) return { ok: false, error: 'invalid_manual_date' };
+  const escrowTable = titleTable_(c.escrowTable, 'escrow_table');
+  if (typeof escrowTable === 'string') return { ok: false, error: escrowTable };
+  if (!escrowTable.length) return { ok: false, error: 'missing_escrow_table' };
+  const titleTable = titleTable_(c.titleTable, 'title_table');
+  if (typeof titleTable === 'string') return { ok: false, error: titleTable };
+  const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable };
+  const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
+    loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
+    titleOverPer: 'OWNERS TITLE OVER TABLE PER' };
+  for (const [k, col] of Object.entries(moneyFields)) {
+    const v = titleMoney_(c[k]);
+    if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
+    fields[col] = v === null ? FieldValue.delete() : v;
+  }
+  for (const [k, col] of Object.entries({ sellerEscrowShare: 'SELLER SHARE OF ESCROW FEE', sellerRecordingShare: 'SELLER SHARE OF RECORDING FEE' })) {
+    const v = titleShare_(c[k]);
+    if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
+    fields[col] = v === null ? FieldValue.delete() : v;
+  }
+  // "Add $20 per $20,000" needs both numbers (or neither)
+  for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER']]) {
+    const hasFee = typeof fields[fee] === 'number', hasPer = typeof fields[per] === 'number';
+    if (hasFee !== hasPer || (hasPer && !(fields[per] > 0))) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
+  }
+  fields['RATE MANUAL DATE'] = manualDate || FieldValue.delete();
+  const notes = String(c.notes || '').replace(/\r\n?/g, '\n').trim().replace(/^[=+\-@]+/, '').slice(0, 2000);
+  fields['NOTES'] = notes || FieldValue.delete();
+  const discounts = [];
+  for (const d of (Array.isArray(c.discounts) ? c.discounts : []).slice(0, 30)) {
+    const dn = cleanText_(d && d.name, 100);
+    const pct = titleShare_(d && d.percent);
+    if (!dn && pct === null) continue;
+    if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_discount' };
+    discounts.push({ 'NAME': dn, 'PERCENT': pct });
+  }
+  fields['DISCOUNTS'] = discounts;
+  const otherFees = [];
+  for (const d of (Array.isArray(c.otherFees) ? c.otherFees : []).slice(0, 50)) {
+    const dn = cleanText_(d && d.name, 100);
+    const amount = titleMoney_(d && d.amount);
+    const share = titleShare_(d && d.sellerShare);
+    if (!dn && amount === null) continue;
+    if (!dn || amount === null || Number.isNaN(amount) || share === null || Number.isNaN(share)) return { ok: false, error: 'invalid_other_fee' };
+    const when = TITLE_FEE_WHEN.includes(d.when) ? d.when : 'Sometimes';
+    otherFees.push({ 'NAME': dn, 'AMOUNT': amount, 'SELLER SHARE': share, 'WHEN': when });
+  }
+  fields['OTHER FEES'] = otherFees;
+
+  let id = String(c.id || '');
+  if (id) {
+    const ref = db.collection('titleCompanies').doc(id);
+    if (!(await ref.get()).exists) return { ok: false, error: 'not_found' };
+    await ref.update(fields);
+  } else {
+    const ref = db.collection('titleCompanies').doc();
+    const data = {};
+    Object.entries(fields).forEach(([k, v]) => { if (!(v instanceof FieldValue)) data[k] = v; });
+    data._order = Date.now() * 1000;
+    await ref.create(data);
+    id = ref.id;
+  }
+  return { ok: true, id, companies: await titleCompanyList_() };
+}
+
+async function deleteTitleCompany_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const ref = db.collection('titleCompanies').doc(String(body.id || 'x'));
+  if (!body.id || !(await ref.get()).exists) return { ok: false, error: 'not_found' };
+  await ref.delete();
+  return { ok: true, companies: await titleCompanyList_() };
 }
 
 // --- Marketing Points (settings.html, admins) ---

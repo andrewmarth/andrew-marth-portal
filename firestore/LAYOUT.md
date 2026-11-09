@@ -18,6 +18,7 @@ You can edit it by hand in the Firebase console.
 | `wholesaleDeals` | Wholesale deals from email (the flip map) | automatic |
 | `links` | The admin Links card (TITLE, DESCRIPTION, SECTION, LINK) | automatic |
 | `marketingPoints` | The admin Marketing Points card (TITLE, DESCRIPTION, LINK, LINK TEXT, and IMAGE DRIVE FILE ID / IMAGE NAME for a picture in the Marketing Points Drive folder) | automatic |
+| `titleCompanies` | The admin Title Companies card: each company's filed fees (NAME, ESCROW RATE TABLE and OWNERS TITLE TABLE as lists of { UP TO, FEE }, add-ons, seller shares, DISCOUNTS, OTHER FEES) | automatic |
 | `tasks` | Current Tasks (ASSIGNED is the account) | the TASK ID |
 | `signatures` | One per signer of each document sent for signature | automatic |
 | `documents` | One per signed PDF filed to Drive (CATEGORY says which log) | automatic |
