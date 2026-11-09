@@ -86,7 +86,9 @@ function portalPropertyType_(v) {
 }
 
 const toNumber_ = v => { const n = Number(v); return v === null || v === undefined || v === '' || !Number.isFinite(n) || n <= 0 ? '' : n; };
-const oneLine_ = a => `${a.street}${a.unit ? ' #' + a.unit : ''}, ${a.city}, ${a.state} ${a.zip}`;
+// Realtor.com's address search ranks a unit written "Unit 18" first; with "#18" a big complex's unit 18 can miss
+// the top 10 (behind 180-189)
+const oneLine_ = (a, unitWord = '#') => `${a.street}${a.unit ? (unitWord === '#' ? ' #' : ' ' + unitWord + ' ') + a.unit : ''}, ${a.city}, ${a.state} ${a.zip}`;
 
 // --- Redfin (ntd119/redfin-com-data): auto-complete (address -> home URL), then details ---
 async function redfinLookup(a) {
@@ -145,12 +147,13 @@ function redfinFacts_(info, records, stats) {
 
 // --- The Realtor.com wrappers: auto-complete (address -> property ID), then details ---
 async function realtorStyleLookup(a, host, status, search, detail) {
-  const ac = await rapidApiGet_(host, status, search.path, { [search.param]: oneLine_(a), limit: 10 });
+  const ac = await rapidApiGet_(host, status, search.path, { [search.param]: oneLine_(a, 'Unit'), limit: 10 });
   const houseNumber = (a.street.match(/^\d+/) || [''])[0];
   const line = r => String(r.line || '').replace(/\s+/g, ' ').trim();
   const homes = ((ac.data && ac.data.autocomplete) || []).filter(r => r.area_type === 'address' && r.mpr_id && r.postal_code === a.zip && line(r).startsWith(`${houseNumber} `));
-  const hasUnit = r => /\b(unit|apt|apartment|ste|suite)\b|#/i.test(r.line);
-  const unitRe = a.unit && new RegExp(`(\\b(unit|apt|apartment|ste|suite)\\b|#)\\s*${String(a.unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  // A manufactured-home park's listing may say "Lot 18" or "Space 18"
+  const hasUnit = r => /\b(unit|apt|apartment|ste|suite|lot|spc|space)\b|#/i.test(r.line);
+  const unitRe = a.unit && new RegExp(`(\\b(unit|apt|apartment|ste|suite|lot|spc|space)\\b|#)\\s*${String(a.unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
   const home = a.unit ? homes.find(r => unitRe.test(r.line)) : homes.find(r => !hasUnit(r));
   if (!home) return null;
   const d = detail.home((await rapidApiGet_(host, status, detail.path, { [detail.param]: home.mpr_id })).data || {}) || {};

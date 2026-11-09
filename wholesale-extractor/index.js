@@ -1105,14 +1105,16 @@ function lookupUsRealtorRapidApi(address) {
 /** Shared by the Realtor.com wrappers: same responses, different paths and parameter names. */
 async function realtorStyleLookup({ street, city, state, zip, unit }, api, search, detail) {
   const ac = await api(search.path,
-    { [search.param]: `${street}${unit ? ' #' + unit : ''}, ${city}, ${state} ${zip}`, limit: 10 });
+    // Realtor.com's search ranks "Unit 18" first; with "#18" a big complex's unit 18 can miss the top 10
+    { [search.param]: `${street}${unit ? ' Unit ' + unit : ''}, ${city}, ${state} ${zip}`, limit: 10 });
   // Same safety check as Redfin: same house number, zip, and unit (if any), or nothing.
   const houseNumber = (street.match(/^\d+/) || [''])[0];
   const homes = ((ac.data && ac.data.autocomplete) || []).filter(r => r.area_type === 'address' &&
     r.mpr_id && r.postal_code === zip && clean(r.line).startsWith(`${houseNumber} `));
-  const hasUnit = r => /\b(unit|apt|ste)\b|#/i.test(r.line);
+  // A manufactured-home park's listing may say "Lot 18" or "Space 18"
+  const hasUnit = r => /\b(unit|apt|apartment|ste|suite|lot|spc|space)\b|#/i.test(r.line);
   const unitRe = unit &&
-    new RegExp(`(\\b(unit|apt|ste)\\b|#)\\s*${String(unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    new RegExp(`(\\b(unit|apt|apartment|ste|suite|lot|spc|space)\\b|#)\\s*${String(unit).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
   const home = unit ? homes.find(r => unitRe.test(r.line)) : homes.find(r => !hasUnit(r));
   if (!home) return null;
 
