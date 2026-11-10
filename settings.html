@@ -2302,7 +2302,7 @@
                     '<div class="tc-grid">' + tcField('Seller’s share of the escrow fee', tcBox('pct', 'id="tc-seller-share" placeholder="50"', c.sellerEscrowShare))
                     + tcField('Recording service fee', tcBox('money', 'id="tc-recording" placeholder="125"', c.recordingFee))
                     + tcField('Seller’s share of recording', tcBox('pct', 'id="tc-recording-share" placeholder="50"', c.sellerRecordingShare)) + '</div>'
-                    + '<label class="tc-check"><input type="checkbox" id="tc-va"' + (c.vaSellerPays ? ' checked' : '') + '><span>On a <b>VA loan</b>, the seller pays the buyer’s share of the escrow and recording fees. VA rules limit what a veteran can be charged, so this is the Arizona custom (WFG 6.6 lets the company agree to a VA rate instead).</span></label>')
+                    + '<label class="tc-check"><input type="checkbox" id="tc-va"' + (c.vaSellerPays ? ' checked' : '') + '><span>On a <b>VA loan</b>, the seller pays the buyer’s share of the escrow fee. VA doesn’t let a veteran pay escrow or closing fees (38 CFR 36.4313), so in Arizona the seller usually covers them (WFG 6.6 lets the company agree to a VA rate instead). Recording fees and title insurance are allowed, so the buyer still pays those.</span></label>')
 
                 + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6). Only one discount applies at a time, to that person’s share of the <b>table rate</b> (the sale add-on is still charged in full).',
                     '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'

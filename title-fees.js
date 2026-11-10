@@ -101,7 +101,8 @@ const discountOf = (list, name) => (name ? ((list || []).find(d => d.name === na
 //   ownerPayer: 'Seller' or 'Buyer' pays the owner's policy (default: the company's custom)
 //   sellerDiscount / buyerDiscount: an escrow discount's name (off that person's share of the table rate)
 //   titleDiscount: a title discount's name (off the owner's policy)
-// On a VA loan (when the company says so) the seller pays the buyer's share of the escrow and recording fees.
+// On a VA loan (when the company says so) the seller pays the buyer's share of the escrow fee: VA doesn't let a veteran pay
+// escrow or closing fees (38 CFR 36.4313). Recording fees and title insurance are allowed, so the buyer still pays those.
 export function saleFees(c, price, loanAmount, o = {}) {
     if (!c || !(price > 0)) return null;
     const property = o.property || 'sfr';
@@ -140,12 +141,12 @@ export function saleFees(c, price, loanAmount, o = {}) {
     const sd = discountOf(c.discounts, o.sellerDiscount), bd = discountOf(c.discounts, o.buyerDiscount);
     let sellerEscrow = Math.ceil(base * share * (1 - sd)) + (total - base) * share;
     let buyerEscrow = Math.ceil(base * (1 - share) * (1 - bd)) + (total - base) * (1 - share);
-    if (va) { sellerEscrow += buyerEscrow; buyerEscrow = 0; note += '; VA: the seller pays it all'; }
+    if (va) { sellerEscrow += buyerEscrow; buyerEscrow = 0; note += '; VA: the seller pays the buyer’s share'; }
     add('Escrow Fee', sellerEscrow + buyerEscrow, sellerEscrow, 'escrow', note);
 
     const q = titlePolicies(c, price, hasLoan ? loanAmount + second : 0);
     const recording = c.recordingFee || 0;
-    if (recording) add('Recording Service Fee', recording, va ? recording : recording * (c.sellerRecordingShare ?? 0.5), 'recording');
+    if (recording) add('Recording Service Fee', recording, recording * (c.sellerRecordingShare ?? 0.5), 'recording');
     const extras = o.extraFees || [];
     (c.otherFees || []).filter(f => f.amount && (feeApplies(f, hasLoan, property) || (f.when !== 'Refinance' && extras.includes(f.name))))
         .forEach(f => add(f.name, f.amount, f.amount * (f.sellerShare ?? 0.5), 'fee'));
