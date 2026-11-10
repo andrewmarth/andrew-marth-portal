@@ -77,6 +77,30 @@ export function specialEscrowFee(c, kind, price) {
     return tableFee(c[kind + 'Table'], c[kind + 'OverFee'], c[kind + 'OverPer'], price);
 }
 
+// The ALTA endorsements every title company has (Settings > Title Companies lists them all; an unpriced one counts as $0).
+// A company's list matches one by its code ("ALTA 9" isn't "ALTA 9.1"); anything else on the list is an extra.
+export const STANDARD_ENDORSEMENTS = [
+    { code: 'ALTA 8.1', name: 'ALTA 8.1 Environmental Protection Lien', when: 'Every Loan' },
+    { code: 'ALTA 9', name: 'ALTA 9 Restrictions, Encroachments, Minerals', when: 'Every Loan' },
+    { code: 'ALTA 4.1', name: 'ALTA 4.1 Condominium', when: 'Condo' },
+    { code: 'ALTA 5.1', name: 'ALTA 5.1 Planned Unit Development', when: 'HOA (PUD)' },
+    { code: 'ALTA 6', name: 'ALTA 6 Variable Rate Mortgage', when: 'Adjustable Rate' },
+    { code: 'ALTA 7.1', name: 'ALTA 7.1 Manufactured Housing', when: 'Manufactured Home' },
+];
+const codeMatch = (code, name) => new RegExp('^' + code.replace('.', '\\.') + '(?![.\\d])', 'i').test(String(name || '').trim());
+// A company's endorsements split into the standard ones (each with its price, or null when it has none) and the extras
+export function splitEndorsements(list) {
+    const rows = list || [];
+    const standard = STANDARD_ENDORSEMENTS.map(s => {
+        const found = rows.find(r => codeMatch(s.code, r.name));
+        return { ...s, amount: found && found.amount !== undefined ? found.amount : null };
+    });
+    const extras = rows.filter(r => !STANDARD_ENDORSEMENTS.some(s => codeMatch(s.code, r.name)));
+    return { standard, extras };
+}
+// The standard endorsements a company hasn't priced (counted as $0)
+export const unpricedEndorsements = c => splitEndorsements(c.loanEndorsementList).standard.filter(s => s.amount === null || s.amount === undefined || s.amount === '');
+
 // Which loans need an endorsement, and which sales an "other fee" applies to
 export const ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 export function endorsementApplies(e, hasLoan, property, loanType) {
@@ -161,8 +185,9 @@ export function saleFees(c, price, loanAmount, o = {}) {
     if (hasLoan && q.loanPolicy !== null) {
         const extraPolicies = Math.max(0, loans - 1) * (c.extraLoanPolicyFee || 0);
         add('Lender’s Title Policy', q.loanPolicy + extraPolicies, 0, 'loanPolicy', second ? 'On both loans (' + money(loanAmount + second) + ')' : '');
-        (c.loanEndorsementList || []).filter(e => endorsementApplies(e, hasLoan, property, loanType))
-            .forEach(e => add(e.name + (loans > 1 ? ' (both loans)' : ''), (e.amount || 0) * loans, 0, 'endorsement'));
+        const { standard, extras } = splitEndorsements(c.loanEndorsementList);
+        standard.concat(extras).filter(e => endorsementApplies(e, hasLoan, property, loanType))
+            .forEach(e => add(e.name + (loans > 1 ? ' (both loans)' : ''), (e.amount || 0) * loans, 0, 'endorsement', e.amount === null ? 'Not priced, counted as $0' : ''));
     }
     const sum = k => items.reduce((s, i) => s + i[k], 0);
     return { items, base, total, va, hasLoan, owner: q.owner, loanPolicy: q.loanPolicy, special, seller: sum('seller'), buyer: sum('buyer') };
@@ -191,7 +216,6 @@ export const TITLE_REQUIRED = [
     ['loanPolicyPercent', 'Loan policy percent', 'value'],
     ['simultaneousPercent', 'Loan policy with the owner’s policy', 'value'],
     ['simultaneousMinimum', 'Loan policy minimum', 'value'],
-    ['loanEndorsementList', 'Lender’s endorsements', 'table'],
     ['extraLoanEscrowFee', 'Escrow fee per extra loan', 'value'],
     ['extraLoanPolicyFee', 'Fee per extra lender’s policy', 'value'],
     ['fincenFee', 'FinCEN report fee', 'value'],

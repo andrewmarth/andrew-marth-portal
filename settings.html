@@ -497,6 +497,11 @@
         .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
         .tc-row.is-discount { grid-template-columns: 2fr 1fr 40px; }
         .tc-row.is-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr 40px; }
+        .tc-row.is-std-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr; padding: 2px 4px; border-radius: 12px; }
+        .tc-std-name { font-size: 0.92rem; font-weight: bold; }
+        .tc-std-when { font-size: 0.85rem; opacity: 0.75; }
+        .tc-row.is-std-endorse.tc-missing { background: #fffbea; }
+        .tc-std-endorse .tc-std-note { margin: 0 0 4px 0; }
         .tc-check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 0.9rem; line-height: 1.45; cursor: pointer; }
         .tc-check input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; accent-color: var(--rust); }
         .tc-try-opts { margin-top: 10px; }
@@ -1144,7 +1149,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -2178,10 +2183,13 @@
                 if (c.manualDate) lines.push('Escrow rates effective ' + longDate(c.manualDate));
                 if (c.titleManualDate) lines.push('Title rates effective ' + longDate(c.titleManualDate));
                 const missing = missingRates(c);
+                const unpriced = unpricedEndorsements(c);
                 return '<li class="mp-item tc-item"><div class="mp-text"><div class="mp-title">' + esc(c.name) + '</div>'
                     + '<div class="mp-desc">' + lines.map(esc).join('<br>') + '</div>'
                     + (missing.length ? '<p class="tc-missing-list">' + TC_WARN + '<span><b>Missing ' + missing.length + ':</b> '
-                        + esc(missing.map(k => requiredLabel(k)).join(', ')) + '</span></p>' : '') + '</div>'
+                        + esc(missing.map(k => requiredLabel(k)).join(', ')) + '</span></p>' : '')
+                    + (unpriced.length ? '<p class="tc-missing-list">' + TC_WARN + '<span><b>Not priced (counted as $0):</b> '
+                        + esc(unpriced.map(e => e.code).join(', ')) + '</span></p>' : '') + '</div>'
                     + '<button type="button" class="cf-edit" data-tc-edit="' + i + '" aria-label="Edit ' + esc(c.name) + '" title="Edit">' + PENCIL_ICON + '</button></li>';
             }).join('');
         }
@@ -2241,6 +2249,16 @@
                 note.innerHTML = TC_WARN + '<span><b>Required.</b> ' + esc(requiredHint(key)) + '</span>';
                 if (isTable) target.after(note); else wrap.append(note);
             });
+            // A standard endorsement without a price doesn't stop a save: it counts as $0, with a note saying so
+            tcBody.querySelectorAll('[data-std]').forEach(row => {
+                const box = row.querySelector('[data-k="amount"]');
+                if (box.value.trim() !== '') return;
+                row.classList.add('tc-missing');
+                const note = document.createElement('p');
+                note.className = 'tc-req tc-std-note';
+                note.innerHTML = TC_WARN + '<span><b>Not priced.</b> Counted as $0 until you enter the company’s price.</span>';
+                row.after(note);
+            });
             return missing;
         }
         const tcBox = (kind, attrs, value) => '<div class="tc-box is-' + kind + '"><input type="text" inputmode="decimal" autocomplete="off" ' + attrs
@@ -2255,6 +2273,9 @@
             + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
             + '<select data-k="when" aria-label="When it applies">' + ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'].map(w => '<option' + ((f.when || 'Sometimes') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
             + '<button type="button" class="tc-remove" data-remove aria-label="Remove fee">' + REMOVE_ICON + '</button></div>';
+        // A standard ALTA endorsement: its name and when it applies are fixed, only its price is entered (blank counts as $0)
+        const standardEndorsementRow = e => '<div class="tc-row is-std-endorse" data-row data-std="' + esc(e.code) + '"><span class="tc-std-name">' + esc(e.name) + '</span>'
+            + tcBox('money', 'data-k="amount" aria-label="' + esc(e.name) + ' price" placeholder="Not priced"', e.amount) + '<span class="tc-std-when">' + esc(e.when) + '</span></div>';
         const endorsementRow = (e = {}) => '<div class="tc-row is-endorse" data-row><input type="text" data-k="name" aria-label="Endorsement" placeholder="ALTA 5.1 Planned Unit Development" value="' + esc(e.name || '') + '">'
             + tcBox('money', 'data-k="amount" aria-label="Price" placeholder="100"', e.amount)
             + '<select data-k="when" aria-label="Which loans need it">' + ENDORSEMENT_WHEN.map(w => '<option' + ((e.when || 'Every Loan') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
@@ -2329,9 +2350,12 @@
                     + tcField('But at least', tcBox('money', 'id="tc-simul-min" placeholder="315"', c.simultaneousMinimum))
                     + '</div>'
                     + '<h4 class="tc-sub">Lender’s endorsements</h4>'
-                    + '<p class="tc-help">Add-ons the lender requires, from the manual’s endorsement table (the <b>Lender</b> column). Every loan gets ALTA 8.1 and 9; a condo adds ALTA 4.1, a home in an HOA (a planned unit development) ALTA 5.1, an adjustable-rate loan ALTA 6, and a manufactured home ALTA 7.1. The buyer pays them.</p>'
+                    + '<p class="tc-help">Add-ons the lender requires, from the manual’s endorsement table (the <b>Lender</b> column). Every company has the standard ALTA endorsements below: every loan gets ALTA 8.1 and 9; a condo adds ALTA 4.1, a home in an HOA (a planned unit development) ALTA 5.1, an adjustable-rate loan ALTA 6, and a manufactured home ALTA 7.1. Enter each one’s price; one without a price counts as $0. The buyer pays them.</p>'
+                    + '<div class="tc-table tc-std-endorse" data-table="standardEndorsements"><div class="tc-row is-std-endorse is-head"><span>Endorsement</span><span>Price</span><span>When</span></div>'
+                    + splitEndorsements(c.loanEndorsementList).standard.map(standardEndorsementRow).join('') + '</div>'
+                    + '<p class="tc-help" style="margin-top:12px">Any other endorsement this company’s lenders usually need:</p>'
                     + '<div class="tc-table" data-table="endorsements"><div class="tc-row is-endorse is-head"><span>Endorsement</span><span>Price</span><span>When</span><span></span></div>'
-                    + (c.loanEndorsementList || []).map(endorsementRow).join('') + '</div><button type="button" class="tc-add-row" data-add="endorsements">+ Add Endorsement</button>')
+                    + splitEndorsements(c.loanEndorsementList).extras.map(endorsementRow).join('') + '</div><button type="button" class="tc-add-row" data-add="endorsements">+ Add Endorsement</button>')
 
                 + section('Title Discounts', 'Percent off the owner’s policy for buyers or sellers who qualify. WFG: a <b>reissue rate</b> of 80% when the seller’s own owner’s policy is less than 5 years old (section 4.4, at least the lesser of $840 or the basic rate), and 70% for an investor (section 10.2).',
                     '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
@@ -2406,7 +2430,12 @@
                 titleTable: rowsOf('title'), titleOverFee: parseMoney(val('tc-title-over-fee')), titleOverPer: parseMoney(val('tc-title-over-per')),
                 titleManualDate: val('tc-title-date'), ownerPolicyPercent: parsePct(val('tc-owner-pct')), sellerOwnerShare: parsePct(val('tc-owner-share')),
                 loanPolicyPercent: parsePct(val('tc-loan-pct')), simultaneousPercent: parsePct(val('tc-simul-pct')),
-                simultaneousMinimum: parseMoney(val('tc-simul-min')), loanEndorsementList: rowsOf('endorsements'), titleDiscounts: rowsOf('titleDiscounts'),
+                simultaneousMinimum: parseMoney(val('tc-simul-min')), titleDiscounts: rowsOf('titleDiscounts'),
+                // The standard endorsements (their fixed names and when; a blank price is null), then the extras
+                loanEndorsementList: [...tcBody.querySelectorAll('[data-std]')].map(row => {
+                    const std = STANDARD_ENDORSEMENTS.find(s => s.code === row.dataset.std);
+                    return { name: std.name, when: std.when, amount: parseMoney(row.querySelector('[data-k="amount"]').value) };
+                }).concat(rowsOf('endorsements')),
                 vaSellerPays: document.getElementById('tc-va').checked,
                 cashNoPayoffAddOn: parseMoney(val('tc-cash-nopayoff')), extraLoanEscrowFee: parseMoney(val('tc-extra-escrow')),
                 extraLoanPolicyFee: parseMoney(val('tc-extra-policy')), fincenFee: parseMoney(val('tc-fincen')), fincenExtraFee: parseMoney(val('tc-fincen-extra')),

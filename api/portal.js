@@ -1229,7 +1229,7 @@ function titleTable_(list, name) {
 const TITLE_REQUIRED_COLUMNS = ['RATE MANUAL DATE', 'ESCROW RATE TABLE', 'ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER', 'CASH SALE ADD ON',
   'LOAN SALE ADD ON', 'CASH NO PAYOFF ADD ON', 'SELLER SHARE OF ESCROW FEE', 'RECORDING SERVICE FEE', 'SELLER SHARE OF RECORDING FEE',
   'TITLE MANUAL DATE', 'OWNERS TITLE TABLE', 'OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER', 'OWNERS POLICY PERCENT',
-  'SELLER SHARE OF OWNERS POLICY', 'LOAN POLICY PERCENT', 'SIMULTANEOUS LOAN PERCENT', 'SIMULTANEOUS LOAN MINIMUM', 'LOAN ENDORSEMENT LIST',
+  'SELLER SHARE OF OWNERS POLICY', 'LOAN POLICY PERCENT', 'SIMULTANEOUS LOAN PERCENT', 'SIMULTANEOUS LOAN MINIMUM',
   'EXTRA LOAN ESCROW FEE', 'EXTRA LOAN POLICY FEE', 'FINCEN FEE', 'FINCEN EXTRA ENTITY FEE', 'SHORT SALE ESCROW TABLE', 'SHORT SALE OVER FEE',
   'SHORT SALE OVER PER', 'SHORT SALE SELLER SHARE', 'REO ESCROW TABLE', 'REO OVER FEE', 'REO OVER PER', 'REO SELLER SHARE',
   'REFINANCE ESCROW FEE', 'REFINANCE RECORDING FEE', 'REFINANCE TITLE TABLE', 'REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER',
@@ -1402,8 +1402,9 @@ async function saveTitleCompany_(account, body) {
   for (const d of (Array.isArray(c.loanEndorsementList) ? c.loanEndorsementList : []).slice(0, 30)) {
     const dn = cleanText_(d && d.name, 100);
     const amount = titleMoney_(d && d.amount);
-    if (!dn && amount === null) continue;
-    if (!dn || amount === null || Number.isNaN(amount) || !TITLE_ENDORSEMENT_WHEN.includes(d.when)) return { ok: false, error: 'invalid_endorsement' };
+    if (!dn) { if (amount === null) continue; return { ok: false, error: 'invalid_endorsement' }; }
+    // (no price: the standard endorsement shows, counted as $0)
+    if (Number.isNaN(amount) || !TITLE_ENDORSEMENT_WHEN.includes(d.when)) return { ok: false, error: 'invalid_endorsement' };
     endorsements.push({ 'NAME': dn, 'AMOUNT': amount, 'WHEN': d.when });
   }
   fields['LOAN ENDORSEMENT LIST'] = endorsements;

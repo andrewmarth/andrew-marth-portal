@@ -1511,12 +1511,14 @@
         const TITLE_LABELS = { escrow: 'Escrow Fee', recording: 'Recording Service Fee', owner: 'Owner’s Title Policy', loanPolicy: 'Lender’s Title Policy', fincen: 'FinCEN Report' };
         function titleLines(sale, side, extra = {}) {
             const mine = sale.items.filter(i => i[side] > 0.004);
-            const ends = mine.filter(i => i.kind === 'endorsement');
+            // Every endorsement the lender needs is listed on the buyer's side, even one counted as $0
+            const ends = side === 'buyer' ? sale.items.filter(i => i.kind === 'endorsement') : mine.filter(i => i.kind === 'endorsement');
             const lines = mine.filter(i => i.kind !== 'endorsement').map(i => ({
                 section: 'Title', ...extra, label: TITLE_LABELS[i.kind] || i.name, amount: -i[side],
                 note: i.kind === 'escrow' && i[side] < i.total - 0.004 ? (i.note ? i.note + '; ' : '') + (side === 'buyer' ? 'the buyer’s' : 'the seller’s') + ' share' : i.note,
             }));
-            if (ends.length) lines.push({ section: 'Title', ...extra, label: 'Lender’s Title Endorsements', amount: -ends.reduce((s, i) => s + i[side], 0), note: ends.map(i => i.name.replace(/ \(both loans\)$/, '')).join(', ') });
+            if (ends.length) lines.push({ section: 'Title', ...extra, label: 'Lender’s Title Endorsements', amount: -ends.reduce((s, i) => s + i[side], 0),
+                note: ends.map(i => i.name.replace(/ \(both loans\)$/, '') + (i.total ? '' : ' ($0)')).join(', ') });
             return lines;
         }
 
