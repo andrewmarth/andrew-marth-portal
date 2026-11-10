@@ -469,6 +469,9 @@
         /* --- Title Companies (admins) --- */
         .tc-item .mp-desc { -webkit-line-clamp: unset; display: block; }
         .edit-dialog.tc-dialog { max-width: 680px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        /* The long pop-ups scroll without showing a scroll bar */
+        .edit-dialog.tc-dialog, .edit-dialog.mp-dialog { scrollbar-width: none; -ms-overflow-style: none; }
+        .edit-dialog.tc-dialog::-webkit-scrollbar, .edit-dialog.mp-dialog::-webkit-scrollbar { display: none; }
         .tc-lead { margin: 10px 0 12px 0; font-size: 0.92rem; }
         .tc-wfg { margin: 0 0 6px 0; min-height: 42px; padding: 8px 18px; font-size: 0.92rem; border: 2px solid var(--navy); }
         .tc-wfg[hidden] { display: none; }
