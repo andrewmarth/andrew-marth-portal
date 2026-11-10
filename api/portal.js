@@ -37,6 +37,8 @@ const PAGE_SETTING_FIELDS = {
   'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
   'WHO PAYS OWNERS POLICY': 'payer', 'OWNERS TITLE DISCOUNT': 'text', 'SELLER ESCROW DISCOUNT': 'text', 'BUYER ESCROW DISCOUNT': 'text',
   'FINCEN REPORT': 'bool', 'EXTRA TITLE FEES': 'list',
+  // Who the buyer is (their escrow and owner's policy discounts follow from it)
+  'BUYER TYPE': ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'],
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
@@ -1234,6 +1236,11 @@ const TITLE_REQUIRED_COLUMNS = ['RATE MANUAL DATE', 'ESCROW RATE TABLE', 'ESCROW
   'SHORT SALE OVER PER', 'SHORT SALE SELLER SHARE', 'REO ESCROW TABLE', 'REO OVER FEE', 'REO OVER PER', 'REO SELLER SHARE',
   'REFINANCE ESCROW FEE', 'REFINANCE RECORDING FEE', 'REFINANCE TITLE TABLE', 'REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER',
   'REFINANCE POLICY PERCENT', 'REFINANCE ENDORSEMENTS'];
+// Who qualifies for a discount (a page's BUYER TYPE is one of the first seven), and whose share an owner's policy discount
+// comes off (the same lists as /title-fees.js)
+const BUYER_TYPES = ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'];
+const TITLE_DISCOUNT_CATEGORIES = BUYER_TYPES.slice(1).concat(['Prior Policy', 'Other']);
+const TITLE_DISCOUNT_APPLIES = ['buyer', 'buyerPays', 'sellerPays', 'eitherPays', 'property'];
 const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'];
 const TITLE_ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 
@@ -1254,7 +1261,9 @@ function titleCompanyOut_(doc) {
     sellerEscrowShare: num(f['SELLER SHARE OF ESCROW FEE']),
     recordingFee: num(f['RECORDING SERVICE FEE']),
     sellerRecordingShare: num(f['SELLER SHARE OF RECORDING FEE']),
-    discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
+    // A discount's CATEGORY says who qualifies (a page's BUYER TYPE, or Prior Policy / Other); a title discount's APPLIES
+    // says whose share it comes off (see /title-fees.js)
+    discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']), category: String(d['CATEGORY'] || '') })) : [],
     titleManualDate: String(f['TITLE MANUAL DATE'] || ''),
     ownerPolicyPercent: num(f['OWNERS POLICY PERCENT']),
     sellerOwnerShare: num(f['SELLER SHARE OF OWNERS POLICY']),
@@ -1285,7 +1294,8 @@ function titleCompanyOut_(doc) {
     refiOverPer: num(f['REFINANCE TITLE OVER PER']),
     refiPolicyPercent: num(f['REFINANCE POLICY PERCENT']),
     refiEndorsements: num(f['REFINANCE ENDORSEMENTS']),
-    titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']) })) : [],
+    titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']),
+      category: String(d['CATEGORY'] || ''), applies: String(d['APPLIES'] || 'property') })) : [],
     otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
     titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
@@ -1375,7 +1385,7 @@ async function saveTitleCompany_(account, body) {
     const pct = titleShare_(d && d.percent);
     if (!dn && pct === null) continue;
     if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_discount' };
-    discounts.push({ 'NAME': dn, 'PERCENT': pct });
+    discounts.push({ 'NAME': dn, 'PERCENT': pct, 'CATEGORY': TITLE_DISCOUNT_CATEGORIES.includes(d.category) ? d.category : 'Other' });
   }
   fields['DISCOUNTS'] = discounts;
   const titleDiscounts = [];
@@ -1384,7 +1394,8 @@ async function saveTitleCompany_(account, body) {
     const pct = titleShare_(d && d.percent);
     if (!dn && pct === null) continue;
     if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_title_discount' };
-    titleDiscounts.push({ 'NAME': dn, 'PERCENT': pct });
+    titleDiscounts.push({ 'NAME': dn, 'PERCENT': pct, 'CATEGORY': TITLE_DISCOUNT_CATEGORIES.includes(d.category) ? d.category : 'Other',
+      'APPLIES': TITLE_DISCOUNT_APPLIES.includes(d.applies) ? d.applies : 'property' });
   }
   fields['TITLE DISCOUNTS'] = titleDiscounts;
   const otherFees = [];

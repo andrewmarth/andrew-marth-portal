@@ -114,6 +114,49 @@ export function feeApplies(f, hasLoan, property) {
 
 const discountOf = (list, name) => (name ? ((list || []).find(d => d.name === name) || {}).percent || 0 : 0);
 
+// What qualifies someone (or the property) for a discount. A page's BUYER TYPE is one of BUYER_TYPES; a discount's category
+// is one of DISCOUNT_CATEGORIES.
+export const BUYER_TYPES = ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'];
+export const DISCOUNT_CATEGORIES = BUYER_TYPES.slice(1).concat(['Prior Policy', 'Other']);
+// Who an owner's policy discount is for, and what it takes off:
+//   buyer       the buyer qualifies; the whole policy costs less, whoever pays (WFG 10.2: an investor buying)
+//   buyerPays   the buyer qualifies; only the buyer's share of the policy costs less
+//   sellerPays  the seller qualifies; only the seller's share costs less
+//   eitherPays  either party can qualify; only what that party pays costs less (First American B.6, Fidelity 803)
+//   property    the property qualifies (a reissue / short-term rate on the seller's prior policy); the whole policy
+export const DISCOUNT_APPLIES = [
+    ['buyer', 'Buyer: whole policy'],
+    ['buyerPays', 'Buyer: their share only'],
+    ['sellerPays', 'Seller: their share only'],
+    ['eitherPays', 'Either party: their share only'],
+    ['property', 'Prior policy: whole policy'],
+];
+// The biggest escrow discount a buyer of this type gets (by category), or ''
+export const buyerEscrowDiscount = (c, buyerType) => ((c.discounts || []).filter(d => d.category && d.category === buyerType)
+    .sort((a, b) => (b.percent || 0) - (a.percent || 0))[0] || {}).name || '';
+// Owner's policy discounts the page picks by hand: ones the seller or the property qualifies for
+export const pickableTitleDiscounts = c => (c.titleDiscounts || []).filter(d => ['sellerPays', 'eitherPays', 'property'].includes(d.applies || 'property'));
+// The owner's policy after the one discount that saves the most: { seller, buyer, note }. sellerPart / buyerPart: each
+// side's share before it. The buyer qualifies by BUYER TYPE (buyerType); the seller or the property by the hand pick.
+export function ownerPolicyDiscount(c, sellerPart, buyerPart, buyerType, picked) {
+    let best = { save: 0, seller: sellerPart, buyer: buyerPart, note: '' };
+    (c.titleDiscounts || []).forEach(d => {
+        const p = d.percent || 0;
+        const applies = d.applies || 'property';
+        const buyerQualifies = Boolean(buyerType) && d.category === buyerType;
+        const pickedHere = picked && d.name === picked;
+        let s = 0, b = 0;
+        if (applies === 'buyer' && buyerQualifies) { s = sellerPart * p; b = buyerPart * p; }
+        else if (applies === 'buyerPays' && buyerQualifies) b = buyerPart * p;
+        else if (applies === 'sellerPays' && pickedHere) s = sellerPart * p;
+        else if (applies === 'eitherPays') { if (buyerQualifies) b = buyerPart * p; if (pickedHere) s = sellerPart * p; }
+        else if (applies === 'property' && pickedHere) { s = sellerPart * p; b = buyerPart * p; }
+        if (s + b > best.save + 0.004) best = { save: s + b, seller: sellerPart - s, buyer: buyerPart - b, note: Math.round(p * 100) + '% off: ' + d.name };
+    });
+    // (a qualifying buyer whose discount only covers what they pay, when the seller pays it all, gets nothing)
+    return best;
+}
+
 // A sale's title and escrow fees: { items: [{ name, total, seller, buyer, kind, note }], seller, buyer, ... } or null
 // (no escrow table, or no price). Options:
 //   property: 'sfr' (no HOA), 'hoa' (a planned unit development), 'condo' or 'manufactured'
@@ -124,7 +167,8 @@ const discountOf = (list, name) => (name ? ((list || []).find(d => d.name === na
 //   extraFees: names of the company's "Sometimes" fees that apply to this sale
 //   ownerPayer: 'Seller' or 'Buyer' pays the owner's policy (default: the company's custom)
 //   sellerDiscount / buyerDiscount: an escrow discount's name (off that person's share of the table rate)
-//   titleDiscount: a title discount's name (off the owner's policy)
+//   buyerType: one of BUYER_TYPES (the buyer's escrow discount and owner's policy discounts follow from it)
+//   titleDiscount: an owner's policy discount picked by hand (the seller or the property qualifies)
 // On a VA loan (when the company says so) the seller pays the buyer's share of the escrow fee: VA doesn't let a veteran pay
 // escrow or closing fees (38 CFR 36.4313). Recording fees and title insurance are allowed, so the buyer still pays those.
 export function saleFees(c, price, loanAmount, o = {}) {
@@ -162,7 +206,8 @@ export function saleFees(c, price, loanAmount, o = {}) {
     }
     if (base === null) return null;
     // A discount comes off that person's share of the table rate, not the add-on
-    const sd = discountOf(c.discounts, o.sellerDiscount), bd = discountOf(c.discounts, o.buyerDiscount);
+    // The seller's escrow discount is picked by hand; the buyer's comes from the buyer type (or an old hand pick)
+    const sd = discountOf(c.discounts, o.sellerDiscount), bd = discountOf(c.discounts, o.buyerDiscount || buyerEscrowDiscount(c, o.buyerType));
     let sellerEscrow = Math.ceil(base * share * (1 - sd)) + (total - base) * share;
     let buyerEscrow = Math.ceil(base * (1 - share) * (1 - bd)) + (total - base) * (1 - share);
     if (va) { sellerEscrow += buyerEscrow; buyerEscrow = 0; note += '; VA: the seller pays the buyer’s share'; }
@@ -177,10 +222,10 @@ export function saleFees(c, price, loanAmount, o = {}) {
     if (o.fincen && c.fincenFee) add('FinCEN Report', c.fincenFee, 0, 'fincen', 'Entity or trust buyer paying cash');
 
     if (q.owner !== null) {
-        const td = discountOf(c.titleDiscounts, o.titleDiscount);
-        const owner = Math.ceil(q.owner * (1 - td));
         const sellerShare = o.ownerPayer === 'Buyer' ? 0 : o.ownerPayer === 'Seller' ? 1 : (c.sellerOwnerShare ?? 1);
-        add('Owner’s Title Policy', owner, owner * sellerShare, 'owner', td ? Math.round(td * 100) + '% off: ' + o.titleDiscount : '');
+        const d = ownerPolicyDiscount(c, q.owner * sellerShare, q.owner * (1 - sellerShare), o.buyerType, o.titleDiscount);
+        const seller = d.save ? Math.ceil(d.seller) : d.seller, buyer = d.save ? Math.ceil(d.buyer) : d.buyer;
+        add('Owner’s Title Policy', seller + buyer, seller, 'owner', d.note);
     }
     if (hasLoan && q.loanPolicy !== null) {
         const extraPolicies = Math.max(0, loans - 1) * (c.extraLoanPolicyFee || 0);

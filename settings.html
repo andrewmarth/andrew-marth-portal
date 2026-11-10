@@ -498,7 +498,12 @@
         .tc-row { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
         .tc-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
         .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
-        .tc-row.is-discount { grid-template-columns: 2fr 1fr 40px; }
+        /* Discounts: the name on its own line, then the percent and the choices */
+        .tc-row.is-discount { grid-template-columns: 110px minmax(0, 1fr) 40px; row-gap: 6px; }
+        .tc-row.is-tdiscount { grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr) 40px; row-gap: 6px; }
+        .tc-row.is-discount .tc-disc-name, .tc-row.is-tdiscount .tc-disc-name { grid-column: 1 / -1; }
+        .tc-row.is-discount.is-head, .tc-row.is-tdiscount.is-head { display: none; }
+        .tc-row.is-discount + .tc-row, .tc-row.is-tdiscount + .tc-row { margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(79, 45, 44, 0.12); }
         .tc-row.is-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr 40px; }
         /* Notes: a fixed size that fits the longest notes on file (Fidelity's) */
         .tc-dialog #tc-notes { height: 420px; }
@@ -553,6 +558,9 @@
             .tc-row.is-fee.is-head { display: none; }
             .tc-row.is-fee .tc-fee-name { grid-column: 1 / -1; }
             .tc-row.is-endorse { grid-template-columns: 1fr 1fr 40px; }
+            /* Phones: the "what it comes off" choice gets its own line too */
+            .tc-row.is-tdiscount { grid-template-columns: 110px minmax(0, 1fr) 40px; }
+            .tc-row.is-tdiscount [data-k="applies"] { grid-column: 1 / -1; }
             .tc-row.is-endorse.is-head { display: none; }
             .tc-row.is-endorse input[data-k="name"] { grid-column: 1 / -1; }
             .edit-dialog.tc-dialog { max-height: calc(100dvh - 24px); }
@@ -1161,7 +1169,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, BUYER_TYPES, DISCOUNT_CATEGORIES, DISCOUNT_APPLIES } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -1996,10 +2004,15 @@
                 [900000, 1800], [950000, 1860], [1000000, 1910]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 20, escrowOverPer: 20000, cashSaleAddOn: 300, loanSaleAddOn: 500, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
+            // Escrow manual 6.2-6.4 (off that person's share)
             discounts: [
-                { name: 'Senior (60 or older)', percent: 0.2 },
-                { name: 'Realtor, military, veteran, public servant or investor', percent: 0.3 },
-                { name: 'Church, non-profit or corporate relocation', percent: 0.3 },
+                { name: 'Senior (60 or older)', percent: 0.2, category: 'Senior' },
+                { name: 'Realtor or broker', percent: 0.3, category: 'Real Estate Agent' },
+                { name: 'Active military or veteran', percent: 0.3, category: 'Military / First Responder' },
+                { name: 'Public servant (teacher, police, firefighter, EMT)', percent: 0.3, category: 'Public Servant' },
+                { name: 'Investor (owns 3+ properties)', percent: 0.3, category: 'Investor' },
+                { name: 'Church or non-profit', percent: 0.3, category: 'Church / Non-Profit' },
+                { name: 'Corporate relocation', percent: 0.3, category: 'Corporate Relocation' },
             ],
             otherFees: [
                 { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Sometimes' },
@@ -2039,8 +2052,9 @@
             ],
             vaSellerPays: true,
             titleDiscounts: [
-                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2 },
-                { name: 'Investor buying a residential property', percent: 0.3 },
+                // 4.4: the property's prior policy; 10.2: an owner's policy insuring an investor who is buying
+                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2, category: 'Prior Policy', applies: 'property' },
+                { name: 'Buyer is an investor', percent: 0.3, category: 'Investor', applies: 'buyer' },
             ],
         };
 
@@ -2051,7 +2065,7 @@
             escrowTable: [[100000, 1012], [120000, 1048], [140000, 1084], [160000, 1116], [180000, 1152], [200000, 1186], [220000, 1216], [240000, 1244], [260000, 1274], [280000, 1304], [300000, 1332], [320000, 1362], [340000, 1392], [360000, 1422], [380000, 1450], [400000, 1480], [420000, 1508], [440000, 1536], [460000, 1568], [480000, 1596], [500000, 1624], [520000, 1650], [540000, 1678], [560000, 1702], [580000, 1728], [600000, 1754], [620000, 1778], [640000, 1804], [660000, 1830], [680000, 1856], [700000, 1882], [720000, 1906], [740000, 1932], [760000, 1958], [780000, 1984], [800000, 2010], [820000, 2034], [840000, 2060], [860000, 2084], [880000, 2110], [900000, 2138], [920000, 2164], [940000, 2188], [960000, 2214], [980000, 2238], [1000000, 2264]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 22, escrowOverPer: 20000, cashSaleAddOn: 0, loanSaleAddOn: 250, sellerEscrowShare: 0.5,
             recordingFee: 0, sellerRecordingShare: 0.5,
-            discounts: [{ name: 'Investor (certifies they invest in real estate)', percent: 0.3 }],
+            discounts: [{ name: 'Investor (certifies they invest in real estate)', percent: 0.3, category: 'Investor' }],
             otherFees: [
                 { name: 'Reconveyance Tracking (lien release not ready at closing)', amount: 100, sellerShare: 1, when: 'Sometimes' },
                 { name: 'Mobile Home Affixture / Title Transfer', amount: 150, sellerShare: 0.5, when: 'Manufactured Home' },
@@ -2089,8 +2103,9 @@
                 { name: 'ALTA 7.1 Manufactured Housing – Conversion', amount: 100, when: 'Manufactured Home' },
             ],
             titleDiscounts: [
-                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35 },
-                { name: 'Investor (on the policies the investor pays for)', percent: 0.3 },
+                // E.2: the property's prior policy; B.6: only on what the investor pays for
+                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35, category: 'Prior Policy', applies: 'property' },
+                { name: 'Investor (on the policies the investor pays for)', percent: 0.3, category: 'Investor', applies: 'eitherPays' },
             ],
             // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
             refiTable: [[250000, 500], [500000, 650], [750000, 800], [1000000, 950]].map(([upTo, fee]) => ({ upTo, fee })),
@@ -2104,9 +2119,11 @@
             escrowOverFee: 21, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
             discounts: [
-                { name: 'Investor (their share only)', percent: 0.3 },
-                { name: 'First responder or military (active or retired)', percent: 0.3 },
-                { name: 'Corporate relocation (employee’s share)', percent: 0.3 },
+                // E301 (investors, builders and agents), E304, E305 (off that person's share)
+                { name: 'Investor (their share only)', percent: 0.3, category: 'Investor' },
+                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, category: 'Real Estate Agent' },
+                { name: 'First responder or military (active or retired)', percent: 0.3, category: 'Military / First Responder' },
+                { name: 'Corporate relocation (employee’s share)', percent: 0.3, category: 'Corporate Relocation' },
             ],
             otherFees: [
                 { name: 'Manufactured Home Title Transfer (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
@@ -2146,11 +2163,13 @@
             ],
             // Chapter VIII
             titleDiscounts: [
-                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2 },
-                { name: 'Investor, builder or real estate agent (a principal in the deal)', percent: 0.3 },
-                { name: 'First responder or military (active or retired)', percent: 0.3 },
-                { name: 'Church, non-profit or charity', percent: 0.3 },
-                { name: 'Corporate relocation (employee’s customary costs)', percent: 0.3 },
+                // 807: the property's prior policy; 803-806: a party to the sale, on what they pay
+                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2, category: 'Prior Policy', applies: 'property' },
+                { name: 'Investor or builder (a party to the sale)', percent: 0.3, category: 'Investor', applies: 'eitherPays' },
+                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, category: 'Real Estate Agent', applies: 'eitherPays' },
+                { name: 'First responder or military (active or retired)', percent: 0.3, category: 'Military / First Responder', applies: 'eitherPays' },
+                { name: 'Church, non-profit or charity', percent: 0.3, category: 'Church / Non-Profit', applies: 'eitherPays' },
+                { name: 'Corporate relocation (employee’s customary costs)', percent: 0.3, category: 'Corporate Relocation', applies: 'eitherPays' },
             ],
             // Section 216B, Zone 1 (ALTA 8.1, 9 and 22 included)
             refiTable: [[100000, 500], [200000, 630], [300000, 800], [400000, 855], [500000, 980], [600000, 1105], [700000, 1230], [800000, 1360], [900000, 1485], [1000000, 1590]].map(([upTo, fee]) => ({ upTo, fee })),
@@ -2278,8 +2297,18 @@
         const tcField = (label, inner) => '<div class="field"><label>' + esc(label) + '</label>' + inner + '</div>';
         const tableRow = (r = {}) => '<div class="tc-row" data-row>' + tcBox('money', 'data-k="upTo" aria-label="Sale price up to" placeholder="100,000"', r.upTo)
             + tcBox('money', 'data-k="fee" aria-label="Fee" placeholder="650"', r.fee) + '<button type="button" class="tc-remove" data-remove aria-label="Remove row">' + REMOVE_ICON + '</button></div>';
-        const discountRow = (d = {}) => '<div class="tc-row is-discount" data-row><input type="text" data-k="name" aria-label="Discount name" placeholder="Senior (60 or older)" value="' + esc(d.name || '') + '">'
-            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent) + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
+        const options = (list, value, fallback) => list.map(o => { const [v, label] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + ((value || fallback) === v ? ' selected' : '') + '>' + esc(label) + '</option>'; }).join('');
+        // An escrow discount: who qualifies (a buyer of that type gets it automatically; a seller's is picked on the page)
+        const discountRow = (d = {}) => '<div class="tc-row is-discount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="Senior (60 or older)" value="' + esc(d.name || '') + '">'
+            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent)
+            + '<select data-k="category" aria-label="Who qualifies">' + options(BUYER_TYPES.slice(1).concat(['Other']), d.category, 'Other') + '</select>'
+            + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
+        // An owner's policy discount: who qualifies, and whose share it comes off
+        const titleDiscountRow = (d = {}) => '<div class="tc-row is-tdiscount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="Reissue (prior policy under 5 years old)" value="' + esc(d.name || '') + '">'
+            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent)
+            + '<select data-k="category" aria-label="Who qualifies">' + options(DISCOUNT_CATEGORIES, d.category, 'Other') + '</select>'
+            + '<select data-k="applies" aria-label="What it comes off">' + options(DISCOUNT_APPLIES, d.applies, 'property') + '</select>'
+            + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
         const feeRow = (f = {}) => '<div class="tc-row is-fee" data-row><input type="text" class="tc-fee-name" data-k="name" aria-label="Fee name" placeholder="FIRPTA Filing Service Fee" value="' + esc(f.name || '') + '">'
             + tcBox('money', 'data-k="amount" aria-label="Amount" placeholder="125"', f.amount)
             + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
@@ -2337,8 +2366,8 @@
                     + tcField('Seller’s share of recording', tcBox('pct', 'id="tc-recording-share" placeholder="50"', c.sellerRecordingShare)) + '</div>'
                     + '<label class="tc-check"><input type="checkbox" id="tc-va"' + (c.vaSellerPays ? ' checked' : '') + '><span>On a <b>VA loan</b>, the seller pays the buyer’s share of the escrow fee. VA doesn’t let a veteran pay escrow or closing fees (38 CFR 36.4313), so in Arizona the seller usually covers them (WFG 6.6 lets the company agree to a VA rate instead). Recording fees and title insurance are allowed, so the buyer still pays those.</span></label>')
 
-                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6). Only one discount applies at a time, to that person’s share of the <b>table rate</b> (the sale add-on is still charged in full).',
-                    '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
+                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6). Only one discount applies at a time, to that person’s share of the <b>table rate</b> (the sale add-on is still charged in full). <b>Who qualifies</b> matches a page’s Buyer Type, so a buyer’s discount applies on its own; a seller’s is picked on the page.',
+                    '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span></span></div>'
                     + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
 
                 + section('Other Fees', 'Extra charges from the escrow manual’s Miscellaneous Fees (WFG section 5) and the title manual (closing protection letters, WFG title section 12). <b>Every Sale</b> fees go on every sheet; <b>With a Loan</b> only when the buyer has a loan; <b>Manufactured Home</b> only for a manufactured home; <b>Refinance</b> only on a refinance (the borrower pays); <b>Sometimes</b> only in certain cases (a foreign seller’s FIRPTA filing, a manufactured home). Seller pays: the seller’s share; the buyer pays the rest.',
@@ -2369,9 +2398,9 @@
                     + '<div class="tc-table" data-table="endorsements"><div class="tc-row is-endorse is-head"><span>Endorsement</span><span>Price</span><span>When</span><span></span></div>'
                     + splitEndorsements(c.loanEndorsementList).extras.map(endorsementRow).join('') + '</div><button type="button" class="tc-add-row" data-add="endorsements">+ Add Endorsement</button>')
 
-                + section('Title Discounts', 'Percent off the owner’s policy for buyers or sellers who qualify. WFG: a <b>reissue rate</b> of 80% when the seller’s own owner’s policy is less than 5 years old (section 4.4, at least the lesser of $840 or the basic rate), and 70% for an investor (section 10.2).',
-                    '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
-                    + (c.titleDiscounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
+                + section('Title Discounts', 'Percent off the owner’s policy. <b>What it comes off</b> matters because the seller usually pays the owner’s policy: WFG’s investor rate (10.2) prices the whole policy lower when the <b>buyer</b> is an investor, so the seller saves; First American (B.6) and Fidelity (803–806) only take it off <b>what the qualifying party pays</b>, so an investor buyer saves nothing when the seller pays. A <b>reissue / short-term rate</b> comes from the seller’s prior policy (the property). Only the one discount that saves the most applies.',
+                    '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-tdiscount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span>What it comes off</span><span></span></div>'
+                    + (c.titleDiscounts || []).map(titleDiscountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
 
                 + section('Second Loans & FinCEN', 'A <b>second loan</b> (a piggyback or down payment assistance loan) can add an escrow fee per extra loan, and its lender’s policy is priced on the <b>combined</b> loan amount plus a fee per extra policy (WFG title 6.2: none; First American F.5: $100; Fidelity 218: $100). A <b>FinCEN report</b> is filed when an LLC or trust buys with cash (WFG escrow 5.5: $150, plus $75 per extra buying entity); the buyer pays it. Enter 0 if the company hasn’t filed one.',
                     '<div class="tc-grid">' + tcField('Escrow fee per extra loan on a sale', tcBox('money', 'id="tc-extra-escrow" placeholder="0"', c.extraLoanEscrowFee))
@@ -2413,6 +2442,7 @@
                 + [['sfr', 'Single family, no HOA'], ['hoa', 'Home in an HOA (PUD)'], ['condo', 'Condo'], ['manufactured', 'Manufactured home']].map(([v, t]) => '<option value="' + v + '"' + (v === 'hoa' ? ' selected' : '') + '>' + t + '</option>').join('')
                 + '</select><select id="tc-try-loantype" aria-label="Loan type">'
                 + [['fixed', 'Fixed-rate loan'], ['arm', 'Adjustable-rate loan'], ['va', 'VA loan']].map(([v, t]) => '<option value="' + v + '">' + t + '</option>').join('')
+                + '</select><select id="tc-try-buyertype" aria-label="Buyer type">' + BUYER_TYPES.map(v => '<option value="' + v + '">' + (v === 'Individual' ? 'Individual buyer' : 'Buyer: ' + v) + '</option>').join('')
                 + '</select><select id="tc-try-saletype" aria-label="Sale type">'
                 + ['Standard', 'Short Sale', 'REO'].map(v => '<option value="' + v + '">' + (v === 'Standard' ? 'Standard sale' : v) + '</option>').join('')
                 + '</select></div>'
@@ -2429,7 +2459,7 @@
                 const o = {};
                 row.querySelectorAll('[data-k]').forEach(i => {
                     const k = i.dataset.k;
-                    o[k] = k === 'name' || k === 'when' ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                    o[k] = ['name', 'when', 'category', 'applies'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
                 });
                 return o;
             });
@@ -2471,15 +2501,16 @@
             const property = document.getElementById('tc-try-property').value;
             const loanType = document.getElementById('tc-try-loantype').value;
             const saleType = document.getElementById('tc-try-saletype').value;
+            const buyerType = document.getElementById('tc-try-buyertype').value;
             const secondLoan = parseMoney(document.getElementById('tc-try-second').value) || 0;
-            const s = saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan });
+            const s = saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, buyerType });
             if (!s) { out.innerHTML = '<li class="is-sub">Fill in the escrow fee table and a sale price to see the fees.</li>'; return; }
             const hasLoan = s.hasLoan;
             const row = (k, v, sub) => '<li' + (sub ? ' class="is-sub"' : '') + '><span>' + esc(k) + '</span><b>' + esc(v) + '</b></li>';
             const who = i => !i.seller ? dollars(i.total) + ' (buyer)' : !i.buyer ? dollars(i.total) + ' (seller)' : dollars(i.total) + ' (seller ' + dollars(i.seller) + ', buyer ' + dollars(i.buyer) + ')';
             // The biggest escrow discount, for the seller (it comes off their share of the table rate, not the add-on)
             const best = (c.discounts || []).reduce((a, d) => ((d.percent || 0) > (a ? a.percent : 0) ? d : a), null);
-            const discounted = best && !s.va ? saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, sellerDiscount: best.name }) : null;
+            const discounted = best && !s.va ? saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, buyerType, sellerDiscount: best.name }) : null;
             out.innerHTML = s.items.map(i => row(i.name, who(i))
                 + (i.note ? row(i.note, '', true) : '')
                 + (i.kind === 'escrow' && discounted ? row('Seller’s share with the biggest discount (' + pctText(best.percent) + '% off the table rate)', dollars(discounted.items[0].seller), true) : '')).join('')
@@ -2527,7 +2558,7 @@
             const add = e.target.closest('[data-add]');
             if (add) {
                 const table = tcBody.querySelector('[data-table="' + add.dataset.add + '"]');
-                table.insertAdjacentHTML('beforeend', add.dataset.add === 'discounts' || add.dataset.add === 'titleDiscounts' ? discountRow() : add.dataset.add === 'fees' ? feeRow() : add.dataset.add === 'endorsements' ? endorsementRow() : tableRow());
+                table.insertAdjacentHTML('beforeend', add.dataset.add === 'titleDiscounts' ? titleDiscountRow() : add.dataset.add === 'discounts' ? discountRow() : add.dataset.add === 'fees' ? feeRow() : add.dataset.add === 'endorsements' ? endorsementRow() : tableRow());
                 table.lastElementChild.querySelector('input').focus();
                 return;
             }

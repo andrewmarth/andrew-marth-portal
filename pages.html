@@ -988,9 +988,13 @@
         .client-dialog .tf-step .cl-money input[type="text"] { padding-left: 36px; }
         .client-dialog .cl-suffix::after { content: attr(data-suffix); position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
         .client-dialog .tf-step .cl-suffix input[type="text"] { padding-right: 90px; }
-        .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+        /* (minmax(0, 1fr): a long choice can't push the box past the card's edge) */
+        .sub-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; }
+        .sub-field { min-width: 0; }
+        /* An open list wraps long names (a closed picker still ends them with "…") */
+        .sub-field .picker-list .picker-main, .sub-field .picker-list .picker-secondary { white-space: normal; overflow-wrap: anywhere; }
         .sub-label { display: block; margin: 0 0 6px 6px; font-size: 0.82rem; font-weight: bold; opacity: 0.8; }
-        @media (max-width: 600px) { .sub-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) { .sub-grid { grid-template-columns: minmax(0, 1fr); } }
         /* Sellers: seller type, the LLC / trust name and each seller's signer title, under the picker */
         .seller-extras { display: grid; gap: 14px; margin-top: 16px; }
         .signer-list { display: grid; gap: 10px; }
@@ -1362,7 +1366,7 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
-        import { saleFees } from '/title-fees.js';
+        import { saleFees, BUYER_TYPES, pickableTitleDiscounts, DISCOUNT_APPLIES } from '/title-fees.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1504,7 +1508,7 @@
                 fincen: isTrue(col(page, 'FINCEN REPORT')), extraFees: listOf(col(page, 'EXTRA TITLE FEES')),
                 ownerPayer: text(col(page, 'WHO PAYS OWNERS POLICY')) || undefined,
                 sellerDiscount: text(col(page, 'SELLER ESCROW DISCOUNT')), buyerDiscount: text(col(page, 'BUYER ESCROW DISCOUNT')),
-                titleDiscount: text(col(page, 'OWNERS TITLE DISCOUNT')),
+                titleDiscount: text(col(page, 'OWNERS TITLE DISCOUNT')), buyerType: text(col(page, 'BUYER TYPE')) || 'Individual',
             });
         }
         // One side's share as escrow breakdown lines (side: 'buyer' or 'seller'); the lender's endorsements are one line
@@ -2668,6 +2672,7 @@
         const CHECK_ICON = '<svg class="picker-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
         const BOX_ICON = '<span class="picker-box" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>';
         const ICONS = {
+            person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
             bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-6 9 6"/><path d="M5 10v9"/><path d="M19 10v9"/><path d="M9 10v9"/><path d="M15 10v9"/><path d="M3 21h18"/></svg>',
             cash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>',
             calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>',
@@ -3425,9 +3430,16 @@
                     fallback: () => (((company() || {}).sellerOwnerShare ?? 1) >= 0.5 ? 'Seller' : 'Buyer') },
                 { label: 'FinCEN Report', column: 'FINCEN REPORT', kind: 'seg', short: 'FinCEN:', items: [{ value: 'TRUE', main: 'Yes' }, { value: 'FALSE', main: 'No' }],
                     show: () => has() && Boolean((company() || {}).fincenFee) && cash(), fallback: () => 'FALSE' },
-                { label: 'Owner’s Policy Discount', column: 'OWNERS TITLE DISCOUNT', kind: 'choice', short: 'Title discount:', items: () => named((company() || {}).titleDiscounts), show: () => has() && ((company() || {}).titleDiscounts || []).length > 0 },
-                { label: (side === 'buyer' ? 'Buyer’s' : 'Seller’s') + ' Escrow Discount', column: side === 'buyer' ? 'BUYER ESCROW DISCOUNT' : 'SELLER ESCROW DISCOUNT', kind: 'choice', short: 'Escrow discount:',
-                    items: () => named((company() || {}).discounts), show: () => has() && ((company() || {}).discounts || []).length > 0 },
+                // The buyer's escrow and owner's policy discounts follow from who they are
+                { label: 'Buyer Type', column: 'BUYER TYPE', kind: 'choice', icon: 'person', short: 'Buyer:', blank: 'Individual',
+                    items: BUYER_TYPES.map(v => ({ value: v === 'Individual' ? '' : v, main: v })), show: has },
+                // Picked by hand: a discount the seller or the property (a prior policy) qualifies for
+                { label: 'Seller / Prior Policy Discount', column: 'OWNERS TITLE DISCOUNT', kind: 'choice', short: 'Title discount:',
+                    items: () => [{ value: '', main: 'None', icon: 'none' }].concat(pickableTitleDiscounts(company() || {}).map(d => ({ value: d.name, main: d.name, icon: 'cash',
+                        secondary: Math.round((d.percent || 0) * 100) + '% off the owner’s policy' + ((d.applies || 'property') === 'property' ? '' : ', on what the seller pays') }))),
+                    show: () => has() && pickableTitleDiscounts(company() || {}).length > 0 },
+                ...(side === 'seller' ? [{ label: 'Seller’s Escrow Discount', column: 'SELLER ESCROW DISCOUNT', kind: 'choice', short: 'Escrow discount:',
+                    items: () => named((company() || {}).discounts), show: () => has() && ((company() || {}).discounts || []).length > 0 }] : []),
                 { label: 'Other Fees That Apply', column: 'EXTRA TITLE FEES', kind: 'multi', one: 'other fee', many: 'other fees',
                     items: () => ((company() || {}).otherFees || []).filter(f => f.when === 'Sometimes' && f.name).map(f => ({ value: f.name, main: f.name, secondary: wholeMoney.format(f.amount || 0) })),
                     show: () => has() && ((company() || {}).otherFees || []).some(f => f.when === 'Sometimes') },
@@ -3435,7 +3447,7 @@
             groupField(parent, 'Title & Escrow', parts, {
                 help: side === 'buyer'
                     ? 'The title company’s filed rates price the escrow fee, recording, title policies and endorsements. Condo, HOA and manufactured home endorsements follow the property.'
-                    : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. Buyer’s Financing is what you expect the buyer to use.',
+                    : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. Buyer’s Financing and Buyer Type are what you expect the buyer to be: a buyer’s discount on the owner’s policy only lowers the seller’s cost when the company takes it off the whole policy.',
             });
         }
 
