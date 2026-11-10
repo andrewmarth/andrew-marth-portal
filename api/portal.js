@@ -37,6 +37,9 @@ const PAGE_SETTING_FIELDS = {
   'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
   'WHO PAYS OWNERS POLICY': 'payer', 'OWNERS TITLE DISCOUNT': 'text', 'SELLER ESCROW DISCOUNT': 'text', 'BUYER ESCROW DISCOUNT': 'text',
   'FINCEN REPORT': 'bool', 'EXTRA TITLE FEES': 'list',
+  // Seller Net's Buyer Inputs (the buyer's side of the escrow breakdown): the loan product by name and the buyer's credit
+  // score; the rest are the Buyer Breakdown's own columns (RETAIL LTV, EARNEST MONEY DEPOSIT, ...)
+  'BUYER LOAN PRODUCT': 'text', 'BUYER CREDIT SCORE': 'int',
   // Who the buyer is (their escrow and owner's policy discounts follow from it)
   'BUYER TYPE': ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'],
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
@@ -2531,6 +2534,15 @@ async function createProperty_(account, body) {
     'SELLER CREDIT': 0,
     'SALE TYPE': 'Standard',
     'BUYER FINANCING': 'Fixed Rate Loan',
+    // Buyer Inputs (the buyer's side): the first loan product, 80% loan, the Buyer Breakdown's insurance placeholder
+    'BUYER LOAN PRODUCT': String(((await rows('loanProducts'))[0] || {})['LOAN PRODUCT NAME'] || '').trim(),
+    'RETAIL LTV': 0.8,
+    'HOMEOWNERS INSURANCE RATE': 0.0035,
+    'LENDER POINTS PURCHASED': 0,
+    'EARNEST MONEY DEPOSIT': 0,
+    'GIFT FUNDS': 0,
+    'BUYERS AGENT COMMISSION %': 0,
+    'BUYERS AGENT COMMISSION $': 0,
     'WHO PAYS TRANSFER FEE': 'Seller',
     'WHO PAYS CAP FEE': 'Seller',
     'WHO PAYS DISCLOSURE FEE': 'Seller',
@@ -2635,6 +2647,9 @@ async function pageData_(id, account, pageId) {
   }
   // Seller Net: every version the viewer can see (this one included), for the version dropdown
   if (result.pageType.toLowerCase() === 'seller net') {
+    // The buyer's side of the escrow breakdown: the loan products and today's rate, like a Buyer Breakdown
+    result.loanProducts = await rows('loanProducts');
+    result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
     result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
   }
   return result;

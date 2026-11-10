@@ -777,6 +777,43 @@
             background: var(--brown);
             color: var(--cream);
         }
+        /* Seller Net: one row per item, the seller's amount and the buyer's side by side */
+        .lg-list { list-style: none; margin: 0; padding: 0; }
+        .lg-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 12px 0; border-bottom: 1px solid rgba(79, 45, 44, 0.12); }
+        .lg-list .lg-row:last-child { border-bottom: none; }
+        .lg-k { font-weight: bold; overflow-wrap: anywhere; text-align: center; }
+        .lg-v { text-align: right; font-variant-numeric: tabular-nums; min-width: 0; }
+        .lg-v b { display: block; font-weight: bold; white-space: nowrap; }
+        .lg-v small { display: block; margin-top: 3px; font-size: 0.78rem; opacity: 0.7; text-align: inherit; }
+        .lg-row > .lg-v:first-child { text-align: left; }
+        .lg-warn { grid-column: 1 / -1; justify-self: center; display: flex; align-items: flex-start; justify-content: center; gap: 6px; max-width: 560px; margin-top: 6px; padding: 8px 12px; border-radius: 10px; background: #fdf6e9; border: 1px solid rgba(192, 144, 80, 0.5); color: var(--rust); font-weight: bold; font-size: 0.82rem; line-height: 1.4; text-align: center; }
+        .lg-warn svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--gold); }
+        .lg-v.is-credit b { color: var(--olive); }
+        .lg-v.is-debit b { color: var(--rust); }
+        .lg-head { padding: 0 0 10px 0; border-bottom: 3px solid var(--brown); }
+        .lg-head .lg-v b { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.2rem; }
+        .lg-wide { list-style: none; margin: 4px 0 12px 0; padding: 16px 18px; border-radius: 18px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); text-align: center; }
+        .lg-wide p { margin: 0 0 12px 0; line-height: 1.45; font-size: 0.95rem; }
+        .lg-wide .btn { margin: 0 auto; }
+        .lg .dual-empty { margin: 14px 0 4px 0; text-align: center; }
+        .lg-total .lg-row { border-bottom-color: rgba(233, 226, 216, 0.25); padding: 9px 0; }
+        .lg-total .lg-row.is-total { border-top: 2px solid rgba(233, 226, 216, 0.6); border-bottom: none; font-size: 1.08rem; }
+        .lg-total .lg-row.is-total .lg-v { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--gold); }
+        .lg-total .lg-row.is-total + .lg-row.is-total { border-top: none; }
+        @media (max-width: 600px) {
+            .lg-row { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr) minmax(0, 0.95fr); gap: 4px 8px; font-size: 0.9rem; }
+            .lg-v b { white-space: normal; }
+            .lg-head .lg-v b { font-size: 1.02rem; }
+            .lg-total .lg-row.is-total .lg-v { font-size: 1.05rem; }
+        }
+        /* Seller Net: seller and buyer side by side (stacked on phones) */
+        .dual { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 34px; }
+        .dual-col { min-width: 0; }
+        .dual-head { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 3px solid var(--brown); }
+        .dual-head h3 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.35rem; line-height: 1.1; }
+        .dual-head span { display: block; margin-top: 3px; font-size: 0.85rem; opacity: 0.7; }
+        .dual-empty { padding: 18px; border-radius: 16px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); font-size: 0.95rem; }
+        @media (max-width: 760px) { .dual { grid-template-columns: minmax(0, 1fr); gap: 30px; } }
         .total-box .label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
         .cash-group + .cash-group { margin-top: 16px; }
         .cash-group-title {
@@ -1333,6 +1370,13 @@
                 <div class="settings-grid" id="misc-fields"></div>
             </div>
 
+            <!-- Seller Net: what prices the buyer's side of the escrow breakdown -->
+            <div class="settings-section" id="buyer-inputs-section" hidden>
+                <h3 class="money-section-title">Buyer Inputs</h3>
+                <p class="field-help buyer-inputs-help">What you expect the buyer to bring: these price the buyer’s side of the escrow breakdown, like a Buyer Breakdown. Buyer’s Financing and Buyer Type are in Title &amp; Escrow.</p>
+                <div class="settings-grid" id="buyer-inputs-fields"></div>
+            </div>
+
             <div class="settings-section" id="inspection-section">
                 <h3 class="money-section-title">Inspections</h3>
                 <div class="settings-grid" id="inspection-fields"></div>
@@ -1741,9 +1785,31 @@
             return { balance, details, warning: '' };
         }
 
-        function calculateSellerNet(page) {
+        // Seller Net: the buyer's side of the escrow breakdown, worked out like a Buyer Breakdown from the Buyer Inputs.
+        // { missing: why it can't be priced yet } until there's a price and (unless the buyer pays cash) a loan product.
+        function buyerSide(page) {
+            const isCash = text(col(page, 'BUYER FINANCING')) === 'Cash';
+            const product = (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === text(col(page, 'BUYER LOAN PRODUCT')));
+            if (!num(col(page, 'PURCHASE PRICE'))) return { missing: 'Add the sale price to see the buyer’s side.' };
+            if (!isCash && !product) return { missing: 'Pick the buyer’s loan product in Buyer Inputs to see the buyer’s side.' };
+            const score = text(col(page, 'BUYER CREDIT SCORE'));
+            const result = calculate({ ...page, 'CASH PURCHASE': isCash ? 'TRUE' : 'FALSE' }, product || {}, data.interestRate || {}, score || String(FALLBACK_CREDIT_SCORE));
+            result.productName = isCash ? 'Cash' : text(col(product, 'LOAN PRODUCT NAME'));
+            result.hasScore = Boolean(score);
+            return result;
+        }
+
+        // buyer: the buyer's side (buyerSide), when there is one: the seller pays only the credit the buyer can use, and the
+        // title fees follow the buyer's actual loan
+        function calculateSellerNet(page, buyer) {
             const price = num(col(page, 'PURCHASE PRICE'));
             const sellerPct = num(col(page, 'SELLER CREDIT'));
+            const buyerReady = Boolean(buyer && !buyer.missing);
+            const creditLine = buyerReady ? buyer.lines.find(l => l.capped === 1) : null;
+            const credit = creditLine ? creditLine.amount : price * sellerPct;
+            const creditWarnings = creditLine && credit < price * sellerPct - 0.5
+                ? ['Only ' + wholeMoney.format(credit) + ' of the ' + percent(sellerPct) + ' can be used: a seller credit can only cover the buyer’s closing costs (and the loan’s limit)'] : [];
+            const buyerLoan = buyerReady ? (buyer.lines.find(l => l.label === 'Loan Amount') || {}).amount || 0 : null;
 
             // Dates: projected close of escrow, and the days left in that month (closing day included)
             const acceptance = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
@@ -1793,7 +1859,7 @@
             // Listed in display order; each line's section is the heading it shows under
             const lines = [
                 { section: 'Financial', label: 'Sale Price', amount: price },
-                { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -(price * sellerPct) },
+                { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -credit, warnings: creditWarnings },
 
                 { section: 'Payoffs', payoff: true, key: 'principal', label: estimatedBalance ? 'Estimated Principal Balance' : 'Principal Loan Amount', amount: -principal,
                     note: closing && principal && !loan.warning ? (estimatedBalance ? 'Estimated balance on ' : 'Projected balance on ') + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
@@ -1812,7 +1878,7 @@
                 ...((sellerTitle => sellerTitle ? titleLines(sellerTitle, 'seller') : [
                     { section: 'Title', label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
                     { section: 'Title', label: 'Owners Title Insurance Fee', amount: -(price * num(col(page, 'OWNERS TITLE RATE'))) },
-                ])(titleSale(page, text(col(page, 'BUYER FINANCING')) === 'Cash' ? 0 : price * 0.8, { sellerHasPayoff: !noLoan }))),
+                ])(titleSale(page, buyerLoan !== null ? buyerLoan : text(col(page, 'BUYER FINANCING')) === 'Cash' ? 0 : price * 0.8, { sellerHasPayoff: !noLoan }))),
 
                 hoaFee('HOA Transfer Fee', 'TRANSFER'),
                 hoaFee('HOA Capital Improvement Fee', 'CAP'),
@@ -1879,27 +1945,101 @@
                 + '<button type="button" class="btn" data-client-input>Add Your Loan Details</button></li>';
             // One heading + list per section, in the order the lines are listed
             // Seller Net leaves out lines that come to $0 (the Sale Price always shows)
-            const shownLines = result.lines.filter(l => !l.hidden && !(result.sellerNet && toDollars(l.amount) === 0 && l.label !== 'Sale Price'));
-            const sections = [...new Set(shownLines.map(l => l.section))];
-            document.getElementById('escrow-list').innerHTML = sections.map(name =>
+            // (a $0 line with a warning still shows, so the warning can be read)
+            const shownLines = result.lines.filter(l => !l.hidden && !(result.sellerNet && toDollars(l.amount) === 0 && l.label !== 'Sale Price' && !(l.warnings || []).length));
+            const sectionsOf = lines => [...new Set(lines.map(l => l.section))].map(name =>
                 '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
-                + '<ul class="money-list">' + shownLines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>'
-            ).join('')
+                + '<ul class="money-list">' + lines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>').join('');
+            const sellerHtml = sectionsOf(shownLines)
                 // No loan line to put it under (no loan, or a $0 balance): the button goes after the breakdown
                 + (result.askClient && !shownLines.some(l => l.key === 'principal') ? '<ul class="money-list">' + clientAskHtml.replace('Add your loan details for an exact payoff', 'Add your loan and HOA details to finish your net sheet') + '</ul>' : '');
-            if (result.sellerNet) renderSellerTotal(result);
-            else renderCashBreakdown(result);
+            if (!result.sellerNet) {
+                document.getElementById('escrow-list').innerHTML = sellerHtml;
+                renderCashBreakdown(result);
+                return;
+            }
+            // Seller Net: one row per line item, the seller's amount on the left and the buyer's on the right (blank when the
+            // item is only on one side); the net to the seller and the buyer's cash to close at the bottom
+            renderSellerTotal(result);
+            const b = result.buyer;
+            const buyerReady = Boolean(b && !b.missing);
+            // The same item on both sides: "Purchase Price" is the "Sale Price"; a percent in the label becomes a note
+            const keyOf = l => (l.label === 'Purchase Price' ? 'Sale Price' : l.label.replace(/\s*\([^)]*%\)\s*$/, ''));
+            const pctNote = l => ((l.label.match(/\(([^)]*%)\)\s*$/) || [])[1] || '');
+            const keep = ['Purchase Price', 'Loan Amount'];
+            const buyerLines = buyerReady ? b.lines.filter(l => !l.hidden && l.label !== b.cashLabel
+                && (toDollars(l.amount) !== 0 || keep.includes(l.label) || (l.warnings || []).length)) : [];
+            const SECTION_ORDER = ['Financial', 'Payoffs', 'Loan', 'Prorations', 'Title', 'Miscellaneous'];
+            const sectionNames = [...new Set(SECTION_ORDER.concat(shownLines.map(l => l.section), buyerLines.map(l => l.section)))];
+            // Each section's rows: the seller's lines in order (with the buyer's matching line), then the buyer's other lines
+            const rowsOf = name => {
+                const rows = [];
+                shownLines.filter(l => l.section === name).forEach(l => rows.push({ key: keyOf(l), seller: l }));
+                buyerLines.filter(l => l.section === name).forEach(l => {
+                    const match = rows.find(r => r.key === keyOf(l) && !r.buyer);
+                    if (match) match.buyer = l; else rows.push({ key: keyOf(l), buyer: l });
+                });
+                return rows;
+            };
+            const cell = l => {
+                if (!l) return '<span class="lg-v is-blank" aria-hidden="true"></span>';
+                const shown = toDollars(l.amount);
+                const cls = shown > 0 ? ' is-credit' : shown < 0 ? ' is-debit' : ' is-zero';
+                const notes = [pctNote(l), l.note].filter(Boolean);
+                return '<span class="lg-v' + cls + '"><b>' + signedMoney(l.amount) + '</b>'
+                    + notes.map(n => '<small>' + escapeHtml(n) + '</small>').join('') + '</span>';
+            };
+            // A line's warnings go under the whole row, centered (once, if both sides have the same one)
+            const warningsOf = r => [...new Set([].concat((r.seller && r.seller.warnings) || [], (r.buyer && r.buyer.warnings) || []))]
+                .map(w => '<small class="lg-warn">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small>').join('');
+            const rowHtml = r => '<li class="lg-row">' + cell(r.seller) + '<span class="lg-k">' + escapeHtml(r.key) + '</span>' + cell(r.buyer) + warningsOf(r) + '</li>'
+                + (r.seller && r.seller.key === 'principal' && result.askClient ? '<li class="lg-wide">' + clientAskHtml.replace(/^<li class="net-ask">|<\/li>$/g, '') + '</li>' : '');
+            const buyerSub = buyerReady ? [b.productName, text(col({ ...data.page, ...draft }, 'BUYER TYPE')) || ''].filter(Boolean).join(' · ') : '';
+            const sectionsHtml = sectionNames.map(name => {
+                const rows = rowsOf(name);
+                if (!rows.length) return '';
+                return '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3><ul class="lg-list">' + rows.map(rowHtml).join('') + '</ul></section>';
+            }).join('');
+            // The bottom line: the seller's net and the buyer's cash
+            const net = toDollars(result.net);
+            const totalRow = (k, s, by, cls) => '<li class="lg-row' + (cls ? ' ' + cls : '') + '"><span class="lg-v">' + (s === null ? '' : s) + '</span>'
+                + '<span class="lg-k">' + escapeHtml(k) + '</span><span class="lg-v">' + (by === null ? '' : by) + '</span></li>';
+            const totals = '<div class="total-box lg-total"><h3 class="label">Bottom Line</h3><ul class="lg-list">'
+                + totalRow('Closing Costs, Credits & Prorations', signedMoney(result.costs), null)
+                + totalRow('Loan Payoffs', signedMoney(result.payoffs), null)
+                + totalRow(net < 0 ? 'Seller Owes At Closing' : 'Estimated Net To Seller', wholeMoney.format(Math.abs(net)), null, 'is-total')
+                + (buyerReady ? totalRow(b.cashLabel, null, wholeMoney.format(Math.abs(toDollars(b.cashToClose))), 'is-total') : '')
+                + '</ul></div>';
+            document.getElementById('escrow-list').innerHTML = '<div class="lg">'
+                + '<div class="lg-row lg-head"><span class="lg-v"><b>Seller</b></span><span class="lg-k"></span><span class="lg-v"><b>Buyer</b>'
+                + (buyerSub ? '<small>' + escapeHtml(buyerSub) + '</small>' : '') + '</span></div>'
+                + (buyerReady ? '' : '<p class="dual-empty">' + escapeHtml((b && b.missing) || 'Add the Buyer Inputs to see the buyer’s side.') + '</p>')
+                + sectionsHtml
+                + (result.askClient && !shownLines.some(l => l.key === 'principal') ? '<ul class="lg-list"><li class="lg-wide">' + clientAskHtml.replace('Add your loan details for an exact payoff', 'Add your loan and HOA details to finish your net sheet').replace(/^<li class="net-ask">|<\/li>$/g, '') + '</li></ul>' : '')
+                + totals + '</div>';
         }
 
         // Seller Net: what the sale brings in, what comes out of it, and what's left for the seller
-        function renderSellerTotal(result) {
+        function sellerTotalRows(result) {
             const row = (k, v) => '<li><span class="k">' + escapeHtml(k) + '</span><span class="v">' + signedMoney(v) + '</span></li>';
             const net = toDollars(result.net);
-            document.getElementById('seller-total-list').innerHTML = row('Sale Price', result.price)
+            return row('Sale Price', result.price)
                 + row('Closing Costs, Credits & Prorations', result.costs)
                 + row('Loan Payoffs', result.payoffs)
                 + '<li class="is-total"><span class="k">' + (net < 0 ? 'Seller Owes At Closing' : 'Estimated Net To Seller') + '</span><span class="v">'
                 + wholeMoney.format(Math.abs(net)) + '</span></li>';
+        }
+        function renderSellerTotal(result) { document.getElementById('seller-total-list').innerHTML = sellerTotalRows(result); }
+        const sellerTotalHtml = result => '<div class="total-box"><h3 class="label">Net Proceeds</h3><ul class="cash-list">' + sellerTotalRows(result) + '</ul></div>';
+        // Seller Net: what the buyer pays during escrow and brings to closing (like a Buyer Breakdown's Cash Breakdown)
+        function buyerTotalHtml(b) {
+            const amount = n => (toDollars(n) < 0 ? '−' : '') + wholeMoney.format(Math.abs(toDollars(n)));
+            const row = (k, v) => '<li><span class="k">' + escapeHtml(k) + '</span><span class="v">' + amount(v) + '</span></li>';
+            return '<div class="total-box"><h3 class="label">Buyer’s Cash</h3><ul class="cash-list">'
+                + row('Earnest Money Deposit', b.earnestMoney)
+                + (b.isCash ? '' : row('Appraisal Deposit', b.appraisalDeposit))
+                + (toDollars(b.giftFunds) ? row('Gift Funds', b.giftFunds) : '')
+                + '<li class="is-total"><span class="k">' + escapeHtml(b.cashLabel) + '</span><span class="v">' + amount(Math.abs(b.cashToClose)) + '</span></li></ul></div>';
         }
 
         // Seller Net, admins only: each calculated escrow line, step by step (with any unsaved settings edits)
@@ -2184,7 +2324,8 @@
         function renderNetWaiting(page) {
             const missing = sellerNetMissing(page);
             const waiting = missing.agent.length > 0;
-            ['escrow-list', 'seller-total', 'seller-note'].forEach(id => { document.getElementById(id).hidden = waiting; });
+            ['escrow-list', 'seller-note'].forEach(id => { document.getElementById(id).hidden = waiting; });
+            document.getElementById('seller-total').hidden = true;
             const box = document.getElementById('net-waiting');
             box.hidden = !waiting;
             if (!waiting) { box.innerHTML = ''; return; }
@@ -2513,7 +2654,9 @@
             // Seller Net: the numbers with any unsaved settings edits
             if (isSellerNet()) {
                 const page = { ...data.page, ...draft };
-                const result = calculateSellerNet(page);
+                const buyer = buyerSide(page);
+                const result = calculateSellerNet(page, buyer);
+                result.buyer = buyer;
                 const missing = sellerNetMissing(page);
                 result.askClient = missing.client.length > 0;
                 renderHouse(page, result, !missing.agent.length);
@@ -3632,6 +3775,23 @@
             percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.');
             percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price and a flat amount. Enter 0 for none.');
 
+            // Buyer Inputs: the buyer's side of the escrow breakdown
+            document.getElementById('buyer-inputs-section').hidden = false;
+            const buyerIn = document.getElementById('buyer-inputs-fields');
+            choiceField(buyerIn, 'Loan Product', 'BUYER LOAN PRODUCT', (data.loanProducts || []).map(p => ({
+                value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')), secondary: text(col(p, 'LENDER NAME')), icon: 'bank' })),
+                { help: 'Not used when Buyer’s Financing is Cash.' });
+            percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
+            percentField(buyerIn, 'Points Purchased', 'LENDER POINTS PURCHASED');
+            toggleField(buyerIn, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']]);
+            wholeField(buyerIn, 'Buyer Credit Score', 'BUYER CREDIT SCORE', { help: 'Blank uses ' + FALLBACK_CREDIT_SCORE + '.' });
+            percentField(buyerIn, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE', { help: 'A yearly percent of the price.' });
+            moneyField(buyerIn, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');
+            moneyField(buyerIn, 'Gift Funds', 'GIFT FUNDS');
+            choiceField(buyerIn, 'Census Designation', 'CENSUS DESIGNATION', ['Low', 'Moderate', 'Middle', 'Upper'].map(v => ({ value: v, main: v, icon: 'map' })),
+                { help: '<a href="https://geomap.ffiec.gov/ffiecgeomap/" target="_blank" rel="noopener noreferrer">Click here for the map</a>' });
+            percentAndDollars(buyerIn, 'Buyer Paid Commission', 'BUYERS AGENT COMMISSION %', 'BUYERS AGENT COMMISSION $', 'What the buyer pays their agent on top of the seller-paid commission. Both are optional.');
+
             validateSettings();
             makeEditable(homeCard);
             makeEditable(listingCard);
@@ -4010,7 +4170,6 @@
             document.getElementById('escrow-eyebrow').textContent = 'Net Proceeds';
             document.getElementById('cash-total').hidden = true;
             document.getElementById('buyer-note').hidden = true;
-            document.getElementById('seller-total').hidden = false;
             document.getElementById('seller-note').hidden = false;
             update();
             setupVersionPicker();
