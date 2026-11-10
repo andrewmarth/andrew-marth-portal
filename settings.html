@@ -521,6 +521,8 @@
         .tc-try-out li.tc-try-total { margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(79, 45, 44, 0.2); font-size: 1rem; }
         .tc-try-out li.tc-try-total + .tc-try-total { margin-top: 0; padding-top: 0; border-top: none; }
         .tc-try-out li.tc-try-head { margin-top: 14px; font-weight: bold; }
+        .tc-norate { margin: 2px 0 10px 0; }
+        .tc-special[hidden] { display: none; }
         /* Missing rates: yellow */
         .tc-req { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4cc; border: 1px solid #ecc94b; color: #6b4e00; font-size: 0.82rem; line-height: 1.35; flex: 1 0 100%; }
         .tc-req svg { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px; color: #b7791f; }
@@ -1996,6 +1998,7 @@
             // columns 4 and 3; a short sale's escrow fees are paid by the buyer (3.2).
             fincenFee: 150, fincenExtraFee: 75, extraLoanEscrowFee: 0, extraLoanPolicyFee: 0, cashNoPayoffAddOn: 300,
             shortSaleTable: [[100000, 1350], [150000, 1350], [200000, 1350], [250000, 1510], [300000, 1510], [350000, 1670], [400000, 1670], [450000, 1840], [500000, 1840], [550000, 2000], [600000, 2000], [650000, 2160], [700000, 2160], [750000, 2320], [800000, 2320], [850000, 2480], [900000, 2480], [950000, 2650], [1000000, 2650]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 20, shortSaleOverPer: 20000, shortSaleSellerShare: 0,
+            shortSaleNoRate: false, reoNoRate: false,
             reoTable: [[100000, 1080], [150000, 1080], [200000, 1080], [250000, 1300], [300000, 1300], [350000, 1300], [400000, 1300], [450000, 1510], [500000, 1510], [550000, 1620], [600000, 1620], [650000, 1620], [700000, 1730], [750000, 1840], [800000, 1840], [850000, 1940], [900000, 1940], [950000, 2050], [1000000, 2020]].map(([upTo, fee]) => ({ upTo, fee })), reoOverFee: 20, reoOverPer: 20000, reoSellerShare: 0.5,
             refiTable: [[250000, 425], [500000, 575], [750000, 720], [1000000, 860]].map(([upTo, fee]) => ({ upTo, fee })),
             refiOverFee: 5.4, refiOverPer: 10000, refiPolicyPercent: 1, refiEndorsements: 0,
@@ -2044,8 +2047,9 @@
             // $1,000,000 it's the basic escrow fee + $1,000, which the table can't show). No REO rate or FinCEN fee filed.
             fincenFee: 0, fincenExtraFee: 0, extraLoanEscrowFee: 250, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
             shortSaleTable: [[100000, 1200], [250000, 1400], [500000, 1600], [750000, 1800], [1000000, 2000]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 0, shortSaleOverPer: 0, shortSaleSellerShare: 0.5,
-            // (no separate REO rate: a $0 row uses the standard rate)
-            reoTable: [{ upTo: 1000000, fee: 0 }], reoOverFee: 0, reoOverPer: 0, reoSellerShare: 0.5,
+            // No separate REO rate: the standard escrow fee is used
+            shortSaleNoRate: false, reoNoRate: true,
+            reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
             // Title manual Appendix A-1, above $1,000,000 add $40 per $20,000
             titleTable: [[100000, 844], [120000, 927], [140000, 989], [160000, 1067], [180000, 1151], [200000, 1234], [220000, 1290], [240000, 1345], [260000, 1408], [280000, 1477], [300000, 1546], [320000, 1600], [340000, 1657], [360000, 1712], [380000, 1768], [400000, 1823], [420000, 1877], [440000, 1934], [460000, 1988], [480000, 2045], [500000, 2100], [520000, 2155], [540000, 2211], [560000, 2265], [580000, 2320], [600000, 2379], [620000, 2433], [640000, 2489], [660000, 2543], [680000, 2600], [700000, 2655], [720000, 2709], [740000, 2765], [760000, 2819], [780000, 2877], [800000, 2932], [820000, 2986], [840000, 3042], [860000, 3097], [880000, 3152], [900000, 3209], [920000, 3263], [940000, 3320], [960000, 3374], [980000, 3429], [1000000, 3485]].map(([upTo, fee]) => ({ upTo, fee })),
             titleOverFee: 40, titleOverPer: 20000,
@@ -2099,8 +2103,9 @@
             // only applies when another company issues the title policy. No FinCEN fee filed.
             fincenFee: 0, fincenExtraFee: 0, extraLoanEscrowFee: 0, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
             shortSaleTable: [[150000, 1200], [300000, 1400], [500000, 1600], [750000, 1900], [1000000, 2100]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 0, shortSaleOverPer: 0, shortSaleSellerShare: 0.5,
-            // (no separate REO rate: a $0 row uses the standard rate)
-            reoTable: [{ upTo: 1000000, fee: 0 }], reoOverFee: 0, reoOverPer: 0, reoSellerShare: 0.5,
+            // No separate REO rate: the standard escrow fee is used
+            shortSaleNoRate: false, reoNoRate: true,
+            reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
             // Title manual Zone 1, above $1,000,000 add $38.85 per $20,000 (to $5,000,000)
             titleTable: [[60000, 585], [80000, 695], [100000, 805], [120000, 869], [140000, 933], [160000, 998], [180000, 1062], [200000, 1125], [220000, 1189], [240000, 1253], [260000, 1317], [280000, 1381], [300000, 1445], [320000, 1495], [340000, 1547], [360000, 1597], [380000, 1647], [400000, 1698], [420000, 1749], [440000, 1800], [460000, 1850], [480000, 1902], [500000, 1952], [520000, 2002], [540000, 2054], [560000, 2104], [580000, 2155], [600000, 2205], [620000, 2256], [640000, 2307], [660000, 2357], [680000, 2409], [700000, 2459], [720000, 2510], [740000, 2561], [760000, 2611], [780000, 2662], [800000, 2712], [820000, 2765], [840000, 2814], [860000, 2864], [880000, 2916], [900000, 2966], [920000, 3017], [940000, 3068], [960000, 3119], [980000, 3169], [1000000, 3219]].map(([upTo, fee]) => ({ upTo, fee })),
             titleOverFee: 38.85, titleOverPer: 20000,
@@ -2208,7 +2213,7 @@
         // What to do about a missing rate
         function requiredHint(key) {
             const kind = (TITLE_REQUIRED.find(r => r[0] === key) || [])[2];
-            if (key === 'shortSaleTable' || key === 'reoTable') return 'Add a row. If the company has no separate rate, add one row with a $0 fee.';
+            if (key === 'shortSaleTable' || key === 'reoTable') return 'Add at least one row, or tick No separate rate above.';
             if (kind === 'table') return key === 'loanEndorsementList' ? 'Add at least one endorsement (a $0 price counts).' : 'Add at least one row.';
             if (kind === 'over') return 'Enter both numbers. Enter 0 and 0 if there’s no extra charge.';
             if (kind === 'date') return 'Enter the date the filing took effect.';
@@ -2248,6 +2253,9 @@
             + tcBox('money', 'data-k="amount" aria-label="Price" placeholder="100"', e.amount)
             + '<select data-k="when" aria-label="Which loans need it">' + ENDORSEMENT_WHEN.map(w => '<option' + ((e.when || 'Every Loan') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
             + '<button type="button" class="tc-remove" data-remove aria-label="Remove endorsement">' + REMOVE_ICON + '</button></div>';
+        // Short sale / REO: "No separate rate" (the standard escrow fee is used, and its table isn't needed)
+        const noRateBox = (kind, on) => '<label class="tc-check tc-norate"><input type="checkbox" id="tc-' + kind + '-norate" data-norate="' + kind + '"' + (on ? ' checked' : '') + '>'
+            + '<span><b>No separate rate.</b> The company charges its standard escrow fee' + (kind === 'reo' ? ' for an REO.' : ' for a short sale.') + '</span></label>';
         const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
 
         function drawTitleForm(c) {
@@ -2313,19 +2321,23 @@
                     + tcField('FinCEN report fee', tcBox('money', 'id="tc-fincen" placeholder="0"', c.fincenFee))
                     + tcField('Per extra buying entity', tcBox('money', 'id="tc-fincen-extra" placeholder="0"', c.fincenExtraFee)) + '</div>')
 
-                + section('Short Sales & REOs', 'Escrow fees for a <b>short sale</b> (the seller’s lender takes less than it’s owed) and an <b>REO</b> (a bank selling a home it foreclosed on) come from their own tables, in place of the table and add-on above (WFG 2.1 columns 3 and 4; First American C.4; Fidelity E410). If the company has no separate rate, add one row with a $0 fee and the standard rate is used.',
+                + section('Short Sales & REOs', 'Escrow fees for a <b>short sale</b> (the seller’s lender takes less than it’s owed) and an <b>REO</b> (a bank selling a home it foreclosed on) come from their own tables, in place of the table and add-on above (WFG 2.1 columns 3 and 4; First American C.4; Fidelity E410). If the company has no separate rate, tick <b>No separate rate</b> and the standard escrow fee is used.',
                     '<h4 class="tc-sub">Short sale escrow fee</h4>'
+                    + noRateBox('shortSale', c.shortSaleNoRate)
+                    + '<div class="tc-special" data-special="shortSale"' + (c.shortSaleNoRate ? ' hidden' : '') + '>'
                     + '<div class="tc-table" data-table="shortSale"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
                     + (c.shortSaleTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="shortSale">+ Add Row</button>'
                     + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-ss-over-fee" aria-label="Add this much" placeholder="0"', c.shortSaleOverFee)
                     + ' for every ' + tcBox('money', 'id="tc-ss-over-per" aria-label="For every" placeholder="20,000"', c.shortSaleOverPer) + '</div>'
-                    + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-ss-share" placeholder="50"', c.shortSaleSellerShare)) + '</div>'
+                    + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-ss-share" placeholder="50"', c.shortSaleSellerShare)) + '</div></div>'
                     + '<h4 class="tc-sub">REO escrow fee</h4>'
+                    + noRateBox('reo', c.reoNoRate)
+                    + '<div class="tc-special" data-special="reo"' + (c.reoNoRate ? ' hidden' : '') + '>'
                     + '<div class="tc-table" data-table="reo"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
                     + (c.reoTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="reo">+ Add Row</button>'
                     + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-reo-over-fee" aria-label="Add this much" placeholder="0"', c.reoOverFee)
                     + ' for every ' + tcBox('money', 'id="tc-reo-over-per" aria-label="For every" placeholder="20,000"', c.reoOverPer) + '</div>'
-                    + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-reo-share" placeholder="50"', c.reoSellerShare)) + '</div>')
+                    + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-reo-share" placeholder="50"', c.reoSellerShare)) + '</div></div>')
 
                 + section('Refinance', 'A loan with no sale (the owner refinances); the borrower pays everything. The escrow manual has a flat <b>loan escrow</b> fee (WFG 4.5: $550) and recording fee (WFG 5.6: $100). The title rate manual has a separate, cheaper <b>refinance loan policy</b> table on the loan amount (WFG 5.2, which already includes the usual endorsements; an expanded coverage policy is 110%).',
                     '<div class="tc-grid">' + tcField('Refinance escrow fee', tcBox('money', 'id="tc-refi-escrow" placeholder="400"', c.refiEscrowFee))
@@ -2379,6 +2391,7 @@
                 vaSellerPays: document.getElementById('tc-va').checked,
                 cashNoPayoffAddOn: parseMoney(val('tc-cash-nopayoff')), extraLoanEscrowFee: parseMoney(val('tc-extra-escrow')),
                 extraLoanPolicyFee: parseMoney(val('tc-extra-policy')), fincenFee: parseMoney(val('tc-fincen')), fincenExtraFee: parseMoney(val('tc-fincen-extra')),
+                shortSaleNoRate: document.getElementById('tc-shortSale-norate').checked, reoNoRate: document.getElementById('tc-reo-norate').checked,
                 shortSaleTable: rowsOf('shortSale'), shortSaleOverFee: parseMoney(val('tc-ss-over-fee')), shortSaleOverPer: parseMoney(val('tc-ss-over-per')), shortSaleSellerShare: parsePct(val('tc-ss-share')),
                 reoTable: rowsOf('reo'), reoOverFee: parseMoney(val('tc-reo-over-fee')), reoOverPer: parseMoney(val('tc-reo-over-per')), reoSellerShare: parsePct(val('tc-reo-share')),
                 refiEscrowFee: parseMoney(val('tc-refi-escrow')), refiRecordingFee: parseMoney(val('tc-refi-recording')), refiTable: rowsOf('refi'),
@@ -2466,7 +2479,13 @@
             updateTitleTry();
             markMissing();
         });
-        tcBody.addEventListener('change', () => { updateTitleTry(); markMissing(); });
+        tcBody.addEventListener('change', e => {
+            // "No separate rate" hides that sale type's table, share and above-the-table charge
+            const noRate = e.target.closest('[data-norate]');
+            if (noRate) tcBody.querySelector('[data-special="' + noRate.dataset.norate + '"]').hidden = noRate.checked;
+            updateTitleTry();
+            markMissing();
+        });
         tcBody.addEventListener('focusout', e => {
             const box = e.target.closest('.tc-box.is-money');
             if (box && e.target.value.trim() !== '') { const n = parseMoney(e.target.value); if (isFinite(n)) e.target.value = moneyText(n); }

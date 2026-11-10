@@ -1273,6 +1273,7 @@ function titleCompanyOut_(doc) {
     shortSaleOverPer: num(f['SHORT SALE OVER PER']), shortSaleSellerShare: num(f['SHORT SALE SELLER SHARE']),
     reoTable: table(f['REO ESCROW TABLE']), reoOverFee: num(f['REO OVER FEE']), reoOverPer: num(f['REO OVER PER']),
     reoSellerShare: num(f['REO SELLER SHARE']),
+    shortSaleNoRate: f['SHORT SALE NO SEPARATE RATE'] === true, reoNoRate: f['REO NO SEPARATE RATE'] === true,
     refiEscrowFee: num(f['REFINANCE ESCROW FEE']),
     refiRecordingFee: num(f['REFINANCE RECORDING FEE']),
     refiTable: table(f['REFINANCE TITLE TABLE']),
@@ -1396,8 +1397,12 @@ async function saveTitleCompany_(account, body) {
   fields['LOAN ENDORSEMENTS'] = FieldValue.delete();
   fields['VA SELLER PAYS BUYER FEES'] = c.vaSellerPays === true;
 
-  // Every rate is required (0 counts: none, and a short sale / REO table of $0 rows means no separate rate)
+  // A short sale or REO with no separate rate uses the standard escrow fee (its table and share aren't needed)
+  fields['SHORT SALE NO SEPARATE RATE'] = c.shortSaleNoRate === true;
+  fields['REO NO SEPARATE RATE'] = c.reoNoRate === true;
+  // Every rate is required (0 counts: none)
   const missing = TITLE_REQUIRED_COLUMNS.filter(col => {
+    if ((c.shortSaleNoRate === true && /^SHORT SALE /.test(col)) || (c.reoNoRate === true && /^REO /.test(col))) return false;
     const v = fields[col];
     return Array.isArray(v) ? !v.length : v === undefined || v === null || v instanceof FieldValue;
   });

@@ -94,10 +94,10 @@ export function saleFees(c, price, loanAmount, o = {}) {
     const items = [];
     const add = (name, total, seller, kind, note) => items.push({ name, total, seller, buyer: total - seller, kind, note: note || '' });
 
-    // Escrow: a short sale or REO has its own table (when the company files one: a table of $0 rows means it doesn't);
-    // otherwise the table plus an add-on
-    const filed = table => (table || []).some(r => r.fee > 0);
-    const special = saleType === 'Short Sale' && filed(c.shortSaleTable) ? 'shortSale' : saleType === 'REO' && filed(c.reoTable) ? 'reo' : '';
+    // Escrow: a short sale or REO has its own table, unless the company has no separate rate (shortSaleNoRate /
+    // reoNoRate, or a table of $0 rows); otherwise the table plus an add-on
+    const filed = kind => !c[kind + 'NoRate'] && (c[kind + 'Table'] || []).some(r => r.fee > 0);
+    const special = saleType === 'Short Sale' && filed('shortSale') ? 'shortSale' : saleType === 'REO' && filed('reo') ? 'reo' : '';
     let base, total, share, note;
     if (special) {
         base = tableFee(c[special + 'Table'], c[special + 'OverFee'], c[special + 'OverPer'], price);
@@ -149,8 +149,8 @@ export function saleFees(c, price, loanAmount, o = {}) {
 
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 
-// Every rate a company needs (the Title Companies card won't save one without them). 0 counts: it means none, and a
-// short sale or REO table of $0 rows means the company has no separate rate. [key, label, kind]; kind 'table' needs a
+// Every rate a company needs (the Title Companies card won't save one without them). 0 counts: it means none. A short sale
+// or REO rate isn't needed when the company has no separate rate (shortSaleNoRate / reoNoRate). [key, label, kind]; kind 'table' needs a
 // complete row, 'over' is an "add $X per $Y" pair (key + 'Fee' and key + 'Per'), everything else needs a value.
 export const TITLE_REQUIRED = [
     ['manualDate', 'Escrow rates effective', 'date'],
@@ -195,6 +195,7 @@ const blank = v => v === null || v === undefined || v === '' || (typeof v === 'n
 // The keys of TITLE_REQUIRED a company is missing
 export function missingRates(c) {
     return TITLE_REQUIRED.filter(([key, , kind]) => {
+        if ((c.shortSaleNoRate && /^shortSale/.test(key)) || (c.reoNoRate && /^reo/.test(key))) return false;
         if (kind === 'table') return !(c[key] || []).some(r => (r.upTo > 0 || r.name) && !blank(r.fee ?? r.amount));
         if (kind === 'over') return OVER_FIELDS[key].some(k => blank(c[k]));
         return blank(c[key]);
