@@ -205,6 +205,8 @@ export async function handle(body, query) {
     if (body.action === 'addTransaction') return await addTransaction_(id, account, body);
     if (body.action === 'saveRentSplit') return await saveRentSplit_(id, account, body);
     if (body.action === 'saveSplitPayments') return await saveSplitPayments_(id, account, body);
+    if (body.action === 'saveRoadhousePaycheck') return await saveRoadhousePaycheck_(id, account, body);
+    if (body.action === 'saveRoadhouseSettings') return await saveRoadhouseSettings_(id, account, body);
     if (body.action === 'markTransactionPaid') return await settleTransaction_(id, account, body, true);
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
@@ -570,7 +572,13 @@ async function cashFlow_(id, account) {
     if (rid.length === 10 && rid !== id && hasRole_(r, 'CUM')) splitPeople.push({ id: rid, name: fullName_(r) || rid });
   });
   splitPeople.sort((a, b) => a.name.localeCompare(b.name));
+  const roadhouse = await roadhouseSettings_(id);
   const transactions = cumEntries_((await cumTransactionRows_()).rows, id).map(e => {
+    // A Roadhouse Paycheck: its shifts (for the edit menu) and how the amount is worked out (listed under it)
+    if (e.shifts) {
+      const pay = roadhousePay_(e.shifts, roadhouse || {});
+      e.lines = roadhouseLines_(pay);
+    }
     if (e.part === 'split') e.note = 'Owed to ' + (names[e.ownerId] || 'the account holder');
     if (e.part === 'receive') e.note = 'From ' + (names[e.person] || 'split');
     if (e.paymentLabel) e.note += ' · ' + e.paymentLabel;
@@ -579,7 +587,134 @@ async function cashFlow_(id, account) {
     delete e.paymentLabel;
     return e;
   });
-  return { ok: true, balance, transactions, splitPeople };
+  return { ok: true, balance, transactions, splitPeople, roadhouse };
+}
+
+// --- Roadhouse Paycheck ---
+// A paycheck worked out from shifts (HOURS, SALES, TIP %) and the account's Roadhouse Paycheck Settings (one cumSettings
+// document per account, by ACCOUNT ID). Percents are stored as decimals (0.03 for 3%).
+const ROADHOUSE_TYPE = 'Roadhouse Paycheck';
+const ROADHOUSE_SHIFTS = 'ROADHOUSE SHIFTS';
+const ROADHOUSE_MAX_SHIFTS = 14;
+const ROADHOUSE_FIELDS = {
+  payout: 'TIP POOL PAYOUT %', received: 'TIP POOL RECEIVED %', rate: 'HOURLY RATE',
+  az: 'AZ TAX %', fitw: 'FITW TAX %', med: 'MED TAX %', ss: 'SS TAX %',
+};
+const ROADHOUSE_TAXES = [['az', 'AZ Tax'], ['fitw', 'FITW Tax'], ['med', 'MED Tax'], ['ss', 'SS Tax']];
+const isRoadhouse_ = t => String(t.type || '').trim().toLowerCase() === ROADHOUSE_TYPE.toLowerCase();
+
+// This account's settings as numbers ({ payout, received, rate, az, fitw, med, ss }), or null before they're saved
+async function roadhouseSettings_(id) {
+  const r = await getRow('cumSettings', id);
+  if (!r) return null;
+  const out = {};
+  Object.keys(ROADHOUSE_FIELDS).forEach(k => { out[k] = cumNumber_(r[ROADHOUSE_FIELDS[k]]); });
+  return out;
+}
+
+// The shifts saved on a transaction: [{ hours, sales, tipPercent (0-100) }]
+function roadhouseShifts_(text) {
+  try {
+    const list = JSON.parse(String(text || '[]'));
+    return Array.isArray(list) ? list.map(s => ({ hours: Number(s.hours) || 0, sales: Number(s.sales) || 0, tipPercent: Number(s.tipPercent) || 0 })) : [];
+  } catch (e) { return []; }
+}
+
+// The paycheck: wages (hourly rate x hours, no overtime) plus tips (each shift's sales x its tip %, less the tip pool
+// payout (sales x payout %), plus the tip pool received (that payout x received %)) is the earned income; each tax is a
+// percent of the earned income, and the paycheck is what's left
+function roadhousePay_(shifts, s) {
+  const hours = shifts.reduce((t, x) => t + x.hours, 0);
+  const sales = shifts.reduce((t, x) => t + x.sales, 0);
+  const wages = cumRound_(hours * (s.rate || 0));
+  const tips = cumRound_(shifts.reduce((t, x) => t + x.sales * x.tipPercent / 100, 0));
+  const payout = cumRound_(sales * (s.payout || 0));
+  const received = cumRound_(sales * (s.payout || 0) * (s.received || 0));
+  const earned = cumRound_(wages + tips - payout + received);
+  const taxes = {};
+  ROADHOUSE_TAXES.forEach(([k]) => { taxes[k] = cumRound_(earned * (s[k] || 0)); });
+  const net = cumRound_(earned - ROADHOUSE_TAXES.reduce((t, [k]) => t + taxes[k], 0));
+  return { hours: cumRound_(hours), wages, tips, payout, received, earned, taxes, net };
+}
+function roadhouseLines_(pay) {
+  return [
+    { description: 'Wages (' + pay.hours + ' hours)', amount: pay.wages },
+    { description: 'Tips', amount: pay.tips },
+    { description: 'Tip Pool Payout', amount: -pay.payout },
+    { description: 'Tip Pool Received', amount: pay.received },
+  ].concat(ROADHOUSE_TAXES.map(([k, label]) => ({ description: label, amount: -pay.taxes[k] })))
+    .filter(l => l.amount !== 0);
+}
+
+// Add (no body.row) or edit (body.row + body.original { date, description }) a Roadhouse Paycheck.
+// body: { date (YYYY-MM-DD), shifts: [{ hours, sales, tipPercent (0-100) }] (1 to 14) }
+async function saveRoadhousePaycheck_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return { ok: false, error: 'invalid_date' };
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const list = Array.isArray(body.shifts) ? body.shifts : [];
+  if (!list.length || list.length > ROADHOUSE_MAX_SHIFTS) return { ok: false, error: 'invalid_shifts' };
+  const num = v => (String(v == null ? '' : v).trim() === '' ? NaN : Number(String(v).replace(/[$,%\s]/g, '')));
+  const shifts = [];
+  for (const sh of list) {
+    const hours = num((sh || {}).hours), sales = num(sh.sales), tipPercent = num(sh.tipPercent);
+    if (!isFinite(hours) || hours <= 0 || hours > 24) return { ok: false, error: 'invalid_shift_hours' };
+    if (!isFinite(sales) || sales < 0 || sales > 1000000) return { ok: false, error: 'invalid_shift_sales' };
+    if (!isFinite(tipPercent) || tipPercent < 0 || tipPercent > 100) return { ok: false, error: 'invalid_shift_tip' };
+    shifts.push({ hours: cumRound_(hours), sales: cumRound_(sales), tipPercent: Math.round(tipPercent * 1000) / 1000 });
+  }
+  const settings = await roadhouseSettings_(id);
+  if (!settings) return { ok: false, error: 'roadhouse_settings_missing' };
+  const amount = roadhousePay_(shifts, settings).net;
+  return withLock('cumTransactions', async () => {
+    const data = await cumTransactionRows_();
+    const col = data.col;
+    if (!col.type) throw new Error('Transactions are missing a TYPE column');
+    const fields = { [col.date]: date, [col.description]: ROADHOUSE_TYPE, [col.amount]: amount, [col.shifts || ROADHOUSE_SHIFTS]: JSON.stringify(shifts) };
+    if (body.row) {
+      const target = data.rows.filter(t => t.rowNumber === Number(body.row))[0];
+      if (!target || target.accountId !== id || !isRoadhouse_(target)) return { ok: false, error: 'not_found' };
+      const original = body.original || {};
+      if (String(original.date).trim() !== target.date || String(original.description).trim() !== target.description) return { ok: false, error: 'changed' };
+      await update('cumTransactions', target.docId, fields);
+      return { ok: true, row: target.rowNumber };
+    }
+    fields[col.id] = id;
+    fields[col.type] = ROADHOUSE_TYPE;
+    if (col.paid) fields[col.paid] = false;
+    const made = await add('cumTransactions', fields);
+    return { ok: true, row: made.order };
+  });
+}
+
+// The account's Roadhouse Paycheck Settings. body: { payout, received, az, fitw, med, ss } as percents (0-100) and
+// rate (dollars and cents). Paychecks not yet checked off are worked out again with the new settings.
+async function saveRoadhouseSettings_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  const fields = { 'ACCOUNT ID': id };
+  const settings = {};
+  for (const k of Object.keys(ROADHOUSE_FIELDS)) {
+    const t = String(body[k] == null ? '' : body[k]).trim().replace(/[$,%\s]/g, '');
+    const n = Number(t);
+    if (t === '' || !isFinite(n) || n < 0 || (k === 'rate' ? n > 1000 : n > 100)) return { ok: false, error: 'invalid_' + k };
+    settings[k] = k === 'rate' ? cumRound_(n) : Math.round(n * 1e4) / 1e6;
+    fields[ROADHOUSE_FIELDS[k]] = settings[k];
+  }
+  // Every value is saved (0 included)
+  const ref = db.collection('cumSettings').doc(id);
+  const data = {};
+  Object.keys(fields).forEach(k => { data[k] = fields[k]; });
+  await ref.set(data, { merge: true });
+  await withLock('cumTransactions', async () => {
+    const tx = await cumTransactionRows_();
+    for (const t of tx.rows) {
+      if (t.accountId !== id || t.paid || !isRoadhouse_(t)) continue;
+      const net = roadhousePay_(t.shifts, settings).net;
+      if (cumNumber_(t.amount) !== net) await update('cumTransactions', t.docId, { [tx.col.amount]: net });
+    }
+  });
+  return { ok: true };
 }
 
 const CUM_LINE_ITEMS = 20;
@@ -602,7 +737,7 @@ async function cumTransactionRows_() {
   };
   const col = {
     id: find('ACCOUNT ID'), date: find('DATE'), description: find('DESCRIPTION'), amount: find('AMOUNT'), type: find('TYPE'),
-    paid: find('PAID'), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
+    paid: find('PAID'), shifts: find(ROADHOUSE_SHIFTS), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
     items: [], payments: [],
   };
   for (let n = 1; n <= CUM_SPLIT_PAYMENTS; n++) {
@@ -647,6 +782,7 @@ async function cumTransactionRows_() {
       amount: text(col.amount),
       type: text(col.type),
       paid: yes(col.paid),
+      shifts: roadhouseShifts_(text(col.shifts)),
       items,
       splitDate: text(col.splitDate),
       splitPaid: yes(col.splitPaid),
@@ -695,7 +831,7 @@ function cumEntries_(list, id) {
       return e;
     };
     if (mine && !t.paid) {
-      if (!t.items.length) out.push(entry('main', { amount: t.amount }));
+      if (!t.items.length) out.push(entry('main', isRoadhouse_(t) ? { amount: t.amount, shifts: t.shifts, roadhouse: true } : { amount: t.amount }));
       else {
         const inline = t.items.filter(i => !i.separate);
         if (inline.length) {

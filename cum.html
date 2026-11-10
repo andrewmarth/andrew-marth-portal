@@ -562,6 +562,17 @@
         .flow-edit { padding: 2px 4px; border: none; background: none; cursor: pointer; font-family: inherit; font-size: 0.8rem; font-weight: bold; color: var(--rust); text-decoration: underline; text-underline-offset: 3px; }
         /* Edit pop-up (styled by the shared income pop-up styles) */
         .tx-dialog { max-width: 480px; }
+        .rh-box { position: relative; }
+        .rh-box[data-prefix]::before, .rh-box[data-suffix]::after { position: absolute; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+        .rh-box[data-prefix]::before { content: attr(data-prefix); left: 20px; }
+        .rh-box[data-suffix]::after { content: attr(data-suffix); right: 20px; }
+        .rh-box[data-prefix] input { padding-left: 36px; }
+        .rh-box[data-suffix] input { padding-right: 40px; }
+        .rh-help { margin: 6px 0 0 8px; font-size: 0.8rem; opacity: 0.7; }
+        .rh-note { margin: 16px 4px 0 4px; }
+        .rh-form .form-message.is-ok { color: var(--olive); }
+        .field input.is-invalid { border-color: #b3392f; }
+        @media (max-width: 600px) { .rh-form .form-grid { grid-template-columns: 1fr; } }
         .tx-dialog .dialog-scroll { padding-top: 18px; padding-bottom: 18px; }
         .tx-dialog .type-fields { grid-template-columns: 1fr; }
         .tx-dialog .ie-q { font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
@@ -646,6 +657,27 @@
             </div>
             <div id="flow"></div>
         </section>
+
+        <!-- Roadhouse Paycheck Settings: what every Roadhouse Paycheck is worked out from -->
+        <section class="main-card reveal" id="roadhouse-card" hidden>
+            <span class="card-eyebrow">Settings</span>
+            <h2>Roadhouse Paycheck Settings</h2>
+            <p class="muted">Each Roadhouse Paycheck is worked out from these. Saving updates the paychecks you haven’t been paid yet.</p>
+            <form class="rh-form" id="roadhouse-form" novalidate>
+                <div class="form-grid">
+                    <div class="field"><label for="rh-payout">Tip Pool Payout</label><div class="rh-box" data-suffix="%"><input id="rh-payout" data-key="payout" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div><p class="rh-help">Of your sales, paid into the tip pool</p></div>
+                    <div class="field"><label for="rh-received">Tip Pool Received</label><div class="rh-box" data-suffix="%"><input id="rh-received" data-key="received" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div><p class="rh-help">Of the tip pool payout, added back in</p></div>
+                    <div class="field"><label for="rh-rate">Hourly Rate</label><div class="rh-box" data-prefix="$"><input id="rh-rate" data-key="rate" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00"></div></div>
+                    <div class="field"><label for="rh-az">AZ Tax</label><div class="rh-box" data-suffix="%"><input id="rh-az" data-key="az" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>
+                    <div class="field"><label for="rh-fitw">FITW Tax</label><div class="rh-box" data-suffix="%"><input id="rh-fitw" data-key="fitw" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>
+                    <div class="field"><label for="rh-med">MED Tax</label><div class="rh-box" data-suffix="%"><input id="rh-med" data-key="med" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>
+                    <div class="field"><label for="rh-ss">SS Tax</label><div class="rh-box" data-suffix="%"><input id="rh-ss" data-key="ss" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>
+                </div>
+                <p class="rh-help rh-note">Taxes are each a percent of your earned income: wages (hourly rate × hours, no overtime) plus tips (sales × tip %), less the tip pool payout, plus the tip pool received.</p>
+                <p class="form-message" role="alert"></p>
+                <div class="form-actions"><button type="submit" class="btn" id="rh-save"><span class="btn-spinner" aria-hidden="true"></span>Save Settings</button></div>
+            </form>
+        </section>
     </main>
 
     <footer>
@@ -700,6 +732,8 @@
         function render(data) {
             transactions = data.transactions || [];
             splitPeople = data.splitPeople || [];
+            roadhouseSettings = data.roadhouse || null;
+            fillRoadhouse();
             pendingSteps = catchUpSteps(data);
             addBtn.hidden = pendingSteps.length > 0;
             if (pendingSteps.length) {
@@ -744,6 +778,8 @@
         let transactions = [];
         // Everyone else with CUM, for "Split with"
         let splitPeople = [];
+        // Roadhouse Paycheck Settings ({ payout, received, rate, az, fitw, med, ss }; percents as decimals), or null
+        let roadhouseSettings = null;
         let currentUser = null;
         async function api(payload) {
             const idToken = await currentUser.getIdToken();
@@ -767,6 +803,11 @@
             payments_too_big: 'The payments come to more than the share. Lower one so there’s some left for the last payment.',
             too_many_payments: 'That’s more payments than can be saved (10 at most).',
             rest_locked: 'The last payment was already checked off, so these payments can’t be changed here.',
+            roadhouse_settings_missing: 'Please fill in Roadhouse Paycheck Settings at the bottom of the page first.',
+            invalid_shifts: 'Please add at least one shift (14 at most).',
+            invalid_shift_hours: 'Please enter the hours for each shift (up to 24).',
+            invalid_shift_sales: 'Please enter the sales for each shift.',
+            invalid_shift_tip: 'Please enter a tip percent from 0 to 100 for each shift.',
         };
         let editor = null;
         function buildEditor() {
@@ -916,6 +957,7 @@
         // The "+" form (Income / Expense / Rent Split), and editing a rent split: one question at a time
         const cumForm = extra => openCumForm({
             splitPeople,
+            roadhouse: roadhouseSettings,
             save: async payload => {
                 const json = await api(payload);
                 if (!json.ok) throw new Error(json.error);
@@ -937,7 +979,7 @@
             if (!btn) return;
             const tx = transactions.find(t => t.key === btn.dataset.editKey);
             if (!tx) return;
-            if (tx.part === 'main' && tx.itemized) {
+            if (tx.part === 'main' && (tx.itemized || tx.roadhouse)) {
                 cumForm({
                     tx,
                     remove: async () => {
@@ -964,6 +1006,62 @@
             }
             if (tx.part === 'receive' || tx.part === 'item') editor.openDate(tx);
             else editor.open(tx);
+        });
+
+        // --- Roadhouse Paycheck Settings ---
+        const rhCard = document.getElementById('roadhouse-card');
+        const rhForm = document.getElementById('roadhouse-form');
+        const rhMessage = rhForm.querySelector('.form-message');
+        const rhInputs = [...rhForm.querySelectorAll('input[data-key]')];
+        // Shown as percents (3 for 3%) and the rate as dollars and cents
+        const asPercent = n => String(Math.round(n * 1e6) / 1e4);
+        function fillRoadhouse() {
+            rhCard.hidden = false;
+            if (rhForm.dataset.dirty) return;
+            const s = roadhouseSettings;
+            rhInputs.forEach(i => { i.value = !s ? '' : i.dataset.key === 'rate' ? Number(s.rate).toFixed(2) : asPercent(s[i.dataset.key]); });
+        }
+        rhForm.addEventListener('input', e => {
+            const el = e.target;
+            const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+            if (cleaned !== el.value) el.value = cleaned;
+            el.classList.remove('is-invalid');
+            rhForm.dataset.dirty = '1';
+            rhMessage.textContent = '';
+            rhMessage.classList.remove('is-ok');
+        });
+        rhForm.querySelector('#rh-rate').addEventListener('blur', e => { if (e.target.value.trim() !== '') e.target.value = Number(e.target.value).toFixed(2); });
+        rhForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const body = { action: 'saveRoadhouseSettings' };
+            for (const i of rhInputs) {
+                const v = i.value.trim();
+                const n = Number(v);
+                const label = rhForm.querySelector('label[for="' + i.id + '"]').textContent;
+                if (v === '' || !isFinite(n) || (i.dataset.key !== 'rate' && n > 100)) {
+                    i.classList.add('is-invalid');
+                    i.focus();
+                    rhMessage.textContent = i.dataset.key === 'rate' ? 'Please enter your hourly rate.' : 'Please enter ' + label + ' as a percent from 0 to 100 (0 if none).';
+                    return;
+                }
+                body[i.dataset.key] = n;
+            }
+            const btn = document.getElementById('rh-save');
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            try {
+                const json = await api(body);
+                if (!json.ok) throw new Error(json.error);
+                delete rhForm.dataset.dirty;
+                await load(currentUser);
+                rhMessage.textContent = 'Saved.';
+                rhMessage.classList.add('is-ok');
+            } catch (err) {
+                console.error(err);
+                rhMessage.textContent = 'We couldn’t save that. Please try again.';
+            }
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
         });
 
         // --- Catch up: a balance older than today, or transactions whose date has passed ---

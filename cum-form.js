@@ -2,13 +2,16 @@
 //   Income / Expense   what it's for, how much, which day
 //   Rent Split         what it's called, the day the rent is due, who it's split with, the line items, what percent of
 //                      each they pay, whether any item is paid on its own day, and when they pay their share
-// Editing a rent split opens the same questions (without Income / Expense / Rent Split), filled in, with Delete.
+//   Roadhouse Paycheck the day it comes in and the shifts it covers (hours, sales, tip %); the amount is worked out
+//                      from the Roadhouse Paycheck Settings
+// Editing a rent split or a paycheck opens the same questions (without the first one), filled in, with Delete.
 // openSplitPayments: the Edit on money coming in from someone splitting with you: their share in payments on different days.
 import { ensureStepFormStyles } from '/task-form.js';
 import { lockPageScroll } from '/income-editor.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MAX_ITEMS = 20;
+const MAX_SHIFTS = 14;
 
 const CSS = `
 .cum-form-dialog .cf-money { position: relative; max-width: 260px; }
@@ -45,7 +48,21 @@ const CSS = `
 .cum-form-dialog .cf-delete[hidden] { display: none; }
 .cum-form-dialog [data-confirm-delete] { background: #b3392f; }
 .cum-form-dialog .tf-cal-day.is-picked { background: var(--olive); }
+.cum-form-dialog .cf-shift { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 0.8fr) 40px; gap: 8px; align-items: end; }
+.cum-form-dialog .cf-shift label { display: block; font-size: 0.78rem; font-weight: bold; margin: 0 0 4px 8px; }
+.cum-form-dialog .cf-suffix { position: relative; }
+.cum-form-dialog .cf-suffix::after { content: attr(data-suffix); position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+.cum-form-dialog .tf-step .cf-row .cf-suffix input[type="text"] { padding-right: 34px; }
+.cum-form-dialog .cf-shift .cf-money { max-width: none; }
+.cum-form-dialog .cf-pay-preview { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: #f7f4f0; font-size: 0.9rem; }
+.cum-form-dialog .cf-pay-preview li { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; list-style: none; }
+.cum-form-dialog .cf-pay-preview li.is-net { margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(14, 42, 59, 0.2); font-weight: bold; color: var(--olive); }
+.cum-form-dialog .cf-pay-preview ul { margin: 0; padding: 0; }
+.cum-form-dialog .cf-pay-preview.is-missing { color: #b3392f; font-weight: bold; }
 @media (max-width: 600px) {
+    .cum-form-dialog .cf-shift { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; }
+    .cum-form-dialog .cf-shift .cf-shift-sales { grid-column: 1 / 3; grid-row: 2; }
+    .cum-form-dialog .cf-shift .cf-remove { grid-column: 3; grid-row: 1; }
     .cum-form-dialog .cf-item { grid-template-columns: 1fr 40px; }
     .cum-form-dialog .cf-item .cf-money { grid-column: 1; max-width: none; }
     .cum-form-dialog .cf-row-head { flex-wrap: wrap; }
@@ -63,6 +80,7 @@ const KINDS = [
     { value: 'income', main: 'Income', sub: 'Money coming in', icon: ICON('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>') },
     { value: 'expense', main: 'Expense', sub: 'Money going out', icon: ICON('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') },
     { value: 'rent', main: 'Rent Split', sub: 'Rent shared with someone else', icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v12h14V9"/><path d="M12 13v8"/>') },
+    { value: 'roadhouse', main: 'Roadhouse Paycheck', sub: 'Worked out from your shifts', icon: ICON('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>') },
 ];
 const WHENS = [
     { value: 'same', main: 'The same day as the rent', sub: 'Their share comes in when the rent is due', icon: ICON('<path d="M20 6 9 17l-5-5"/>') },
@@ -112,13 +130,14 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
     + step('separate', '<div class="cf-rows" data-separate></div>')
     + step('splitWhen', '<div class="tf-choices is-stacked" data-choices="splitWhen">' + WHENS.map(w => choice(w.value, w.main, w.sub, w.icon)).join('') + '</div>')
     + step('splitDate', calendar('splitDate'))
+    + step('shifts', '<div class="cf-rows" data-shifts></div><button type="button" class="cf-add-item" data-add-shift>+ Add a shift</button><div class="cf-pay-preview" data-pay-preview></div>')
     + '</div>'
     + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
         + '<div class="form-actions"><button type="button" class="btn btn-secondary cf-delete" data-delete hidden>Delete</button>'
         + '<button type="button" class="btn btn-secondary" data-back>Cancel</button>'
         + '<button type="submit" class="btn" data-next><span class="btn-spinner" aria-hidden="true"></span><span data-next-text>Next</span></button></div></div>'
     + '<div class="ie-confirm" hidden role="alertdialog" aria-labelledby="cf-confirm-title"><div class="ie-confirm-card"><h3 id="cf-confirm-title">Delete this rent split?</h3>'
-        + '<p>It will be removed from your cash flow, along with what the other person owes for it. This can’t be undone here.</p>'
+        + '<p data-confirm-text>It will be removed from your cash flow, along with what the other person owes for it. This can’t be undone here.</p>'
         + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-keep>Cancel</button>'
         + '<button type="button" class="btn" data-confirm-delete><span class="btn-spinner" aria-hidden="true"></span>Delete</button></div></div></div>'
     + '</form>';
@@ -169,8 +188,10 @@ function build() {
     let current = 'kind';
 
     const RENT_STEPS = () => ['description', 'date', 'splitWith', 'items', 'percents', 'separate', 'splitWhen'].concat(a.splitWhen === 'other' ? ['splitDate'] : []);
-    const steps = () => (editing ? RENT_STEPS() : ['kind'].concat(a.kind === 'rent' ? RENT_STEPS() : ['description', 'amount', 'date']));
-    const rent = () => editing || a.kind === 'rent';
+    const kindSteps = () => (a.kind === 'rent' ? RENT_STEPS() : a.kind === 'roadhouse' ? ['date', 'shifts'] : ['description', 'amount', 'date']);
+    const steps = () => (editing ? kindSteps() : ['kind'].concat(kindSteps()));
+    const rent = () => a.kind === 'rent';
+    const roadhouse = () => a.kind === 'roadhouse';
     const personName = () => (ctx.splitPeople.find(p => p.id === a.splitWith) || {}).name || 'They';
     const firstName = () => personName().split(' ')[0];
 
@@ -179,7 +200,8 @@ function build() {
         if (id === 'kind') return ['What are you adding?', ''];
         if (id === 'description') return rent() ? ['What should it be called?', 'Like “Rent” or “March Rent”.'] : ['What’s it for?', a.kind === 'income' ? 'Like “Paycheck”.' : 'Like “Car payment”.'];
         if (id === 'amount') return ['How much?', ''];
-        if (id === 'date') return rent() ? ['When is the rent due?', ''] : [a.kind === 'income' ? 'When does it come in?' : 'When does it go out?', ''];
+        if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : 'When does it go out?', ''];
+        if (id === 'shifts') return ['Which shifts does it cover?', 'Hours, sales and the tip percent for each shift.'];
         if (id === 'splitWith') return ['Who are you splitting it with?', ''];
         if (id === 'items') return ['What’s included?', 'Each charge on its own line. Use a minus for a credit, like -20.'];
         if (id === 'percents') return ['How much of each does ' + firstName() + ' pay?', 'A percent of each line. 0 means you pay all of it.'];
@@ -300,6 +322,65 @@ function build() {
         rows[rows.length - 1].focus();
     });
 
+    // --- Roadhouse Paycheck shifts: hours, sales, tip %; the paycheck worked out underneath ---
+    const num = v => Number(String(v).replace(/[$,%\s]/g, '')) || 0;
+    function drawShifts() {
+        const box = (k, cls, label, value, extra) => '<div class="' + cls + '"><label for="cf-' + cls + '-' + k + '">' + label + '</label>' + extra[0]
+            + '<input type="text" id="cf-' + cls + '-' + k + '" class="' + cls + '-input" inputmode="decimal" autocomplete="off" placeholder="0" value="' + escapeHtml(value) + '">' + extra[1] + '</div>';
+        $('[data-shifts]').innerHTML = a.shifts.map((sh, k) => '<div class="cf-row cf-shift" data-k="' + k + '">'
+            + box(k, 'cf-shift-hours', 'Hours', sh.hours, ['<div class="cf-suffix" data-suffix="hr">', '</div>'])
+            + box(k, 'cf-shift-sales', 'Sales', sh.sales, ['<div class="cf-money">', '</div>'])
+            + box(k, 'cf-shift-tip', 'Tip', sh.tip, ['<div class="cf-suffix" data-suffix="%">', '</div>'])
+            + '<button type="button" class="cf-remove" data-remove aria-label="Remove shift ' + (k + 1) + '"' + (a.shifts.length === 1 ? ' disabled' : '') + '>' + CLOSE_ICON + '</button></div>').join('');
+        $('[data-add-shift]').hidden = a.shifts.length >= MAX_SHIFTS;
+        drawPay();
+    }
+    // The same math as the API: wages (no overtime) + tips - tip pool payout + tip pool received, less each tax
+    function drawPay() {
+        const s = ctx.roadhouse;
+        const preview = $('[data-pay-preview]');
+        preview.classList.toggle('is-missing', !s);
+        if (!s) { preview.textContent = 'Fill in Roadhouse Paycheck Settings at the bottom of the page first.'; return; }
+        const r = n => Math.round(n * 100) / 100;
+        const hours = a.shifts.reduce((t, x) => t + num(x.hours), 0);
+        const sales = a.shifts.reduce((t, x) => t + num(x.sales), 0);
+        const wages = r(hours * s.rate);
+        const tips = r(a.shifts.reduce((t, x) => t + num(x.sales) * num(x.tip) / 100, 0));
+        const payout = r(sales * s.payout);
+        const received = r(sales * s.payout * s.received);
+        const earned = r(wages + tips - payout + received);
+        const taxes = [['AZ Tax', s.az], ['FITW Tax', s.fitw], ['MED Tax', s.med], ['SS Tax', s.ss]].map(([label, p]) => [label, r(earned * p)]);
+        const net = r(earned - taxes.reduce((t, x) => t + x[1], 0));
+        const row = (label, n, cls) => '<li' + (cls ? ' class="' + cls + '"' : '') + '><span>' + escapeHtml(label) + '</span><span>' + (n < 0 ? '−' : '') + dollars(Math.abs(n)) + '</span></li>';
+        preview.innerHTML = '<ul>' + row('Wages (' + r(hours) + ' hours)', wages) + row('Tips', tips) + row('Tip Pool Payout', -payout) + row('Tip Pool Received', received)
+            + row('Earned Income', earned, 'is-net') + taxes.map(([label, n]) => row(label, -n)).join('') + row('Paycheck', net, 'is-net') + '</ul>';
+    }
+    $('[data-shifts]').addEventListener('input', e => {
+        const row = e.target.closest('[data-k]');
+        if (!row) return;
+        const v = cleanMoney(e.target.value, false);
+        if (v !== e.target.value) e.target.value = v;
+        const sh = a.shifts[Number(row.dataset.k)];
+        if (e.target.matches('.cf-shift-hours-input')) sh.hours = v;
+        if (e.target.matches('.cf-shift-sales-input')) sh.sales = v;
+        if (e.target.matches('.cf-shift-tip-input')) sh.tip = v;
+        drawPay();
+    });
+    $('[data-shifts]').addEventListener('click', e => {
+        const b = e.target.closest('[data-remove]');
+        if (!b || a.shifts.length === 1) return;
+        a.shifts.splice(Number(b.closest('[data-k]').dataset.k), 1);
+        drawShifts();
+    });
+    $('[data-add-shift]').addEventListener('click', () => {
+        if (a.shifts.length >= MAX_SHIFTS) return;
+        const last = a.shifts[a.shifts.length - 1];
+        a.shifts.push({ hours: '', sales: '', tip: last ? last.tip : '' });
+        drawShifts();
+        const rows = dialog.querySelectorAll('.cf-shift-hours-input');
+        rows[rows.length - 1].focus();
+    });
+
     // --- What percent of each line they pay ---
     const share = i => itemAmount(i) * (Number(i.percent) || 0) / 100;
     function drawPercents() {
@@ -388,6 +469,18 @@ function build() {
             return true;
         }
         if (id === 'splitWhen') return a.splitWhen ? true : problem(null, 'Please choose when they pay you.');
+        if (id === 'shifts') {
+            if (!ctx.roadhouse) return problem(null, 'Please fill in Roadhouse Paycheck Settings at the bottom of the page first.');
+            const blank = v => String(v).trim() === '';
+            for (let k = 0; k < a.shifts.length; k++) {
+                const sh = a.shifts[k];
+                const row = dialog.querySelector('[data-shifts] [data-k="' + k + '"]');
+                if (blank(sh.hours) || !(num(sh.hours) > 0 && num(sh.hours) <= 24)) return problem(row.querySelector('.cf-shift-hours-input'), 'Please enter the hours for each shift.');
+                if (blank(sh.sales)) return problem(row.querySelector('.cf-shift-sales-input'), 'Please enter the sales for each shift (0 if none).');
+                if (blank(sh.tip) || num(sh.tip) > 100) return problem(row.querySelector('.cf-shift-tip-input'), 'Please enter a tip percent from 0 to 100 for each shift.');
+            }
+            return true;
+        }
         return true;
     }
     function show(id, direction) {
@@ -410,6 +503,7 @@ function build() {
         if (id === 'items') drawItems();
         if (id === 'percents') drawPercents();
         if (id === 'separate') drawSeparate();
+        if (id === 'shifts') drawShifts();
         showFooter();
         scroller.scrollTop = 0;
         const field = { description: '#cf-description', amount: '#cf-amount' }[id];
@@ -452,7 +546,10 @@ function build() {
     };
     async function save() {
         let payload;
-        if (!rent()) {
+        if (roadhouse()) {
+            payload = { action: 'saveRoadhousePaycheck', date: isoDate(a.date), shifts: a.shifts.map(sh => ({ hours: num(sh.hours), sales: num(sh.sales), tipPercent: num(sh.tip) })) };
+            if (editing) { payload.row = ctx.tx.row; payload.original = { date: ctx.tx.date, description: ctx.tx.description }; }
+        } else if (!rent()) {
             payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: a.description, amount: a.amount };
         } else {
             payload = {
@@ -513,21 +610,34 @@ function build() {
             dialog.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
             message.textContent = '';
             confirmBox.hidden = true;
-            if (editing) {
+            $('#cf-confirm-title').textContent = editing && next.tx.roadhouse ? 'Delete this paycheck?' : 'Delete this rent split?';
+            $('[data-confirm-text]').textContent = editing && next.tx.roadhouse
+                ? 'It will be removed from your cash flow. This can’t be undone here.'
+                : 'It will be removed from your cash flow, along with what the other person owes for it. This can’t be undone here.';
+            if (editing && next.tx.roadhouse) {
+                const tx = next.tx;
+                a = {
+                    kind: 'roadhouse', date: dayOf(tx.date),
+                    shifts: (tx.shifts || []).map(sh => ({ hours: String(sh.hours), sales: String(sh.sales), tip: String(sh.tipPercent) })),
+                    items: [],
+                };
+                if (!a.shifts.length) a.shifts = [{ hours: '', sales: '', tip: '' }];
+                $('#cf-title').textContent = 'Edit Roadhouse Paycheck';
+            } else if (editing) {
                 const tx = next.tx;
                 const items = tx.items || [];
                 const splitWith = (items.find(i => i.splitId) || {}).splitId || '';
                 // Someone no longer marked CUM still shows, so saving doesn't drop their split
                 if (splitWith && !ctx.splitPeople.some(p => p.id === splitWith)) ctx = { ...ctx, splitPeople: ctx.splitPeople.concat({ id: splitWith, name: splitWith }) };
                 a = {
-                    description: tx.description || '', date: dayOf(tx.date), splitWith,
+                    kind: 'rent', description: tx.description || '', date: dayOf(tx.date), splitWith,
                     items: items.map(i => ({ n: i.n, description: i.description || '', amount: String(i.amount), percent: i.splitId ? String(i.percent) : '0', separate: !!i.separate, separateDate: i.separate && dayOf(i.separateDate) ? isoDate(dayOf(i.separateDate)) : '',
                         separatePaid: !!i.separatePaid, paidDate: i.separate && dayOf(i.separateDate) ? isoDate(dayOf(i.separateDate)) : '' })),
                     splitWhen: tx.splitDate ? 'other' : 'same', splitDate: tx.splitDate ? dayOf(tx.splitDate) : null,
                 };
                 $('#cf-title').textContent = 'Edit Rent Split';
             } else {
-                a = { items: [{ n: 0, description: 'Base Rent', amount: '', percent: '50', separate: false, separateDate: '' }] };
+                a = { items: [{ n: 0, description: 'Base Rent', amount: '', percent: '50', separate: false, separateDate: '' }], shifts: [{ hours: '', sales: '', tip: '' }] };
                 $('#cf-title').textContent = 'Add Transaction';
             }
             $('#cf-description').value = a.description || '';
