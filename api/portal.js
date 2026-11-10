@@ -40,6 +40,8 @@ const PAGE_SETTING_FIELDS = {
   // Seller Net's Buyer Inputs (the buyer's side of the escrow breakdown): the loan product by name and the buyer's credit
   // score; the rest are the Buyer Breakdown's own columns (RETAIL LTV, EARNEST MONEY DEPOSIT, ...)
   'BUYER LOAN PRODUCT': 'text', 'BUYER CREDIT SCORE': 'int',
+  // What the client sees: the seller's side only (the buyer's side is an admin-only card), or both sides (blank)
+  'CLIENT VIEW': ['Seller Only', 'Both Sides'],
   // Who the buyer is (their escrow and owner's policy discounts follow from it)
   'BUYER TYPE': ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'],
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',

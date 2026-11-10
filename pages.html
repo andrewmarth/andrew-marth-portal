@@ -792,6 +792,7 @@
         .lg-v.is-debit b { color: #b3392f; }
         .lg-head { padding: 0 0 10px 0; border-bottom: 3px solid var(--brown); }
         .lg-head .lg-v b { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.2rem; }
+        #buyer-card .dual-empty { text-align: center; }
         .lg-wide { list-style: none; margin: 4px 0 12px 0; padding: 16px 18px; border-radius: 18px; background: #fbf9f6; border: 2px dashed rgba(79, 45, 44, 0.25); text-align: center; }
         .lg-wide p { margin: 0 0 12px 0; line-height: 1.45; font-size: 0.95rem; }
         .lg-wide .btn { margin: 0 auto; }
@@ -1397,6 +1398,14 @@
             <p class="math-intro">Step by step, for the escrow breakdown lines that are calculated. Includes any unsaved settings edits.</p>
             <div id="math-list"></div>
         </section>
+
+        <!-- 7. Seller Net, admins only, when Client View is Seller Only: the buyer's side of the escrow breakdown -->
+        <section class="main-card reveal" id="buyer-card" hidden>
+            <span class="card-eyebrow">Admin Only</span>
+            <h2>Buyer Breakdown</h2>
+            <p class="math-intro" id="buyer-card-sub"></p>
+            <div id="buyer-card-list"></div>
+        </section>
     </main>
 
     <footer>
@@ -1958,11 +1967,33 @@
                 renderCashBreakdown(result);
                 return;
             }
-            // Seller Net: one row per line item, the seller's amount on the left and the buyer's on the right (blank when the
-            // item is only on one side); the net to the seller and the buyer's cash to close at the bottom
             renderSellerTotal(result);
             const b = result.buyer;
             const buyerReady = Boolean(b && !b.missing);
+            const buyerSub = buyerReady ? [b.productName, text(col({ ...data.page, ...draft }, 'BUYER TYPE')) || ''].filter(Boolean).join(' · ') : '';
+            const buyerCard = document.getElementById('buyer-card');
+            // Seller Only: the seller's side and Net Proceeds box; admins get the buyer's side in its own card at the bottom
+            if (clientView({ ...data.page, ...draft }) === 'Seller Only') {
+                document.getElementById('escrow-list').innerHTML = sellerHtml;
+                buyerCard.hidden = !data.isAdmin;
+                if (data.isAdmin) {
+                    const keep = ['Purchase Price', 'Loan Amount'];
+                    const lines = buyerReady ? b.lines.filter(l => !l.hidden && l.label !== b.cashLabel
+                        && (toDollars(l.amount) !== 0 || keep.includes(l.label) || (l.warnings || []).length)) : [];
+                    document.getElementById('buyer-card-sub').textContent = buyerReady
+                        ? 'What the buyer pays (' + buyerSub + '). The client doesn’t see this while Client View is Seller Only.'
+                        : 'The client doesn’t see this while Client View is Seller Only.';
+                    document.getElementById('buyer-card-list').innerHTML = buyerReady
+                        ? [...new Set(lines.map(l => l.section))].map(name => '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
+                            + '<ul class="money-list">' + lines.filter(l => l.section === name).map(l => lineHtml({ ...l, key: '' })).join('') + '</ul></section>').join('')
+                            + buyerTotalHtml(b)
+                        : '<p class="dual-empty">' + escapeHtml((b && b.missing) || 'Add the Buyer Inputs to see the buyer’s side.') + '</p>';
+                }
+                return;
+            }
+            buyerCard.hidden = true;
+            // Seller Net, Both Sides: one row per line item, the seller's amount on the left, the item in the middle and the
+            // buyer's on the right (blank when the item is only on one side); the seller's net and the buyer's cash at the bottom
             // The same item on both sides: "Purchase Price" is the "Sale Price"; a percent in the label becomes a note
             const keyOf = l => (l.label === 'Purchase Price' ? 'Sale Price' : l.label.replace(/\s*\([^)]*%\)\s*$/, ''));
             const pctNote = l => ((l.label.match(/\(([^)]*%)\)\s*$/) || [])[1] || '');
@@ -1994,7 +2025,6 @@
                 .map(w => '<small class="lg-warn">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small>').join('');
             const rowHtml = r => '<li class="lg-row">' + cell(r.seller) + '<span class="lg-k">' + escapeHtml(r.key) + '</span>' + cell(r.buyer) + warningsOf(r) + '</li>'
                 + (r.seller && r.seller.key === 'principal' && result.askClient ? '<li class="lg-wide">' + clientAskHtml.replace(/^<li class="net-ask">|<\/li>$/g, '') + '</li>' : '');
-            const buyerSub = buyerReady ? [b.productName, text(col({ ...data.page, ...draft }, 'BUYER TYPE')) || ''].filter(Boolean).join(' · ') : '';
             const sectionsHtml = sectionNames.map(name => {
                 const rows = rowsOf(name);
                 if (!rows.length) return '';
@@ -2019,6 +2049,8 @@
                 + totals + '</div>';
         }
 
+        // Seller Net: what the client sees; blank is Both Sides
+        const clientView = page => (/^seller only$/i.test(text(col(page, 'CLIENT VIEW'))) ? 'Seller Only' : 'Both Sides');
         // Seller Net: what the sale brings in, what comes out of it, and what's left for the seller
         function sellerTotalRows(result) {
             const row = (k, v) => '<li><span class="k">' + escapeHtml(k) + '</span><span class="v">' + signedMoney(v) + '</span></li>';
@@ -2325,7 +2357,7 @@
             const missing = sellerNetMissing(page);
             const waiting = missing.agent.length > 0;
             ['escrow-list', 'seller-note'].forEach(id => { document.getElementById(id).hidden = waiting; });
-            document.getElementById('seller-total').hidden = true;
+            document.getElementById('seller-total').hidden = waiting || clientView(page) !== 'Seller Only';
             const box = document.getElementById('net-waiting');
             box.hidden = !waiting;
             if (!waiting) { box.innerHTML = ''; return; }
@@ -3749,6 +3781,13 @@
             loanFeeFields = [...payoffs.children].slice(payoffStart);
 
             const misc = document.getElementById('misc-fields');
+            // Client View: Both Sides (blank) shows the buyer's side next to the seller's; Seller Only moves it to an admin-only card
+            const viewField = fieldShell('Client View', { help: 'Seller Only shows the client just the seller’s side; the buyer’s side is in an admin-only card at the bottom.' });
+            const viewSeg = segToggle([['Seller Only', 'Seller Only'], ['Both Sides', 'Both Sides']], clientView({ 'CLIENT VIEW': current('CLIENT VIEW') }),
+                v => setDraft('CLIENT VIEW', v), 'Client View');
+            viewField.body.append(viewSeg);
+            viewField.wrap.syncInputs = () => setSeg(viewSeg, clientView({ 'CLIENT VIEW': current('CLIENT VIEW') }));
+            misc.append(viewField.wrap);
             titleEscrowField(misc, 'seller');
             const titleStart = misc.children.length;
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
