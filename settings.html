@@ -521,6 +521,13 @@
         .tc-try-out li.tc-try-total { margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(79, 45, 44, 0.2); font-size: 1rem; }
         .tc-try-out li.tc-try-total + .tc-try-total { margin-top: 0; padding-top: 0; border-top: none; }
         .tc-try-out li.tc-try-head { margin-top: 14px; font-weight: bold; }
+        /* Missing rates: yellow */
+        .tc-req { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4cc; border: 1px solid #ecc94b; color: #6b4e00; font-size: 0.82rem; line-height: 1.35; flex: 1 0 100%; }
+        .tc-req svg { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px; color: #b7791f; }
+        .tc-missing input, .tc-missing.tc-table .tc-row:not(.is-head) input, .tc-missing select { border-color: #e0b100 !important; background: #fffbea !important; }
+        .tc-table.tc-missing { padding: 6px; border-radius: 12px; background: #fffbea; outline: 1px dashed #e0b100; }
+        .tc-missing-list { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0 0; padding: 8px 12px; border-radius: 12px; background: #fff4cc; border: 1px solid #ecc94b; color: #6b4e00; font-size: 0.85rem; line-height: 1.4; }
+        .tc-missing-list svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: #b7791f; }
         .tc-help-date { max-width: 240px; margin-bottom: 14px; }
         .tc-sub { margin: 18px 0 8px 2px; font-size: 0.95rem; }
         @media (max-width: 600px) {
@@ -1131,7 +1138,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -1987,7 +1994,7 @@
             // Escrow manual 5.5: $150 (+$75 per extra buying entity); a second loan on a sale is in the bundled rate (4.1.2),
             // and loan policies are priced on the combined amount (title manual 6.2). Short sales and REOs: rate schedule
             // columns 4 and 3; a short sale's escrow fees are paid by the buyer (3.2).
-            fincenFee: 150, fincenExtraFee: 75, extraLoanEscrowFee: 0, extraLoanPolicyFee: 0, cashNoPayoffAddOn: null,
+            fincenFee: 150, fincenExtraFee: 75, extraLoanEscrowFee: 0, extraLoanPolicyFee: 0, cashNoPayoffAddOn: 300,
             shortSaleTable: [[100000, 1350], [150000, 1350], [200000, 1350], [250000, 1510], [300000, 1510], [350000, 1670], [400000, 1670], [450000, 1840], [500000, 1840], [550000, 2000], [600000, 2000], [650000, 2160], [700000, 2160], [750000, 2320], [800000, 2320], [850000, 2480], [900000, 2480], [950000, 2650], [1000000, 2650]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 20, shortSaleOverPer: 20000, shortSaleSellerShare: 0,
             reoTable: [[100000, 1080], [150000, 1080], [200000, 1080], [250000, 1300], [300000, 1300], [350000, 1300], [400000, 1300], [450000, 1510], [500000, 1510], [550000, 1620], [600000, 1620], [650000, 1620], [700000, 1730], [750000, 1840], [800000, 1840], [850000, 1940], [900000, 1940], [950000, 2050], [1000000, 2020]].map(([upTo, fee]) => ({ upTo, fee })), reoOverFee: 20, reoOverPer: 20000, reoSellerShare: 0.5,
             refiTable: [[250000, 425], [500000, 575], [750000, 720], [1000000, 860]].map(([upTo, fee]) => ({ upTo, fee })),
@@ -2035,9 +2042,10 @@
             refiEscrowFee: 575, refiRecordingFee: 0, vaSellerPays: true,
             // Escrow C.2: $250 per loan; title F.5(b): combined amount + $100 per policy over one. C.4 short sale (above
             // $1,000,000 it's the basic escrow fee + $1,000, which the table can't show). No REO rate or FinCEN fee filed.
-            fincenFee: null, fincenExtraFee: null, extraLoanEscrowFee: 250, extraLoanPolicyFee: 100, cashNoPayoffAddOn: null,
-            shortSaleTable: [[100000, 1200], [250000, 1400], [500000, 1600], [750000, 1800], [1000000, 2000]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: null, shortSaleOverPer: null, shortSaleSellerShare: 0.5,
-            reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
+            fincenFee: 0, fincenExtraFee: 0, extraLoanEscrowFee: 250, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
+            shortSaleTable: [[100000, 1200], [250000, 1400], [500000, 1600], [750000, 1800], [1000000, 2000]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 0, shortSaleOverPer: 0, shortSaleSellerShare: 0.5,
+            // (no separate REO rate: a $0 row uses the standard rate)
+            reoTable: [{ upTo: 1000000, fee: 0 }], reoOverFee: 0, reoOverPer: 0, reoSellerShare: 0.5,
             // Title manual Appendix A-1, above $1,000,000 add $40 per $20,000
             titleTable: [[100000, 844], [120000, 927], [140000, 989], [160000, 1067], [180000, 1151], [200000, 1234], [220000, 1290], [240000, 1345], [260000, 1408], [280000, 1477], [300000, 1546], [320000, 1600], [340000, 1657], [360000, 1712], [380000, 1768], [400000, 1823], [420000, 1877], [440000, 1934], [460000, 1988], [480000, 2045], [500000, 2100], [520000, 2155], [540000, 2211], [560000, 2265], [580000, 2320], [600000, 2379], [620000, 2433], [640000, 2489], [660000, 2543], [680000, 2600], [700000, 2655], [720000, 2709], [740000, 2765], [760000, 2819], [780000, 2877], [800000, 2932], [820000, 2986], [840000, 3042], [860000, 3097], [880000, 3152], [900000, 3209], [920000, 3263], [940000, 3320], [960000, 3374], [980000, 3429], [1000000, 3485]].map(([upTo, fee]) => ({ upTo, fee })),
             titleOverFee: 40, titleOverPer: 20000,
@@ -2059,7 +2067,7 @@
             ],
             // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
             refiTable: [[250000, 500], [500000, 650], [750000, 800], [1000000, 950]].map(([upTo, fee]) => ({ upTo, fee })),
-            refiOverFee: null, refiOverPer: null, refiPolicyPercent: 1, refiEndorsements: 0,
+            refiOverFee: 0, refiOverPer: 0, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         // Fidelity National Title's Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022 (Zone 1: Maricopa and Pinal)
         const FIDELITY_RATES = {
@@ -2089,9 +2097,10 @@
             // Escrow E101: a cash sale with no payoff adds nothing; a second loan on a sale is in the bundled rate (E102);
             // title 218: combined amount + $100 per policy over one. E410(B) short sale, split 50/50. Its REO rate (E307)
             // only applies when another company issues the title policy. No FinCEN fee filed.
-            fincenFee: null, fincenExtraFee: null, extraLoanEscrowFee: 0, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
-            shortSaleTable: [[150000, 1200], [300000, 1400], [500000, 1600], [750000, 1900], [1000000, 2100]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: null, shortSaleOverPer: null, shortSaleSellerShare: 0.5,
-            reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
+            fincenFee: 0, fincenExtraFee: 0, extraLoanEscrowFee: 0, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
+            shortSaleTable: [[150000, 1200], [300000, 1400], [500000, 1600], [750000, 1900], [1000000, 2100]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 0, shortSaleOverPer: 0, shortSaleSellerShare: 0.5,
+            // (no separate REO rate: a $0 row uses the standard rate)
+            reoTable: [{ upTo: 1000000, fee: 0 }], reoOverFee: 0, reoOverPer: 0, reoSellerShare: 0.5,
             // Title manual Zone 1, above $1,000,000 add $38.85 per $20,000 (to $5,000,000)
             titleTable: [[60000, 585], [80000, 695], [100000, 805], [120000, 869], [140000, 933], [160000, 998], [180000, 1062], [200000, 1125], [220000, 1189], [240000, 1253], [260000, 1317], [280000, 1381], [300000, 1445], [320000, 1495], [340000, 1547], [360000, 1597], [380000, 1647], [400000, 1698], [420000, 1749], [440000, 1800], [460000, 1850], [480000, 1902], [500000, 1952], [520000, 2002], [540000, 2054], [560000, 2104], [580000, 2155], [600000, 2205], [620000, 2256], [640000, 2307], [660000, 2357], [680000, 2409], [700000, 2459], [720000, 2510], [740000, 2561], [760000, 2611], [780000, 2662], [800000, 2712], [820000, 2765], [840000, 2814], [860000, 2864], [880000, 2916], [900000, 2966], [920000, 3017], [940000, 3068], [960000, 3119], [980000, 3169], [1000000, 3219]].map(([upTo, fee]) => ({ upTo, fee })),
             titleOverFee: 38.85, titleOverPer: 20000,
@@ -2117,7 +2126,7 @@
             ],
             // Section 216B, Zone 1 (ALTA 8.1, 9 and 22 included)
             refiTable: [[100000, 500], [200000, 630], [300000, 800], [400000, 855], [500000, 980], [600000, 1105], [700000, 1230], [800000, 1360], [900000, 1485], [1000000, 1590]].map(([upTo, fee]) => ({ upTo, fee })),
-            refiOverFee: null, refiOverPer: null, refiPolicyPercent: 1, refiEndorsements: 0,
+            refiOverFee: 0, refiOverPer: 0, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         const FILED_RATES = { wfg: WFG_RATES, firstAmerican: FIRST_AMERICAN_RATES, fidelity: FIDELITY_RATES };
         const tcCard = document.getElementById('title-card');
@@ -2157,8 +2166,11 @@
                 if (refi && (c.refiEscrowFee || refi.policy !== null)) lines.push('Refinance of a $400,000 loan: ' + dollars(refi.total) + (refi.policy === null ? ' (escrow and recording only)' : ''));
                 if (c.manualDate) lines.push('Escrow rates effective ' + longDate(c.manualDate));
                 if (c.titleManualDate) lines.push('Title rates effective ' + longDate(c.titleManualDate));
+                const missing = missingRates(c);
                 return '<li class="mp-item tc-item"><div class="mp-text"><div class="mp-title">' + esc(c.name) + '</div>'
-                    + '<div class="mp-desc">' + lines.map(esc).join('<br>') + '</div></div>'
+                    + '<div class="mp-desc">' + lines.map(esc).join('<br>') + '</div>'
+                    + (missing.length ? '<p class="tc-missing-list">' + TC_WARN + '<span><b>Missing ' + missing.length + ':</b> '
+                        + esc(missing.map(k => requiredLabel(k)).join(', ')) + '</span></p>' : '') + '</div>'
                     + '<button type="button" class="cf-edit" data-tc-edit="' + i + '" aria-label="Edit ' + esc(c.name) + '" title="Edit">' + PENCIL_ICON + '</button></li>';
             }).join('');
         }
@@ -2178,6 +2190,48 @@
         }
 
         // --- The pop-up ---
+        // Each required rate's box (or table) in the pop-up, by its TITLE_REQUIRED key
+        const REQ_TARGETS = {
+            manualDate: '#tc-date', escrowTable: '[data-table="escrow"]', escrowOver: '#tc-esc-over-fee', cashSaleAddOn: '#tc-cash',
+            loanSaleAddOn: '#tc-loan', cashNoPayoffAddOn: '#tc-cash-nopayoff', sellerEscrowShare: '#tc-seller-share', recordingFee: '#tc-recording',
+            sellerRecordingShare: '#tc-recording-share', titleManualDate: '#tc-title-date', titleTable: '[data-table="title"]',
+            titleOver: '#tc-title-over-fee', ownerPolicyPercent: '#tc-owner-pct', sellerOwnerShare: '#tc-owner-share', loanPolicyPercent: '#tc-loan-pct',
+            simultaneousPercent: '#tc-simul-pct', simultaneousMinimum: '#tc-simul-min', loanEndorsementList: '[data-table="endorsements"]',
+            extraLoanEscrowFee: '#tc-extra-escrow', extraLoanPolicyFee: '#tc-extra-policy', fincenFee: '#tc-fincen', fincenExtraFee: '#tc-fincen-extra',
+            shortSaleTable: '[data-table="shortSale"]', shortSaleOver: '#tc-ss-over-fee', shortSaleSellerShare: '#tc-ss-share',
+            reoTable: '[data-table="reo"]', reoOver: '#tc-reo-over-fee', reoSellerShare: '#tc-reo-share', refiEscrowFee: '#tc-refi-escrow',
+            refiRecordingFee: '#tc-refi-recording', refiTable: '[data-table="refi"]', refiOver: '#tc-refi-over-fee', refiPolicyPercent: '#tc-refi-pct',
+            refiEndorsements: '#tc-refi-endorse',
+        };
+        const TC_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+        const requiredLabel = key => (TITLE_REQUIRED.find(r => r[0] === key) || [key, key])[1];
+        // What to do about a missing rate
+        function requiredHint(key) {
+            const kind = (TITLE_REQUIRED.find(r => r[0] === key) || [])[2];
+            if (key === 'shortSaleTable' || key === 'reoTable') return 'Add a row. If the company has no separate rate, add one row with a $0 fee.';
+            if (kind === 'table') return key === 'loanEndorsementList' ? 'Add at least one endorsement (a $0 price counts).' : 'Add at least one row.';
+            if (kind === 'over') return 'Enter both numbers. Enter 0 and 0 if there’s no extra charge.';
+            if (kind === 'date') return 'Enter the date the filing took effect.';
+            return 'Enter 0 if the filing has none.';
+        }
+        // Marks every empty required rate in the pop-up with a yellow note; returns the missing keys
+        function markMissing(c = readTitleForm()) {
+            const missing = missingRates(c);
+            tcBody.querySelectorAll('.tc-req').forEach(n => n.remove());
+            tcBody.querySelectorAll('.tc-missing').forEach(n => n.classList.remove('tc-missing'));
+            missing.forEach(key => {
+                const target = tcBody.querySelector(REQ_TARGETS[key]);
+                if (!target) return;
+                const isTable = target.matches('[data-table]');
+                const wrap = isTable ? target : (target.closest('.field') || target.closest('.tc-sentence') || target);
+                wrap.classList.add('tc-missing');
+                const note = document.createElement('p');
+                note.className = 'tc-req';
+                note.innerHTML = TC_WARN + '<span><b>Required.</b> ' + esc(requiredHint(key)) + '</span>';
+                if (isTable) target.after(note); else wrap.append(note);
+            });
+            return missing;
+        }
         const tcBox = (kind, attrs, value) => '<div class="tc-box is-' + kind + '"><input type="text" inputmode="decimal" autocomplete="off" ' + attrs
             + ' value="' + esc(kind === 'pct' ? pctText(value) : moneyText(value)) + '"></div>';
         const tcField = (label, inner) => '<div class="field"><label>' + esc(label) + '</label>' + inner + '</div>';
@@ -2212,7 +2266,7 @@
                 + section('Bundled Sale Add-On', 'A resale’s escrow fee is the table amount <b>plus</b> a flat add-on that covers couriers, wires, payoff processing, e-documents and (at WFG) one mobile notary (WFG 4.1.1 and 4.1.2). It’s more when the buyer has a loan.',
                     '<div class="tc-grid">' + tcField('Cash sale adds', tcBox('money', 'id="tc-cash" placeholder="200"', c.cashSaleAddOn))
                     + tcField('Sale with a buyer’s loan adds', tcBox('money', 'id="tc-loan" placeholder="400"', c.loanSaleAddOn))
-                    + tcField('Cash sale, seller has no loan to pay off', tcBox('money', 'id="tc-cash-nopayoff" placeholder="Same as cash"', c.cashNoPayoffAddOn)) + '</div>')
+                    + tcField('Cash sale, seller has no loan to pay off', tcBox('money', 'id="tc-cash-nopayoff" placeholder="0"', c.cashNoPayoffAddOn)) + '</div>')
 
                 + section('Who Pays', 'Escrow and recording fees are usually split 50/50 between buyer and seller unless the contract says otherwise (WFG 3.2 and 5.6).',
                     '<div class="tc-grid">' + tcField('Seller’s share of the escrow fee', tcBox('pct', 'id="tc-seller-share" placeholder="50"', c.sellerEscrowShare))
@@ -2253,13 +2307,13 @@
                     '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Who qualifies</span><span>Percent off</span><span></span></div>'
                     + (c.titleDiscounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
 
-                + section('Second Loans & FinCEN', 'A <b>second loan</b> (a piggyback or down payment assistance loan) can add an escrow fee per extra loan, and its lender’s policy is priced on the <b>combined</b> loan amount plus a fee per extra policy (WFG title 6.2: none; First American F.5: $100; Fidelity 218: $100). A <b>FinCEN report</b> is filed when an LLC or trust buys with cash (WFG escrow 5.5: $150, plus $75 per extra buying entity); the buyer pays it. Leave it blank if the company hasn’t filed one.',
+                + section('Second Loans & FinCEN', 'A <b>second loan</b> (a piggyback or down payment assistance loan) can add an escrow fee per extra loan, and its lender’s policy is priced on the <b>combined</b> loan amount plus a fee per extra policy (WFG title 6.2: none; First American F.5: $100; Fidelity 218: $100). A <b>FinCEN report</b> is filed when an LLC or trust buys with cash (WFG escrow 5.5: $150, plus $75 per extra buying entity); the buyer pays it. Enter 0 if the company hasn’t filed one.',
                     '<div class="tc-grid">' + tcField('Escrow fee per extra loan on a sale', tcBox('money', 'id="tc-extra-escrow" placeholder="0"', c.extraLoanEscrowFee))
                     + tcField('Fee per extra lender’s policy', tcBox('money', 'id="tc-extra-policy" placeholder="0"', c.extraLoanPolicyFee))
-                    + tcField('FinCEN report fee', tcBox('money', 'id="tc-fincen" placeholder="Not filed"', c.fincenFee))
+                    + tcField('FinCEN report fee', tcBox('money', 'id="tc-fincen" placeholder="0"', c.fincenFee))
                     + tcField('Per extra buying entity', tcBox('money', 'id="tc-fincen-extra" placeholder="0"', c.fincenExtraFee)) + '</div>')
 
-                + section('Short Sales & REOs', 'Escrow fees for a <b>short sale</b> (the seller’s lender takes less than it’s owed) and an <b>REO</b> (a bank selling a home it foreclosed on) come from their own tables, in place of the table and add-on above (WFG 2.1 columns 3 and 4; First American C.4; Fidelity E410). Leave a table empty to use the standard rate.',
+                + section('Short Sales & REOs', 'Escrow fees for a <b>short sale</b> (the seller’s lender takes less than it’s owed) and an <b>REO</b> (a bank selling a home it foreclosed on) come from their own tables, in place of the table and add-on above (WFG 2.1 columns 3 and 4; First American C.4; Fidelity E410). If the company has no separate rate, add one row with a $0 fee and the standard rate is used.',
                     '<h4 class="tc-sub">Short sale escrow fee</h4>'
                     + '<div class="tc-table" data-table="shortSale"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
                     + (c.shortSaleTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="shortSale">+ Add Row</button>'
@@ -2298,6 +2352,7 @@
                 + '<div class="tc-sentence tc-try-opts">Second loan ' + tcBox('money', 'id="tc-try-second" aria-label="Second loan" placeholder="0"', '') + '</div>'
                 + '<ul class="tc-try-out" id="tc-try-out"></ul></div>';
             updateTitleTry();
+            markMissing();
         }
 
         // The form -> a company (numbers parsed; blank rows dropped by the API)
@@ -2402,15 +2457,16 @@
                 return;
             }
             const remove = e.target.closest('[data-remove]');
-            if (remove) { remove.closest('[data-row]').remove(); updateTitleTry(); }
+            if (remove) { remove.closest('[data-row]').remove(); updateTitleTry(); markMissing(); }
         });
         tcBody.addEventListener('input', e => {
             e.target.classList.remove('is-invalid');
             tcMessage.textContent = '';
             if (e.target.closest('.tc-box')) e.target.value = e.target.value.replace(/[^\d.,]/g, '');
             updateTitleTry();
+            markMissing();
         });
-        tcBody.addEventListener('change', updateTitleTry);
+        tcBody.addEventListener('change', () => { updateTitleTry(); markMissing(); });
         tcBody.addEventListener('focusout', e => {
             const box = e.target.closest('.tc-box.is-money');
             if (box && e.target.value.trim() !== '') { const n = parseMoney(e.target.value); if (isFinite(n)) e.target.value = moneyText(n); }
@@ -2434,6 +2490,7 @@
             invalid_owners_title_over_table_fee: 'Fill in both numbers for the basic rate above the table (or neither).',
             invalid_title_discount: 'Each title discount needs a name and a percent from 0 to 100.',
             invalid_endorsement: 'Each lender’s endorsement needs a name and a price (0 counts).',
+            missing_rates: 'Some rates are missing. Fill in every field (0 counts).',
             invalid_short_sale_table: 'Each short sale row needs a sale price and a fee (and no two rows can have the same price).',
             invalid_reo_table: 'Each REO row needs a sale price and a fee (and no two rows can have the same price).',
             invalid_short_sale_over_fee: 'Fill in both numbers for the short sale fee above the table (or neither).',
@@ -2460,7 +2517,14 @@
             if (tcBusy) return;
             const c = readTitleForm();
             if (!c.name) { document.getElementById('tc-name').classList.add('is-invalid'); document.getElementById('tc-name').focus(); tcMessage.textContent = TC_ERRORS.missing_name; return; }
-            if (!c.escrowTable.some(r => r.upTo > 0 && r.fee !== null)) { tcMessage.textContent = TC_ERRORS.missing_escrow_table; return; }
+            // Every rate is required (0 counts)
+            const missing = markMissing(c);
+            if (missing.length) {
+                tcMessage.textContent = missing.length + (missing.length === 1 ? ' rate is' : ' rates are') + ' missing (marked in yellow). Enter 0 where the filing has none.';
+                const first = tcBody.querySelector('.tc-missing');
+                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
             if (tcEditing && !tcDirty()) { tcDialog.close(); return; }
             tcSetBusy(true, tcSave);
             try {

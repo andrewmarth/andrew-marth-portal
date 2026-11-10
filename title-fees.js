@@ -94,8 +94,10 @@ export function saleFees(c, price, loanAmount, o = {}) {
     const items = [];
     const add = (name, total, seller, kind, note) => items.push({ name, total, seller, buyer: total - seller, kind, note: note || '' });
 
-    // Escrow: a short sale or REO has its own table (when the company files one); otherwise the table plus an add-on
-    const special = saleType === 'Short Sale' && (c.shortSaleTable || []).length ? 'shortSale' : saleType === 'REO' && (c.reoTable || []).length ? 'reo' : '';
+    // Escrow: a short sale or REO has its own table (when the company files one: a table of $0 rows means it doesn't);
+    // otherwise the table plus an add-on
+    const filed = table => (table || []).some(r => r.fee > 0);
+    const special = saleType === 'Short Sale' && filed(c.shortSaleTable) ? 'shortSale' : saleType === 'REO' && filed(c.reoTable) ? 'reo' : '';
     let base, total, share, note;
     if (special) {
         base = tableFee(c[special + 'Table'], c[special + 'OverFee'], c[special + 'OverPer'], price);
@@ -146,3 +148,55 @@ export function saleFees(c, price, loanAmount, o = {}) {
 }
 
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
+
+// Every rate a company needs (the Title Companies card won't save one without them). 0 counts: it means none, and a
+// short sale or REO table of $0 rows means the company has no separate rate. [key, label, kind]; kind 'table' needs a
+// complete row, 'over' is an "add $X per $Y" pair (key + 'Fee' and key + 'Per'), everything else needs a value.
+export const TITLE_REQUIRED = [
+    ['manualDate', 'Escrow rates effective', 'date'],
+    ['escrowTable', 'Escrow fee table', 'table'],
+    ['escrowOver', 'Escrow fee above the table', 'over'],
+    ['cashSaleAddOn', 'Cash sale add-on', 'value'],
+    ['loanSaleAddOn', 'Loan sale add-on', 'value'],
+    ['cashNoPayoffAddOn', 'Cash sale with no payoff add-on', 'value'],
+    ['sellerEscrowShare', 'Seller’s share of the escrow fee', 'value'],
+    ['recordingFee', 'Recording service fee', 'value'],
+    ['sellerRecordingShare', 'Seller’s share of recording', 'value'],
+    ['titleManualDate', 'Title rates effective', 'date'],
+    ['titleTable', 'Basic rate table', 'table'],
+    ['titleOver', 'Basic rate above the table', 'over'],
+    ['ownerPolicyPercent', 'Owner’s policy percent', 'value'],
+    ['sellerOwnerShare', 'Seller’s share of the owner’s policy', 'value'],
+    ['loanPolicyPercent', 'Loan policy percent', 'value'],
+    ['simultaneousPercent', 'Loan policy with the owner’s policy', 'value'],
+    ['simultaneousMinimum', 'Loan policy minimum', 'value'],
+    ['loanEndorsementList', 'Lender’s endorsements', 'table'],
+    ['extraLoanEscrowFee', 'Escrow fee per extra loan', 'value'],
+    ['extraLoanPolicyFee', 'Fee per extra lender’s policy', 'value'],
+    ['fincenFee', 'FinCEN report fee', 'value'],
+    ['fincenExtraFee', 'FinCEN fee per extra entity', 'value'],
+    ['shortSaleTable', 'Short sale escrow table', 'table'],
+    ['shortSaleOver', 'Short sale fee above the table', 'over'],
+    ['shortSaleSellerShare', 'Seller’s share of a short sale', 'value'],
+    ['reoTable', 'REO escrow table', 'table'],
+    ['reoOver', 'REO fee above the table', 'over'],
+    ['reoSellerShare', 'Seller’s share of an REO', 'value'],
+    ['refiEscrowFee', 'Refinance escrow fee', 'value'],
+    ['refiRecordingFee', 'Refinance recording fee', 'value'],
+    ['refiTable', 'Refinance policy table', 'table'],
+    ['refiOver', 'Refinance policy above the table', 'over'],
+    ['refiPolicyPercent', 'Refinance policy percent', 'value'],
+    ['refiEndorsements', 'Refinance endorsements', 'value'],
+];
+// The over-table pairs' field names, by key
+export const OVER_FIELDS = { escrowOver: ['escrowOverFee', 'escrowOverPer'], titleOver: ['titleOverFee', 'titleOverPer'],
+    shortSaleOver: ['shortSaleOverFee', 'shortSaleOverPer'], reoOver: ['reoOverFee', 'reoOverPer'], refiOver: ['refiOverFee', 'refiOverPer'] };
+const blank = v => v === null || v === undefined || v === '' || (typeof v === 'number' && !isFinite(v));
+// The keys of TITLE_REQUIRED a company is missing
+export function missingRates(c) {
+    return TITLE_REQUIRED.filter(([key, , kind]) => {
+        if (kind === 'table') return !(c[key] || []).some(r => (r.upTo > 0 || r.name) && !blank(r.fee ?? r.amount));
+        if (kind === 'over') return OVER_FIELDS[key].some(k => blank(c[k]));
+        return blank(c[key]);
+    }).map(([key]) => key);
+}

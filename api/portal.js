@@ -1225,6 +1225,15 @@ function titleTable_(list, name) {
   if (out.some((r, i) => i && r['UP TO'] === out[i - 1]['UP TO'])) return 'invalid_' + name;
   return out;
 }
+// The rates a company can't be saved without (the Title Companies card's TITLE_REQUIRED, in /title-fees.js)
+const TITLE_REQUIRED_COLUMNS = ['RATE MANUAL DATE', 'ESCROW RATE TABLE', 'ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER', 'CASH SALE ADD ON',
+  'LOAN SALE ADD ON', 'CASH NO PAYOFF ADD ON', 'SELLER SHARE OF ESCROW FEE', 'RECORDING SERVICE FEE', 'SELLER SHARE OF RECORDING FEE',
+  'TITLE MANUAL DATE', 'OWNERS TITLE TABLE', 'OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER', 'OWNERS POLICY PERCENT',
+  'SELLER SHARE OF OWNERS POLICY', 'LOAN POLICY PERCENT', 'SIMULTANEOUS LOAN PERCENT', 'SIMULTANEOUS LOAN MINIMUM', 'LOAN ENDORSEMENT LIST',
+  'EXTRA LOAN ESCROW FEE', 'EXTRA LOAN POLICY FEE', 'FINCEN FEE', 'FINCEN EXTRA ENTITY FEE', 'SHORT SALE ESCROW TABLE', 'SHORT SALE OVER FEE',
+  'SHORT SALE OVER PER', 'SHORT SALE SELLER SHARE', 'REO ESCROW TABLE', 'REO OVER FEE', 'REO OVER PER', 'REO SELLER SHARE',
+  'REFINANCE ESCROW FEE', 'REFINANCE RECORDING FEE', 'REFINANCE TITLE TABLE', 'REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER',
+  'REFINANCE POLICY PERCENT', 'REFINANCE ENDORSEMENTS'];
 const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'];
 const TITLE_ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 
@@ -1337,7 +1346,8 @@ async function saveTitleCompany_(account, body) {
   for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER'],
     ['REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER'], ['SHORT SALE OVER FEE', 'SHORT SALE OVER PER'], ['REO OVER FEE', 'REO OVER PER']]) {
     const hasFee = typeof fields[fee] === 'number', hasPer = typeof fields[per] === 'number';
-    if (hasFee !== hasPer || (hasPer && !(fields[per] > 0))) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
+    // ($0 per $0 means no extra charge above the table)
+    if (hasFee !== hasPer || (hasPer && !(fields[per] > 0) && fields[fee] !== 0)) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
   }
   fields['RATE MANUAL DATE'] = manualDate || FieldValue.delete();
   const titleManualDate = String(c.titleManualDate || '').trim();
@@ -1385,6 +1395,13 @@ async function saveTitleCompany_(account, body) {
   fields['LOAN ENDORSEMENT LIST'] = endorsements;
   fields['LOAN ENDORSEMENTS'] = FieldValue.delete();
   fields['VA SELLER PAYS BUYER FEES'] = c.vaSellerPays === true;
+
+  // Every rate is required (0 counts: none, and a short sale / REO table of $0 rows means no separate rate)
+  const missing = TITLE_REQUIRED_COLUMNS.filter(col => {
+    const v = fields[col];
+    return Array.isArray(v) ? !v.length : v === undefined || v === null || v instanceof FieldValue;
+  });
+  if (missing.length) return { ok: false, error: 'missing_rates', missing };
 
   let id = String(c.id || '');
   if (id) {
