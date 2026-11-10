@@ -500,6 +500,8 @@
         .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
         .tc-row.is-discount { grid-template-columns: 2fr 1fr 40px; }
         .tc-row.is-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr 40px; }
+        /* Notes: a fixed size that fits the longest notes on file (Fidelity's) */
+        .tc-dialog #tc-notes { height: 420px; }
         .tc-row.is-std-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr; padding: 2px 4px; border-radius: 12px; }
         .tc-std-name { font-size: 0.92rem; font-weight: bold; }
         .tc-std-when { font-size: 0.85rem; opacity: 0.75; }
@@ -530,6 +532,8 @@
         .tc-try-out li.tc-try-total + .tc-try-total { margin-top: 0; padding-top: 0; border-top: none; }
         .tc-try-out li.tc-try-head { margin-top: 14px; font-weight: bold; }
         .tc-norate { margin: 2px 0 10px 0; }
+        /* The dropdown's line and the boxes under it */
+        .tc-over .tc-sentence + .tc-sentence { margin-top: 10px; }
         .tc-over select { min-height: 40px; padding: 6px 12px; border: 2px solid var(--navy); border-radius: 12px; background: #f7f4f0; font-family: inherit; font-size: 0.92rem; color: var(--brown); }
         .tc-over [data-mode-text] { display: contents; }
         .tc-over[data-mode="per"] [data-mode-text="standardPlus"], .tc-over[data-mode="per"] [data-mode-text="basicRate"],
@@ -552,6 +556,11 @@
             .tc-row.is-endorse.is-head { display: none; }
             .tc-row.is-endorse input[data-k="name"] { grid-column: 1 / -1; }
             .edit-dialog.tc-dialog { max-height: calc(100dvh - 24px); }
+            .tc-dialog #tc-notes { height: 840px; }
+            /* Standard endorsements: the name on its own line, then a price box wide enough for its amount and the "when" */
+            .tc-row.is-std-endorse { grid-template-columns: 120px 1fr; row-gap: 6px; padding: 6px 4px; }
+            .tc-row.is-std-endorse .tc-std-name { grid-column: 1 / -1; }
+            .tc-row.is-std-endorse.is-head { display: none; }
         }
 
         /* --- Marketing Points (admins) --- */
