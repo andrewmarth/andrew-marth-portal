@@ -522,6 +522,10 @@
         .tc-try-out li.tc-try-total + .tc-try-total { margin-top: 0; padding-top: 0; border-top: none; }
         .tc-try-out li.tc-try-head { margin-top: 14px; font-weight: bold; }
         .tc-norate { margin: 2px 0 10px 0; }
+        .tc-over select { min-height: 40px; padding: 6px 12px; border: 2px solid var(--navy); border-radius: 12px; background: #f7f4f0; font-family: inherit; font-size: 0.92rem; color: var(--brown); }
+        .tc-over [data-mode-text] { display: contents; }
+        .tc-over[data-mode="per"] [data-mode-text="standardPlus"], .tc-over[data-mode="per"] [data-mode-text="basicRate"],
+        .tc-over:not([data-mode="per"]) [data-mode-text="per"] { display: none; }
         .tc-special[hidden] { display: none; }
         /* Missing rates: yellow */
         .tc-req { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4cc; border: 1px solid #ecc94b; color: #6b4e00; font-size: 0.82rem; line-height: 1.35; flex: 1 0 100%; }
@@ -2026,7 +2030,7 @@
         // First American Title's Arizona Schedule of Escrow Fees, effective September 22, 2024 (Area A: Maricopa and Pinal)
         const FIRST_AMERICAN_RATES = {
             name: 'First American Title', manualDate: '2024-09-22', titleManualDate: '2026-07-29',
-            notes: 'Escrow fees from First American’s Arizona Schedule of Escrow Fees, effective September 22, 2024, Residential Area A (Maricopa and Pinal Counties). Recording services are included in the escrow fee for residential sales. Title insurance from First American’s Arizona Schedule of Title Insurance Rates (SERFF FACO-135003181, acknowledged July 29, 2026), Appendix A-1 (Maricopa, Pima and Pinal): an EAGLE owner’s policy (First American’s homeowner’s policy, 110%) and an extended loan policy issued with it, which First American prices at 65% of the basic rate on the loan amount (section F.2; a loan policy on its own is 120%). A refinance over $1,000,000 is 30% of the extended loan rate (120% of the basic rate), which the table above can’t show. First American charges for ALTA 9 ($100), and the EAGLE loan policy (140%) would include 4.1, 5.1, 6 and 8.1 at no charge.',
+            notes: 'Escrow fees from First American’s Arizona Schedule of Escrow Fees, effective September 22, 2024, Residential Area A (Maricopa and Pinal Counties). Recording services are included in the escrow fee for residential sales. Title insurance from First American’s Arizona Schedule of Title Insurance Rates (SERFF FACO-135003181, acknowledged July 29, 2026), Appendix A-1 (Maricopa, Pima and Pinal): an EAGLE owner’s policy (First American’s homeowner’s policy, 110%) and an extended loan policy issued with it, which First American prices at 65% of the basic rate on the loan amount (section F.2; a loan policy on its own is 120%). A refinance over $1,000,000 is 30% of the extended loan rate (120% of the basic rate), so 36% of the basic rate. A short sale over $1,000,000 is the basic escrow fee plus $1,000. First American charges for ALTA 9 ($100), and the EAGLE loan policy (140%) would include 4.1, 5.1, 6 and 8.1 at no charge.',
             escrowTable: [[100000, 1012], [120000, 1048], [140000, 1084], [160000, 1116], [180000, 1152], [200000, 1186], [220000, 1216], [240000, 1244], [260000, 1274], [280000, 1304], [300000, 1332], [320000, 1362], [340000, 1392], [360000, 1422], [380000, 1450], [400000, 1480], [420000, 1508], [440000, 1536], [460000, 1568], [480000, 1596], [500000, 1624], [520000, 1650], [540000, 1678], [560000, 1702], [580000, 1728], [600000, 1754], [620000, 1778], [640000, 1804], [660000, 1830], [680000, 1856], [700000, 1882], [720000, 1906], [740000, 1932], [760000, 1958], [780000, 1984], [800000, 2010], [820000, 2034], [840000, 2060], [860000, 2084], [880000, 2110], [900000, 2138], [920000, 2164], [940000, 2188], [960000, 2214], [980000, 2238], [1000000, 2264]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 22, escrowOverPer: 20000, cashSaleAddOn: 0, loanSaleAddOn: 250, sellerEscrowShare: 0.5,
             recordingFee: 0, sellerRecordingShare: 0.5,
@@ -2046,7 +2050,9 @@
             // Escrow C.2: $250 per loan; title F.5(b): combined amount + $100 per policy over one. C.4 short sale (above
             // $1,000,000 it's the basic escrow fee + $1,000, which the table can't show). No REO rate or FinCEN fee filed.
             fincenFee: 0, fincenExtraFee: 0, extraLoanEscrowFee: 250, extraLoanPolicyFee: 100, cashNoPayoffAddOn: 0,
-            shortSaleTable: [[100000, 1200], [250000, 1400], [500000, 1600], [750000, 1800], [1000000, 2000]].map(([upTo, fee]) => ({ upTo, fee })), shortSaleOverFee: 0, shortSaleOverPer: 0, shortSaleSellerShare: 0.5,
+            shortSaleTable: [[100000, 1200], [250000, 1400], [500000, 1600], [750000, 1800], [1000000, 2000]].map(([upTo, fee]) => ({ upTo, fee })),
+            // C.4: above $1,000,000, the basic escrow fee plus $1,000
+            shortSaleOverMode: 'standardPlus', shortSaleOverFee: 1000, shortSaleOverPer: null, shortSaleSellerShare: 0.5,
             // No separate REO rate: the standard escrow fee is used
             shortSaleNoRate: false, reoNoRate: true,
             reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
@@ -2071,12 +2077,12 @@
             ],
             // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
             refiTable: [[250000, 500], [500000, 650], [750000, 800], [1000000, 950]].map(([upTo, fee]) => ({ upTo, fee })),
-            refiOverFee: 0, refiOverPer: 0, refiPolicyPercent: 1, refiEndorsements: 0,
+            refiOverFee: null, refiOverPer: null, refiOverMode: 'basicRate', refiOverPercent: 0.36, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         // Fidelity National Title's Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022 (Zone 1: Maricopa and Pinal)
         const FIDELITY_RATES = {
             name: 'Fidelity National Title', manualDate: '2022-01-12', titleManualDate: '2026-07-29',
-            notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). Title insurance from Fidelity’s Arizona Schedule of Title Insurance Rates and Charges (SERFF FDLS-134996142, effective July 29, 2026), Zone 1 (Maricopa and Pinal): a homeowner’s owner’s policy (section 103, 110%) and an extended loan policy issued with it at 65% of the basic rate on the loan amount (section 208; on its own it’s 120%). Above $5,000,000 the basic rate adds $37.80 per $20,000 instead of $38.85. Refinances use section 216B (Zone 1, full coverage, ALTA 8.1, 9 and 22 included); a lender-program refinance with electronic ordering (216A) is cheaper: $360 / $540 / $660 / $800 up to $1,000,000. Over $1,000,000 a refinance is 50% of the applicable rate, which the table can’t show.',
+            notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). Title insurance from Fidelity’s Arizona Schedule of Title Insurance Rates and Charges (SERFF FDLS-134996142, effective July 29, 2026), Zone 1 (Maricopa and Pinal): a homeowner’s owner’s policy (section 103, 110%) and an extended loan policy issued with it at 65% of the basic rate on the loan amount (section 208; on its own it’s 120%). Above $5,000,000 the basic rate adds $37.80 per $20,000 instead of $38.85. Refinances use section 216B (Zone 1, full coverage, ALTA 8.1, 9 and 22 included); a lender-program refinance with electronic ordering (216A) is cheaper: $360 / $540 / $660 / $800 up to $1,000,000. Over $1,000,000 a refinance is 50% of the extended loan rate (120% of the basic rate), so 60% of the basic rate, and its endorsements are charged separately. A short sale over $1,000,000 is negotiated, so above the table it shows no extra charge.',
             escrowTable: [[120000, 696], [140000, 728], [160000, 761], [180000, 793], [200000, 827], [220000, 855], [240000, 882], [260000, 911], [280000, 939], [300000, 966], [320000, 995], [340000, 1022], [360000, 1052], [380000, 1079], [400000, 1106], [420000, 1134], [440000, 1162], [460000, 1191], [480000, 1218], [500000, 1246], [520000, 1271], [540000, 1295], [560000, 1319], [580000, 1343], [600000, 1369], [620000, 1393], [640000, 1417], [660000, 1441], [680000, 1465], [700000, 1490], [720000, 1515], [740000, 1539], [760000, 1564], [780000, 1588], [800000, 1612], [820000, 1636], [840000, 1661], [860000, 1685], [880000, 1710], [900000, 1734], [920000, 1759], [940000, 1783], [960000, 1808], [980000, 1832], [1000000, 1856]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 21, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
@@ -2131,7 +2137,7 @@
             ],
             // Section 216B, Zone 1 (ALTA 8.1, 9 and 22 included)
             refiTable: [[100000, 500], [200000, 630], [300000, 800], [400000, 855], [500000, 980], [600000, 1105], [700000, 1230], [800000, 1360], [900000, 1485], [1000000, 1590]].map(([upTo, fee]) => ({ upTo, fee })),
-            refiOverFee: 0, refiOverPer: 0, refiPolicyPercent: 1, refiEndorsements: 0,
+            refiOverFee: null, refiOverPer: null, refiOverMode: 'basicRate', refiOverPercent: 0.6, refiPolicyPercent: 1, refiEndorsements: 0,
         };
         const FILED_RATES = { wfg: WFG_RATES, firstAmerican: FIRST_AMERICAN_RATES, fidelity: FIDELITY_RATES };
         const tcCard = document.getElementById('title-card');
@@ -2215,7 +2221,7 @@
             const kind = (TITLE_REQUIRED.find(r => r[0] === key) || [])[2];
             if (key === 'shortSaleTable' || key === 'reoTable') return 'Add at least one row, or tick No separate rate above.';
             if (kind === 'table') return key === 'loanEndorsementList' ? 'Add at least one endorsement (a $0 price counts).' : 'Add at least one row.';
-            if (kind === 'over') return 'Enter both numbers. Enter 0 and 0 if there’s no extra charge.';
+            if (kind === 'over') return 'Fill in the boxes. For no extra charge, add $0 for every $0.';
             if (kind === 'date') return 'Enter the date the filing took effect.';
             return 'Enter 0 if the filing has none.';
         }
@@ -2225,7 +2231,7 @@
             tcBody.querySelectorAll('.tc-req').forEach(n => n.remove());
             tcBody.querySelectorAll('.tc-missing').forEach(n => n.classList.remove('tc-missing'));
             missing.forEach(key => {
-                const target = tcBody.querySelector(REQ_TARGETS[key]);
+                const target = tcBody.querySelector(key === 'refiOver' && c.refiOverMode === 'basicRate' ? '#tc-refi-over-pct' : REQ_TARGETS[key]);
                 if (!target) return;
                 const isTable = target.matches('[data-table]');
                 const wrap = isTable ? target : (target.closest('.field') || target.closest('.tc-sentence') || target);
@@ -2256,6 +2262,22 @@
         // Short sale / REO: "No separate rate" (the standard escrow fee is used, and its table isn't needed)
         const noRateBox = (kind, on) => '<label class="tc-check tc-norate"><input type="checkbox" id="tc-' + kind + '-norate" data-norate="' + kind + '"' + (on ? ' checked' : '') + '>'
             + '<span><b>No separate rate.</b> The company charges its standard escrow fee' + (kind === 'reo' ? ' for an REO.' : ' for a short sale.') + '</span></label>';
+        // "Above the last row": add $X for every $Y, or (alt) the standard escrow fee plus $X (short sale / REO) or X% of the
+        // basic rate on the loan amount (refinance)
+        function overChoice(prefix, key, c, alt) {
+            const mode = c[key + 'OverMode'] === alt ? alt : 'per';
+            const fee = tcBox('money', 'id="tc-' + prefix + '-over-fee" aria-label="Add this much" placeholder="0"', c[key + 'OverFee']);
+            const per = tcBox('money', 'id="tc-' + prefix + '-over-per" aria-label="For every" placeholder="20,000"', c[key + 'OverPer']);
+            return '<div class="tc-over" data-mode="' + mode + '"><div class="tc-sentence" style="margin-top:12px">Above the last row:'
+                + '<select id="tc-' + prefix + '-over-mode" data-over-mode aria-label="Above the last row">'
+                + '<option value="per"' + (mode === 'per' ? ' selected' : '') + '>Add $ for every $</option>'
+                + '<option value="' + alt + '"' + (mode === alt ? ' selected' : '') + '>' + (alt === 'standardPlus' ? 'The standard escrow fee plus $' : 'A percent of the basic rate') + '</option></select></div>'
+                + '<div class="tc-sentence">' + (alt === 'standardPlus'
+                    ? '<span data-mode-text="per">Add</span><span data-mode-text="standardPlus">The standard escrow fee plus</span>' + fee + '<span data-mode-text="per">for every' + per + '</span>'
+                    : '<span data-mode-text="per">Add' + fee + 'for every' + per + '</span><span data-mode-text="basicRate">'
+                        + tcBox('pct', 'id="tc-refi-over-pct" aria-label="Percent of the basic rate" placeholder="36"', c.refiOverPercent) + 'of the basic rate on the loan amount</span>')
+                + '</div></div>';
+        }
         const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
 
         function drawTitleForm(c) {
@@ -2327,16 +2349,14 @@
                     + '<div class="tc-special" data-special="shortSale"' + (c.shortSaleNoRate ? ' hidden' : '') + '>'
                     + '<div class="tc-table" data-table="shortSale"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
                     + (c.shortSaleTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="shortSale">+ Add Row</button>'
-                    + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-ss-over-fee" aria-label="Add this much" placeholder="0"', c.shortSaleOverFee)
-                    + ' for every ' + tcBox('money', 'id="tc-ss-over-per" aria-label="For every" placeholder="20,000"', c.shortSaleOverPer) + '</div>'
+                    + overChoice('ss', 'shortSale', c, 'standardPlus')
                     + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-ss-share" placeholder="50"', c.shortSaleSellerShare)) + '</div></div>'
                     + '<h4 class="tc-sub">REO escrow fee</h4>'
                     + noRateBox('reo', c.reoNoRate)
                     + '<div class="tc-special" data-special="reo"' + (c.reoNoRate ? ' hidden' : '') + '>'
                     + '<div class="tc-table" data-table="reo"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
                     + (c.reoTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="reo">+ Add Row</button>'
-                    + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-reo-over-fee" aria-label="Add this much" placeholder="0"', c.reoOverFee)
-                    + ' for every ' + tcBox('money', 'id="tc-reo-over-per" aria-label="For every" placeholder="20,000"', c.reoOverPer) + '</div>'
+                    + overChoice('reo', 'reo', c, 'standardPlus')
                     + '<div class="tc-grid" style="margin-top:12px">' + tcField('Seller’s share', tcBox('pct', 'id="tc-reo-share" placeholder="50"', c.reoSellerShare)) + '</div></div>')
 
                 + section('Refinance', 'A loan with no sale (the owner refinances); the borrower pays everything. The escrow manual has a flat <b>loan escrow</b> fee (WFG 4.5: $550) and recording fee (WFG 5.6: $100). The title rate manual has a separate, cheaper <b>refinance loan policy</b> table on the loan amount (WFG 5.2, which already includes the usual endorsements; an expanded coverage policy is 110%).',
@@ -2345,8 +2365,7 @@
                     + '<h4 class="tc-sub">Refinance loan policy</h4>'
                     + '<div class="tc-table" data-table="refi"><div class="tc-row is-head"><span>Loan amount up to</span><span>Premium</span><span></span></div>'
                     + (c.refiTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="refi">+ Add Row</button>'
-                    + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-refi-over-fee" aria-label="Add this much" placeholder="5.40"', c.refiOverFee)
-                    + ' for every ' + tcBox('money', 'id="tc-refi-over-per" aria-label="For every" placeholder="10,000"', c.refiOverPer) + '</div>'
+                    + overChoice('refi', 'refi', c, 'basicRate')
                     + '<div class="tc-grid" style="margin-top:12px">' + tcField('Percent of the table', tcBox('pct', 'id="tc-refi-pct" placeholder="100"', c.refiPolicyPercent))
                     + tcField('Lender’s endorsements', tcBox('money', 'id="tc-refi-endorse" placeholder="0"', c.refiEndorsements)) + '</div>')
 
@@ -2392,6 +2411,8 @@
                 cashNoPayoffAddOn: parseMoney(val('tc-cash-nopayoff')), extraLoanEscrowFee: parseMoney(val('tc-extra-escrow')),
                 extraLoanPolicyFee: parseMoney(val('tc-extra-policy')), fincenFee: parseMoney(val('tc-fincen')), fincenExtraFee: parseMoney(val('tc-fincen-extra')),
                 shortSaleNoRate: document.getElementById('tc-shortSale-norate').checked, reoNoRate: document.getElementById('tc-reo-norate').checked,
+                shortSaleOverMode: val('tc-ss-over-mode'), reoOverMode: val('tc-reo-over-mode'), refiOverMode: val('tc-refi-over-mode'),
+                refiOverPercent: parsePct(val('tc-refi-over-pct')),
                 shortSaleTable: rowsOf('shortSale'), shortSaleOverFee: parseMoney(val('tc-ss-over-fee')), shortSaleOverPer: parseMoney(val('tc-ss-over-per')), shortSaleSellerShare: parsePct(val('tc-ss-share')),
                 reoTable: rowsOf('reo'), reoOverFee: parseMoney(val('tc-reo-over-fee')), reoOverPer: parseMoney(val('tc-reo-over-per')), reoSellerShare: parsePct(val('tc-reo-share')),
                 refiEscrowFee: parseMoney(val('tc-refi-escrow')), refiRecordingFee: parseMoney(val('tc-refi-recording')), refiTable: rowsOf('refi'),
@@ -2481,6 +2502,7 @@
         });
         tcBody.addEventListener('change', e => {
             // "No separate rate" hides that sale type's table, share and above-the-table charge
+            if (e.target.matches('[data-over-mode]')) e.target.closest('.tc-over').dataset.mode = e.target.value;
             const noRate = e.target.closest('[data-norate]');
             if (noRate) tcBody.querySelector('[data-special="' + noRate.dataset.norate + '"]').hidden = noRate.checked;
             updateTitleTry();

@@ -48,13 +48,33 @@ export function titlePolicies(c, price, loanAmount) {
 }
 
 // A refinance of loanAmount: { escrow, recording, policy (null without a table), endorsements, fees, total }
+// Above its last row (refiOverMode 'basicRate'), a refinance policy is refiOverPercent of the basic rate on the loan amount
+// (First American: 30% of its 120% extended loan rate = 36%); otherwise the table's "add $X per $Y".
 export function refiQuote(c, loanAmount) {
     if (!(loanAmount > 0)) return null;
-    const table = tableFee(c.refiTable, c.refiOverFee, c.refiOverPer, loanAmount);
-    const policy = table === null ? null : Math.ceil(table * (c.refiPolicyPercent ?? 1));
+    let policy;
+    if (c.refiOverMode === 'basicRate' && loanAmount > lastUpTo(c.refiTable)) {
+        const basic = tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, loanAmount);
+        policy = basic === null ? null : Math.ceil(basic * (c.refiOverPercent || 0));
+    } else {
+        const table = tableFee(c.refiTable, c.refiOverFee, c.refiOverPer, loanAmount);
+        policy = table === null ? null : Math.ceil(table * (c.refiPolicyPercent ?? 1));
+    }
     const fees = (c.otherFees || []).filter(f => f.when === 'Refinance' && f.amount);
     const escrow = c.refiEscrowFee || 0, recording = c.refiRecordingFee || 0, endorsements = c.refiEndorsements || 0;
     return { escrow, recording, policy, endorsements, fees, total: escrow + recording + (policy || 0) + endorsements + fees.reduce((s, f) => s + f.amount, 0) };
+}
+
+// A table's last "up to" amount (0 when empty)
+const lastUpTo = table => Math.max(0, ...(table || []).filter(r => r.upTo > 0 && r.fee !== null && r.fee !== undefined).map(r => r.upTo));
+// A short sale or REO escrow fee (kind 'shortSale' or 'reo'). Above its last row, '...OverMode' 'standardPlus' means the
+// standard escrow table's fee plus OverFee (First American: the basic escrow fee + $1,000); otherwise "add $X per $Y".
+export function specialEscrowFee(c, kind, price) {
+    if (c[kind + 'OverMode'] === 'standardPlus' && price > lastUpTo(c[kind + 'Table'])) {
+        const standard = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price);
+        return standard === null ? null : standard + (c[kind + 'OverFee'] || 0);
+    }
+    return tableFee(c[kind + 'Table'], c[kind + 'OverFee'], c[kind + 'OverPer'], price);
 }
 
 // Which loans need an endorsement, and which sales an "other fee" applies to
@@ -100,7 +120,7 @@ export function saleFees(c, price, loanAmount, o = {}) {
     const special = saleType === 'Short Sale' && filed('shortSale') ? 'shortSale' : saleType === 'REO' && filed('reo') ? 'reo' : '';
     let base, total, share, note;
     if (special) {
-        base = tableFee(c[special + 'Table'], c[special + 'OverFee'], c[special + 'OverPer'], price);
+        base = specialEscrowFee(c, special, price);
         total = base;
         share = c[special + 'SellerShare'] ?? c.sellerEscrowShare ?? 0.5;
         note = (special === 'reo' ? 'REO' : 'Short sale') + ' escrow rate';
@@ -197,7 +217,13 @@ export function missingRates(c) {
     return TITLE_REQUIRED.filter(([key, , kind]) => {
         if ((c.shortSaleNoRate && /^shortSale/.test(key)) || (c.reoNoRate && /^reo/.test(key))) return false;
         if (kind === 'table') return !(c[key] || []).some(r => (r.upTo > 0 || r.name) && !blank(r.fee ?? r.amount));
-        if (kind === 'over') return OVER_FIELDS[key].some(k => blank(c[k]));
+        if (kind === 'over') {
+            // "Standard fee plus $X" needs only $X; "% of the basic rate" only the percent
+            const mode = c[key + 'Mode'];
+            if (mode === 'standardPlus') return blank(c[OVER_FIELDS[key][0]]);
+            if (mode === 'basicRate') return blank(c.refiOverPercent);
+            return OVER_FIELDS[key].some(k => blank(c[k]));
+        }
         return blank(c[key]);
     }).map(([key]) => key);
 }

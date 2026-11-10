@@ -1274,6 +1274,10 @@ function titleCompanyOut_(doc) {
     reoTable: table(f['REO ESCROW TABLE']), reoOverFee: num(f['REO OVER FEE']), reoOverPer: num(f['REO OVER PER']),
     reoSellerShare: num(f['REO SELLER SHARE']),
     shortSaleNoRate: f['SHORT SALE NO SEPARATE RATE'] === true, reoNoRate: f['REO NO SEPARATE RATE'] === true,
+    // Above the last row: 'per' (add OVER FEE per OVER PER), 'standardPlus' (the standard escrow fee + OVER FEE) or, for a
+    // refinance, 'basicRate' (REFINANCE OVER PERCENT of the basic rate on the loan amount)
+    shortSaleOverMode: String(f['SHORT SALE OVER MODE'] || 'per'), reoOverMode: String(f['REO OVER MODE'] || 'per'),
+    refiOverMode: String(f['REFINANCE OVER MODE'] || 'per'), refiOverPercent: num(f['REFINANCE OVER PERCENT']),
     refiEscrowFee: num(f['REFINANCE ESCROW FEE']),
     refiRecordingFee: num(f['REFINANCE RECORDING FEE']),
     refiTable: table(f['REFINANCE TITLE TABLE']),
@@ -1333,6 +1337,14 @@ async function saveTitleCompany_(account, body) {
     if (Number.isNaN(v)) return { ok: false, error: 'invalid_' + k };
     fields[col] = v === null ? FieldValue.delete() : v;
   }
+  // How each table charges above its last row (see titleCompanyOut_)
+  const modes = {
+    shortSale: c.shortSaleOverMode === 'standardPlus' ? 'standardPlus' : 'per',
+    reo: c.reoOverMode === 'standardPlus' ? 'standardPlus' : 'per',
+    refi: c.refiOverMode === 'basicRate' ? 'basicRate' : 'per',
+  };
+  const modeOf_ = col => (/^SHORT SALE/.test(col) ? modes.shortSale : /^REO/.test(col) ? modes.reo : /^REFINANCE/.test(col) ? modes.refi : 'per');
+  if (modes.refi === 'basicRate' && (c.refiOverPercent === null || c.refiOverPercent === undefined || c.refiOverPercent === '')) return { ok: false, error: 'missing_rates', missing: ['REFINANCE OVER PERCENT'] };
   // Shares are 0-100%; the policy percents of the basic rate can be more than 100% (110% for a homeowner's policy)
   const shareFields = { sellerEscrowShare: ['SELLER SHARE OF ESCROW FEE', 1], sellerRecordingShare: ['SELLER SHARE OF RECORDING FEE', 1],
     sellerOwnerShare: ['SELLER SHARE OF OWNERS POLICY', 1], ownerPolicyPercent: ['OWNERS POLICY PERCENT', 3],
@@ -1347,7 +1359,8 @@ async function saveTitleCompany_(account, body) {
   for (const [fee, per] of [['ESCROW OVER TABLE FEE', 'ESCROW OVER TABLE PER'], ['OWNERS TITLE OVER TABLE FEE', 'OWNERS TITLE OVER TABLE PER'],
     ['REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER'], ['SHORT SALE OVER FEE', 'SHORT SALE OVER PER'], ['REO OVER FEE', 'REO OVER PER']]) {
     const hasFee = typeof fields[fee] === 'number', hasPer = typeof fields[per] === 'number';
-    // ($0 per $0 means no extra charge above the table)
+    // ($0 per $0 means no extra charge above the table; the other "above the last row" choices don't use $ per $)
+    if (modeOf_(fee) !== 'per') continue;
     if (hasFee !== hasPer || (hasPer && !(fields[per] > 0) && fields[fee] !== 0)) return { ok: false, error: 'invalid_' + fee.toLowerCase().replace(/ /g, '_') };
   }
   fields['RATE MANUAL DATE'] = manualDate || FieldValue.delete();
@@ -1397,12 +1410,22 @@ async function saveTitleCompany_(account, body) {
   fields['LOAN ENDORSEMENTS'] = FieldValue.delete();
   fields['VA SELLER PAYS BUYER FEES'] = c.vaSellerPays === true;
 
+  // The "above the last row" choices
+  fields['SHORT SALE OVER MODE'] = modes.shortSale;
+  fields['REO OVER MODE'] = modes.reo;
+  fields['REFINANCE OVER MODE'] = modes.refi;
+  const refiOverPercent = titleShare_(c.refiOverPercent);
+  if (Number.isNaN(refiOverPercent)) return { ok: false, error: 'invalid_refiOverPercent' };
+  fields['REFINANCE OVER PERCENT'] = refiOverPercent === null ? FieldValue.delete() : refiOverPercent;
   // A short sale or REO with no separate rate uses the standard escrow fee (its table and share aren't needed)
   fields['SHORT SALE NO SEPARATE RATE'] = c.shortSaleNoRate === true;
   fields['REO NO SEPARATE RATE'] = c.reoNoRate === true;
   // Every rate is required (0 counts: none)
   const missing = TITLE_REQUIRED_COLUMNS.filter(col => {
     if ((c.shortSaleNoRate === true && /^SHORT SALE /.test(col)) || (c.reoNoRate === true && /^REO /.test(col))) return false;
+    // "Standard fee plus $X" needs no "per"; "% of the basic rate" needs only its percent
+    if (/ OVER (TABLE )?PER$/.test(col) && modeOf_(col) === 'standardPlus') return false;
+    if (/^REFINANCE TITLE OVER /.test(col) && modes.refi === 'basicRate') return false;
     const v = fields[col];
     return Array.isArray(v) ? !v.length : v === undefined || v === null || v instanceof FieldValue;
   });
