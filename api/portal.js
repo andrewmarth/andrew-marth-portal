@@ -227,6 +227,11 @@ export async function handle(body, query) {
     if (body.action === 'marketingPointImage') return await marketingPointImage_(account, body);
     // settings.html: the admin Title Companies card (each company's filed escrow and title fees)
     if (body.action === 'titleCompanies') return await titleCompanies_(account);
+    // settings.html: the admin Lenders card (each lender, its linked lender accounts and its loan products)
+    if (body.action === 'lenders') return await lenders_(account);
+    if (body.action === 'saveLender') return await saveLender_(account, body);
+    if (body.action === 'deleteLender') return await deleteLender_(account, body);
+    if (body.action === 'saveLenderProduct') return await saveLenderProduct_(account, body);
     if (body.action === 'saveTitleCompany') return await saveTitleCompany_(account, body);
     if (body.action === 'deleteTitleCompany') return await deleteTitleCompany_(account, body);
     // Home page (admins): add a new property for a buyer
@@ -2989,9 +2994,12 @@ function loanProductFields_(headers) {
     .map(h => ({ section: 'Other', col: h, kind: 'text' })));
 }
 
-// This lender's LOAN_PRODUCTS rows (ACCOUNT ID is theirs): each one's row number (_order) and its values as text
+// This lender's LOAN_PRODUCTS rows (ACCOUNT ID is theirs, or LENDER NAME is their LENDER BANK): each one's row number
+// (_order) and its values as text
 async function lenderLoanProducts_(id) {
-  return (await rows('loanProducts')).filter(r => phoneToId_(r['ACCOUNT ID']) === id).map(r => {
+  const me = (await rows('accounts')).find(r => phoneToId_(r['ACCOUNT ID']) === id);
+  const bank = lenderKey_(me ? me['LENDER BANK'] : '');
+  return (await rows('loanProducts')).filter(r => phoneToId_(r['ACCOUNT ID']) === id || (bank && lenderKey_(r['LENDER NAME']) === bank)).map(r => {
     const product = {};
     Object.keys(r).forEach(h => { const key = h.trim().toUpperCase(); if (key && key !== 'ACCOUNT ID') product[key] = r[h]; });
     return { row: r._order, values: product, docId: r._id };
@@ -3030,6 +3038,127 @@ async function saveLoanProduct_(id, account, body) {
     if (target) await update('loanProducts', target.docId, clean);
     else await add('loanProducts', Object.assign({ 'ACCOUNT ID': id }, clean));
     return { ok: true, products: (await lenderLoanProducts_(id)).map(p => ({ row: p.row, values: p.values })) };
+  });
+}
+
+// --- Lenders (settings.html, admins) ---
+// A lender is a name (a lenders document: NAME). Its loan products are the loanProducts rows whose LENDER NAME is that
+// name, and its linked lender accounts are the accounts whose LENDER BANK is that name (their My Loan Products card shows
+// the lender's products). Names match without regard to case or extra spaces. A name used on a product or an account
+// that has no lenders document still shows as a lender (saving it adds the document).
+const lenderKey_ = v => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
+async function lenderList_() {
+  const docs = await rows('lenders');
+  const products = await rows('loanProducts');
+  const accounts = (await rows('accounts')).filter(r => phoneToId_(r['ACCOUNT ID']));
+  const byKey = new Map();
+  const touch = (name, id) => {
+    const key = lenderKey_(name);
+    if (!key) return null;
+    if (!byKey.has(key)) byKey.set(key, { id: '', name: String(name).trim().replace(/\s+/g, ' '), accounts: [], products: [] });
+    const l = byKey.get(key);
+    if (id && !l.id) { l.id = id; l.name = String(name).trim(); }
+    return l;
+  };
+  docs.forEach(d => touch(d['NAME'], d._id));
+  products.forEach(p => {
+    const l = touch(p['LENDER NAME']);
+    if (!l) return;
+    const values = {};
+    Object.keys(p).forEach(h => { const key = h.trim().toUpperCase(); if (key && key !== 'ACCOUNT ID') values[key] = p[h]; });
+    l.products.push({ row: p._order, values });
+  });
+  accounts.filter(a => hasRole_(a, 'LENDER')).forEach(a => {
+    const l = touch(a['LENDER BANK']);
+    if (l) l.accounts.push(phoneToId_(a['ACCOUNT ID']));
+  });
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+async function lenders_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const lenderAccounts = (await rows('accounts')).filter(r => hasRole_(r, 'LENDER') && phoneToId_(r['ACCOUNT ID']))
+    .map(r => ({ id: phoneToId_(r['ACCOUNT ID']), name: fullName_(r) || phoneToId_(r['ACCOUNT ID']), bank: String(r['LENDER BANK'] || '').trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, lenders: await lenderList_(), lenderAccounts, loanProductFields: loanProductFields_(await columns('loanProducts')) };
+}
+// Adds a lender or renames one, and sets which lender accounts are linked to it. body: { id, oldName, name, accounts: [id] }.
+// A rename moves its loan products (LENDER NAME) and linked accounts (LENDER BANK) to the new name. An account linked
+// here leaves any other lender; one unlinked here has no lender until it's linked again.
+async function saveLender_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const name = cleanText_(body.name, 100).replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'missing_name' };
+  const linked = new Set((Array.isArray(body.accounts) ? body.accounts : []).map(phoneToId_).filter(String));
+  return withLock('lenders', async () => {
+    const list = await lenderList_();
+    const oldKey = lenderKey_(body.oldName || '');
+    const current = body.id ? list.find(l => l.id === String(body.id)) : oldKey ? list.find(l => lenderKey_(l.name) === oldKey) : null;
+    if ((body.id || oldKey) && !current) return { ok: false, error: 'not_found' };
+    if (list.some(l => l !== current && lenderKey_(l.name) === lenderKey_(name))) return { ok: false, error: 'duplicate_lender' };
+    const key = current ? lenderKey_(current.name) : '';
+    if (current && current.id) await update('lenders', current.id, { 'NAME': name });
+    else await add('lenders', { 'NAME': name });
+    // Its loan products follow a rename
+    if (current && current.name !== name) {
+      for (const p of (await rows('loanProducts')).filter(r => lenderKey_(r['LENDER NAME']) === key)) await update('loanProducts', p._id, { 'LENDER NAME': name });
+    }
+    // Linked lender accounts: LENDER BANK is this lender's name (or blank when unlinked here)
+    for (const a of (await rows('accounts')).filter(r => hasRole_(r, 'LENDER'))) {
+      const aid = phoneToId_(a['ACCOUNT ID']);
+      const bank = String(a['LENDER BANK'] || '').trim();
+      const want = linked.has(aid) ? name : (key && lenderKey_(bank) === key) ? '' : bank;
+      if (want !== bank) await update('accounts', a._id, { 'LENDER BANK': want });
+    }
+    return { ok: true, lenders: await lenderList_() };
+  });
+}
+// Deletes a lender that has no loan products; its linked accounts are unlinked. body: { id, name }
+async function deleteLender_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  return withLock('lenders', async () => {
+    const key = lenderKey_(body.name);
+    const current = (await lenderList_()).find(l => (body.id && l.id === String(body.id)) || (!body.id && key && lenderKey_(l.name) === key));
+    if (!current) return { ok: false, error: 'not_found' };
+    if (current.products.length) return { ok: false, error: 'has_products' };
+    for (const a of (await rows('accounts')).filter(r => hasRole_(r, 'LENDER') && lenderKey_(r['LENDER BANK']) === lenderKey_(current.name))) {
+      await update('accounts', a._id, { 'LENDER BANK': '' });
+    }
+    if (current.id) await remove('lenders', current.id);
+    return { ok: true, lenders: await lenderList_() };
+  });
+}
+// Admins: saves a lender's loan product (body.row, its row number) or adds one (no row) under body.lender. body.values
+// as for saveLoanProduct_; LENDER NAME is the lender's name unless the form changed it (moving the product).
+async function saveLenderProduct_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const lenderName = cleanText_(body.lender, 100).replace(/\s+/g, ' ');
+  if (!lenderName) return { ok: false, error: 'missing_name' };
+  const rowNumber = body.row ? Number(body.row) : 0;
+  const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
+  if (!rowNumber || !String(submitted['LENDER NAME'] || '').trim()) submitted['LENDER NAME'] = lenderName;
+  return withLock('loanProducts', async () => {
+    const fields = loanProductFields_(await columns('loanProducts'));
+    const clean = {};
+    for (const f of fields) {
+      const value = cleanSetting_(f.kind, submitted[f.col]);
+      if (value === null || (value === '' && f.section !== 'Other')) return { ok: false, error: 'invalid_value', field: f.col };
+      clean[f.col] = value;
+    }
+    const all = await rows('loanProducts');
+    const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
+    if (rowNumber && !target) return { ok: false, error: 'not_found' };
+    // Pages pick a product by name, so one lender can't have two with the same name
+    const lender = lenderKey_(clean['LENDER NAME']), name = lenderKey_(clean['LOAN PRODUCT NAME']);
+    if (all.some(r => r !== target && lenderKey_(r['LENDER NAME']) === lender && lenderKey_(r['LOAN PRODUCT NAME']) === name)) {
+      return { ok: false, error: 'duplicate_name' };
+    }
+    if (target) await update('loanProducts', target._id, clean);
+    else {
+      // A new product belongs to the lender's first linked account (if it has one)
+      const owner = (await rows('accounts')).find(r => hasRole_(r, 'LENDER') && lenderKey_(r['LENDER BANK']) === lender);
+      await add('loanProducts', Object.assign({ 'ACCOUNT ID': owner ? phoneToId_(owner['ACCOUNT ID']) : '' }, clean));
+    }
+    return { ok: true, lenders: await lenderList_() };
   });
 }
 

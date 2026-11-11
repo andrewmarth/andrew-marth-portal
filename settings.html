@@ -468,6 +468,17 @@
 
         /* --- Title Companies (admins) --- */
         .tc-item .mp-desc { -webkit-line-clamp: unset; display: block; }
+        /* --- Lenders (admins) --- */
+        .ln-item .mp-desc { -webkit-line-clamp: unset; display: block; }
+        .ln-products { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .ln-product { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px; border: 1px solid rgba(233, 226, 216, 0.45); border-radius: 999px; background: rgba(233, 226, 216, 0.08); color: var(--cream); font-family: inherit; font-size: 0.88rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+        .ln-product svg { width: 14px; height: 14px; }
+        .ln-product.is-add { border-style: dashed; font-weight: normal; }
+        @media (hover: hover) { .ln-product:hover { background: var(--cream); color: var(--brown); } }
+        .ln-accounts { display: grid; gap: 4px; margin-top: 6px; }
+        .field .ln-accounts label.tc-check { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0 0 6px; font-weight: normal; font-size: 0.95rem; }
+        .ln-accounts .tc-check input { width: 20px; height: 20px; min-height: 0; padding: 0; margin: 1px 0 0 0; border: none; box-shadow: none; }
+        .ln-accounts .ln-bank { opacity: 0.65; font-size: 0.84rem; }
         .edit-dialog.tc-dialog { max-width: 680px; max-height: calc(100dvh - 40px); overflow-y: auto; }
         /* The long pop-ups scroll without showing a scroll bar */
         .edit-dialog.tc-dialog, .edit-dialog.mp-dialog { scrollbar-width: none; -ms-overflow-style: none; }
@@ -1004,6 +1015,21 @@
                 <span class="cf-saved" id="tc-saved" role="status"></span>
             </div>
         </section>
+
+        <!-- Admins only: each lender, the lender accounts linked to it and its loan products -->
+        <section class="main-card glow-card reveal" id="lender-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Lenders</h2>
+            <p class="mp-intro">Each lender and its loan products. Tap a product to edit it. A lender's linked lender accounts see its products on their home page's My Loan Products card.</p>
+            <ul class="mp-list" id="ln-list"><li class="client-empty">Loading...</li></ul>
+            <div class="mp-foot">
+                <button type="button" class="btn" id="ln-add" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    Add Lender
+                </button>
+                <span class="cf-saved" id="ln-saved" role="status"></span>
+            </div>
+        </section>
     </main>
 
     <!-- Add / edit a title company pop-up (admins) -->
@@ -1031,6 +1057,36 @@
                 <button type="button" class="mp-delete" id="tc-delete" hidden>Delete</button>
                 <button type="button" class="btn btn-secondary" data-close-tc>Cancel</button>
                 <button type="submit" class="btn" id="tc-save">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Add / edit a lender pop-up (admins) -->
+    <dialog class="edit-dialog ln-dialog" id="ln-dialog" aria-labelledby="ln-dialog-title">
+        <form class="dialog-inner" id="ln-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="ln-dialog-title">New Lender</h2>
+                <button type="button" class="close-btn" data-close-ln aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <div class="field">
+                <label for="ln-name">Lender Name</label>
+                <input type="text" id="ln-name" maxlength="100" autocomplete="off" placeholder="Sunflower Bank">
+            </div>
+            <div class="field">
+                <label>Linked Lender Accounts</label>
+                <p class="muted" style="margin:0 0 0 6px;font-size:0.88rem">Lender accounts that work for this lender. They see its loan products on their home page, and loan products they add go under it.</p>
+                <div class="ln-accounts" id="ln-accounts"></div>
+            </div>
+            <p class="form-message" id="ln-message" role="alert"></p>
+            <div class="form-actions mp-actions">
+                <button type="button" class="mp-delete" id="ln-delete" hidden>Delete</button>
+                <button type="button" class="btn btn-secondary" data-close-ln>Cancel</button>
+                <button type="submit" class="btn" id="ln-save">
                     <span class="btn-spinner" aria-hidden="true"></span>
                     Save
                 </button>
@@ -1181,6 +1237,7 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
+        import { openLoanProductForm } from '/loan-products.js';
         import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, BUYER_TYPES, DISCOUNT_CATEGORIES, DISCOUNT_APPLIES } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
@@ -1258,7 +1315,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); loadTitleCompanies(user); await loadClients(user); }
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); await loadClients(user); }
                     // Income & Debt is only for buyers
                     document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
                 }
@@ -2698,6 +2755,154 @@
                 console.error(err);
                 tcSetBusy(false);
                 tcMessage.textContent = 'We couldn’t delete that. Please try again.';
+            }
+        });
+
+        // --- Lenders (admins) ---
+        // Each lender (its name), the lender accounts linked to it (their LENDER BANK is its name) and its loan products,
+        // edited with the same form lenders use on the home page (/loan-products.js)
+        const lnCard = document.getElementById('lender-card');
+        const lnList = document.getElementById('ln-list');
+        const lnAdd = document.getElementById('ln-add');
+        const lnSaved = document.getElementById('ln-saved');
+        const lnDialog = document.getElementById('ln-dialog');
+        const lnForm = document.getElementById('ln-form');
+        const lnName = document.getElementById('ln-name');
+        const lnAccountsEl = document.getElementById('ln-accounts');
+        const lnMessage = document.getElementById('ln-message');
+        const lnSave = document.getElementById('ln-save');
+        const lnDelete = document.getElementById('ln-delete');
+        const LN_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+        let lnUser = null;
+        let lnLenders = [];
+        let lnAccounts = [];
+        let lnFields = [];
+        let lnEditing = null;
+        let lnBusy = false;
+        const accountName = id => (lnAccounts.find(a => a.id === id) || { name: id }).name;
+        function renderLenders() {
+            if (!lnLenders.length) { lnList.innerHTML = '<li class="client-empty">No lenders yet.</li>'; return; }
+            lnList.innerHTML = lnLenders.map((l, i) => {
+                const lines = [l.products.length ? l.products.length + (l.products.length === 1 ? ' loan product' : ' loan products') : 'No loan products yet',
+                    l.accounts.length ? 'Linked: ' + l.accounts.map(accountName).join(', ') : 'No linked lender accounts'];
+                return '<li class="mp-item ln-item"><div class="mp-text"><div class="mp-title">' + esc(l.name) + '</div>'
+                    + '<div class="mp-desc">' + lines.map(esc).join('<br>') + '</div>'
+                    + '<div class="ln-products">' + l.products.map((p, j) => '<button type="button" class="ln-product" data-ln-product="' + i + ':' + j + '">'
+                        + esc(String(p.values['LOAN PRODUCT NAME'] || '').trim() || 'Untitled loan product') + '</button>').join('')
+                    + '<button type="button" class="ln-product is-add" data-ln-new-product="' + i + '">' + LN_PLUS + 'Add Loan Product</button></div></div>'
+                    + '<button type="button" class="cf-edit" data-ln-edit="' + i + '" aria-label="Edit ' + esc(l.name) + '" title="Edit">' + PENCIL_ICON + '</button></li>';
+            }).join('');
+        }
+        async function loadLenders(user) {
+            lnUser = user;
+            lnCard.hidden = false;
+            try {
+                const data = await callApi(user, { action: 'lenders' });
+                if (!data.ok) throw new Error(data.error);
+                lnLenders = data.lenders || [];
+                lnAccounts = data.lenderAccounts || [];
+                lnFields = data.loanProductFields || [];
+                renderLenders();
+                lnAdd.disabled = false;
+            } catch (err) {
+                console.error(err);
+                lnList.innerHTML = '<li class="client-empty">We couldn’t load the lenders. Please refresh to try again.</li>';
+            }
+        }
+        function openLender(l) {
+            lnEditing = l || null;
+            lnSaved.textContent = '';
+            lnMessage.textContent = '';
+            lnName.classList.remove('is-invalid');
+            document.getElementById('ln-dialog-title').textContent = l ? 'Edit ' + l.name : 'New Lender';
+            lnName.value = l ? l.name : '';
+            lnDelete.hidden = !l;
+            const linked = new Set(l ? l.accounts : []);
+            lnAccountsEl.innerHTML = lnAccounts.length ? lnAccounts.map(a => '<label class="tc-check"><input type="checkbox" value="' + esc(a.id) + '"' + (linked.has(a.id) ? ' checked' : '') + '><span>'
+                + esc(a.name) + (a.bank && !linked.has(a.id) ? ' <span class="ln-bank">(now ' + esc(a.bank) + ')</span>' : '') + '</span></label>').join('')
+                : '<p class="muted" style="margin:6px 0 0 6px">No accounts have the Lender role yet (Clients card).</p>';
+            lnDialog.showModal();
+            lnName.focus();
+        }
+        lnAdd.addEventListener('click', () => openLender(null));
+        lnList.addEventListener('click', e => {
+            const editBtn = e.target.closest('[data-ln-edit]');
+            if (editBtn) { openLender(lnLenders[Number(editBtn.dataset.lnEdit)]); return; }
+            const productBtn = e.target.closest('[data-ln-product], [data-ln-new-product]');
+            if (!productBtn) return;
+            lnSaved.textContent = '';
+            const isNew = productBtn.hasAttribute('data-ln-new-product');
+            const [i, j] = (isNew ? productBtn.dataset.lnNewProduct + ':' : productBtn.dataset.lnProduct).split(':').map(Number);
+            const lender = lnLenders[i];
+            const product = isNew ? null : lender.products[j];
+            openLoanProductForm({ fields: lnFields, product, submit: async (values, row) => {
+                const data = await callApi(lnUser, { action: 'saveLenderProduct', lender: lender.name, row, values });
+                if (!data.ok) throw new Error(data.error);
+                lnLenders = data.lenders || [];
+                renderLenders();
+                lnSaved.textContent = (isNew ? 'Added ' : 'Saved ') + (values['LOAN PRODUCT NAME'] || 'the loan product') + '.';
+            } });
+        });
+        const lnClose = () => { if (!lnBusy) lnDialog.close(); };
+        lnForm.querySelectorAll('[data-close-ln]').forEach(b => b.addEventListener('click', lnClose));
+        lnDialog.addEventListener('cancel', e => { e.preventDefault(); lnClose(); });
+        lnName.addEventListener('input', () => { lnName.classList.remove('is-invalid'); lnMessage.textContent = ''; });
+        const LN_ERRORS = {
+            missing_name: 'Please enter the lender’s name.',
+            duplicate_lender: 'There’s already a lender with that name.',
+            has_products: 'This lender still has loan products, so it can’t be deleted.',
+            not_found: 'That lender couldn’t be found. Please refresh and try again.',
+        };
+        function lnSetBusy(busy, btn) {
+            lnBusy = busy;
+            lnForm.querySelectorAll('input, button').forEach(el => { el.disabled = busy; });
+            if (btn) btn.classList.toggle('is-loading', busy);
+        }
+        lnForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (lnBusy) return;
+            const name = lnName.value.trim().replace(/\s+/g, ' ');
+            if (!name) { lnName.classList.add('is-invalid'); lnName.focus(); lnMessage.textContent = LN_ERRORS.missing_name; return; }
+            const accounts = [...lnAccountsEl.querySelectorAll('input:checked')].map(i => i.value);
+            lnSetBusy(true, lnSave);
+            try {
+                const data = await callApi(lnUser, { action: 'saveLender', id: lnEditing ? lnEditing.id : '', oldName: lnEditing ? lnEditing.name : '', name, accounts });
+                if (!data.ok) throw new Error(data.error);
+                lnLenders = data.lenders || [];
+                // The linked accounts' lender changed
+                lnAccounts.forEach(a => {
+                    if (accounts.includes(a.id)) a.bank = name;
+                    else if (lnEditing && a.bank.toLowerCase() === lnEditing.name.toLowerCase()) a.bank = '';
+                });
+                lnSetBusy(false, lnSave);
+                lnDialog.close();
+                renderLenders();
+                lnSaved.textContent = (lnEditing ? 'Saved ' : 'Added ') + name + '.';
+            } catch (err) {
+                console.error(err);
+                lnSetBusy(false, lnSave);
+                lnMessage.textContent = LN_ERRORS[err.message] || 'We couldn’t save that. Please try again.';
+            }
+        });
+        lnDelete.addEventListener('click', async () => {
+            if (lnBusy || !lnEditing) return;
+            if (lnEditing.products.length) { lnMessage.textContent = LN_ERRORS.has_products; return; }
+            if (!window.confirm('Delete ' + lnEditing.name + '?' + (lnEditing.accounts.length ? ' Its linked lender accounts will have no lender until you link them again.' : ''))) return;
+            lnSetBusy(true);
+            try {
+                const data = await callApi(lnUser, { action: 'deleteLender', id: lnEditing.id, name: lnEditing.name });
+                if (!data.ok) throw new Error(data.error);
+                lnLenders = data.lenders || [];
+                lnAccounts.forEach(a => { if (a.bank.toLowerCase() === lnEditing.name.toLowerCase()) a.bank = ''; });
+                const name = lnEditing.name;
+                lnSetBusy(false);
+                lnDialog.close();
+                renderLenders();
+                lnSaved.textContent = 'Deleted ' + name + '.';
+            } catch (err) {
+                console.error(err);
+                lnSetBusy(false);
+                lnMessage.textContent = LN_ERRORS[err.message] || 'We couldn’t delete that. Please try again.';
             }
         });
 
