@@ -101,12 +101,13 @@ function cleanSetting_(kind, value) {
 
 // LOAN_PRODUCTS columns a lender fills in from the home page's My Loan Products card, in the form's order and sections.
 // Kinds as for PAGE_SETTING_FIELDS (rate: a decimal like 0.03 for 3%), plus cents: dollars that may have cents.
-// ACCOUNT ID is always the lender's own; any other column that isn't listed here is asked as text under "Other".
+// ACCOUNT ID is always the lender's own and LENDER NAME is set from the lender (never asked); any other column that isn't
+// listed here is asked as text under "Other".
 // The form (loan-products.js) lays these out with its own yes/no questions and fills in every column before saving.
 const LOAN_PRODUCT_FIELDS = (function () {
   const dti = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
   const sections = [
-    ['Product', [['LOAN PRODUCT NAME', 'text'], ['LENDER NAME', 'text'], ['LOAN TERM', 'int']]],
+    ['Product', [['LOAN PRODUCT NAME', 'text'], ['LOAN TERM', 'int']]],
     ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
       ['INCOME LIMIT', 'money'], ['SECOND LOAN LTV MAX', 'rate'], ['SILENT SECOND', 'bool']]],
     ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
@@ -2984,9 +2985,9 @@ async function myPagesData_(id, account) {
   return result;
 }
 
-// The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID)
+// The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
 function loanProductFields_(headers) {
-  const known = {};
+  const known = { 'LENDER NAME': true };
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   return LOAN_PRODUCT_FIELDS.concat(headers
     .map(h => String(h).trim().toUpperCase())
@@ -3008,16 +3009,14 @@ async function lenderLoanProducts_(id) {
 
 // Lenders only: saves one of their own LOAN_PRODUCTS rows (body.row, its row number), or adds a new one (no row).
 // body.values: { column: value } for every question; each is checked like a Settings value and none may be blank
-// (except the extra text columns). A new product's LENDER NAME is the lender's bank on file, and SILENT SECOND is
-// always TRUE. Returns the lender's products again.
+// (except the extra text columns). A new product's LENDER NAME is the lender's bank on file (an existing one keeps its
+// own), and SILENT SECOND is always TRUE. Returns the lender's products again.
 async function saveLoanProduct_(id, account, body) {
   if (!hasRole_(account, 'LENDER')) return { ok: false, error: 'not_allowed' };
   const rowNumber = body.row ? Number(body.row) : 0;
   const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
-  if (!rowNumber) {
-    submitted['LENDER NAME'] = String(account['LENDER BANK'] || '').trim();
-    if (!submitted['LENDER NAME']) return { ok: false, error: 'no_lender_bank' };
-  }
+  const bank = String(account['LENDER BANK'] || '').trim();
+  if (!rowNumber && !bank) return { ok: false, error: 'no_lender_bank' };
   return withLock('loanProducts', async () => {
     const fields = loanProductFields_(await columns('loanProducts'));
     const clean = {};
@@ -3036,7 +3035,7 @@ async function saveLoanProduct_(id, account, body) {
       return { ok: false, error: 'duplicate_name' };
     }
     if (target) await update('loanProducts', target.docId, clean);
-    else await add('loanProducts', Object.assign({ 'ACCOUNT ID': id }, clean));
+    else await add('loanProducts', Object.assign({ 'ACCOUNT ID': id, 'LENDER NAME': bank }, clean));
     return { ok: true, products: (await lenderLoanProducts_(id)).map(p => ({ row: p.row, values: p.values })) };
   });
 }
@@ -3128,14 +3127,13 @@ async function deleteLender_(account, body) {
   });
 }
 // Admins: saves a lender's loan product (body.row, its row number) or adds one (no row) under body.lender. body.values
-// as for saveLoanProduct_; LENDER NAME is the lender's name unless the form changed it (moving the product).
+// as for saveLoanProduct_; LENDER NAME is always that lender's name.
 async function saveLenderProduct_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
   const lenderName = cleanText_(body.lender, 100).replace(/\s+/g, ' ');
   if (!lenderName) return { ok: false, error: 'missing_name' };
   const rowNumber = body.row ? Number(body.row) : 0;
   const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
-  if (!rowNumber || !String(submitted['LENDER NAME'] || '').trim()) submitted['LENDER NAME'] = lenderName;
   return withLock('loanProducts', async () => {
     const fields = loanProductFields_(await columns('loanProducts'));
     const clean = {};
@@ -3144,6 +3142,7 @@ async function saveLenderProduct_(account, body) {
       if (value === null || (value === '' && f.section !== 'Other')) return { ok: false, error: 'invalid_value', field: f.col };
       clean[f.col] = value;
     }
+    clean['LENDER NAME'] = lenderName;
     const all = await rows('loanProducts');
     const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };

@@ -59,7 +59,7 @@ const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
 const LAYOUT = [
     { section: 'Product', items: [
         { col: 'LOAN PRODUCT NAME' },
-        { col: 'LENDER NAME', editOnly: true },
+        // (no Lender Name question: a product's lender is set by the API from the lender it's under)
         { col: 'LOAN TERM', label: 'Loan Term (Years)', input: 'term' },
     ] },
     { section: 'Loan Limits', items: [
