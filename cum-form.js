@@ -1,5 +1,7 @@
 // The CUM page's "+" pop-up, one question at a time (same look as the home page's New Task form):
 //   Income / Expense   what it's for, how much, which day
+//   Savings Budget     how much and which Monday (always called "Savings Budget"; money set aside: it goes out like an
+//                      expense, is highlighted on the list, and drops off the list on its Monday without a catch-up question)
 //   Rent Split         what it's called, the day the rent is due, who it's split with, the line items, what percent of
 //                      each they pay, whether any item is paid on its own day, and when they pay their share
 //   Roadhouse Paycheck the day it comes in and the shifts it covers (hours, sales, tip %); the amount is worked out
@@ -79,6 +81,7 @@ const NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const KINDS = [
     { value: 'income', main: 'Income', sub: 'Money coming in', icon: ICON('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>') },
     { value: 'expense', main: 'Expense', sub: 'Money going out', icon: ICON('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') },
+    { value: 'savings', main: 'Savings Budget', sub: 'Money set aside for savings', icon: ICON('<path d="M19 7c-1-2-3.5-3-7-3C6.5 4 3 7 3 11c0 2.2 1 4 2.6 5.2L5 20h3l.7-1.6c1 .3 2.1.6 3.3.6s2.3-.2 3.3-.6L16 20h3l-.6-3.8c1-.8 1.8-1.8 2.2-3.2H22v-4h-1.6c-.3-.7-.8-1.4-1.4-2Z"/><path d="M16 11h.01"/>') },
     { value: 'rent', main: 'Rent Split', sub: 'Rent shared with someone else', icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v12h14V9"/><path d="M12 13v8"/>') },
     { value: 'roadhouse', main: 'Roadhouse Paycheck', sub: 'Worked out from your shifts', icon: ICON('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>') },
 ];
@@ -188,7 +191,8 @@ function build() {
     let current = 'kind';
 
     const RENT_STEPS = () => ['description', 'date', 'splitWith', 'items', 'percents', 'separate', 'splitWhen'].concat(a.splitWhen === 'other' ? ['splitDate'] : []);
-    const kindSteps = () => (a.kind === 'rent' ? RENT_STEPS() : a.kind === 'roadhouse' ? ['date', 'shifts'] : ['description', 'amount', 'date']);
+    const kindSteps = () => (a.kind === 'rent' ? RENT_STEPS() : a.kind === 'roadhouse' ? ['date', 'shifts'] : a.kind === 'savings' ? ['amount', 'date'] : ['description', 'amount', 'date']);
+    const savings = () => a.kind === 'savings';
     const steps = () => (editing ? kindSteps() : ['kind'].concat(kindSteps()));
     const rent = () => a.kind === 'rent';
     const roadhouse = () => a.kind === 'roadhouse';
@@ -198,9 +202,9 @@ function build() {
     // The question and hint for each step (some depend on the answers so far)
     function words(id) {
         if (id === 'kind') return ['What are you adding?', ''];
-        if (id === 'description') return rent() ? ['What should it be called?', 'Like “Rent” or “March Rent”.'] : ['What’s it for?', a.kind === 'income' ? 'Like “Paycheck”.' : 'Like “Car payment”.'];
-        if (id === 'amount') return ['How much?', ''];
-        if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : 'When does it go out?', ''];
+        if (id === 'description') return rent() ? ['What should it be called?', 'Like “Rent” or “March Rent”.'] : ['What’s it for?', a.kind === 'income' ? 'Like “Paycheck”.' : a.kind === 'savings' ? 'Like “Emergency fund” or “Vacation”.' : 'Like “Car payment”.'];
+        if (id === 'amount') return savings() ? ['How much are you setting aside?', ''] : ['How much?', ''];
+        if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : a.kind === 'savings' ? 'Which Monday does it go to savings?' : 'When does it go out?', a.kind === 'savings' ? 'Mondays only. It comes off the list on that Monday.' : ''];
         if (id === 'shifts') return ['Which shifts does it cover?', 'Hours, sales and the tip percent for each shift.'];
         if (id === 'splitWith') return ['Who are you splitting it with?', ''];
         if (id === 'items') return ['What’s included?', 'Each charge on its own line. Use a minus for a credit, like -20.'];
@@ -252,8 +256,9 @@ function build() {
             for (let d = 1; d <= days; d++) {
                 const day = new Date(year, month, d);
                 const on = sameDay(day, a[name]);
+                const closed = day < today || (savings() && name === 'date' && (day.getDay() !== 1 || day <= today));
                 html += '<button type="button" class="tf-cal-day' + (sameDay(day, today) ? ' is-today' : '') + (on ? ' is-picked' : '') + '" data-day="' + d + '"'
-                    + (day < today ? ' disabled' : '') + (on ? ' aria-pressed="true"' : '') + ' aria-label="' + escapeHtml(longDate(day)) + '">' + d + '</button>';
+                    + (closed ? ' disabled' : '') + (on ? ' aria-pressed="true"' : '') + ' aria-label="' + escapeHtml(longDate(day)) + '">' + d + '</button>';
             }
             grid.innerHTML = html;
             picked.textContent = a[name] ? longDate(a[name]) : '';
@@ -550,7 +555,7 @@ function build() {
             payload = { action: 'saveRoadhousePaycheck', date: isoDate(a.date), shifts: a.shifts.map(sh => ({ hours: num(sh.hours), sales: num(sh.sales), tipPercent: num(sh.tip) })) };
             if (editing) { payload.row = ctx.tx.row; payload.original = { date: ctx.tx.date, description: ctx.tx.description }; }
         } else if (!rent()) {
-            payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: a.description, amount: a.amount };
+            payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: savings() ? 'Savings Budget' : a.description, amount: a.amount };
         } else {
             payload = {
                 action: 'saveRentSplit', description: a.description, date: isoDate(a.date),

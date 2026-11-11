@@ -573,7 +573,13 @@ async function cashFlow_(id, account) {
   });
   splitPeople.sort((a, b) => a.name.localeCompare(b.name));
   const roadhouse = await roadhouseSettings_(id);
-  const transactions = cumEntries_((await cumTransactionRows_()).rows, id).map(e => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayTime = text => { const d = String(text).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return d ? new Date(Number(d[3]), Number(d[1]) - 1, Number(d[2])).getTime() : NaN; };
+  const transactions = cumEntries_((await cumTransactionRows_()).rows, id)
+    // A Savings Budget comes off the list on its Monday (no catch-up question)
+    .filter(e => !(e.part === 'main' && isSavings_(e) && dayTime(e.date) <= today))
+    .map(e => {
     // A Roadhouse Paycheck: its shifts (for the edit menu) and how the amount is worked out (listed under it)
     if (e.shifts) {
       const pay = roadhousePay_(e.shifts, roadhouse || {});
@@ -977,7 +983,8 @@ async function changeTransaction_(id, account, body, removeIt) {
   if (!description) return { ok: false, error: 'invalid_description' };
   const fields = {};
   fields[data.col.date] = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  fields[data.col.description] = description;
+  fields[data.col.description] = isSavings_(target) ? CUM_SAVINGS : description;
+  if (isSavings_(target) && fields[data.col.date].getDay() !== 1) return { ok: false, error: 'not_monday' };
   if (itemized) {
     // Line item changes: [{ n, description, amount (negative for a credit), splitId (10 digits or blank), percent (0-100) }]
     const list = Array.isArray(body.items) ? body.items : [];
@@ -1017,20 +1024,26 @@ async function changeTransaction_(id, account, body, removeIt) {
   const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
   if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
   const type = target.type.toLowerCase();
-  const negative = type === 'expense' || (type !== 'income' && Number(target.amount.replace(/[$,\s]/g, '')) < 0);
+  const negative = type === 'expense' || type === 'savings budget' || (type !== 'income' && Number(target.amount.replace(/[$,\s]/g, '')) < 0);
   fields[data.col.amount] = Math.round((negative ? -size : size) * 100) / 100;
   await update('cumTransactions', target.docId, fields);
   return { ok: true };
 }
 
-// A new Income or Expense transaction for this account, after the others (Expense amounts are saved negative)
+// A new Income, Expense or Savings Budget transaction for this account, after the others (Expense and Savings Budget
+// amounts are saved negative: savings is money set aside, so it comes out of the balance)
+const CUM_TYPES = { income: 'Income', expense: 'Expense', savings: 'Savings Budget' };
+// A Savings Budget is always called "Savings Budget" and is on a Monday
+const CUM_SAVINGS = 'Savings Budget';
+const isSavings_ = t => String(t.type || '').trim().toLowerCase() === CUM_SAVINGS.toLowerCase();
 async function addTransaction_(id, account, body) {
   if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
   const kind = String(body.type || '').trim().toLowerCase();
-  if (kind !== 'income' && kind !== 'expense') return { ok: false, error: 'invalid_type' };
+  if (!CUM_TYPES[kind]) return { ok: false, error: 'invalid_type' };
   const m = String(body.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return { ok: false, error: 'invalid_date' };
-  const description = cleanText_(body.description, 100);
+  if (kind === 'savings' && new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay() !== 1) return { ok: false, error: 'not_monday' };
+  const description = kind === 'savings' ? CUM_SAVINGS : cleanText_(body.description, 100);
   if (!description) return { ok: false, error: 'invalid_description' };
   const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
   if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
@@ -1038,13 +1051,13 @@ async function addTransaction_(id, account, body) {
     const data = await cumTransactionRows_();
     const col = data.col;
     if (!col.type) throw new Error('Transactions are missing a TYPE column');
-    // TYPE spelled the way it's already spelled ("Income" / "Expense")
-    const typeText = (data.rows.filter(t => t.type.toLowerCase() === kind)[0] || {}).type || (kind === 'income' ? 'Income' : 'Expense');
+    // TYPE spelled the way it's already spelled ("Income" / "Expense" / "Savings Budget")
+    const typeText = (data.rows.filter(t => t.type.toLowerCase() === CUM_TYPES[kind].toLowerCase())[0] || {}).type || CUM_TYPES[kind];
     const fields = {};
     fields[col.id] = id;
     fields[col.date] = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     fields[col.description] = description;
-    fields[col.amount] = Math.round((kind === 'expense' ? -size : size) * 100) / 100;
+    fields[col.amount] = Math.round((kind === 'income' ? size : -size) * 100) / 100;
     fields[col.type] = typeText;
     const made = await add('cumTransactions', fields);
     return { ok: true, row: made.order };

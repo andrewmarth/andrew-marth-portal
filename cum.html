@@ -531,6 +531,11 @@
         .flow-change.is-out { color: #b3392f; }
         .flow-balance { flex: 0 0 auto; text-align: right; font-weight: bold; white-space: nowrap; }
         .flow-row.is-low .flow-balance { color: #b3392f; }
+        /* Savings Budget rows: a gold band so money set aside stands out from spending */
+        .flow-row.is-savings { margin: 6px 0; padding: 14px 12px; border: 2px solid rgba(192, 144, 80, 0.55); border-left-width: 6px; border-radius: 14px; background: #fbf4e6; }
+        .flow-row.is-savings + .flow-row { border-top: none; }
+        .flow-row.is-savings .flow-change.is-out { color: #8a6326; }
+        .flow-tag { display: inline-block; align-self: flex-start; margin-bottom: 4px; padding: 2px 9px; border-radius: 999px; background: var(--gold); color: var(--white); font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
         .flow-right { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
         .flow-change-line { display: flex; align-items: baseline; gap: 8px; }
         /* Line items under a transaction, and who a split is with */
@@ -597,6 +602,12 @@
         .flow-row.is-balance .flow-balance { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.5rem; color: var(--cream); }
         .flow-row.is-balance .flow-sub { opacity: 0.8; }
         .flow-row.is-balance .flow-update-balance { margin-top: 2px; padding-left: 0; color: var(--gold); }
+        .flow-row.is-balance { flex-wrap: wrap; }
+        .flow-budget { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; padding-top: 12px; border-top: 1px solid rgba(233, 226, 216, 0.25); }
+        .flow-budget > span:first-child { display: flex; flex-direction: column; min-width: 0; }
+        .flow-budget-label { font-weight: bold; }
+        .flow-budget-amount { flex: 0 0 auto; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.5rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
+        .flow-budget-amount.is-low { color: #f2b8a8; }
         .flow-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
         .flow-message { text-align: center; padding: 10px 0; }
         @media (max-width: 600px) {
@@ -605,6 +616,7 @@
             .flow-date .d { font-size: 1.25rem; }
             .flow-row.is-balance { padding: 14px; }
             .flow-row.is-balance .flow-balance { font-size: 1.3rem; }
+            .flow-budget-amount { font-size: 1.3rem; }
         }
     </style>
 </head>
@@ -749,10 +761,21 @@
                 .filter(t => t.when && (!asOf || dayOf(t.when) >= dayOf(asOf)))
                 // On the same day, money coming in goes first so the running balance doesn't dip for nothing
                 .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || ((b.value > 0) - (a.value > 0)) || (a.order - b.order));
+            // Spending Budget: the lowest the balance gets over the next 12 months (what can be spent without dipping below $0)
+            const horizon = dayOf(new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()));
+            let low = start, lowWhen = asOf, run = start;
+            items.forEach(t => {
+                if (dayOf(t.when) > horizon) return;
+                run += t.value;
+                if (run < low) { low = run; lowWhen = t.when; }
+            });
+            const budgetLine = '<span class="flow-budget"><span><span class="flow-budget-label">Spending Budget</span>'
+                + '<span class="flow-sub">Lowest balance in the next 12 months' + (lowWhen && low < start ? ', ' + lowWhen.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '') + '</span></span>'
+                + '<span class="flow-budget-amount' + (low < 0 ? ' is-low' : '') + '">' + money.format(low) + '</span></span>';
             const balanceRow = '<ul class="flow-list"><li class="flow-row is-balance">' + dateBox(asOf)
                 + '<span class="flow-text"><span class="flow-desc">Current Balance</span>'
                 + '<span><button type="button" class="flow-edit flow-update-balance" data-update-balance>Update Balance</button></span></span>'
-                + '<span class="flow-balance">' + money.format(start) + '</span></li></ul>';
+                + '<span class="flow-balance">' + money.format(start) + '</span>' + budgetLine + '</li></ul>';
             let running = start;
             const months = [];
             items.forEach(t => {
@@ -760,8 +783,9 @@
                 const key = t.when.getFullYear() + '-' + t.when.getMonth();
                 let month = months[months.length - 1];
                 if (!month || month.key !== key) months.push(month = { key, title: t.when.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), rows: [] });
-                month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + '">' + dateBox(t.when)
-                    + '<span class="flow-text">' + detailHtml(t)
+                const savings = isSavingsTx(t);
+                month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + (savings ? ' is-savings' : '') + '">' + dateBox(t.when)
+                    + '<span class="flow-text">' + (savings ? '<span class="flow-tag">Savings</span>' : '') + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
                     // The transaction itself, or just the date of a split coming in or a line paid on its own day; what you owe
                     // someone else is managed by them
@@ -808,6 +832,7 @@
             invalid_shift_hours: 'Please enter the hours for each shift (up to 24).',
             invalid_shift_sales: 'Please enter the sales for each shift.',
             invalid_shift_tip: 'Please enter a tip percent from 0 to 100 for each shift.',
+            not_monday: 'A savings budget has to be on a Monday.',
         };
         let editor = null;
         function buildEditor() {
@@ -889,6 +914,11 @@
                 const amount = Number(raw);
                 if (!date) { message.textContent = 'Please choose a date.'; $('#tx-date').focus(); return; }
                 if (!raw || !isFinite(amount) || amount <= 0) { message.textContent = 'Please enter an amount above $0.'; $('#tx-amount').focus(); return; }
+                if (isSavingsTx(tx)) {
+                    const [y, mo, d] = date.split('-').map(Number);
+                    const day = new Date(y, mo - 1, d);
+                    if (day.getDay() !== 1 || day <= dayOf(currentDay())) { message.textContent = 'Please pick a Monday after today.'; $('#tx-date').focus(); return; }
+                }
                 if (!description) { message.textContent = 'Please enter a description.'; $('#tx-desc').focus(); return; }
                 const btn = $('[data-save]');
                 setBusy(true, btn);
@@ -935,10 +965,14 @@
                     $('#tx-amount').value = value ? String(Math.abs(value)) : '';
                     // "Edit Income" / "Edit Expense" from its TYPE
                     const type = String(tx.type || '').trim();
-                    $('#tx-title').textContent = 'Edit ' + (type ? type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() : 'Transaction');
+                    $('#tx-title').textContent = 'Edit ' + (type ? type.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) : 'Transaction');
                     $('#tx-desc').value = tx.description || '';
                     $('.tx-amount-field').style.display = '';
                     show();
+                    // A savings budget is always "Savings Budget", on a Monday
+                    $('.tx-desc-field').style.display = isSavingsTx(tx) ? 'none' : '';
+                    $('.tx-date-note').hidden = !isSavingsTx(tx);
+                    $('.tx-date-note').textContent = 'Mondays only. It comes off the list on that Monday.';
                 },
                 openDate(next) {
                     dateOnly = true;
@@ -953,6 +987,7 @@
                 },
             };
         }
+        const isSavingsTx = t => String(t.type || '').trim().toLowerCase() === 'savings budget' && t.part === 'main';
         const addBtn = document.getElementById('flow-add');
         // The "+" form (Income / Expense / Rent Split), and editing a rent split: one question at a time
         const cumForm = extra => openCumForm({
