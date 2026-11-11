@@ -7,21 +7,33 @@
 // titleDiscounts, vaSellerPays, fincenFee, extraLoanEscrowFee, extraLoanPolicyFee, shortSaleTable / reoTable (with
 // their OverFee, OverPer and SellerShare), refiEscrowFee, refiRecordingFee, refiTable, refiOverFee, refiOverPer,
 // refiPolicyPercent, refiEndorsements }, as the API's titleCompanies action returns it. Tables are [{ upTo, fee }].
+// Each table's "add $X per $Y" above its last row can change higher up: escrowOverTiers, titleOverTiers, shortSaleOverTiers,
+// reoOverTiers and refiOverTiers are [{ above, fee, per }] (Fidelity: above $5,000,000 the escrow fee adds $14.70 per
+// $20,000 instead of $21).
 
-// The fee for an amount from a rate table: the first row it fits under, else the last row plus the over-table charge
-export function tableFee(table, overFee, overPer, amount) {
+// The fee for an amount from a rate table: the first row it fits under, else the last row plus the over-table charge.
+// tiers: [{ above, fee, per }], where the charge changes; each stretch is charged per its own $Y or fraction of it.
+export function tableFee(table, overFee, overPer, amount, tiers) {
     const rows = (table || []).filter(r => r.upTo > 0 && r.fee !== null && r.fee !== undefined).sort((a, b) => a.upTo - b.upTo);
     if (!rows.length || !(amount > 0)) return null;
     const row = rows.find(r => amount <= r.upTo);
     if (row) return row.fee;
     const last = rows[rows.length - 1];
-    return last.fee + (overFee && overPer ? Math.ceil((amount - last.upTo) / overPer) * overFee : 0);
+    const steps = [{ above: last.upTo, fee: overFee, per: overPer }].concat((tiers || [])
+        .filter(t => t && t.above > last.upTo && t.fee !== null && t.fee !== undefined && t.per > 0).sort((a, b) => a.above - b.above));
+    let fee = last.fee;
+    steps.forEach((s, i) => {
+        const end = i + 1 < steps.length ? steps[i + 1].above : Infinity;
+        const part = Math.min(amount, end) - s.above;
+        if (part > 0 && s.fee && s.per) fee += Math.ceil(part / s.per) * s.fee;
+    });
+    return Math.round(fee * 100) / 100;
 }
 
 // The standard sale escrow fee: { base (the table), cash, loan, sellerCash, sellerLoan, recording, sellerRecording,
 // owner, sellerOwner, loanPolicy }. Null without an escrow table or a price.
 export function titleQuote(c, price, loanAmount) {
-    const base = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price);
+    const base = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price, c.escrowOverTiers);
     if (base === null) return null;
     const share = c.sellerEscrowShare ?? 0.5;
     const cash = base + (c.cashSaleAddOn || 0);
@@ -36,12 +48,12 @@ export function titleQuote(c, price, loanAmount) {
 // Owner's policy = basic rate x owner's percent; loan policy (issued with it) = basic rate on the loan x loan percent x
 // the simultaneous percent, at least the minimum. Fractions of a dollar round up.
 export function titlePolicies(c, price, loanAmount) {
-    const basic = tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, price);
+    const basic = tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, price, c.titleOverTiers);
     if (basic === null) return { owner: null, sellerOwner: null, loanPolicy: null };
     const owner = Math.ceil(basic * (c.ownerPolicyPercent ?? 1));
     let loanPolicy = null;
     if (loanAmount > 0) {
-        const full = Math.ceil(tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, loanAmount) * (c.loanPolicyPercent ?? 1));
+        const full = Math.ceil(tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, loanAmount, c.titleOverTiers) * (c.loanPolicyPercent ?? 1));
         loanPolicy = Math.max(c.simultaneousMinimum || 0, Math.ceil(full * (c.simultaneousPercent ?? 1)));
     }
     return { owner, sellerOwner: owner * (c.sellerOwnerShare ?? 1), loanPolicy };
@@ -54,10 +66,10 @@ export function refiQuote(c, loanAmount) {
     if (!(loanAmount > 0)) return null;
     let policy;
     if (c.refiOverMode === 'basicRate' && loanAmount > lastUpTo(c.refiTable)) {
-        const basic = tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, loanAmount);
+        const basic = tableFee(c.titleTable, c.titleOverFee, c.titleOverPer, loanAmount, c.titleOverTiers);
         policy = basic === null ? null : Math.ceil(basic * (c.refiOverPercent || 0));
     } else {
-        const table = tableFee(c.refiTable, c.refiOverFee, c.refiOverPer, loanAmount);
+        const table = tableFee(c.refiTable, c.refiOverFee, c.refiOverPer, loanAmount, c.refiOverTiers);
         policy = table === null ? null : Math.ceil(table * (c.refiPolicyPercent ?? 1));
     }
     const fees = (c.otherFees || []).filter(f => f.when === 'Refinance' && f.amount);
@@ -71,10 +83,10 @@ const lastUpTo = table => Math.max(0, ...(table || []).filter(r => r.upTo > 0 &&
 // standard escrow table's fee plus OverFee (First American: the basic escrow fee + $1,000); otherwise "add $X per $Y".
 export function specialEscrowFee(c, kind, price) {
     if (c[kind + 'OverMode'] === 'standardPlus' && price > lastUpTo(c[kind + 'Table'])) {
-        const standard = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price);
+        const standard = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price, c.escrowOverTiers);
         return standard === null ? null : standard + (c[kind + 'OverFee'] || 0);
     }
-    return tableFee(c[kind + 'Table'], c[kind + 'OverFee'], c[kind + 'OverPer'], price);
+    return tableFee(c[kind + 'Table'], c[kind + 'OverFee'], c[kind + 'OverPer'], price, c[kind + 'OverTiers']);
 }
 
 // The ALTA endorsements every title company has (Settings > Title Companies lists them all; an unpriced one counts as $0).
@@ -194,7 +206,7 @@ export function saleFees(c, price, loanAmount, o = {}) {
         share = c[special + 'SellerShare'] ?? c.sellerEscrowShare ?? 0.5;
         note = (special === 'reo' ? 'REO' : 'Short sale') + ' escrow rate';
     } else {
-        base = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price);
+        base = tableFee(c.escrowTable, c.escrowOverFee, c.escrowOverPer, price, c.escrowOverTiers);
         if (base === null) return null;
         const addOn = hasLoan ? (c.loanSaleAddOn || 0)
             : !o.sellerHasPayoff && o.sellerHasPayoff !== undefined && c.cashNoPayoffAddOn !== null && c.cashNoPayoffAddOn !== undefined ? c.cashNoPayoffAddOn

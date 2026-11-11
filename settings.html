@@ -544,6 +544,13 @@
         .tc-over[data-mode="per"] [data-mode-text="standardPlus"], .tc-over[data-mode="per"] [data-mode-text="basicRate"],
         .tc-over:not([data-mode="per"]) [data-mode-text="per"] { display: none; }
         .tc-special[hidden] { display: none; }
+        /* Higher "above the last row" tiers: Above $[x], add $[y] for every $[z] */
+        .tc-tiers { margin-top: 10px; }
+        .tc-tiers .tc-table:empty { display: none; }
+        .tc-row.is-tier { grid-template-columns: 1fr 1fr 1fr 40px; }
+        .tc-tier-part { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; white-space: nowrap; }
+        .tc-tier-part .tc-box { flex: 1 1 auto; min-width: 0; }
+        .tc-over:not([data-mode="per"]) .tc-tiers { display: none; }
         /* Missing rates: yellow */
         .tc-req { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 0 0; padding: 6px 10px; border-radius: 10px; background: #fff4cc; border: 1px solid #ecc94b; color: #6b4e00; font-size: 0.82rem; line-height: 1.35; flex: 1 0 100%; }
         .tc-req svg { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px; color: #b7791f; }
@@ -558,6 +565,11 @@
             .tc-row.is-fee.is-head { display: none; }
             .tc-row.is-fee .tc-fee-name { grid-column: 1 / -1; }
             .tc-row.is-endorse { grid-template-columns: 1fr 1fr 40px; }
+            /* Phones: a tier's three boxes stack, the remove button beside the first */
+            .tc-row.is-tier { grid-template-columns: 1fr 40px; row-gap: 6px; }
+            .tc-row.is-tier .tc-tier-part { grid-column: 1; }
+            .tc-row.is-tier .tc-remove { grid-column: 2; grid-row: 1; }
+            .tc-tier-part > span { width: 70px; flex: 0 0 auto; }
             /* Phones: the "what it comes off" choice gets its own line too */
             .tc-row.is-tdiscount { grid-template-columns: 110px minmax(0, 1fr) 40px; }
             .tc-row.is-tdiscount [data-k="applies"] { grid-column: 1 / -1; }
@@ -2116,7 +2128,7 @@
             name: 'Fidelity National Title', manualDate: '2022-01-12', titleManualDate: '2026-07-29',
             notes: 'Escrow fees from Fidelity’s Arizona Schedule of Escrow Fees & Charges, effective January 12, 2022, Zone 1 (Maricopa and Pinal Counties). Above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21. A cash sale with no loan to pay off adds nothing ($200 is for one with a payoff). Title insurance from Fidelity’s Arizona Schedule of Title Insurance Rates and Charges (SERFF FDLS-134996142, effective July 29, 2026), Zone 1 (Maricopa and Pinal): a homeowner’s owner’s policy (section 103, 110%) and an extended loan policy issued with it at 65% of the basic rate on the loan amount (section 208; on its own it’s 120%). Above $5,000,000 the basic rate adds $37.80 per $20,000 instead of $38.85. Refinances use section 216B (Zone 1, full coverage, ALTA 8.1, 9 and 22 included); a lender-program refinance with electronic ordering (216A) is cheaper: $360 / $540 / $660 / $800 up to $1,000,000. Over $1,000,000 a refinance is 50% of the extended loan rate (120% of the basic rate), so 60% of the basic rate, and its endorsements are charged separately. A short sale over $1,000,000 is negotiated, so above the table it shows no extra charge.',
             escrowTable: [[120000, 696], [140000, 728], [160000, 761], [180000, 793], [200000, 827], [220000, 855], [240000, 882], [260000, 911], [280000, 939], [300000, 966], [320000, 995], [340000, 1022], [360000, 1052], [380000, 1079], [400000, 1106], [420000, 1134], [440000, 1162], [460000, 1191], [480000, 1218], [500000, 1246], [520000, 1271], [540000, 1295], [560000, 1319], [580000, 1343], [600000, 1369], [620000, 1393], [640000, 1417], [660000, 1441], [680000, 1465], [700000, 1490], [720000, 1515], [740000, 1539], [760000, 1564], [780000, 1588], [800000, 1612], [820000, 1636], [840000, 1661], [860000, 1685], [880000, 1710], [900000, 1734], [920000, 1759], [940000, 1783], [960000, 1808], [980000, 1832], [1000000, 1856]].map(([upTo, fee]) => ({ upTo, fee })),
-            escrowOverFee: 21, escrowOverPer: 20000, cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
+            escrowOverFee: 21, escrowOverPer: 20000, escrowOverTiers: [{ above: 5000000, fee: 14.7, per: 20000 }], cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
             discounts: [
                 // E301 (investors, builders and agents), E304, E305 (off that person's share)
@@ -2148,7 +2160,7 @@
             reoTable: [], reoOverFee: null, reoOverPer: null, reoSellerShare: null,
             // Title manual Zone 1, above $1,000,000 add $38.85 per $20,000 (to $5,000,000)
             titleTable: [[60000, 585], [80000, 695], [100000, 805], [120000, 869], [140000, 933], [160000, 998], [180000, 1062], [200000, 1125], [220000, 1189], [240000, 1253], [260000, 1317], [280000, 1381], [300000, 1445], [320000, 1495], [340000, 1547], [360000, 1597], [380000, 1647], [400000, 1698], [420000, 1749], [440000, 1800], [460000, 1850], [480000, 1902], [500000, 1952], [520000, 2002], [540000, 2054], [560000, 2104], [580000, 2155], [600000, 2205], [620000, 2256], [640000, 2307], [660000, 2357], [680000, 2409], [700000, 2459], [720000, 2510], [740000, 2561], [760000, 2611], [780000, 2662], [800000, 2712], [820000, 2765], [840000, 2814], [860000, 2864], [880000, 2916], [900000, 2966], [920000, 3017], [940000, 3068], [960000, 3119], [980000, 3169], [1000000, 3219]].map(([upTo, fee]) => ({ upTo, fee })),
-            titleOverFee: 38.85, titleOverPer: 20000,
+            titleOverFee: 38.85, titleOverPer: 20000, titleOverTiers: [{ above: 5000000, fee: 37.8, per: 20000 }],
             ownerPolicyPercent: 1.1, sellerOwnerShare: 1,
             // Section 208: an extended loan policy with a homeowner's policy is 65% of the basic rate on the loan amount
             loanPolicyPercent: 1, simultaneousPercent: 0.65, simultaneousMinimum: 0,
@@ -2321,6 +2333,16 @@
             + tcBox('money', 'data-k="amount" aria-label="Price" placeholder="100"', e.amount)
             + '<select data-k="when" aria-label="Which loans need it">' + ENDORSEMENT_WHEN.map(w => '<option' + ((e.when || 'Every Loan') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
             + '<button type="button" class="tc-remove" data-remove aria-label="Remove endorsement">' + REMOVE_ICON + '</button></div>';
+        // A higher tier above a table's last row: above this amount, add $X for every $Y (or part of it) instead
+        const tierRow = (t = {}) => '<div class="tc-row is-tier" data-row>'
+            + '<span class="tc-tier-part"><span>Above</span>' + tcBox('money', 'data-k="above" aria-label="Above this amount" placeholder="5,000,000"', t.above) + '</span>'
+            + '<span class="tc-tier-part"><span>add</span>' + tcBox('money', 'data-k="fee" aria-label="Add this much" placeholder="15"', t.fee) + '</span>'
+            + '<span class="tc-tier-part"><span>for every</span>' + tcBox('money', 'data-k="per" aria-label="For every" placeholder="20,000"', t.per) + '</span>'
+            + '<button type="button" class="tc-remove" data-remove aria-label="Remove tier">' + REMOVE_ICON + '</button></div>';
+        // A table's higher tiers (key: escrowOverTiers, titleOverTiers, ...)
+        const tiersBlock = (key, tiers) => '<div class="tc-tiers"><div class="tc-table" data-table="' + key + '">' + (tiers || []).map(tierRow).join('') + '</div>'
+            + '<button type="button" class="tc-add-row" data-add="' + key + '">+ Add Higher Tier</button>'
+            + '<p class="tc-help" style="margin:2px 0 0 0">Only if the charge changes higher up (Fidelity: above $5,000,000 the escrow fee adds $14.70 per $20,000 instead of $21). Each tier runs until the next one.</p></div>';
         // Short sale / REO: "No separate rate" (the standard escrow fee is used, and its table isn't needed)
         const noRateBox = (kind, on) => '<label class="tc-check tc-norate"><input type="checkbox" id="tc-' + kind + '-norate" data-norate="' + kind + '"' + (on ? ' checked' : '') + '>'
             + '<span><b>No separate rate.</b> The company charges its standard escrow fee' + (kind === 'reo' ? ' for an REO.' : ' for a short sale.') + '</span></label>';
@@ -2338,7 +2360,7 @@
                     ? '<span data-mode-text="per">Add</span><span data-mode-text="standardPlus">The standard escrow fee plus</span>' + fee + '<span data-mode-text="per">for every' + per + '</span>'
                     : '<span data-mode-text="per">Add' + fee + 'for every' + per + '</span><span data-mode-text="basicRate">'
                         + tcBox('pct', 'id="tc-refi-over-pct" aria-label="Percent of the basic rate" placeholder="36"', c.refiOverPercent) + 'of the basic rate on the loan amount</span>')
-                + '</div></div>';
+                + '</div>' + tiersBlock(key + 'OverTiers', c[key + 'OverTiers']) + '</div>';
         }
         const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
 
@@ -2353,7 +2375,8 @@
                     + '<button type="button" class="tc-add-row" data-add="escrow">+ Add Row</button>'
                     + '<p class="tc-help" style="margin-top:14px">Above the last row, the fee goes up (WFG: “Add $20 per each $20,000 or fraction thereof”):</p>'
                     + '<div class="tc-sentence">Add ' + tcBox('money', 'id="tc-esc-over-fee" aria-label="Add this much" placeholder="20"', c.escrowOverFee)
-                    + ' for every ' + tcBox('money', 'id="tc-esc-over-per" aria-label="For every" placeholder="20,000"', c.escrowOverPer) + ' or part of it</div>')
+                    + ' for every ' + tcBox('money', 'id="tc-esc-over-per" aria-label="For every" placeholder="20,000"', c.escrowOverPer) + ' or part of it</div>'
+                    + tiersBlock('escrowOverTiers', c.escrowOverTiers))
 
                 + section('Bundled Sale Add-On', 'A resale’s escrow fee is the table amount <b>plus</b> a flat add-on that covers couriers, wires, payoff processing, e-documents and (at WFG) one mobile notary (WFG 4.1.1 and 4.1.2). It’s more when the buyer has a loan.',
                     '<div class="tc-grid">' + tcField('Cash sale adds', tcBox('money', 'id="tc-cash" placeholder="200"', c.cashSaleAddOn))
@@ -2379,7 +2402,8 @@
                     + '<div class="tc-table" data-table="title"><div class="tc-row is-head"><span>Insured amount up to</span><span>Basic rate</span><span></span></div>'
                     + (c.titleTable || []).map(tableRow).join('') + '</div><button type="button" class="tc-add-row" data-add="title">+ Add Row</button>'
                     + '<div class="tc-sentence" style="margin-top:12px">Above the last row, add ' + tcBox('money', 'id="tc-title-over-fee" aria-label="Add this much" placeholder="18"', c.titleOverFee)
-                    + ' for every ' + tcBox('money', 'id="tc-title-over-per" aria-label="For every" placeholder="10,000"', c.titleOverPer) + '</div>')
+                    + ' for every ' + tcBox('money', 'id="tc-title-over-per" aria-label="For every" placeholder="10,000"', c.titleOverPer) + '</div>'
+                    + tiersBlock('titleOverTiers', c.titleOverTiers))
 
                 + section('Owner’s Policy', 'Insures the buyer’s ownership, on the full sale price. Arizona resales usually use the <b>Homeowner’s Policy</b> (expanded coverage), 110% of the basic rate at WFG (section 4.1; a standard policy is 100%, extended 150%). The seller usually pays for it in Arizona.',
                     '<div class="tc-grid">' + tcField('Percent of the basic rate', tcBox('pct', 'id="tc-owner-pct" placeholder="110"', c.ownerPolicyPercent))
@@ -2489,6 +2513,8 @@
                 refiEscrowFee: parseMoney(val('tc-refi-escrow')), refiRecordingFee: parseMoney(val('tc-refi-recording')), refiTable: rowsOf('refi'),
                 refiOverFee: parseMoney(val('tc-refi-over-fee')), refiOverPer: parseMoney(val('tc-refi-over-per')),
                 refiPolicyPercent: parsePct(val('tc-refi-pct')), refiEndorsements: parseMoney(val('tc-refi-endorse')),
+                escrowOverTiers: rowsOf('escrowOverTiers'), titleOverTiers: rowsOf('titleOverTiers'), shortSaleOverTiers: rowsOf('shortSaleOverTiers'),
+                reoOverTiers: rowsOf('reoOverTiers'), refiOverTiers: rowsOf('refiOverTiers'),
             };
         }
 
@@ -2558,7 +2584,7 @@
             const add = e.target.closest('[data-add]');
             if (add) {
                 const table = tcBody.querySelector('[data-table="' + add.dataset.add + '"]');
-                table.insertAdjacentHTML('beforeend', add.dataset.add === 'titleDiscounts' ? titleDiscountRow() : add.dataset.add === 'discounts' ? discountRow() : add.dataset.add === 'fees' ? feeRow() : add.dataset.add === 'endorsements' ? endorsementRow() : tableRow());
+                table.insertAdjacentHTML('beforeend', add.dataset.add === 'titleDiscounts' ? titleDiscountRow() : add.dataset.add === 'discounts' ? discountRow() : add.dataset.add === 'fees' ? feeRow() : add.dataset.add === 'endorsements' ? endorsementRow() : /OverTiers$/.test(add.dataset.add) ? tierRow() : tableRow());
                 table.lastElementChild.querySelector('input').focus();
                 return;
             }
@@ -2599,6 +2625,7 @@
             missing_escrow_table: 'Please fill in at least one row of the escrow fee table.',
             invalid_escrow_table: 'Each escrow fee row needs a sale price and a fee (and no two rows can have the same price).',
             invalid_title_table: 'Each basic rate row needs an amount and a rate (and no two rows can have the same amount).',
+            invalid_over_tier: 'Each higher tier needs an amount it starts above, a fee and a “for every” amount (and no two tiers can start at the same amount).',
             invalid_escrow_over_table_fee: 'Fill in both numbers for the escrow fee above the table (or neither).',
             invalid_owners_title_over_table_fee: 'Fill in both numbers for the basic rate above the table (or neither).',
             invalid_title_discount: 'Each title discount needs a name and a percent from 0 to 100.',

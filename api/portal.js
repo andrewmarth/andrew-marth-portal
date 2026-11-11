@@ -1418,7 +1418,25 @@ async function resumeGemini_(account) {
 // The pages' TITLE COMPANY setting is a company's document ID; the fee math is in /title-fees.js.
 // Refinance: a flat REFINANCE ESCROW FEE and REFINANCE RECORDING FEE, and the loan policy from REFINANCE TITLE TABLE (its own
 // table, on the loan amount) times REFINANCE POLICY PERCENT, plus REFINANCE ENDORSEMENTS.
+// Higher up, a table's "add $X per $Y" can change: ESCROW / OWNERS TITLE / SHORT SALE / REO / REFINANCE TITLE OVER TIERS are
+// lists of { 'ABOVE', 'FEE', 'PER' } (above that amount, add FEE per PER or fraction instead).
 const TITLE_MONEY_MAX = 100000000;
+const TITLE_TIER_COLUMNS = { escrowOverTiers: 'ESCROW OVER TIERS', titleOverTiers: 'OWNERS TITLE OVER TIERS', shortSaleOverTiers: 'SHORT SALE OVER TIERS',
+  reoOverTiers: 'REO OVER TIERS', refiOverTiers: 'REFINANCE TITLE OVER TIERS' };
+// Above-the-table tiers: [{ 'ABOVE', 'FEE', 'PER' }] sorted by amount, or an error code
+function titleTiers_(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const r of list.slice(0, 20)) {
+    const above = titleMoney_(r && r.above), fee = titleMoney_(r && r.fee), per = titleMoney_(r && r.per);
+    if (above === null && fee === null && per === null) continue;
+    if (!(above > 0) || fee === null || Number.isNaN(fee) || !(per > 0)) return 'invalid_over_tier';
+    out.push({ 'ABOVE': above, 'FEE': fee, 'PER': per });
+  }
+  out.sort((a, b) => a['ABOVE'] - b['ABOVE']);
+  if (out.some((r, i) => i && r['ABOVE'] === out[i - 1]['ABOVE'])) return 'invalid_over_tier';
+  return out;
+}
 function titleMoney_(v) {
   const s = String(v === null || v === undefined ? '' : v).replace(/[$,\s]/g, '');
   if (s === '') return null;
@@ -1467,7 +1485,10 @@ function titleCompanyOut_(doc) {
   const f = doc.data();
   const num = v => (typeof v === 'number' ? v : v === undefined || v === null || v === '' ? null : Number(v));
   const table = t => (Array.isArray(t) ? t.map(r => ({ upTo: num(r['UP TO']), fee: num(r['FEE']) })) : []);
+  const tiers = Object.fromEntries(Object.entries(TITLE_TIER_COLUMNS).map(([k, col]) => [k,
+    Array.isArray(f[col]) ? f[col].map(r => ({ above: num(r['ABOVE']), fee: num(r['FEE']), per: num(r['PER']) })) : []]));
   return {
+    ...tiers,
     id: doc.id,
     name: String(f['NAME'] || ''),
     manualDate: String(f['RATE MANUAL DATE'] || ''),
@@ -1553,6 +1574,11 @@ async function saveTitleCompany_(account, body) {
   if (typeof reoTable === 'string') return { ok: false, error: reoTable };
   const fields = { 'NAME': name, 'ESCROW RATE TABLE': escrowTable, 'OWNERS TITLE TABLE': titleTable, 'REFINANCE TITLE TABLE': refiTable,
     'SHORT SALE ESCROW TABLE': shortSaleTable, 'REO ESCROW TABLE': reoTable };
+  for (const [k, col] of Object.entries(TITLE_TIER_COLUMNS)) {
+    const tiers = titleTiers_(c[k]);
+    if (typeof tiers === 'string') return { ok: false, error: tiers };
+    fields[col] = tiers;
+  }
   const moneyFields = { escrowOverFee: 'ESCROW OVER TABLE FEE', escrowOverPer: 'ESCROW OVER TABLE PER', cashSaleAddOn: 'CASH SALE ADD ON',
     loanSaleAddOn: 'LOAN SALE ADD ON', recordingFee: 'RECORDING SERVICE FEE', titleOverFee: 'OWNERS TITLE OVER TABLE FEE',
     titleOverPer: 'OWNERS TITLE OVER TABLE PER', simultaneousMinimum: 'SIMULTANEOUS LOAN MINIMUM',
