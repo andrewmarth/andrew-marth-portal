@@ -15,7 +15,7 @@ You can edit it by hand in the Firebase console.
 | `settings` | `interestRate`: TODAY INTEREST RATE | `interestRate` |
 | `homeInspectors`, `sewerInspectors`, `termiteInspectors` | Each inspector's price list | automatic |
 | `cumTransactions`, `cumBalances` | Cash flow transactions and bank balances (a Roadhouse Paycheck has TYPE `Roadhouse Paycheck` and its shifts in ROADHOUSE SHIFTS as JSON: [{ hours, sales, tipPercent }]) | automatic |
-| `cumSettings` | Each CUM account's Roadhouse Paycheck Settings (TIP POOL PAYOUT %, TIP POOL RECEIVED %, HOURLY RATE, AZ / FITW / MED / SS TAX %; percents as decimals) | the 10-digit phone number (ACCOUNT ID) |
+| `cumSettings` | Each CUM account's Roadhouse Paycheck Settings (TIP POOL PAYOUT %, TIP POOL RECEIVED %, HOURLY RATE, AZ / FITW / MED / SS TAX %; percents as decimals) and SAVINGS ALLOCATION (money set aside for savings; a Spending Budget transaction's own SAVINGS ALLOCATION is added to it on the budget's Monday, when the budget is checked off) | the 10-digit phone number (ACCOUNT ID) |
 | `wholesaleDeals` | Wholesale deals from email (the flip map) | automatic |
 | `links` | The admin Links card (TITLE, DESCRIPTION, SECTION, LINK) | automatic |
 | `marketingPoints` | The admin Marketing Points card (TITLE, DESCRIPTION, LINK, LINK TEXT, and IMAGE DRIVE FILE ID / IMAGE NAME for a picture in the Marketing Points Drive folder) | automatic |

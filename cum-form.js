@@ -1,6 +1,6 @@
 // The CUM page's "+" pop-up, one question at a time (same look as the home page's New Task form):
 //   Income / Expense   what it's for, how much, which day
-//   Spending Budget    how much and which Monday (always called "Spending Budget"; money set aside: it goes out like an
+//   Spending Budget    how much, the savings allocation set aside with it, and which Monday (always called "Spending Budget"; money set aside: it goes out like an
 //                      expense, is highlighted on the list, and drops off the list on its Monday without a catch-up question)
 //   Rent Split         what it's called, the day the rent is due, who it's split with, the line items, what percent of
 //                      each they pay, whether any item is paid on its own day, and when they pay their share
@@ -126,6 +126,7 @@ const DIALOG_HTML = '<form class="income-form" novalidate>'
     + step('kind', '<div class="tf-choices is-stacked" data-choices="kind">' + KINDS.map(k => choice(k.value, k.main, k.sub, k.icon)).join('') + '</div>')
     + step('description', '<input id="cf-description" type="text" maxlength="100" autocomplete="off" aria-labelledby="cf-q-description">')
     + step('amount', '<div class="cf-money"><input id="cf-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-labelledby="cf-q-amount"></div>')
+    + step('allocation', '<div class="cf-money"><input id="cf-allocation" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-labelledby="cf-q-allocation"></div>')
     + step('date', calendar('date'))
     + step('splitWith', '<div class="tf-list" data-people role="group" aria-labelledby="cf-q-splitWith"></div>')
     + step('items', '<div class="cf-rows" data-items></div><button type="button" class="cf-add-item" data-add-item>+ Add a line item</button><p class="cf-total" data-items-total></p>')
@@ -191,7 +192,7 @@ function build() {
     let current = 'kind';
 
     const RENT_STEPS = () => ['description', 'date', 'splitWith', 'items', 'percents', 'separate', 'splitWhen'].concat(a.splitWhen === 'other' ? ['splitDate'] : []);
-    const kindSteps = () => (a.kind === 'rent' ? RENT_STEPS() : a.kind === 'roadhouse' ? ['date', 'shifts'] : a.kind === 'savings' ? ['amount', 'date'] : ['description', 'amount', 'date']);
+    const kindSteps = () => (a.kind === 'rent' ? RENT_STEPS() : a.kind === 'roadhouse' ? ['date', 'shifts'] : a.kind === 'savings' ? ['amount', 'allocation', 'date'] : ['description', 'amount', 'date']);
     const savings = () => a.kind === 'savings';
     const steps = () => (editing ? kindSteps() : ['kind'].concat(kindSteps()));
     const rent = () => a.kind === 'rent';
@@ -204,6 +205,7 @@ function build() {
         if (id === 'kind') return ['What are you adding?', ''];
         if (id === 'description') return rent() ? ['What should it be called?', 'Like “Rent” or “March Rent”.'] : ['What’s it for?', a.kind === 'income' ? 'Like “Paycheck”.' : a.kind === 'savings' ? 'Like “Emergency fund” or “Vacation”.' : 'Like “Car payment”.'];
         if (id === 'amount') return savings() ? ['How much is the spending budget?', ''] : ['How much?', ''];
+        if (id === 'allocation') return ['How much goes to savings?', 'It goes out with the spending budget and is added to your Savings Allocation on that Monday. 0 if none.'];
         if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : a.kind === 'savings' ? 'Which Monday is it for?' : 'When does it go out?', a.kind === 'savings' ? 'Mondays only. It comes off the list on that Monday.' : ''];
         if (id === 'shifts') return ['Which shifts does it cover?', 'Hours, sales and the tip percent for each shift.'];
         if (id === 'splitWith') return ['Who are you splitting it with?', ''];
@@ -236,6 +238,7 @@ function build() {
 
     // --- Money box (Income / Expense) ---
     $('#cf-amount').addEventListener('input', e => { const v = cleanMoney(e.target.value, false); if (v !== e.target.value) e.target.value = v; });
+    $('#cf-allocation').addEventListener('input', e => { const v = cleanMoney(e.target.value, false); if (v !== e.target.value) e.target.value = v; });
 
     // --- Calendars (the rent's day, the day their share comes in): today on; a pick moves on unless it's the last question ---
     const cals = {};
@@ -447,6 +450,10 @@ function build() {
             a.amount = $('#cf-amount').value.trim();
             return Number(a.amount) > 0 ? true : problem($('#cf-amount'), 'Please enter an amount above $0.');
         }
+        if (id === 'allocation') {
+            a.allocation = $('#cf-allocation').value.trim() || '0';
+            return isFinite(Number(a.allocation)) && Number(a.allocation) >= 0 ? true : problem($('#cf-allocation'), 'Please enter an amount (0 if none).');
+        }
         if (id === 'date' || id === 'splitDate') return a[id] ? true : problem(null, 'Please pick a day.');
         if (id === 'splitWith') return a.splitWith ? true : problem(null, 'Please choose who you’re splitting it with.');
         if (id === 'items') {
@@ -511,7 +518,7 @@ function build() {
         if (id === 'shifts') drawShifts();
         showFooter();
         scroller.scrollTop = 0;
-        const field = { description: '#cf-description', amount: '#cf-amount' }[id];
+        const field = { description: '#cf-description', amount: '#cf-amount', allocation: '#cf-allocation' }[id];
         if (field) setTimeout(() => $(field).focus(), 60);
     }
     function showFooter() {
@@ -556,6 +563,7 @@ function build() {
             if (editing) { payload.row = ctx.tx.row; payload.original = { date: ctx.tx.date, description: ctx.tx.description }; }
         } else if (!rent()) {
             payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: savings() ? 'Spending Budget' : a.description, amount: a.amount };
+            if (savings()) payload.allocation = a.allocation || '0';
         } else {
             payload = {
                 action: 'saveRentSplit', description: a.description, date: isoDate(a.date),

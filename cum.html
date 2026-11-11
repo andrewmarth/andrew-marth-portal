@@ -608,6 +608,11 @@
         .flow-budget-label { font-weight: bold; }
         .flow-budget-amount { flex: 0 0 auto; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.5rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
         .flow-budget-amount.is-low { color: #f2b8a8; }
+        .flow-budget + .flow-budget { margin-top: 0; }
+        .flow-budget .flow-update-balance { align-self: flex-start; }
+        /* Below $0 only on paper: the savings allocation set aside so far still covers it */
+        .flow-row.is-covered .flow-balance { color: #a8790f; }
+        .flow-covered-note { display: block; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: #fdf3d4; color: #6e5208; font-size: 0.8rem; line-height: 1.35; }
         .flow-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
         .flow-message { text-align: center; padding: 10px 0; }
         @media (max-width: 600px) {
@@ -756,41 +761,60 @@
             const balance = data.balance;
             const start = balance ? amountOf(balance.amount) : 0;
             const asOf = balance ? dateOf(balance.date) : null;
+            // Savings Allocation: money in the account set aside for savings, so it comes off the running balance now
+            savingsAllocation = Number(data.savingsAllocation) || 0;
+            const opening = start - savingsAllocation;
+            // A Spending Budget's own savings allocation goes out with it (listed under it)
+            const allocationOf = t => (isSavingsTx(t) ? Number(t.allocation) || 0 : 0);
             const items = (data.transactions || [])
-                .map((t, order) => ({ ...t, order, when: dateOf(t.date), value: amountOf(t.amount) }))
+                .map((t, order) => ({ ...t, order, when: dateOf(t.date), value: amountOf(t.amount) - allocationOf(t),
+                    lines: allocationOf(t) ? [{ description: 'Spending Budget', amount: amountOf(t.amount) }, { description: 'Savings Allocation', amount: -allocationOf(t) }] : t.lines }))
                 .filter(t => t.when && (!asOf || dayOf(t.when) >= dayOf(asOf)))
                 // On the same day, money coming in goes first so the running balance doesn't dip for nothing
                 .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || ((b.value > 0) - (a.value > 0)) || (a.order - b.order));
             // Spending Budget: the lowest the balance gets over the next 12 months (what can be spent without dipping below $0)
             const horizon = dayOf(new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()));
-            let low = start, lowWhen = asOf, run = start;
+            let low = opening, lowWhen = asOf, run = opening;
             items.forEach(t => {
                 if (dayOf(t.when) > horizon) return;
                 run += t.value;
                 if (run < low) { low = run; lowWhen = t.when; }
             });
             const budgetLine = '<span class="flow-budget"><span><span class="flow-budget-label">Spending Budget</span>'
-                + '<span class="flow-sub">Lowest balance in the next 12 months' + (lowWhen && low < start ? ', ' + lowWhen.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '') + '</span></span>'
+                + '<span class="flow-sub">Lowest balance in the next 12 months' + (lowWhen && low < opening ? ', ' + lowWhen.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '') + '</span></span>'
                 + '<span class="flow-budget-amount' + (low < 0 ? ' is-low' : '') + '">' + money.format(low) + '</span></span>';
+            const allocationLine = '<span class="flow-budget"><span><span class="flow-budget-label">Savings Allocation</span>'
+                + '<span class="flow-sub">Set aside for savings, so it’s off the balances below</span>'
+                + '<button type="button" class="flow-edit flow-update-balance" data-edit-allocation>Edit</button></span>'
+                + '<span class="flow-budget-amount">' + money.format(savingsAllocation) + '</span></span>';
             const balanceRow = '<ul class="flow-list"><li class="flow-row is-balance">' + dateBox(asOf)
                 + '<span class="flow-text"><span class="flow-desc">Current Balance</span>'
                 + '<span><button type="button" class="flow-edit flow-update-balance" data-update-balance>Update Balance</button></span></span>'
-                + '<span class="flow-balance">' + money.format(start) + '</span>' + budgetLine + '</li></ul>';
-            let running = start;
+                + '<span class="flow-balance">' + money.format(start) + '</span>' + allocationLine + budgetLine + '</li></ul>';
+            let running = opening;
+            // Everything set aside for savings so far (still in the account): the actual balance is the running one plus this
+            let setAside = savingsAllocation;
             const months = [];
             items.forEach(t => {
                 running += t.value;
+                setAside += allocationOf(t);
+                const actual = running + setAside;
+                // Red: the account itself goes below $0. Yellow: only the balance after savings does.
+                const shade = actual < -0.005 ? ' is-low' : running < -0.005 ? ' is-covered' : '';
                 const key = t.when.getFullYear() + '-' + t.when.getMonth();
                 let month = months[months.length - 1];
                 if (!month || month.key !== key) months.push(month = { key, title: t.when.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), rows: [] });
                 const savings = isSavingsTx(t);
-                month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + (savings ? ' is-savings' : '') + '">' + dateBox(t.when)
+                month.rows.push('<li class="flow-row' + shade + (savings ? ' is-savings' : '') + '">' + dateBox(t.when)
                     + '<span class="flow-text">' + (savings ? '<span class="flow-tag">Spending</span>' : '') + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
                     // The transaction itself, or just the date of a split coming in or a line paid on its own day; what you owe
                     // someone else is managed by them
                     + (t.part === 'main' || t.part === 'receive' || t.part === 'item' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
-                    + '</span></span>'
+                    + '</span>'
+                    + (shade === ' is-covered' ? '<span class="flow-covered-note">Your actual balance here is ' + money.format(actual)
+                        + '. Your savings allocation covers the rest, so the account doesn’t go below $0.</span>' : '')
+                    + '</span>'
                     + '<span class="flow-balance">' + money.format(running) + '</span></li>');
             });
             flowEl.innerHTML = balanceRow
@@ -804,6 +828,7 @@
         let splitPeople = [];
         // Roadhouse Paycheck Settings ({ payout, received, rate, az, fitw, med, ss }; percents as decimals), or null
         let roadhouseSettings = null;
+        let savingsAllocation = 0;
         let currentUser = null;
         async function api(payload) {
             const idToken = await currentUser.getIdToken();
@@ -833,6 +858,7 @@
             invalid_shift_sales: 'Please enter the sales for each shift.',
             invalid_shift_tip: 'Please enter a tip percent from 0 to 100 for each shift.',
             not_monday: 'A spending budget has to be on a Monday.',
+            invalid_allocation: 'Please enter a savings allocation of $0 or more.',
         };
         let editor = null;
         function buildEditor() {
@@ -846,6 +872,7 @@
                 + '<div class="field"><label for="tx-date">Date</label><input id="tx-date" type="date" required></div>'
                 + '<div class="field tx-amount-field"><label for="tx-amount">Amount</label><div class="money-wrap"><input class="money" id="tx-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>'
                 + '<div class="field tx-desc-field"><label for="tx-desc">Description</label><input id="tx-desc" type="text" maxlength="100" autocomplete="off"></div>'
+                + '<div class="field tx-allocation-field"><label for="tx-allocation">Savings Allocation</label><div class="money-wrap"><input class="money" id="tx-allocation" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>'
                 + '<p class="tx-date-note" hidden></p>'
                 + '</div></div>'
                 + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
@@ -881,6 +908,11 @@
             });
             form.addEventListener('input', () => { message.textContent = ''; });
             // Amounts are positive (whether it's money in or out comes from its TYPE): digits and one decimal point only
+            $('#tx-allocation').addEventListener('input', e => {
+                const el = e.target;
+                const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                if (cleaned !== el.value) el.value = cleaned;
+            });
             $('#tx-amount').addEventListener('input', e => {
                 const el = e.target;
                 const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
@@ -923,7 +955,7 @@
                 const btn = $('[data-save]');
                 setBusy(true, btn);
                 try {
-                    const json = await api({ action: 'updateTransaction', row: tx.row, original: original(), date, description, amount });
+                    const json = await api({ action: 'updateTransaction', row: tx.row, original: original(), date, description, amount, allocation: $('#tx-allocation').value.trim() || '0' });
                     if (!json.ok) throw new Error(json.error);
                     await load(currentUser);
                     setBusy(false, btn);
@@ -948,6 +980,7 @@
             const show = () => {
                 $('[data-delete]').style.display = dateOnly ? 'none' : '';
                 $('.tx-desc-field').style.display = dateOnly ? 'none' : '';
+                $('.tx-allocation-field').style.display = 'none';
                 $('.tx-date-note').hidden = !dateOnly;
                 $('[data-save]').lastChild.textContent = 'Save Changes';
                 message.textContent = '';
@@ -971,6 +1004,8 @@
                     show();
                     // A spending budget is always "Spending Budget", on a Monday
                     $('.tx-desc-field').style.display = isSavingsTx(tx) ? 'none' : '';
+                    $('.tx-allocation-field').style.display = isSavingsTx(tx) ? '' : 'none';
+                    $('#tx-allocation').value = isSavingsTx(tx) && Number(tx.allocation) ? String(Number(tx.allocation)) : '';
                     $('.tx-date-note').hidden = !isSavingsTx(tx);
                     $('.tx-date-note').textContent = 'Mondays only. It comes off the list on that Monday.';
                 },
@@ -1006,6 +1041,11 @@
         flowEl.addEventListener('click', e => {
             if (e.target.closest('[data-catch-up]')) { openCatchUp(); return; }
             // Just the balance question, any time
+            if (e.target.closest('[data-edit-allocation]')) {
+                if (!catchUp) catchUp = buildCatchUp();
+                catchUp.open([{ kind: 'allocation' }]);
+                return;
+            }
             if (e.target.closest('[data-update-balance]')) {
                 if (!catchUp) catchUp = buildCatchUp();
                 catchUp.open([{ kind: 'balance' }]);
@@ -1198,6 +1238,17 @@
                         const cleaned = el.value.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '').replace(/(\..*)\./g, '$1');
                         if (cleaned !== el.value) el.value = cleaned;
                     });
+                } else if (step.kind === 'allocation') {
+                    $('#cu-title').textContent = 'Savings Allocation';
+                    body.innerHTML = '<p class="cu-q">How much is set aside for savings?</p>'
+                        + '<p class="cu-help">Money in your bank account that’s saved, not for spending. It comes off the balances on your list. Each spending budget’s savings allocation is added to it on its Monday.</p>'
+                        + '<div class="field"><label for="cu-allocation">Savings Allocation</label><div class="money-wrap"><input class="money" id="cu-allocation" type="text" inputmode="decimal" autocomplete="off" placeholder="0"></div></div>';
+                    $('#cu-allocation').value = savingsAllocation ? String(savingsAllocation) : '';
+                    $('#cu-allocation').addEventListener('input', e => {
+                        const el = e.target;
+                        const cleaned = el.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                        if (cleaned !== el.value) el.value = cleaned;
+                    });
                 } else {
                     const t = step.tx;
                     const value = amountOf(t.amount);
@@ -1228,6 +1279,10 @@
                     const amount = Number(raw);
                     if (!raw || raw === '-' || !isFinite(amount)) { message.textContent = 'Please enter your bank balance.'; $('#cu-balance').focus(); return; }
                     request = { action: 'updateBalance', date: isoDay(new Date()), amount };
+                } else if (step.kind === 'allocation') {
+                    const raw = $('#cu-allocation').value.trim().replace(/[$,]/g, '');
+                    if (!isFinite(Number(raw)) || Number(raw) < 0) { message.textContent = 'Please enter an amount (0 if none).'; $('#cu-allocation').focus(); return; }
+                    request = { action: 'saveSavingsAllocation', amount: raw || '0' };
                 } else {
                     const t = step.tx;
                     const happened = (dialog.querySelector('[name="cu-happened"]:checked') || {}).value;

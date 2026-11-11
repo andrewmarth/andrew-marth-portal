@@ -107,6 +107,8 @@ export async function columns(collection) {
 
 // --- Writing (each write forgets that collection's cached rows) ---
 const forget = collection => cache().delete(collection);
+// After a write made straight to Firestore (a batch), so this request reads that collection again
+export const forgetRows = collection => forget(collection);
 const storedFields = fields => Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, stored(k, v)]));
 
 export async function update(collection, id, fields) {

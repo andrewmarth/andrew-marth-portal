@@ -1,7 +1,7 @@
 // Andrew Marth Client Portal - private data API (Cloud Run function).
 //
 // The data lives in Firestore (see firestore/LAYOUT.md). Rows come from lib/store.js as { COLUMN: text }.
-import { rows, row as getRow, columns, update, add, remove, withLock } from './lib/store.js';
+import { rows, row as getRow, columns, update, add, remove, withLock, forgetRows } from './lib/store.js';
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
 import { lookupPropertyFacts } from './lib/property-facts.js';
@@ -207,6 +207,7 @@ export async function handle(body, query) {
     if (body.action === 'saveSplitPayments') return await saveSplitPayments_(id, account, body);
     if (body.action === 'saveRoadhousePaycheck') return await saveRoadhousePaycheck_(id, account, body);
     if (body.action === 'saveRoadhouseSettings') return await saveRoadhouseSettings_(id, account, body);
+    if (body.action === 'saveSavingsAllocation') return await saveSavingsAllocation_(id, account, body);
     if (body.action === 'markTransactionPaid') return await settleTransaction_(id, account, body, true);
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
@@ -550,6 +551,8 @@ async function createVersion_(id, account, body) {
 // Column names are matched without regard to case ("Date", "DATE").
 async function cashFlow_(id, account) {
   if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  await rollSpendingBudgets_(id);
+  const savingsAllocation = await savingsAllocation_(id);
   const get = (r, name) => {
     const key = Object.keys(r).filter(k => k.toUpperCase() === name)[0];
     return key === undefined ? '' : String(r[key]).trim();
@@ -593,7 +596,56 @@ async function cashFlow_(id, account) {
     delete e.paymentLabel;
     return e;
   });
-  return { ok: true, balance, transactions, splitPeople, roadhouse };
+  return { ok: true, balance, transactions, splitPeople, roadhouse, savingsAllocation };
+}
+
+// --- Savings Allocation ---
+// Money in the bank account that's set aside for savings (cumSettings SAVINGS ALLOCATION). It comes off the running
+// balance right away. Each Spending Budget can set more aside (its SAVINGS ALLOCATION, going out with it); on the
+// budget's Monday that amount is added to the account's Savings Allocation.
+const CUM_ALLOCATION = 'SAVINGS ALLOCATION';
+const cumToday_ = () => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); };
+const cumDayTime_ = text => { const d = String(text).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return d ? new Date(Number(d[3]), Number(d[1]) - 1, Number(d[2])).getTime() : NaN; };
+async function savingsAllocation_(id) {
+  const r = await getRow('cumSettings', id);
+  return cumRound_(cumNumber_(r ? r[CUM_ALLOCATION] : 0));
+}
+// Spending Budgets whose Monday has come: each is checked off and its savings allocation added to the account's, in one
+// write so it's only counted once
+async function rollSpendingBudgets_(id) {
+  const today = cumToday_();
+  const due = list => list.filter(t => t.accountId === id && !t.paid && isSavings_(t) && cumDayTime_(t.date) <= today);
+  if (!due((await cumTransactionRows_()).rows).length) return;
+  await withLock('cumTransactions', async () => {
+    forgetRows('cumTransactions');
+    const data = await cumTransactionRows_();
+    const list = due(data.rows);
+    if (!list.length) return;
+    const batch = db.batch();
+    list.forEach(t => batch.update(db.collection('cumTransactions').doc(String(t.docId)), { [data.col.paid || 'PAID']: true }));
+    const total = cumRound_(list.reduce((s, t) => s + t.allocation, 0));
+    if (total) batch.set(db.collection('cumSettings').doc(id), { 'ACCOUNT ID': id, [CUM_ALLOCATION]: FieldValue.increment(total) }, { merge: true });
+    await batch.commit();
+  });
+  forgetRows('cumTransactions');
+  forgetRows('cumSettings');
+}
+// A savings allocation as typed: blank is 0; otherwise $0 to $100,000,000 (NaN when it isn't)
+function cumAllocation_(value) {
+  const t = String(value == null ? '' : value).trim().replace(/[$,\s]/g, '');
+  if (t === '') return 0;
+  const n = Number(t);
+  return isFinite(n) && n >= 0 && n <= 100000000 ? cumRound_(n) : NaN;
+}
+// The account's Savings Allocation, as the person sets it. body: { amount }
+async function saveSavingsAllocation_(id, account, body) {
+  if (!hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+  if (String(body.amount == null ? '' : body.amount).trim() === '') return { ok: false, error: 'invalid_allocation' };
+  const amount = cumAllocation_(body.amount);
+  if (isNaN(amount)) return { ok: false, error: 'invalid_allocation' };
+  await db.collection('cumSettings').doc(id).set({ 'ACCOUNT ID': id, [CUM_ALLOCATION]: amount }, { merge: true });
+  forgetRows('cumSettings');
+  return { ok: true };
 }
 
 // --- Roadhouse Paycheck ---
@@ -743,7 +795,7 @@ async function cumTransactionRows_() {
   };
   const col = {
     id: find('ACCOUNT ID'), date: find('DATE'), description: find('DESCRIPTION'), amount: find('AMOUNT'), type: find('TYPE'),
-    paid: find('PAID'), shifts: find(ROADHOUSE_SHIFTS), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
+    paid: find('PAID'), shifts: find(ROADHOUSE_SHIFTS), allocation: find(CUM_ALLOCATION), splitDate: find('SPLIT PERSON DATE'), splitPaid: find('SPLIT PERSON PAID'), receivePaid: find('RECEIVING PERSON PAID'),
     items: [], payments: [],
   };
   for (let n = 1; n <= CUM_SPLIT_PAYMENTS; n++) {
@@ -789,6 +841,7 @@ async function cumTransactionRows_() {
       type: text(col.type),
       paid: yes(col.paid),
       shifts: roadhouseShifts_(text(col.shifts)),
+      allocation: cumNumber_(text(col.allocation)),
       items,
       splitDate: text(col.splitDate),
       splitPaid: yes(col.splitPaid),
@@ -837,7 +890,11 @@ function cumEntries_(list, id) {
       return e;
     };
     if (mine && !t.paid) {
-      if (!t.items.length) out.push(entry('main', isRoadhouse_(t) ? { amount: t.amount, shifts: t.shifts, roadhouse: true } : { amount: t.amount }));
+      if (!t.items.length) {
+        out.push(entry('main', isRoadhouse_(t) ? { amount: t.amount, shifts: t.shifts, roadhouse: true }
+          // A Spending Budget's savings allocation goes out with it (amount is the spending budget alone)
+          : isSavings_(t) ? { amount: t.amount, allocation: t.allocation } : { amount: t.amount }));
+      }
       else {
         const inline = t.items.filter(i => !i.separate);
         if (inline.length) {
@@ -1026,6 +1083,11 @@ async function changeTransaction_(id, account, body, removeIt) {
   const type = target.type.toLowerCase();
   const negative = type === 'expense' || isSavings_(target) || (type !== 'income' && Number(target.amount.replace(/[$,\s]/g, '')) < 0);
   fields[data.col.amount] = Math.round((negative ? -size : size) * 100) / 100;
+  if (isSavings_(target)) {
+    const allocation = cumAllocation_(body.allocation);
+    if (isNaN(allocation)) return { ok: false, error: 'invalid_allocation' };
+    fields[data.col.allocation || CUM_ALLOCATION] = allocation;
+  }
   await update('cumTransactions', target.docId, fields);
   return { ok: true };
 }
@@ -1044,6 +1106,8 @@ async function addTransaction_(id, account, body) {
   if (!m) return { ok: false, error: 'invalid_date' };
   if (kind === 'savings' && new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay() !== 1) return { ok: false, error: 'not_monday' };
   const description = kind === 'savings' ? CUM_SAVINGS : cleanText_(body.description, 100);
+  const allocation = kind === 'savings' ? cumAllocation_(body.allocation) : 0;
+  if (isNaN(allocation)) return { ok: false, error: 'invalid_allocation' };
   if (!description) return { ok: false, error: 'invalid_description' };
   const size = Number(String(body.amount).replace(/[$,\s]/g, ''));
   if (!isFinite(size) || size <= 0 || size > 100000000) return { ok: false, error: 'invalid_amount' };
@@ -1058,6 +1122,7 @@ async function addTransaction_(id, account, body) {
     fields[col.date] = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     fields[col.description] = description;
     fields[col.amount] = Math.round((kind === 'income' ? size : -size) * 100) / 100;
+    if (kind === 'savings') fields[col.allocation || CUM_ALLOCATION] = allocation;
     fields[col.type] = typeText;
     const made = await add('cumTransactions', fields);
     return { ok: true, row: made.order };
