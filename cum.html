@@ -612,6 +612,7 @@
         .flow-budget .flow-update-balance { align-self: flex-start; }
         /* Below $0 only on paper: the savings allocation set aside so far still covers it */
         .flow-row.is-covered .flow-balance { color: #a8790f; }
+        .flow-cut-note { display: block; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: rgba(192, 144, 80, 0.16); color: #6e4f1d; font-size: 0.8rem; line-height: 1.35; }
         .flow-covered-note { display: block; margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: #fdf3d4; color: #6e5208; font-size: 0.8rem; line-height: 1.35; }
         .flow-empty { padding: 16px 18px; border-radius: 16px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; opacity: 0.85; }
         .flow-message { text-align: center; padding: 10px 0; }
@@ -763,7 +764,6 @@
             const asOf = balance ? dateOf(balance.date) : null;
             // Savings Allocation: money in the account set aside for savings, so it comes off the running balance now
             savingsAllocation = Number(data.savingsAllocation) || 0;
-            const opening = start - savingsAllocation;
             // A Spending Budget's own savings allocation goes out with it (listed under it)
             const allocationOf = t => (isSavingsTx(t) ? Number(t.allocation) || 0 : 0);
             const items = (data.transactions || [])
@@ -774,6 +774,59 @@
                 .sort((a, b) => (dayOf(a.when) - dayOf(b.when)) || ((b.value > 0) - (a.value > 0)) || (a.order - b.order));
             // Spending Budget: the lowest the balance gets over the next 12 months (what can be spent without dipping below $0)
             const horizon = dayOf(new Date(new Date().getFullYear() + 1, new Date().getMonth(), new Date().getDate()));
+            // Covering a shortfall: while the balance dips below $0 in the next 12 months, the spending budgets up to that
+            // dip give it up, soonest first (each one's spending, then its savings allocation), then the Savings Allocation
+            // up top. Only what's shown changes; what's saved stays as it is. Whatever's left shows as a negative budget.
+            const budgets = items.filter(isSavingsTx);
+            budgets.forEach(t => { t.spend = Math.max(0, -amountOf(t.amount)); t.alloc = allocationOf(t); t.spendCut = 0; t.allocCut = 0; });
+            let topCut = 0;
+            const valueOf = t => (isSavingsTx(t) ? -(t.spend - t.spendCut) - (t.alloc - t.allocCut) || 0 : t.value);
+            const lowest = () => {
+                let r = start - (savingsAllocation - topCut), min = r, at = -1;
+                items.forEach((t, i) => {
+                    if (dayOf(t.when) > horizon) return;
+                    r += valueOf(t);
+                    if (r < min) { min = r; at = i; }
+                });
+                return { min, at };
+            };
+            for (let guard = 0; guard < 1000; guard++) {
+                const { min, at } = lowest();
+                if (min >= -0.005) break;
+                let need = -min;
+                for (let i = 0; i <= at && need > 0.005; i++) {
+                    const t = items[i];
+                    if (!isSavingsTx(t)) continue;
+                    const s = Math.min(need, t.spend - t.spendCut);
+                    t.spendCut += s;
+                    need -= s;
+                    const a = Math.min(need, t.alloc - t.allocCut);
+                    t.allocCut += a;
+                    need -= a;
+                }
+                if (need > 0.005) {
+                    const c = Math.min(need, savingsAllocation - topCut);
+                    topCut += c;
+                    need -= c;
+                }
+                // Nothing left to take from
+                if (need > 0.005) break;
+            }
+            const topAllocation = savingsAllocation - topCut;
+            const opening = start - topAllocation;
+            budgets.forEach(t => {
+                t.value = valueOf(t);
+                t.allocLeft = t.alloc - t.allocCut;
+                const cut = t.spendCut + t.allocCut;
+                if (t.alloc || cut) {
+                    t.lines = [{ description: 'Spending Budget', amount: -(t.spend - t.spendCut) || 0 }]
+                        .concat(t.alloc ? [{ description: 'Savings Allocation', amount: -t.allocLeft || 0 }] : []);
+                }
+                if (cut > 0.005) {
+                    t.cutNote = 'Lowered by ' + cents.format(Math.round(cut * 100) / 100) + ' to cover a shortfall (planned: '
+                        + cents.format(t.spend) + ' spending' + (t.alloc ? ', ' + cents.format(t.alloc) + ' savings' : '') + ').';
+                }
+            });
             let low = opening, lowWhen = asOf, run = opening;
             items.forEach(t => {
                 if (dayOf(t.when) > horizon) return;
@@ -782,22 +835,23 @@
             });
             const budgetLine = '<span class="flow-budget"><span><span class="flow-budget-label">Spending Budget</span>'
                 + '<span class="flow-sub">Lowest balance in the next 12 months' + (lowWhen && low < opening ? ', ' + lowWhen.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '') + '</span></span>'
-                + '<span class="flow-budget-amount' + (low < 0 ? ' is-low' : '') + '">' + money.format(low) + '</span></span>';
+                + '<span class="flow-budget-amount' + (low < -0.5 ? ' is-low' : '') + '">' + money.format(low < -0.5 ? low : Math.max(0, low)) + '</span></span>';
             const allocationLine = '<span class="flow-budget"><span><span class="flow-budget-label">Savings Allocation</span>'
-                + '<span class="flow-sub">Set aside for savings, so it’s off the balances below</span>'
+                + '<span class="flow-sub">' + (topCut > 0.005 ? cents.format(Math.round(topCut * 100) / 100) + ' of your ' + cents.format(savingsAllocation) + ' covers a shortfall, so it’s back in the balances below'
+                    : 'Set aside for savings, so it’s off the balances below') + '</span>'
                 + '<button type="button" class="flow-edit flow-update-balance" data-edit-allocation>Edit</button></span>'
-                + '<span class="flow-budget-amount">' + money.format(savingsAllocation) + '</span></span>';
+                + '<span class="flow-budget-amount">' + money.format(topAllocation) + '</span></span>';
             const balanceRow = '<ul class="flow-list"><li class="flow-row is-balance">' + dateBox(asOf)
                 + '<span class="flow-text"><span class="flow-desc">Current Balance</span>'
                 + '<span><button type="button" class="flow-edit flow-update-balance" data-update-balance>Update Balance</button></span></span>'
                 + '<span class="flow-balance">' + money.format(start) + '</span>' + allocationLine + budgetLine + '</li></ul>';
             let running = opening;
             // Everything set aside for savings so far (still in the account): the actual balance is the running one plus this
-            let setAside = savingsAllocation;
+            let setAside = topAllocation;
             const months = [];
             items.forEach(t => {
                 running += t.value;
-                setAside += allocationOf(t);
+                setAside += t.allocLeft || 0;
                 const actual = running + setAside;
                 // Red: the account itself goes below $0. Yellow: only the balance after savings does.
                 const shade = actual < -0.005 ? ' is-low' : running < -0.005 ? ' is-covered' : '';
@@ -807,11 +861,12 @@
                 const savings = isSavingsTx(t);
                 month.rows.push('<li class="flow-row' + shade + (savings ? ' is-savings' : '') + '">' + dateBox(t.when)
                     + '<span class="flow-text">' + (savings ? '<span class="flow-tag">Spending</span>' : '') + detailHtml(t)
-                    + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
+                    + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 || savings ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
                     // The transaction itself, or just the date of a split coming in or a line paid on its own day; what you owe
                     // someone else is managed by them
                     + (t.part === 'main' || t.part === 'receive' || t.part === 'item' ? '<button type="button" class="flow-edit" data-edit-key="' + escapeHtml(t.key) + '" aria-label="Edit ' + escapeHtml(t.description || 'transaction') + '">Edit</button>' : '')
                     + '</span>'
+                    + (t.cutNote ? '<span class="flow-cut-note">' + escapeHtml(t.cutNote) + '</span>' : '')
                     + (shade === ' is-covered' ? '<span class="flow-covered-note">Your actual balance here is ' + money.format(actual)
                         + '. Your savings allocation covers the rest, so the account doesn’t go below $0.</span>' : '')
                     + '</span>'
