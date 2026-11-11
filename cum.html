@@ -531,7 +531,7 @@
         .flow-change.is-out { color: #b3392f; }
         .flow-balance { flex: 0 0 auto; text-align: right; font-weight: bold; white-space: nowrap; }
         .flow-row.is-low .flow-balance { color: #b3392f; }
-        /* Savings Budget rows: a gold band so money set aside stands out from spending */
+        /* Spending Budget rows: a gold band so money set aside stands out from other expenses */
         .flow-row.is-savings { margin: 6px 0; padding: 14px 12px; border: 2px solid rgba(192, 144, 80, 0.55); border-left-width: 6px; border-radius: 14px; background: #fbf4e6; }
         .flow-row.is-savings + .flow-row { border-top: none; }
         .flow-row.is-savings .flow-change.is-out { color: #8a6326; }
@@ -785,7 +785,7 @@
                 if (!month || month.key !== key) months.push(month = { key, title: t.when.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), rows: [] });
                 const savings = isSavingsTx(t);
                 month.rows.push('<li class="flow-row' + (running < 0 ? ' is-low' : '') + (savings ? ' is-savings' : '') + '">' + dateBox(t.when)
-                    + '<span class="flow-text">' + (savings ? '<span class="flow-tag">Savings</span>' : '') + detailHtml(t)
+                    + '<span class="flow-text">' + (savings ? '<span class="flow-tag">Spending</span>' : '') + detailHtml(t)
                     + '<span class="flow-change-line"><span class="flow-change ' + (t.value < 0 ? 'is-out' : 'is-in') + '">' + (t.value > 0 ? '+' : '') + money.format(t.value) + '</span>'
                     // The transaction itself, or just the date of a split coming in or a line paid on its own day; what you owe
                     // someone else is managed by them
@@ -832,7 +832,7 @@
             invalid_shift_hours: 'Please enter the hours for each shift (up to 24).',
             invalid_shift_sales: 'Please enter the sales for each shift.',
             invalid_shift_tip: 'Please enter a tip percent from 0 to 100 for each shift.',
-            not_monday: 'A savings budget has to be on a Monday.',
+            not_monday: 'A spending budget has to be on a Monday.',
         };
         let editor = null;
         function buildEditor() {
@@ -965,11 +965,11 @@
                     $('#tx-amount').value = value ? String(Math.abs(value)) : '';
                     // "Edit Income" / "Edit Expense" from its TYPE
                     const type = String(tx.type || '').trim();
-                    $('#tx-title').textContent = 'Edit ' + (type ? type.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) : 'Transaction');
+                    $('#tx-title').textContent = 'Edit ' + (isSavingsTx(tx) ? 'Spending Budget' : type ? type.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) : 'Transaction');
                     $('#tx-desc').value = tx.description || '';
                     $('.tx-amount-field').style.display = '';
                     show();
-                    // A savings budget is always "Savings Budget", on a Monday
+                    // A spending budget is always "Spending Budget", on a Monday
                     $('.tx-desc-field').style.display = isSavingsTx(tx) ? 'none' : '';
                     $('.tx-date-note').hidden = !isSavingsTx(tx);
                     $('.tx-date-note').textContent = 'Mondays only. It comes off the list on that Monday.';
@@ -987,7 +987,8 @@
                 },
             };
         }
-        const isSavingsTx = t => String(t.type || '').trim().toLowerCase() === 'savings budget' && t.part === 'main';
+        // A Spending Budget row ("Savings Budget" was its first name)
+        const isSavingsTx = t => /^(spending|savings) budget$/i.test(String(t.type || '').trim()) && t.part === 'main';
         const addBtn = document.getElementById('flow-add');
         // The "+" form (Income / Expense / Rent Split), and editing a rent split: one question at a time
         const cumForm = extra => openCumForm({

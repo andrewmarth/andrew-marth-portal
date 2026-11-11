@@ -1,6 +1,6 @@
 // The CUM page's "+" pop-up, one question at a time (same look as the home page's New Task form):
 //   Income / Expense   what it's for, how much, which day
-//   Savings Budget     how much and which Monday (always called "Savings Budget"; money set aside: it goes out like an
+//   Spending Budget    how much and which Monday (always called "Spending Budget"; money set aside: it goes out like an
 //                      expense, is highlighted on the list, and drops off the list on its Monday without a catch-up question)
 //   Rent Split         what it's called, the day the rent is due, who it's split with, the line items, what percent of
 //                      each they pay, whether any item is paid on its own day, and when they pay their share
@@ -81,7 +81,7 @@ const NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const KINDS = [
     { value: 'income', main: 'Income', sub: 'Money coming in', icon: ICON('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>') },
     { value: 'expense', main: 'Expense', sub: 'Money going out', icon: ICON('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') },
-    { value: 'savings', main: 'Savings Budget', sub: 'Money set aside for savings', icon: ICON('<path d="M19 7c-1-2-3.5-3-7-3C6.5 4 3 7 3 11c0 2.2 1 4 2.6 5.2L5 20h3l.7-1.6c1 .3 2.1.6 3.3.6s2.3-.2 3.3-.6L16 20h3l-.6-3.8c1-.8 1.8-1.8 2.2-3.2H22v-4h-1.6c-.3-.7-.8-1.4-1.4-2Z"/><path d="M16 11h.01"/>') },
+    { value: 'savings', main: 'Spending Budget', sub: 'Money set aside for spending', icon: ICON('<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>') },
     { value: 'rent', main: 'Rent Split', sub: 'Rent shared with someone else', icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v12h14V9"/><path d="M12 13v8"/>') },
     { value: 'roadhouse', main: 'Roadhouse Paycheck', sub: 'Worked out from your shifts', icon: ICON('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>') },
 ];
@@ -203,8 +203,8 @@ function build() {
     function words(id) {
         if (id === 'kind') return ['What are you adding?', ''];
         if (id === 'description') return rent() ? ['What should it be called?', 'Like “Rent” or “March Rent”.'] : ['What’s it for?', a.kind === 'income' ? 'Like “Paycheck”.' : a.kind === 'savings' ? 'Like “Emergency fund” or “Vacation”.' : 'Like “Car payment”.'];
-        if (id === 'amount') return savings() ? ['How much are you setting aside?', ''] : ['How much?', ''];
-        if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : a.kind === 'savings' ? 'Which Monday does it go to savings?' : 'When does it go out?', a.kind === 'savings' ? 'Mondays only. It comes off the list on that Monday.' : ''];
+        if (id === 'amount') return savings() ? ['How much is the spending budget?', ''] : ['How much?', ''];
+        if (id === 'date') return rent() ? ['When is the rent due?', ''] : roadhouse() ? ['When is payday?', ''] : [a.kind === 'income' ? 'When does it come in?' : a.kind === 'savings' ? 'Which Monday is it for?' : 'When does it go out?', a.kind === 'savings' ? 'Mondays only. It comes off the list on that Monday.' : ''];
         if (id === 'shifts') return ['Which shifts does it cover?', 'Hours, sales and the tip percent for each shift.'];
         if (id === 'splitWith') return ['Who are you splitting it with?', ''];
         if (id === 'items') return ['What’s included?', 'Each charge on its own line. Use a minus for a credit, like -20.'];
@@ -555,7 +555,7 @@ function build() {
             payload = { action: 'saveRoadhousePaycheck', date: isoDate(a.date), shifts: a.shifts.map(sh => ({ hours: num(sh.hours), sales: num(sh.sales), tipPercent: num(sh.tip) })) };
             if (editing) { payload.row = ctx.tx.row; payload.original = { date: ctx.tx.date, description: ctx.tx.description }; }
         } else if (!rent()) {
-            payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: savings() ? 'Savings Budget' : a.description, amount: a.amount };
+            payload = { action: 'addTransaction', type: a.kind, date: isoDate(a.date), description: savings() ? 'Spending Budget' : a.description, amount: a.amount };
         } else {
             payload = {
                 action: 'saveRentSplit', description: a.description, date: isoDate(a.date),
