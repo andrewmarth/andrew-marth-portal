@@ -611,7 +611,7 @@ function build() {
         // A little room above and below the curve, and clean tick steps inside it (in decimals: 0.0025 is 0.25%)
         const pad = (yMax - yMin) * 0.06;
         yMin -= pad; yMax += pad;
-        const rough = (yMax - yMin) / 4;
+        const rough = (yMax - yMin) / 5;
         const pow = Math.pow(10, Math.floor(Math.log10(rough)));
         const step = [1, 2, 2.5, 5, 10].map(f => f * pow).find(s => s >= rough);
         const pw = CH.w - CH.l - CH.r, ph = CH.h - CH.t - CH.b;
@@ -621,7 +621,9 @@ function build() {
     function markupChart(mt) {
         const s = chartScales(mt);
         const qMin = Math.min(...mt.quoted), qMax = Math.max(...mt.quoted);
-        const dec = s.step * 100 >= 1 ? 0 : s.step * 100 >= 0.1 ? (Math.round(s.step * 1000) % 10 ? 2 : 1) : 2;
+        // As many decimals as the step needs (2.5% steps: "+2.5%", "+5.0%")
+        const stepPct = Math.round(s.step * 1e6) / 1e4;
+        const dec = [0, 1, 2, 3].find(d => Math.abs(stepPct * Math.pow(10, d) - Math.round(stepPct * Math.pow(10, d))) < 1e-6);
         const yLabel = v => { const p = Math.round(v * 1e6) / 1e4; return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(dec) + '%'; };
         const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + s.x(p[0]).toFixed(1) + ' ' + s.y(p[1]).toFixed(1)).join('');
         // The curve in three pieces: below the quoted range, across it, above it (each sampled finely, sharing their ends)
