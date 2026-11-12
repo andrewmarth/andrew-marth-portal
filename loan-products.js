@@ -36,6 +36,34 @@ const CSS = `
 .loan-dialog .lp-step { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--navy); background: #f7f4f0; color: var(--olive); font-family: inherit; font-size: 1.4rem; font-weight: bold; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .loan-dialog .lp-step:disabled { opacity: 0.35; cursor: default; }
 @media (hover: hover) { .loan-dialog .lp-step:not(:disabled):hover { background: var(--olive); color: var(--cream); } }
+/* Dropdowns (Product Type, Rate Type, Loan Term): a button that opens its choices in the form, like the Loan Product
+   picker on the pages. The real select stays underneath (hidden) and holds the answer. */
+.loan-dialog .lp-native { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.loan-dialog .lp-picker { position: relative; }
+.loan-dialog .lp-picker-btn { width: 100%; min-height: 54px; display: flex; align-items: center; gap: 12px; padding: 8px 46px 8px 10px; border: 2px solid var(--navy); border-radius: 999px;
+    background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 18px center / 16px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03); font-family: inherit; font-size: 0.98rem; color: var(--brown); text-align: left; cursor: pointer; transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease; -webkit-tap-highlight-color: transparent; }
+.loan-dialog .lp-picker.is-open .lp-picker-btn { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E"); }
+.loan-dialog .lp-picker-btn:focus-visible, .loan-dialog .lp-picker.is-open .lp-picker-btn { outline: none; background-color: var(--white); border-color: var(--tan); box-shadow: 0 0 0 4px rgba(192, 144, 80, 0.22); }
+.loan-dialog .lp-native.is-invalid + .lp-picker .lp-picker-btn { border-color: var(--rust); background-color: #fdf2f2; }
+.loan-dialog .lp-picker-btn.is-empty .lp-pick-text { opacity: 0.55; }
+.loan-dialog .lp-pick-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: #ece5db; color: var(--tan); }
+.loan-dialog .lp-pick-icon svg { width: 18px; height: 18px; }
+.loan-dialog .lp-picker-btn.is-empty .lp-pick-icon { background: transparent; color: rgba(78, 81, 62, 0.45); }
+.loan-dialog .lp-pick-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+.loan-dialog .lp-picker-list { display: none; position: absolute; z-index: 20; top: 100%; left: 0; right: 0; min-width: 240px; margin-top: 8px; padding: 6px; background: var(--white); border: 2px solid var(--navy); border-radius: 20px; box-shadow: 5px 5px 0 var(--navy); }
+.loan-dialog .lp-picker.is-open .lp-picker-list { display: grid; gap: 2px; animation: lpPickerIn 0.18s ease both; }
+@keyframes lpPickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.loan-dialog .lp-option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 12px; border: none; border-radius: 14px; background: transparent; font-family: inherit; color: var(--brown); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color 0.15s ease; }
+.loan-dialog .lp-option:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px; }
+@media (hover: hover) { .loan-dialog .lp-option:hover { background: #f2ede6; } }
+.loan-dialog .lp-option.is-picked { background: var(--olive); color: var(--cream); }
+.loan-dialog .lp-option.is-picked .lp-pick-icon { background: var(--cream); color: var(--olive); }
+.loan-dialog .lp-option-text { display: grid; gap: 1px; min-width: 0; }
+.loan-dialog .lp-option-main { font-weight: bold; font-size: 0.98rem; }
+.loan-dialog .lp-option-sub { font-size: 0.84rem; opacity: 0.75; }
+.loan-dialog .lp-check { margin-left: auto; flex: 0 0 auto; width: 18px; height: 18px; opacity: 0; }
+.loan-dialog .lp-option.is-picked .lp-check { opacity: 1; }
 @media (max-width: 600px) {
     .loan-dialog .gate-body { grid-template-columns: 1fr; }
 }
@@ -47,6 +75,22 @@ const ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { const n = Number(String(v === undefined || v === null ? '' : v).replace(/[$,%\s]/g, '')); return isFinite(n) ? n : 0; };
 const isTrue = v => String(v || '').trim().toUpperCase() === 'TRUE';
+
+// Each dropdown choice's icon and short description (by its value)
+const CHOICES = {
+    'Conventional': { icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>'), sub: 'Not backed by the government' },
+    'FHA': { icon: ICON('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>'), sub: 'Government-insured, low down payment' },
+    'VA': { icon: ICON('<path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.4 2.8 1-6L3.3 9.4l6-.9Z"/>'), sub: 'For veterans and service members' },
+    'Jumbo': { icon: ICON('<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h.01"/><path d="M15 11h.01"/>'), sub: 'Above the conforming loan limit' },
+    'Non-Conforming': { icon: ICON('<path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="m5.6 5.6 2.8 2.8"/><path d="m15.6 15.6 2.8 2.8"/><path d="m5.6 18.4 2.8-2.8"/><path d="m15.6 8.4 2.8-2.8"/>'), sub: 'Outside the standard guidelines' },
+    'Fixed Rate': { icon: ICON('<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'), sub: 'The same rate for the whole loan' },
+    'Adjustable Rate': { icon: ICON('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'), sub: 'Can change after the first few years' },
+    '30': { icon: ICON('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/><path d="M8 2v4"/><path d="M16 2v4"/>'), main: '30 years' },
+    '15': { icon: ICON('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/><path d="M8 2v4"/><path d="M16 2v4"/>'), main: '15 years' },
+    'other': { icon: ICON('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'), main: 'Other', sub: 'Type the number of years' },
+};
+const CHECK_ICON = '<svg class="lp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const EMPTY_ICON = ICON('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>');
 
 const DTI = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
 const DESIGNATIONS = ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'];
@@ -289,7 +333,70 @@ function build() {
             input.classList.remove('is-invalid');
             syncStepper(input);
         }));
+        sectionsEl.querySelectorAll('select').forEach(makePicker);
     }
+
+    // A select → a styled picker: a button showing the choice, and a list floating under it (scrolled into view when
+    // opened) of each choice with its icon and description. The select keeps the answer and gets a change event.
+    function makePicker(select) {
+        select.classList.add('lp-native');
+        select.tabIndex = -1;
+        select.setAttribute('aria-hidden', 'true');
+        const picker = document.createElement('div');
+        picker.className = 'lp-picker';
+        const btnId = select.id + '-btn';
+        const label = sectionsEl.querySelector('label[for="' + select.id + '"]');
+        if (label) label.htmlFor = btnId;
+        const options = [...select.options].filter(o => o.value);
+        picker.innerHTML = '<button type="button" class="lp-picker-btn" id="' + btnId + '" aria-haspopup="listbox" aria-expanded="false"></button>'
+            + '<div class="lp-picker-list" role="listbox">' + options.map(o => {
+                const info = CHOICES[o.value] || {};
+                return '<button type="button" class="lp-option" role="option" data-value="' + escapeHtml(o.value) + '"><span class="lp-pick-icon">' + (info.icon || EMPTY_ICON) + '</span>'
+                    + '<span class="lp-option-text"><span class="lp-option-main">' + escapeHtml(info.main || o.text) + '</span>'
+                    + (info.sub ? '<span class="lp-option-sub">' + escapeHtml(info.sub) + '</span>' : '') + '</span>' + CHECK_ICON + '</button>';
+            }).join('') + '</div>';
+        select.after(picker);
+        const btn = picker.querySelector('.lp-picker-btn');
+        const open = on => {
+            if (on) sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => { if (p !== picker) p.classList.remove('is-open'); });
+            picker.classList.toggle('is-open', on);
+            btn.setAttribute('aria-expanded', String(on));
+            if (on) { const list = picker.querySelector('.lp-picker-list'); list.scrollIntoView({ block: 'nearest' }); (list.querySelector('.is-picked') || list.querySelector('.lp-option')).focus({ preventScroll: true }); }
+        };
+        btn.addEventListener('click', () => open(!picker.classList.contains('is-open')));
+        picker.querySelectorAll('.lp-option').forEach(o => o.addEventListener('click', () => {
+            select.value = o.dataset.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            syncPicker(select);
+            open(false);
+            btn.focus({ preventScroll: true });
+        }));
+        picker.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && picker.classList.contains('is-open')) { e.preventDefault(); e.stopPropagation(); open(false); btn.focus(); }
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && picker.classList.contains('is-open')) {
+                e.preventDefault();
+                const all = [...picker.querySelectorAll('.lp-option')];
+                const i = all.indexOf(document.activeElement);
+                all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length].focus();
+            }
+        });
+        syncPicker(select);
+    }
+    // Shows the select's choice on its picker button
+    function syncPicker(select) {
+        const picker = select.nextElementSibling;
+        if (!picker || !picker.classList.contains('lp-picker')) return;
+        const info = CHOICES[select.value] || {};
+        const opt = [...select.options].find(o => o.value && o.value === select.value);
+        const btn = picker.querySelector('.lp-picker-btn');
+        btn.classList.toggle('is-empty', !opt);
+        btn.innerHTML = '<span class="lp-pick-icon">' + (opt ? info.icon || EMPTY_ICON : EMPTY_ICON) + '</span><span class="lp-pick-text">' + escapeHtml(opt ? info.main || opt.text : 'Choose...') + '</span>';
+        picker.querySelectorAll('.lp-option').forEach(o => { const on = o.dataset.value === select.value; o.classList.toggle('is-picked', on); o.setAttribute('aria-selected', String(on)); });
+    }
+    // Closes an open picker when something else is clicked
+    dialog.addEventListener('click', e => {
+        if (!e.target.closest('.lp-picker')) sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => { p.classList.remove('is-open'); p.querySelector('.lp-picker-btn').setAttribute('aria-expanded', 'false'); });
+    });
 
     // No negative months: "−" stops at 0
     function syncStepper(input) {
@@ -338,6 +445,8 @@ function build() {
             showTerm();
         }
         sectionsEl.querySelectorAll('[data-edit-only]').forEach(f => { f.hidden = isNew; });
+        sectionsEl.querySelectorAll('select.lp-native').forEach(syncPicker);
+        sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => p.classList.remove('is-open'));
         showGates();
     }
 
@@ -394,7 +503,8 @@ function build() {
     const problem = (el, text) => {
         if (el) {
             el.classList.add('is-invalid');
-            const focusable = el.matches('input, select') ? el : el.querySelector('input');
+            const picker = el.matches('select.lp-native') ? el.nextElementSibling : null;
+            const focusable = picker ? picker.querySelector('.lp-picker-btn') : el.matches('input, select') ? el : el.querySelector('input');
             if (focusable) focusable.focus({ preventScroll: true });
             el.scrollIntoView({ block: 'center' });
         }
