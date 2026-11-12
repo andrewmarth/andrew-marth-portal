@@ -7,6 +7,11 @@ import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
 
 const CSS = `
 .loan-dialog .income-section .type-fields { margin-top: 2px; }
+/* A Down Payment Assistance product's questions, or a regular product's (see LAYOUT) */
+.loan-dialog .lp-scope { display: contents; }
+.loan-dialog .lp-scope[hidden], .loan-dialog .income-section[data-scope][hidden] { display: none; }
+/* One question per line (the income editor's sections are two across) */
+.loan-dialog .income-section .type-fields, .loan-dialog .income-section .gate-body, .loan-dialog .income-section .lp-tiles { grid-template-columns: 1fr; }
 .loan-dialog .field-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
 .loan-dialog .type-picker.yes-no { grid-template-columns: 1fr 1fr; margin-bottom: 0; min-height: 54px; align-items: center; }
 /* (the general ".field label" style would otherwise pull these to the top-left) */
@@ -82,6 +87,7 @@ const CHOICES = {
     'FHA': { icon: ICON('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>'), sub: 'Government-insured, low down payment' },
     'VA': { icon: ICON('<path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.4 2.8 1-6L3.3 9.4l6-.9Z"/>'), sub: 'For veterans and service members' },
     'Jumbo': { icon: ICON('<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h.01"/><path d="M15 11h.01"/>'), sub: 'Above the conforming loan limit' },
+    'Down Payment Assistance': { icon: ICON('<path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/><path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 16 6 6"/><circle cx="16" cy="9" r="2.9"/><circle cx="6" cy="5" r="3"/>'), sub: 'A second “piggy back” loan toward the down payment' },
     'Non-Conforming': { icon: ICON('<path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="m5.6 5.6 2.8 2.8"/><path d="m15.6 15.6 2.8 2.8"/><path d="m5.6 18.4 2.8-2.8"/><path d="m15.6 8.4 2.8-2.8"/>'), sub: 'Outside the standard guidelines' },
     'Fixed Rate': { icon: ICON('<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'), sub: 'The same rate for the whole loan' },
     'Adjustable Rate': { icon: ICON('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'), sub: 'Can change after the first few years' },
@@ -92,6 +98,12 @@ const CHOICES = {
 const CHECK_ICON = '<svg class="lp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 const EMPTY_ICON = ICON('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>');
 
+// Labels that change with another answer: { col, when: [that column, its value], label }
+const LABEL_RULES = [
+    // A second loan the client can't adjust is a set LTV, not a maximum
+    { col: 'SECOND LOAN LTV MAX', when: ['SECOND LOAN ADJUSTABLE BY CLIENT', 'FALSE'], label: 'Second Loan LTV' },
+];
+
 const DTI = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
 const DESIGNATIONS = ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'];
 const NO_INCOME_LIMIT = '99999999';
@@ -100,19 +112,27 @@ const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
 // Items: a column question ({ col, label?, input? }), property tiles ({ tiles }), a column always set to one value
 // ({ col, fixed }), or a yes/no ({ gate, label, items, isOn(values), off(col, values)?, col? }). A gate with a col is
 // itself that TRUE / FALSE column. When a gate is no, the columns under it get off(col) (else 0, or FALSE for yes/no).
+// Scope: a Down Payment Assistance product (Product Type) is a second "piggy back" loan, so it's asked only its name, type
+// and the 'dpa' questions; any other product is asked everything else ('regular': every section but Product and Down
+// Payment Assistance, plus Rate Type and Loan Term). Questions out of scope aren't shown: a regular product's piggy back
+// answers are 0 / No, and a DPA product's other answers are left blank.
+const DPA = 'Down Payment Assistance';
 const LAYOUT = [
-    { section: 'Product', items: [
+    { section: 'Product', scope: '', items: [
         { col: 'LOAN PRODUCT NAME' },
         { col: 'PRODUCT TYPE' },
-        { col: 'RATE TYPE' },
+        { col: 'RATE TYPE', scope: 'regular' },
         // (no Lender Name question: a product's lender is set by the API from the lender it's under)
-        { col: 'LOAN TERM', label: 'Loan Term (Years)', input: 'term' },
+        { col: 'LOAN TERM', label: 'Loan Term (Years)', input: 'term', scope: 'regular' },
+    ] },
+    { section: 'Down Payment Assistance', scope: 'dpa', items: [
+        { col: 'SECOND LOAN ADJUSTABLE BY CLIENT', label: 'Is the second loan amount able to be adjusted by the client?' },
+        { col: 'SECOND LOAN LTV MAX' },
     ] },
     { section: 'Loan Limits', items: [
         { col: 'MAX LTV' }, { col: 'MIN LOAN AMOUNT' }, { col: 'MAX LOAN AMOUNT' }, { col: 'MAX SELLER CREDIT %' },
         { gate: 'income', label: 'Is there an income limit?', items: [{ col: 'INCOME LIMIT' }],
             isOn: v => String(v['INCOME LIMIT'] || '').trim() !== '' && num(v['INCOME LIMIT']) < 9999999, off: () => NO_INCOME_LIMIT },
-        { gate: 'second', label: 'Is a second loan allowed?', items: [{ col: 'SECOND LOAN LTV MAX' }], isOn: anyAbove0(['SECOND LOAN LTV MAX']) },
         { col: 'SILENT SECOND', fixed: 'TRUE' },
     ] },
     { section: 'Property Types', items: [{ tiles: [
@@ -284,9 +304,9 @@ function build() {
             used[it.col] = true;
             return kinds[it.col] ? it : null;
         }).filter(Boolean);
-        const out = LAYOUT.map(s => ({ section: s.section, items: keep(s.items) })).filter(s => s.items.length);
+        const out = LAYOUT.map(s => ({ section: s.section, scope: s.scope === undefined ? 'regular' : s.scope, items: keep(s.items) })).filter(s => s.items.length);
         const extra = fields.filter(f => !used[f.col]).map(f => ({ col: f.col, optional: f.section === 'Other' && f.kind === 'text' }));
-        if (extra.length) out.push({ section: 'Other', items: extra });
+        if (extra.length) out.push({ section: 'Other', scope: 'regular', items: extra });
         return out;
     }
 
@@ -303,7 +323,8 @@ function build() {
                 return '<div class="field span-2"><span class="field-label">' + escapeHtml(it.label) + '</span>' + yesNo('lp-gate-' + it.gate, 'data-gate="' + it.gate + '"') + '</div>'
                     + '<div class="gate-body" data-gate-body="' + it.gate + '" hidden>' + itemsHtml(it.items, section, counter) + '</div>';
             }
-            return question(it, kinds[it.col], section, n);
+            const q = question(it, kinds[it.col], section, n);
+            return it.scope ? '<div class="lp-scope" data-scope="' + it.scope + '">' + q + '</div>' : q;
         }).join('');
     }
 
@@ -314,7 +335,7 @@ function build() {
         drawnFor = key;
         layout = layoutFor(fields);
         const counter = { n: 0 };
-        sectionsEl.innerHTML = layout.map(s => '<fieldset class="income-section"><div class="section-head"><h3>' + escapeHtml(s.section) + '</h3></div>'
+        sectionsEl.innerHTML = layout.map(s => '<fieldset class="income-section"' + (s.scope ? ' data-scope="' + s.scope + '"' : '') + '><div class="section-head"><h3>' + escapeHtml(s.section) + '</h3></div>'
             + '<div class="type-fields">' + itemsHtml(s.items, s.section, counter) + '</div></fieldset>').join('');
         sectionsEl.querySelectorAll('input[data-kind]').forEach(el => el.addEventListener('input', () => {
             const kind = el.dataset.kind;
@@ -327,6 +348,8 @@ function build() {
         sectionsEl.querySelectorAll('[data-gate] input').forEach(r => r.addEventListener('change', showGates));
         const term = sectionsEl.querySelector('[data-term]');
         if (term) term.addEventListener('change', showTerm);
+        const type = sectionsEl.querySelector('[data-col="PRODUCT TYPE"]');
+        if (type) type.addEventListener('change', showScopes);
         sectionsEl.querySelectorAll('.lp-step').forEach(b => b.addEventListener('click', () => {
             const input = b.parentElement.querySelector('input');
             input.value = String(Math.max(0, Math.min(99, num(input.value) + Number(b.dataset.step))));
@@ -402,6 +425,11 @@ function build() {
     function syncStepper(input) {
         input.parentElement.querySelector('[data-step="-1"]').disabled = num(input.value) <= 0;
     }
+    const isDpa = () => { const type = sectionsEl.querySelector('[data-col="PRODUCT TYPE"]'); return !!type && type.value === DPA; };
+    const scopeOn = scope => (scope === 'dpa' ? isDpa() : scope === 'regular' ? !isDpa() : true);
+    function showScopes() {
+        sectionsEl.querySelectorAll('[data-scope]').forEach(el => { el.hidden = !scopeOn(el.dataset.scope); });
+    }
     function showTerm() {
         const term = sectionsEl.querySelector('[data-term]');
         sectionsEl.querySelector('[data-term-other]').hidden = term.value !== 'other';
@@ -446,6 +474,8 @@ function build() {
         }
         sectionsEl.querySelectorAll('[data-edit-only]').forEach(f => { f.hidden = isNew; });
         sectionsEl.querySelectorAll('select.lp-native').forEach(syncPicker);
+        syncLabels();
+        showScopes();
         sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => p.classList.remove('is-open'));
         showGates();
     }
@@ -472,6 +502,7 @@ function build() {
                 walk(it.items, on === true, it.off || off);
                 return;
             }
+            if (it.scope && !scopeOn(it.scope)) { blank(it); return; }
             if (!active) { offs.push([it.col, off]); return; }
             // A new product's lender name is the bank on file (the API fills it in)
             if (it.editOnly && !ctx.product) return;
@@ -486,9 +517,13 @@ function build() {
             values[it.col] = el.dataset.kind === 'bool' ? ((el.querySelector('input:checked') || {}).value || '') : boxValue(el);
             if (!it.optional) need(el, values[it.col]);
         });
-        layout.forEach(s => walk(s.items, true, null));
+        // A DPA product: everything regular is left blank
+        const blanks = [];
+        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
+        blanks.forEach(col => { values[col] = ''; });
         return { values, missing };
     }
 
@@ -499,6 +534,19 @@ function build() {
     const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
     form.addEventListener('input', clear);
     form.addEventListener('change', clear);
+    form.addEventListener('change', syncLabels);
+    // Each LABEL_RULES label: its own text while the other answer matches, else the usual one
+    function syncLabels() {
+        LABEL_RULES.forEach(r => {
+            const box = sectionsEl.querySelector('[data-col="' + r.col + '"]');
+            const label = box && sectionsEl.querySelector('label[for="' + box.id + '"]');
+            if (!label) return;
+            if (!label.dataset.usual) label.dataset.usual = label.textContent;
+            const other = sectionsEl.querySelector('[data-col="' + r.when[0] + '"]');
+            const answer = other ? (other.matches('input, select') ? other.value : ((other.querySelector('input:checked') || {}).value || '')) : '';
+            label.textContent = answer === r.when[1] ? r.label : label.dataset.usual;
+        });
+    }
 
     const problem = (el, text) => {
         if (el) {

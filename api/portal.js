@@ -105,14 +105,20 @@ function cleanSetting_(kind, value) {
 // ACCOUNT ID is always the lender's own and LENDER NAME is set from the lender (never asked); any other column that isn't
 // listed here is asked as text under "Other".
 // The form (loan-products.js) lays these out with its own yes/no questions and fills in every column before saving.
-const LOAN_PRODUCT_TYPES = ['Conventional', 'FHA', 'VA', 'Jumbo', 'Non-Conforming'];
+const LOAN_PRODUCT_TYPES = ['Conventional', 'FHA', 'VA', 'Jumbo', 'Non-Conforming', 'Down Payment Assistance'];
+// A Down Payment Assistance product is a second "piggy back" loan: only these are asked (the rest are left blank), and
+// any other product's piggy back answers are 0 / FALSE
+const LOAN_DPA = 'Down Payment Assistance';
+const LOAN_DPA_FIELDS = ['LOAN PRODUCT NAME', 'PRODUCT TYPE', 'SECOND LOAN ADJUSTABLE BY CLIENT', 'SECOND LOAN LTV MAX', 'SILENT SECOND'];
 const LOAN_RATE_TYPES = ['Fixed Rate', 'Adjustable Rate'];
 const LOAN_PRODUCT_FIELDS = (function () {
   const dti = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
   const sections = [
     ['Product', [['LOAN PRODUCT NAME', 'text'], ['PRODUCT TYPE', LOAN_PRODUCT_TYPES], ['RATE TYPE', LOAN_RATE_TYPES], ['LOAN TERM', 'int']]],
     ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
-      ['INCOME LIMIT', 'money'], ['SECOND LOAN LTV MAX', 'rate'], ['SILENT SECOND', 'bool']]],
+      ['INCOME LIMIT', 'money'], ['SILENT SECOND', 'bool']]],
+    // (Down Payment Assistance products only)
+    ['Down Payment Assistance', [['SECOND LOAN ADJUSTABLE BY CLIENT', 'bool'], ['SECOND LOAN LTV MAX', 'rate']]],
     ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
     ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'],
       ['LENDER CREDIT % OF PURCHASE PRICE', 'rate'], ['LENDER CREDIT % OF LOAN AMOUNT', 'rate'], ['LENDER CREDIT FLAT $', 'cents'],
@@ -2988,6 +2994,20 @@ async function myPagesData_(id, account) {
   return result;
 }
 
+// A loan product's answers, checked: { clean } or { error, field }. Every answer is required (the extra text columns
+// aren't), except that a Down Payment Assistance product needs only LOAN_DPA_FIELDS (the rest are saved blank).
+function cleanLoanProduct_(fields, submitted) {
+  const dpa = String(submitted['PRODUCT TYPE'] || '').trim().toLowerCase() === LOAN_DPA.toLowerCase();
+  const clean = {};
+  for (const f of fields) {
+    const asked = !dpa || LOAN_DPA_FIELDS.includes(f.col);
+    const value = asked ? cleanSetting_(f.kind, submitted[f.col]) : '';
+    if (value === null || (value === '' && asked && f.section !== 'Other')) return { error: 'invalid_value', field: f.col };
+    clean[f.col] = value;
+  }
+  return { clean };
+}
+
 // The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
 function loanProductFields_(headers) {
   const known = { 'LENDER NAME': true };
@@ -3021,14 +3041,9 @@ async function saveLoanProduct_(id, account, body) {
   const bank = String(account['LENDER BANK'] || '').trim();
   if (!rowNumber && !bank) return { ok: false, error: 'no_lender_bank' };
   return withLock('loanProducts', async () => {
-    const fields = loanProductFields_(await columns('loanProducts'));
-    const clean = {};
-    for (let i = 0; i < fields.length; i++) {
-      const f = fields[i];
-      const value = cleanSetting_(f.kind, submitted[f.col]);
-      if (value === null || (value === '' && f.section !== 'Other')) return { ok: false, error: 'invalid_value', field: f.col };
-      clean[f.col] = value;
-    }
+    const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
+    if (checked.error) return { ok: false, error: checked.error, field: checked.field };
+    const clean = checked.clean;
     const mine = await lenderLoanProducts_(id);
     const target = rowNumber ? mine.find(p => p.row === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };
@@ -3138,13 +3153,9 @@ async function saveLenderProduct_(account, body) {
   const rowNumber = body.row ? Number(body.row) : 0;
   const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
   return withLock('loanProducts', async () => {
-    const fields = loanProductFields_(await columns('loanProducts'));
-    const clean = {};
-    for (const f of fields) {
-      const value = cleanSetting_(f.kind, submitted[f.col]);
-      if (value === null || (value === '' && f.section !== 'Other')) return { ok: false, error: 'invalid_value', field: f.col };
-      clean[f.col] = value;
-    }
+    const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
+    if (checked.error) return { ok: false, error: checked.error, field: checked.field };
+    const clean = checked.clean;
     clean['LENDER NAME'] = lenderName;
     const all = await rows('loanProducts');
     const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
