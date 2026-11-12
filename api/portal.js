@@ -88,6 +88,20 @@ function cleanSetting_(kind, value) {
   // A document ID, or a list of names joined by " | "
   if (kind === 'id') return /^[A-Za-z0-9_-]{1,64}$/.test(raw) ? raw : null;
   if (kind === 'list') return cleanText_(raw, 1000);
+  // A loan product's added lender fees: JSON [{ NAME, AMOUNT }] (up to 30, each named, $0 to $100,000,000)
+  if (kind === 'fees') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(list) || list.length > 30) return null;
+    const out = [];
+    for (const f of list) {
+      const name = cleanText_(f && f.NAME, 100);
+      const amount = Number(f && f.AMOUNT);
+      if (!name || !isFinite(amount) || amount < 0 || amount > 100000000) return null;
+      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100 });
+    }
+    return JSON.stringify(out);
+  }
   if (kind === 'date') {
     const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     return m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31 ? (+m[1]) + '/' + (+m[2]) + '/' + m[3] : null;
@@ -123,8 +137,9 @@ const LOAN_PRODUCT_FIELDS = (function () {
     ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'],
       ['LENDER CREDIT % OF PURCHASE PRICE', 'rate'], ['LENDER CREDIT % OF LOAN AMOUNT', 'rate'], ['LENDER CREDIT FLAT $', 'cents'],
       ['ADDITIONAL LENDER CREDIT', 'cents']]],
+    // The standard fees, then any others (OTHER LENDER FEES: JSON [{ NAME, AMOUNT }]; "[]" for none)
     ['Lender Fees', [['APPRAISAL FEE AT CLOSING', 'cents'], ['APPRAISAL DEPOSIT', 'cents'], ['APPRASIAL MANAGEMENT FEE', 'cents'],
-      ['CREDIT REPORT FEE', 'cents'], ['FLOOD CERT FEE', 'cents'], ['TAX CERT FEE', 'cents'], ['OTHER FEE', 'cents']]],
+      ['CREDIT REPORT FEE', 'cents'], ['FLOOD CERT FEE', 'cents'], ['TAX CERT FEE', 'cents'], ['ATTORNEY REVIEW FEE', 'cents'], ['OTHER LENDER FEES', 'fees']]],
     ['Mortgage Insurance', [['PREPAID MORTGAGE INSURANCE RATE 0%-5% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 5%-10% DOWN', 'rate'],
       ['PREPAID MORTGAGE INSURANCE RATE 10%-20% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 20%+ DOWN', 'rate'],
       ['PMI LTV THRESHOLD', 'rate'], ['LOAN PRODUCT PMI RATE', 'rate']]],
@@ -3010,7 +3025,7 @@ function cleanLoanProduct_(fields, submitted) {
 
 // The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
 function loanProductFields_(headers) {
-  const known = { 'LENDER NAME': true };
+  const known = { 'LENDER NAME': true, 'OTHER FEE': true };
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   return LOAN_PRODUCT_FIELDS.concat(headers
     .map(h => String(h).trim().toUpperCase())

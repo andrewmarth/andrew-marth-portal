@@ -1420,6 +1420,7 @@
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
         import { saleFees, BUYER_TYPES, pickableTitleDiscounts, DISCOUNT_APPLIES } from '/title-fees.js';
+        import { lenderFees } from '/loan-products.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1684,6 +1685,9 @@
                 { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')) },
                 { section: 'Loan', cost: true, label: 'Flood Certification Fee', amount: -num(col(product, 'FLOOD CERT FEE')) },
                 { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')) },
+                { section: 'Loan', cost: true, label: 'Attorney Review Fee', amount: -num(col(product, 'ATTORNEY REVIEW FEE')) },
+                // Any other fees the lender charges (the loan product's added fees)
+                ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -f.amount })),
                 { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')) },
 
                 // Escrow and title: the buyer's share from the title company (or, without one, the old rates)

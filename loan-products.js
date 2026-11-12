@@ -69,8 +69,25 @@ const CSS = `
 .loan-dialog .lp-option-sub { font-size: 0.84rem; opacity: 0.75; }
 .loan-dialog .lp-check { margin-left: auto; flex: 0 0 auto; width: 18px; height: 18px; opacity: 0; }
 .loan-dialog .lp-option.is-picked .lp-check { opacity: 1; }
+/* Lender fees: the standard ones (a set name and a price), then any others (a name, a price and a remove button) */
+.loan-dialog .lp-fees-help { margin: -2px 0 0 6px; font-size: 0.86rem; opacity: 0.75; }
+.loan-dialog .lp-fees { display: grid; gap: 8px; }
+.loan-dialog .lp-fee-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 40px; gap: 8px; align-items: center; }
+.loan-dialog .lp-fee-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
+.loan-dialog .lp-fee-row.is-std { padding: 2px 4px; border-radius: 14px; }
+.loan-dialog .lp-fee-name { font-size: 0.95rem; font-weight: bold; padding-left: 6px; }
+.loan-dialog .lp-fee-row .money-wrap input { min-height: 46px; }
+.loan-dialog .lp-fee-remove { width: 36px; height: 36px; border: none; border-radius: 50%; background: #f2ede6; color: var(--brown); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.loan-dialog .lp-fee-remove svg { width: 15px; height: 15px; }
+.loan-dialog .lp-fees-sub { margin: 10px 0 0 6px; font-size: 0.9rem; font-weight: bold; }
+.loan-dialog .lp-fees-extra:empty { display: none; }
+.loan-dialog .lp-add-fee { justify-self: start; margin-top: 2px; padding: 6px 4px; border: none; background: none; font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.loan-dialog .lp-fee-row .is-invalid { border-color: var(--rust); background: #fdf2f2; }
 @media (max-width: 600px) {
     .loan-dialog .gate-body { grid-template-columns: 1fr; }
+    /* Phones: an added fee's name on its own line, then its price and remove button */
+    .loan-dialog .lp-fee-row.is-extra { grid-template-columns: minmax(0, 1fr) 40px; }
+    .loan-dialog .lp-fee-row.is-extra [data-fee-k="name"] { grid-column: 1 / -1; }
 }
 `;
 
@@ -103,6 +120,16 @@ const LABEL_RULES = [
     // A second loan the client can't adjust is a set LTV, not a maximum
     { col: 'SECOND LOAN LTV MAX', when: ['SECOND LOAN ADJUSTABLE BY CLIENT', 'FALSE'], label: 'Second Loan LTV' },
 ];
+
+// A product's OTHER LENDER FEES (JSON: [{ NAME, AMOUNT }]) as [{ name, amount }]
+export function lenderFees(raw) {
+    try {
+        const list = JSON.parse(String(raw || '[]'));
+        return Array.isArray(list) ? list.map(f => ({ name: String((f && f.NAME) || '').trim(), amount: Number(f && f.AMOUNT) || 0 })).filter(f => f.name) : [];
+    } catch (e) {
+        return [];
+    }
+}
 
 const DTI = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
 const DESIGNATIONS = ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'];
@@ -148,7 +175,10 @@ const LAYOUT = [
             items: [{ col: 'LENDER CREDIT % OF PURCHASE PRICE' }, { col: 'LENDER CREDIT % OF LOAN AMOUNT' }, { col: 'LENDER CREDIT FLAT $' }, { col: 'ADDITIONAL LENDER CREDIT' }],
             isOn: anyAbove0(['LENDER CREDIT % OF PURCHASE PRICE', 'LENDER CREDIT % OF LOAN AMOUNT', 'LENDER CREDIT FLAT $', 'ADDITIONAL LENDER CREDIT']) },
     ] },
-    { section: 'Lender Fees', items: ['APPRAISAL FEE AT CLOSING', 'APPRAISAL DEPOSIT', 'APPRASIAL MANAGEMENT FEE', 'CREDIT REPORT FEE', 'FLOOD CERT FEE', 'TAX CERT FEE', 'OTHER FEE'].map(col => ({ col })) },
+    // Standard fees (every product has them; 0 counts) and any others the lender charges (OTHER LENDER FEES, a list)
+    { section: 'Lender Fees', items: [{ fees: {
+        standard: ['APPRAISAL FEE AT CLOSING', 'APPRAISAL DEPOSIT', 'APPRASIAL MANAGEMENT FEE', 'CREDIT REPORT FEE', 'FLOOD CERT FEE', 'TAX CERT FEE', 'ATTORNEY REVIEW FEE'],
+        col: 'OTHER LENDER FEES' } }] },
     { section: 'Mortgage Insurance', items: [
         { gate: 'prepaid', label: 'Is there prepaid mortgage insurance?',
             items: ['0%-5%', '5%-10%', '10%-20%', '20%+'].map(d => ({ col: 'PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN' })),
@@ -300,6 +330,12 @@ function build() {
         const used = {};
         const keep = items => items.map(it => {
             if (it.tiles) { const tiles = it.tiles.filter(t => kinds[t.col]); tiles.forEach(t => { used[t.col] = true; }); return tiles.length ? { tiles } : null; }
+            if (it.fees) {
+                const standard = it.fees.standard.filter(c => kinds[c]);
+                standard.forEach(c => { used[c] = true; });
+                used[it.fees.col] = true;
+                return standard.length || kinds[it.fees.col] ? { fees: { standard, col: kinds[it.fees.col] ? it.fees.col : null } } : null;
+            }
             if (it.gate) { if (it.col) used[it.col] = true; return { ...it, items: keep(it.items) }; }
             used[it.col] = true;
             return kinds[it.col] ? it : null;
@@ -314,6 +350,15 @@ function build() {
         return items.map(it => {
             const n = counter.n++;
             if (it.fixed) return '';
+            if (it.fees) {
+                return '<p class="lp-fees-help">Every product has the standard fees (0 if the lender doesn’t charge one). Add any other fee the lender charges. The buyer pays them at closing.</p>'
+                    + '<div class="lp-fees"><div class="lp-fee-row is-head"><span>Fee</span><span>Amount</span><span></span></div>'
+                    + it.fees.standard.map((c, i) => '<div class="lp-fee-row is-std field"><label class="lp-fee-name" for="lp-' + n + '-' + i + '">' + escapeHtml(labelFor(c, section)) + '</label>'
+                        + '<div class="money-wrap"><input id="lp-' + n + '-' + i + '" class="money" data-col="' + escapeHtml(c) + '" data-kind="cents" type="text" inputmode="decimal" autocomplete="off"></div><span></span></div>').join('')
+                    + (it.fees.col ? '<p class="lp-fees-sub">Other fees</p><div class="lp-fees-extra" data-fee-list></div>'
+                        + '<button type="button" class="lp-add-fee" data-add-fee>+ Add Fee</button>' : '')
+                    + '</div>';
+            }
             if (it.tiles) {
                 return '<p class="lp-tiles-help">Select all that are allowed.</p><div class="lp-tiles">' + it.tiles.map(t => '<div class="lp-tile">'
                     + '<input type="checkbox" id="lp-' + n + '-' + escapeHtml(t.col) + '" data-col="' + escapeHtml(t.col) + '" data-kind="tile">'
@@ -416,6 +461,24 @@ function build() {
         btn.innerHTML = '<span class="lp-pick-icon">' + (opt ? info.icon || EMPTY_ICON : EMPTY_ICON) + '</span><span class="lp-pick-text">' + escapeHtml(opt ? info.main || opt.text : 'Choose...') + '</span>';
         picker.querySelectorAll('.lp-option').forEach(o => { const on = o.dataset.value === select.value; o.classList.toggle('is-picked', on); o.setAttribute('aria-selected', String(on)); });
     }
+    // An added lender fee: its name, its amount and a remove button
+    const feeRow = (f = {}) => '<div class="lp-fee-row is-extra field"><input type="text" data-fee-k="name" maxlength="100" autocomplete="off" aria-label="Fee name" placeholder="Fee name" value="' + escapeHtml(f.name || '') + '">'
+        + '<div class="money-wrap"><input class="money" data-fee-k="amount" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount" value="' + escapeHtml(f.amount === undefined || f.amount === null || f.amount === '' ? '' : shown('cents', f.amount)) + '"></div>'
+        + '<button type="button" class="lp-fee-remove" data-remove-fee aria-label="Remove fee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>';
+    sectionsEl.addEventListener('click', e => {
+        if (e.target.closest('[data-add-fee]')) {
+            const list = sectionsEl.querySelector('[data-fee-list]');
+            list.insertAdjacentHTML('beforeend', feeRow());
+            list.lastElementChild.querySelector('input').focus();
+            return;
+        }
+        const remove = e.target.closest('[data-remove-fee]');
+        if (remove) remove.closest('.lp-fee-row').remove();
+    });
+    sectionsEl.addEventListener('input', e => {
+        if (e.target.matches('[data-fee-k="amount"]')) e.target.value = withCommas(decimalOnly(e.target.value, 2));
+        if (e.target.matches('[data-fee-k]')) e.target.classList.remove('is-invalid');
+    });
     // Closes an open picker when something else is clicked
     dialog.addEventListener('click', e => {
         if (!e.target.closest('.lp-picker')) sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => { p.classList.remove('is-open'); p.querySelector('.lp-picker-btn').setAttribute('aria-expanded', 'false'); });
@@ -465,6 +528,8 @@ function build() {
             else el.value = isNew && el.closest('.lp-stepper') ? ESCROW_DEFAULT : shown(kind, raw);
             if (el.closest('.lp-stepper')) syncStepper(el);
         });
+        const feeList = sectionsEl.querySelector('[data-fee-list]');
+        if (feeList) feeList.innerHTML = lenderFees(values['OTHER LENDER FEES']).map(feeRow).join('');
         const term = sectionsEl.querySelector('[data-term]');
         if (term) {
             const years = String(values['LOAN TERM'] || '').trim();
@@ -495,6 +560,26 @@ function build() {
         const walk = (items, active, off) => items.forEach(it => {
             if (it.fixed) { values[it.col] = it.fixed; return; }
             if (it.tiles) { it.tiles.forEach(t => { values[t.col] = sectionsEl.querySelector('[data-col="' + t.col + '"]').checked ? 'TRUE' : 'FALSE'; }); return; }
+            if (it.fees) {
+                it.fees.standard.forEach(c => {
+                    const el = sectionsEl.querySelector('[data-col="' + c + '"]');
+                    values[c] = active ? boxValue(el) : '0';
+                    if (active) need(el, values[c]);
+                });
+                if (it.fees.col) {
+                    const list = [];
+                    if (active) sectionsEl.querySelectorAll('[data-fee-list] .lp-fee-row').forEach(row => {
+                        const name = row.querySelector('[data-fee-k="name"]'), amount = row.querySelector('[data-fee-k="amount"]');
+                        const n = name.value.trim(), a = amount.value.trim().replace(/,/g, '');
+                        if (!n && !a) return;
+                        if (!n) need(name, '');
+                        if (a === '') need(amount, '');
+                        if (n && a !== '') list.push({ NAME: n, AMOUNT: Number(a) });
+                    });
+                    values[it.fees.col] = JSON.stringify(list);
+                }
+                return;
+            }
             if (it.gate) {
                 const on = active ? gateAnswer(it.gate) : false;
                 if (on === null) need(sectionsEl.querySelector('[data-gate="' + it.gate + '"]'), '');
@@ -519,7 +604,7 @@ function build() {
         });
         // A DPA product: everything regular is left blank
         const blanks = [];
-        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
@@ -570,6 +655,7 @@ function build() {
         message.textContent = '';
         const { values, missing } = read();
         if (missing) {
+            if (missing.matches('[data-fee-k]')) { problem(missing, missing.dataset.feeK === 'name' ? 'Please name the added fee (or remove it).' : 'Please enter the added fee’s amount (or remove it).'); return; }
             const field = missing.closest('.field');
             const name = field ? field.querySelector('label, .field-label').textContent : 'this question';
             problem(missing, 'Please answer "' + name + '".');
