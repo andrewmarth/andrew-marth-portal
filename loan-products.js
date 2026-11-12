@@ -59,6 +59,8 @@ const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
 const LAYOUT = [
     { section: 'Product', items: [
         { col: 'LOAN PRODUCT NAME' },
+        { col: 'PRODUCT TYPE' },
+        { col: 'RATE TYPE' },
         // (no Lender Name question: a product's lender is set by the API from the lender it's under)
         { col: 'LOAN TERM', label: 'Loan Term (Years)', input: 'term' },
     ] },
@@ -157,6 +159,11 @@ const yesNo = (name, attrs) => '<div class="type-picker yes-no" ' + attrs + '>'
 function question(item, kind, section, n) {
     const id = 'lp-' + n;
     const label = escapeHtml(item.label || labelFor(item.col, section));
+    // A list of choices (Product Type, Rate Type): a dropdown
+    if (Array.isArray(kind)) {
+        return '<div class="field"><label for="' + id + '">' + label + '</label><select id="' + id + '" data-col="' + escapeHtml(item.col) + '" data-kind="choice">'
+            + '<option value="">Choose...</option>' + kind.map(c => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join('') + '</select></div>';
+    }
     const attrs = 'id="' + id + '" data-col="' + escapeHtml(item.col) + '" data-kind="' + kind + '"';
     const box = (cls, mode) => '<input ' + attrs + ' class="' + cls + '" type="text" inputmode="' + mode + '" autocomplete="off">';
     const wrap = (cls, inner) => '<div class="' + cls + '">' + inner + '</div>';
@@ -316,6 +323,10 @@ function build() {
             const raw = cleared[col] ? '' : values[col];
             if (kind === 'tile') el.checked = isTrue(raw);
             else if (kind === 'bool') el.querySelectorAll('input').forEach(r => { r.checked = String(raw || '').trim().toUpperCase() === r.value; });
+            else if (kind === 'choice') {
+                const pick = [...el.options].find(o => o.value && o.value.toLowerCase() === String(raw || '').trim().toLowerCase());
+                el.value = pick ? pick.value : '';
+            }
             else el.value = isNew && el.closest('.lp-stepper') ? ESCROW_DEFAULT : shown(kind, raw);
             if (el.closest('.lp-stepper')) syncStepper(el);
         });

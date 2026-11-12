@@ -100,14 +100,17 @@ function cleanSetting_(kind, value) {
 }
 
 // LOAN_PRODUCTS columns a lender fills in from the home page's My Loan Products card, in the form's order and sections.
-// Kinds as for PAGE_SETTING_FIELDS (rate: a decimal like 0.03 for 3%), plus cents: dollars that may have cents.
+// Kinds as for PAGE_SETTING_FIELDS (rate: a decimal like 0.03 for 3%; a list: one of those choices), plus cents: dollars
+// that may have cents.
 // ACCOUNT ID is always the lender's own and LENDER NAME is set from the lender (never asked); any other column that isn't
 // listed here is asked as text under "Other".
 // The form (loan-products.js) lays these out with its own yes/no questions and fills in every column before saving.
+const LOAN_PRODUCT_TYPES = ['Conventional', 'FHA', 'VA', 'Jumbo', 'Non-Conforming'];
+const LOAN_RATE_TYPES = ['Fixed Rate', 'Adjustable Rate'];
 const LOAN_PRODUCT_FIELDS = (function () {
   const dti = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
   const sections = [
-    ['Product', [['LOAN PRODUCT NAME', 'text'], ['LOAN TERM', 'int']]],
+    ['Product', [['LOAN PRODUCT NAME', 'text'], ['PRODUCT TYPE', LOAN_PRODUCT_TYPES], ['RATE TYPE', LOAN_RATE_TYPES], ['LOAN TERM', 'int']]],
     ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
       ['INCOME LIMIT', 'money'], ['SECOND LOAN LTV MAX', 'rate'], ['SILENT SECOND', 'bool']]],
     ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
