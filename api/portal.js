@@ -102,6 +102,16 @@ function cleanSetting_(kind, value) {
     }
     return JSON.stringify(out);
   }
+  // A loan product's 27 quoted rates: JSON { QUOTES: [27 decimals, each over 0 and at most 100%] }. TODAY (today's interest
+  // rate when they were quoted) is set by stampRateQuotes_, not taken from the form.
+  if (kind === 'quotes') {
+    let v;
+    try { v = JSON.parse(raw); } catch (e) { return null; }
+    if (!v || !Array.isArray(v.QUOTES) || v.QUOTES.length !== 27) return null;
+    const quotes = v.QUOTES.map(Number);
+    if (quotes.some(q => !isFinite(q) || q <= 0 || q > 1)) return null;
+    return JSON.stringify({ QUOTES: quotes.map(q => Math.round(q * 1e6) / 1e6) });
+  }
   if (kind === 'date') {
     const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     return m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31 ? (+m[1]) + '/' + (+m[2]) + '/' + m[3] : null;
@@ -143,7 +153,9 @@ const LOAN_PRODUCT_FIELDS = (function () {
     ['Mortgage Insurance', [['PREPAID MORTGAGE INSURANCE RATE 0%-5% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 5%-10% DOWN', 'rate'],
       ['PREPAID MORTGAGE INSURANCE RATE 10%-20% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 20%+ DOWN', 'rate'],
       ['PMI LTV THRESHOLD', 'rate'], ['LOAN PRODUCT PMI RATE', 'rate']]],
-    ['Rates', dti.map(s => ['PAR RATE CREDIT SCORE ' + s, 'rate']).concat([['POINT RATE BUYDOWN AMOUNT', 'rate']])],
+    // RATE QUOTES: the lender's 27 quoted rates (JSON { QUOTES, TODAY }; see /rate-markups.js). The old PAR RATE CREDIT
+    // SCORE columns are no longer asked (pages still use them for a product without quotes).
+    ['Rates', [['RATE QUOTES', 'quotes'], ['POINT RATE BUYDOWN AMOUNT', 'rate']]],
     ['Max DTI', dti.map(s => ['MAX DTI CREDIT SCORE ' + s, 'rate'])],
     ['Max DTI Housing Only', dti.map(s => ['MAX DTI HOUSING ONLY CREDIT SCORE ' + s, 'rate'])],
     ['Income Qualifying', [['SALARY QUALIFYING %', 'rate'], ['HOURLY QUALIFYING %', 'rate'], ['1099 QUALIFYING %', 'rate'],
@@ -2969,7 +2981,7 @@ async function myPagesData_(id, account) {
     });
     // "My Loan Products": this lender's LOAN_PRODUCTS rows and the questions the form asks
     result.myLoanProducts = await lenderLoanProducts_(id);
-    result.loanProductFields = loanProductFields_(await columns('loanProducts'));
+    result.loanProductFields = loanProductFields_(await columns('loanProducts'), await todayInterestRate_());
   }
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
@@ -3023,11 +3035,35 @@ function cleanLoanProduct_(fields, submitted) {
   return { clean };
 }
 
+// Today's interest rate (settings interestRate: TODAY INTEREST RATE, a decimal), or null
+async function todayInterestRate_() {
+  const r = (await rows('settings')).find(s => s._id === 'interestRate');
+  const n = r ? Number(r['TODAY INTEREST RATE']) : NaN;
+  return isFinite(n) && n > 0 ? n : null;
+}
+// Adds TODAY to a cleaned product's RATE QUOTES: the saved one when the quotes haven't changed (old: the saved RATE
+// QUOTES), else today's interest rate, so each quote's markup is measured against the rate on the day it was quoted
+async function stampRateQuotes_(clean, old) {
+  if (!clean['RATE QUOTES']) return null;
+  const v = JSON.parse(clean['RATE QUOTES']);
+  let before = null;
+  try { before = old ? JSON.parse(old) : null; } catch (e) { before = null; }
+  const same = before && Array.isArray(before.QUOTES) && before.QUOTES.length === 27 && isFinite(Number(before.TODAY)) && Number(before.TODAY) > 0
+    && before.QUOTES.every((q, i) => Math.abs(Number(q) - v.QUOTES[i]) < 1e-9);
+  const today = same ? Number(before.TODAY) : await todayInterestRate_();
+  if (!today) return 'no_today_rate';
+  clean['RATE QUOTES'] = JSON.stringify({ QUOTES: v.QUOTES, TODAY: today });
+  return null;
+}
+
 // The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
-function loanProductFields_(headers) {
+// (RATE QUOTES also carries today: today's interest rate, for the form's markup tables)
+function loanProductFields_(headers, today) {
   const known = { 'LENDER NAME': true, 'OTHER FEE': true };
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
-  return LOAN_PRODUCT_FIELDS.concat(headers
+  ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+']
+    .forEach(s => { known['PAR RATE CREDIT SCORE ' + s] = true; });
+  return LOAN_PRODUCT_FIELDS.map(f => (f.col === 'RATE QUOTES' ? Object.assign({ today }, f) : f)).concat(headers
     .map(h => String(h).trim().toUpperCase())
     .filter(h => h && h !== 'ACCOUNT ID' && !known[h])
     .map(h => ({ section: 'Other', col: h, kind: 'text' })));
@@ -3062,6 +3098,8 @@ async function saveLoanProduct_(id, account, body) {
     const mine = await lenderLoanProducts_(id);
     const target = rowNumber ? mine.find(p => p.row === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };
+    const stampError = await stampRateQuotes_(clean, target ? target.values['RATE QUOTES'] : null);
+    if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
     const name = String(clean['LOAN PRODUCT NAME']).toLowerCase();
     if (mine.some(p => p.row !== rowNumber && String(p.values['LOAN PRODUCT NAME'] || '').trim().toLowerCase() === name)) {
@@ -3111,7 +3149,7 @@ async function lenders_(account) {
   const lenderAccounts = (await rows('accounts')).filter(r => hasRole_(r, 'LENDER') && phoneToId_(r['ACCOUNT ID']))
     .map(r => ({ id: phoneToId_(r['ACCOUNT ID']), name: fullName_(r) || phoneToId_(r['ACCOUNT ID']), bank: String(r['LENDER BANK'] || '').trim() }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { ok: true, lenders: await lenderList_(), lenderAccounts, loanProductFields: loanProductFields_(await columns('loanProducts')) };
+  return { ok: true, lenders: await lenderList_(), lenderAccounts, loanProductFields: loanProductFields_(await columns('loanProducts'), await todayInterestRate_()) };
 }
 // Adds a lender or renames one, and sets which lender accounts are linked to it. body: { id, oldName, name, accounts: [id] }.
 // A rename moves its loan products (LENDER NAME) and linked accounts (LENDER BANK) to the new name. An account linked
@@ -3175,6 +3213,8 @@ async function saveLenderProduct_(account, body) {
     const all = await rows('loanProducts');
     const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };
+    const stampError = await stampRateQuotes_(clean, target ? target['RATE QUOTES'] : null);
+    if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
     const lender = lenderKey_(clean['LENDER NAME']), name = lenderKey_(clean['LOAN PRODUCT NAME']);
     if (all.some(r => r !== target && lenderKey_(r['LENDER NAME']) === lender && lenderKey_(r['LOAN PRODUCT NAME']) === name)) {

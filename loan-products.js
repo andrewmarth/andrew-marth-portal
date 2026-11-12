@@ -4,6 +4,7 @@
 // Columns the API sends that LAYOUT doesn't mention are asked under "Other".
 // Uses the same pop-up styles as the income editor: a card on wide screens, a swipe-up sheet on phones.
 import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
+import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel } from '/rate-markups.js';
 
 const CSS = `
 .loan-dialog .income-section .type-fields { margin-top: 2px; }
@@ -83,7 +84,58 @@ const CSS = `
 .loan-dialog .lp-fees-extra:empty { display: none; }
 .loan-dialog .lp-add-fee { justify-self: start; margin-top: 2px; padding: 6px 4px; border: none; background: none; font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .loan-dialog .lp-fee-row .is-invalid { border-color: var(--rust); background: #fdf2f2; }
+/* Rates: the lender's 27 quotes (one table per credit score: DTI down, LTV across), then the markups they work out to */
+.loan-dialog .lp-quotes { display: grid; gap: 12px; }
+.loan-dialog .lp-quote-block { padding: 10px 8px 6px; border: 2px solid rgba(14, 42, 59, 0.18); border-radius: 18px; background: #faf8f5; }
+.loan-dialog .lp-quote-title { margin: 0 0 4px 8px; font-size: 0.95rem; font-weight: bold; }
+.loan-dialog .lp-quote-grid { width: 100%; border-collapse: separate; border-spacing: 5px; table-layout: fixed; }
+.loan-dialog .lp-quote-grid th { font-size: 0.8rem; font-weight: bold; opacity: 0.75; text-align: center; padding: 0 2px; }
+.loan-dialog .lp-quote-grid th[scope="row"] { width: 62px; text-align: left; padding-left: 4px; }
+.loan-dialog .lp-quote-grid .pct-wrap::after { right: 12px; }
+.loan-dialog .field .lp-quote-grid input { min-height: 46px; padding: 8px 24px 8px 12px; font-size: 1rem; border-radius: 14px; }
+.loan-dialog .lp-quote-help strong { white-space: nowrap; }
+.loan-dialog .lp-markups { display: grid; gap: 12px; margin-top: 4px; }
+.loan-dialog .lp-markups-empty { margin: 0 0 0 6px; font-size: 0.88rem; opacity: 0.7; }
+.loan-dialog .lp-markups-head { margin: 4px 0 0 6px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+.loan-dialog .lp-markup-sum { margin: 0; padding: 10px 14px; border-radius: 16px; background: #f2ede6; font-size: 0.9rem; line-height: 1.45; }
+.loan-dialog .lp-markup-sum b { white-space: nowrap; }
+/* Each metric: its chart (the curve) beside its table */
+.loan-dialog .lp-metrics { display: grid; gap: 12px; }
+.loan-dialog .lp-markup-table { border: 2px solid var(--navy); border-radius: 16px; overflow: hidden; background: var(--white); }
+.loan-dialog .lp-markup-table h4 { margin: 0; padding: 8px 10px; background: var(--olive); color: var(--cream); font-size: 0.9rem; text-align: center; }
+.loan-dialog .lp-metric-body { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); }
+.loan-dialog .lp-chart { position: relative; padding: 10px 6px 4px 2px; border-right: 1px solid rgba(14, 42, 59, 0.12); outline: none; touch-action: pan-y; cursor: crosshair; }
+.loan-dialog .lp-chart:focus-visible { box-shadow: inset 0 0 0 3px var(--gold); }
+.loan-dialog .lp-chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: inherit; }
+.loan-dialog .lp-chart text { font-size: 11px; fill: rgba(79, 45, 44, 0.75); }
+.loan-dialog .lp-tip { position: absolute; top: 8px; z-index: 2; display: grid; gap: 1px; padding: 5px 10px; border: 1.5px solid var(--navy); border-radius: 10px; background: var(--white); box-shadow: 2px 2px 0 var(--navy); font-size: 0.78rem; line-height: 1.25; white-space: nowrap; pointer-events: none; }
+.loan-dialog .lp-tip[hidden] { display: none; }
+.loan-dialog .lp-tip b { font-size: 0.95rem; color: var(--brown); font-variant-numeric: tabular-nums; }
+.loan-dialog .lp-tip span { color: rgba(79, 45, 44, 0.75); }
+.loan-dialog .lp-mt-scroll { max-height: 236px; overflow-y: auto; }
+.loan-dialog .lp-markup-table tr.is-hover td { background: rgba(166, 90, 53, 0.16); }
+.loan-dialog .lp-markup-table table { width: 100%; border-collapse: collapse; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+.loan-dialog .lp-markup-table th { position: sticky; top: 0; background: #ece5db; padding: 5px 8px; font-size: 0.76rem; text-align: left; }
+.loan-dialog .lp-markup-table th:last-child, .loan-dialog .lp-markup-table td:last-child { text-align: right; }
+.loan-dialog .lp-markup-table td { padding: 4px 8px; border-top: 1px solid rgba(14, 42, 59, 0.08); }
+.loan-dialog .lp-markup-table tr.is-quoted td { font-weight: bold; background: rgba(192, 144, 80, 0.16); }
+.loan-dialog .lp-markup-table tr.is-estimated td { color: rgba(78, 81, 62, 0.7); font-style: italic; }
+.loan-dialog .lp-markup-key { margin: 0 0 0 6px; font-size: 0.8rem; opacity: 0.75; }
+.loan-dialog .lp-key-line { display: inline-block; width: 18px; height: 0; margin: 0 3px 3px 0; vertical-align: middle; border-top: 2px solid #a65a35; }
+.loan-dialog .lp-key-line.is-dashed { border-top-style: dashed; }
+.loan-dialog .lp-key-band { display: inline-block; width: 12px; height: 10px; margin: 0 3px 1px 0; vertical-align: middle; border-radius: 2px; background: rgba(192, 144, 80, 0.28); }
+.loan-dialog .lp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 600px) {
+    .loan-dialog .lp-metric-body { grid-template-columns: 1fr; }
+    .loan-dialog .lp-chart { border-right: none; border-bottom: 1px solid rgba(14, 42, 59, 0.12); }
+    .loan-dialog .lp-mt-scroll { max-height: 220px; }
+    /* Room for a rate like 7.875 in each quote box */
+    .loan-dialog .lp-quote-block { padding: 8px 2px 4px; }
+    .loan-dialog .lp-quote-grid { border-spacing: 3px; }
+    .loan-dialog .lp-quote-grid th[scope="row"] { width: 38px; padding-left: 4px; font-size: 0.74rem; }
+    .loan-dialog .lp-quote-grid th { font-size: 0.74rem; }
+    .loan-dialog .field .lp-quote-grid input { padding: 8px 17px 8px 7px; font-size: 0.95rem; border-radius: 12px; }
+    .loan-dialog .lp-quote-grid .pct-wrap::after { right: 6px; font-size: 0.85rem; }
     .loan-dialog .gate-body { grid-template-columns: 1fr; }
     /* Phones: an added fee's name on its own line, then its price and remove button */
     .loan-dialog .lp-fee-row.is-extra { grid-template-columns: minmax(0, 1fr) 40px; }
@@ -185,7 +237,8 @@ const LAYOUT = [
             isOn: anyAbove0(['0%-5%', '5%-10%', '10%-20%', '20%+'].map(d => 'PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN')) },
         { col: 'PMI LTV THRESHOLD' }, { col: 'LOAN PRODUCT PMI RATE' },
     ] },
-    { section: 'Rates', items: DTI.map(s => ({ col: 'PAR RATE CREDIT SCORE ' + s })).concat([{ col: 'POINT RATE BUYDOWN AMOUNT' }]) },
+    // The lender's 27 quoted rates (RATE QUOTES) and the markups they work out to (see /rate-markups.js)
+    { section: 'Rates', items: [{ quotes: 'RATE QUOTES' }, { col: 'POINT RATE BUYDOWN AMOUNT' }] },
     { section: 'Max DTI', items: DTI.map(s => ({ col: 'MAX DTI CREDIT SCORE ' + s })) },
     // No separate housing-only DTI: each housing-only column gets the matching Max DTI answer
     { section: 'Max DTI Housing Only', items: [
@@ -336,6 +389,7 @@ function build() {
                 used[it.fees.col] = true;
                 return standard.length || kinds[it.fees.col] ? { fees: { standard, col: kinds[it.fees.col] ? it.fees.col : null } } : null;
             }
+            if (it.quotes) { used[it.quotes] = true; return kinds[it.quotes] ? it : null; }
             if (it.gate) { if (it.col) used[it.col] = true; return { ...it, items: keep(it.items) }; }
             used[it.col] = true;
             return kinds[it.col] ? it : null;
@@ -350,6 +404,7 @@ function build() {
         return items.map(it => {
             const n = counter.n++;
             if (it.fixed) return '';
+            if (it.quotes) return quotesHtml();
             if (it.fees) {
                 return '<p class="lp-fees-help">Every product has the standard fees (0 if the lender doesn’t charge one). Add any other fee the lender charges. The buyer pays them at closing.</p>'
                     + '<div class="lp-fees"><div class="lp-fee-row is-head"><span>Fee</span><span>Amount</span><span></span></div>'
@@ -476,6 +531,7 @@ function build() {
         if (remove) remove.closest('.lp-fee-row').remove();
     });
     sectionsEl.addEventListener('input', e => {
+        if (e.target.matches('[data-quote]')) { e.target.value = decimalOnly(e.target.value, 4); e.target.classList.remove('is-invalid'); showMarkups(); }
         if (e.target.matches('[data-fee-k="amount"]')) e.target.value = withCommas(decimalOnly(e.target.value, 2));
         if (e.target.matches('[data-fee-k]')) e.target.classList.remove('is-invalid');
     });
@@ -483,6 +539,165 @@ function build() {
     dialog.addEventListener('click', e => {
         if (!e.target.closest('.lp-picker')) sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => { p.classList.remove('is-open'); p.querySelector('.lp-picker-btn').setAttribute('aria-expanded', 'false'); });
     });
+
+    // Rates: the 27 quote boxes, one table per credit score (debt-to-income down the side, loan-to-value across)
+    const pctText = v => String(Math.round(v * 100)) + '%';
+    const quoteLabel = (c, d, l) => QUOTE_CREDIT[c] + ' credit score, ' + pctText(QUOTE_DTI[d]) + ' DTI, ' + pctText(QUOTE_LTV[l]) + ' LTV';
+    function quotesHtml() {
+        return '<p class="lp-fees-help lp-quote-help">Quote the interest rate (no points bought) for each scenario. Today’s interest rate is <strong data-today>not set</strong>; each quote’s markup is how far it is above (or below) it.</p>'
+            + '<div class="field lp-quotes">' + QUOTE_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
+                + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
+                + QUOTE_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
+                + QUOTE_DTI.map((d, di) => '<tr><th scope="row">' + pctText(d) + ' DTI</th>' + QUOTE_LTV.map((l, li) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-quote="'
+                    + quoteIndex(ci, di, li) + '" aria-label="' + escapeHtml(quoteLabel(ci, di, li)) + '"></div></td>').join('') + '</tr>').join('')
+                + '</tbody></table></div>').join('') + '</div>'
+            + '<div class="lp-markups" data-markups></div>';
+    }
+    let savedQuotes = null;
+    const quoteBoxes = () => [...sectionsEl.querySelectorAll('[data-quote]')].sort((a, b) => a.dataset.quote - b.dataset.quote);
+    const quotesField = () => (ctx && ctx.fields || []).find(f => f.col === 'RATE QUOTES');
+    const fieldToday = () => { const f = quotesField(); return f && Number(f.today) > 0 ? Number(f.today) : null; };
+    // The 27 quotes as decimals, or null while any is blank or not over 0
+    function quotesNow() {
+        const boxes = quoteBoxes();
+        if (boxes.length !== 27 || boxes.some(b => b.value.trim() === '')) return null;
+        const list = boxes.map(b => Number(b.value.trim()) / 100);
+        return list.every(q => isFinite(q) && q > 0) ? list : null;
+    }
+    // Today's rate the markups are measured from: the saved one while the quotes are unchanged, else today's
+    function todayFor(quotes) {
+        const same = savedQuotes && savedQuotes.today !== null && (!quotes || savedQuotes.quotes.every((q, i) => Math.abs(q - quotes[i]) < 1e-9));
+        return same ? { rate: savedQuotes.today, saved: true } : { rate: fieldToday(), saved: false };
+    }
+    const markText = v => { const r = Math.round(v * 1e5) / 1e3; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(3) + '%'; };
+    const rateText = v => String(Number((v * 100).toFixed(4))) + '%';
+    // The starting markup and the three markup tables (credit score 850 to 300, DTI 5% to 70%, LTV 5% to 100%)
+    function showMarkups() {
+        const el = sectionsEl.querySelector('[data-markups]');
+        if (!el) return;
+        const quotes = quotesNow();
+        const today = todayFor(quotes);
+        const todayBox = sectionsEl.querySelector('[data-today]');
+        if (todayBox) todayBox.textContent = today.rate ? rateText(today.rate) + (today.saved ? ' (when these were quoted)' : '') : 'not set';
+        if (!quotes) { el.innerHTML = '<p class="lp-markups-empty">Fill in all 27 quotes to see the rate markups.</p>'; return; }
+        if (!today.rate) { el.innerHTML = '<p class="lp-markups-empty">Today’s interest rate isn’t set, so the markups can’t be worked out yet.</p>'; return; }
+        const m = markupModel(quotes, today.rate);
+        const metrics = [
+            { key: 'credit', title: 'Credit Score', head: 'Score', rows: m.tables.credit, fn: m.credit, quoted: QUOTE_CREDIT, label: v => String(v), tip: v => v + ' credit score', ticks: [300, 400, 500, 600, 700, 800], tick: v => String(v) },
+            { key: 'dti', title: 'Debt-to-Income', head: 'DTI', rows: m.tables.dti, fn: m.dti, quoted: QUOTE_DTI, label: pctText, tip: v => pctText(v) + ' DTI', ticks: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], tick: pctText },
+            { key: 'ltv', title: 'Loan-to-Value', head: 'LTV', rows: m.tables.ltv, fn: m.ltv, quoted: QUOTE_LTV, label: pctText, tip: v => pctText(v) + ' LTV', ticks: [0.2, 0.4, 0.6, 0.8, 1], tick: pctText },
+        ];
+        const table = mt => '<div class="lp-mt-scroll"><table><thead><tr><th scope="col">' + mt.head + '</th><th scope="col">Markup</th></tr></thead><tbody>'
+            + mt.rows.map(r => '<tr class="is-' + r.place + '" data-v="' + r.value + '"><td>' + mt.label(r.value) + '</td><td>' + markText(r.markup) + '</td></tr>').join('') + '</tbody></table></div>';
+        el.innerHTML = '<p class="lp-markups-head">Rate Markups</p>'
+            + '<p class="lp-markup-sum">Starting markup (800 credit score, 20% DTI, 50% LTV): <b>' + markText(m.start) + '</b>. A buyer’s rate is today’s interest rate + the starting markup + the three markups below'
+            + (m.worstMiss >= 0.00005 ? '; that comes within <b>' + (Math.round(m.worstMiss * 1e5) / 1e3).toFixed(3) + '%</b> of every quote.' : ', matching every quote.') + '</p>'
+            + '<div class="lp-metrics">' + metrics.map(mt => '<div class="lp-markup-table" data-metric="' + mt.key + '"><h4>' + mt.title + '</h4><div class="lp-metric-body">'
+                + markupChart(mt) + table(mt) + '</div></div>').join('') + '</div>'
+            + '<p class="lp-markup-key"><span class="lp-key-band"></span>Shaded: the quoted range, where the curve passes through the quoted levels (the dots and <b>bold</b> rows). '
+            + '<span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past the quotes. The curve flattens out on one side and keeps bending on the other.</p>';
+        metrics.forEach(mt => wireChart(el.querySelector('[data-metric="' + mt.key + '"]'), mt));
+    }
+
+    // A markup curve as an SVG line chart: the curve (solid across the quoted range, dashed past it), a dot at each quoted
+    // level, the quoted range shaded, and a hover / arrow-key readout that snaps to the table's rows
+    const CH = { w: 340, h: 210, l: 46, r: 12, t: 10, b: 26, line: '#a65a35' };
+    function chartScales(mt) {
+        const xs = mt.rows.map(r => r.value);
+        const xMin = Math.min(...xs), xMax = Math.max(...xs);
+        const samples = Array.from({ length: 161 }, (_, i) => { const x = xMin + (xMax - xMin) * i / 160; return [x, mt.fn(x)]; });
+        let yMin = Math.min(0, ...samples.map(s => s[1])), yMax = Math.max(0, ...samples.map(s => s[1]));
+        if (yMax - yMin < 1e-5) { yMin -= 0.0005; yMax += 0.0005; }
+        // A little room above and below the curve, and clean tick steps inside it (in decimals: 0.0025 is 0.25%)
+        const pad = (yMax - yMin) * 0.06;
+        yMin -= pad; yMax += pad;
+        const rough = (yMax - yMin) / 4;
+        const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+        const step = [1, 2, 2.5, 5, 10].map(f => f * pow).find(s => s >= rough);
+        const pw = CH.w - CH.l - CH.r, ph = CH.h - CH.t - CH.b;
+        return { xMin, xMax, yMin, yMax, step, samples,
+            x: v => CH.l + (v - xMin) / (xMax - xMin) * pw, y: v => CH.t + (yMax - v) / (yMax - yMin) * ph };
+    }
+    function markupChart(mt) {
+        const s = chartScales(mt);
+        const qMin = Math.min(...mt.quoted), qMax = Math.max(...mt.quoted);
+        const dec = s.step * 100 >= 1 ? 0 : s.step * 100 >= 0.1 ? (Math.round(s.step * 1000) % 10 ? 2 : 1) : 2;
+        const yLabel = v => { const p = Math.round(v * 1e6) / 1e4; return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(dec) + '%'; };
+        const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + s.x(p[0]).toFixed(1) + ' ' + s.y(p[1]).toFixed(1)).join('');
+        // The curve in three pieces: below the quoted range, across it, above it (each sampled finely, sharing their ends)
+        const piece = (from, to) => { const pts = s.samples.filter(p => p[0] >= from && p[0] <= to); pts.unshift([from, mt.fn(from)]); pts.push([to, mt.fn(to)]); return pts; };
+        const parts = [[s.xMin, qMin, true], [qMin, qMax, false], [qMax, s.xMax, true]].filter(p => p[1] > p[0]);
+        let grid = '';
+        for (let v = Math.ceil(s.yMin / s.step - 1e-9) * s.step; v <= s.yMax + 1e-12; v += s.step) {
+            const y = s.y(v).toFixed(1), zero = Math.abs(v) < s.step / 2;
+            grid += '<line x1="' + CH.l + '" x2="' + (CH.w - CH.r) + '" y1="' + y + '" y2="' + y + '" stroke="' + (zero ? 'rgba(14,42,59,0.4)' : 'rgba(14,42,59,0.09)') + '" stroke-width="1"/>'
+                + '<text x="' + (CH.l - 6) + '" y="' + y + '" text-anchor="end" dominant-baseline="middle">' + yLabel(zero ? 0 : v) + '</text>';
+        }
+        const xTicks = mt.ticks.map(v => '<text x="' + s.x(v).toFixed(1) + '" y="' + (CH.h - 6) + '" text-anchor="middle">' + escapeHtml(mt.tick(v)) + '</text>').join('');
+        const top = mt.rows.reduce((a, r) => (Math.abs(r.markup) > Math.abs(a.markup) ? r : a), mt.rows[0]);
+        const label = mt.title + ' markup chart: ' + mt.quoted.map(q => mt.tip(q) + ' ' + markText(mt.fn(q))).join(', ') + '; ' + mt.tip(top.value) + ' ' + markText(top.markup) + ' (estimated). The table beside it lists every value.';
+        return '<div class="lp-chart" tabindex="0" role="img" aria-label="' + escapeHtml(label) + '"><svg viewBox="0 0 ' + CH.w + ' ' + CH.h + '" aria-hidden="true">'
+            + '<rect x="' + s.x(qMin).toFixed(1) + '" y="' + CH.t + '" width="' + (s.x(qMax) - s.x(qMin)).toFixed(1) + '" height="' + (CH.h - CH.t - CH.b) + '" fill="rgba(192,144,80,0.16)"/>'
+            + grid + xTicks
+            + parts.map(([a, b, dashed]) => '<path d="' + path(piece(a, b)) + '" fill="none" stroke="' + CH.line + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' + (dashed ? ' stroke-dasharray="5 4"' : '') + '/>').join('')
+            + mt.quoted.map(q => '<circle cx="' + s.x(q).toFixed(1) + '" cy="' + s.y(mt.fn(q)).toFixed(1) + '" r="4.5" fill="' + CH.line + '" stroke="#fff" stroke-width="2"/>').join('')
+            + '<g data-hover style="display: none"><line data-cross y1="' + CH.t + '" y2="' + (CH.h - CH.b) + '" stroke="rgba(14,42,59,0.45)" stroke-width="1"/><circle data-dot r="5" fill="#fff" stroke="' + CH.line + '" stroke-width="2.5"/></g>'
+            + '</svg><div class="lp-tip" hidden><b data-tip-v></b><span data-tip-k></span></div></div>';
+    }
+    // Hover, touch and arrow keys: a crosshair on the nearest table row, its value in a tooltip, and that row highlighted
+    function wireChart(card, mt) {
+        const chart = card.querySelector('.lp-chart');
+        const svg = chart.querySelector('svg');
+        const s = chartScales(mt);
+        const rows = mt.rows.slice().sort((a, b) => a.value - b.value);
+        const hover = svg.querySelector('[data-hover]'), cross = svg.querySelector('[data-cross]'), dot = svg.querySelector('[data-dot]');
+        const tip = chart.querySelector('.lp-tip'), scroller = card.querySelector('.lp-mt-scroll');
+        let at = -1;
+        const show = i => {
+            at = Math.max(0, Math.min(rows.length - 1, i));
+            const r = rows[at];
+            const px = s.x(r.value), py = s.y(r.markup);
+            hover.style.display = '';
+            cross.setAttribute('x1', px); cross.setAttribute('x2', px);
+            dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+            tip.querySelector('[data-tip-v]').textContent = markText(r.markup);
+            tip.querySelector('[data-tip-k]').textContent = mt.tip(r.value) + (r.place === 'estimated' ? ' · estimated' : r.place === 'quoted' ? ' · quoted' : '');
+            tip.hidden = false;
+            const box = svg.getBoundingClientRect(), outer = chart.getBoundingClientRect();
+            const left = px * box.width / CH.w + box.left - outer.left;
+            const right = left > chart.clientWidth * 0.55;
+            tip.style.left = right ? '' : (left + 12) + 'px';
+            tip.style.right = right ? (chart.clientWidth - left + 12) + 'px' : '';
+            card.querySelectorAll('tr.is-hover').forEach(t => t.classList.remove('is-hover'));
+            const row = card.querySelector('tr[data-v="' + r.value + '"]');
+            if (row) {
+                row.classList.add('is-hover');
+                const head = scroller.querySelector('thead').offsetHeight;
+                if (row.offsetTop - head < scroller.scrollTop) scroller.scrollTop = row.offsetTop - head;
+                else if (row.offsetTop + row.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = row.offsetTop + row.offsetHeight - scroller.clientHeight;
+            }
+        };
+        const hide = () => { at = -1; hover.style.display = 'none'; tip.hidden = true; card.querySelectorAll('tr.is-hover').forEach(t => t.classList.remove('is-hover')); };
+        const nearest = clientX => {
+            const box = svg.getBoundingClientRect();
+            const v = s.xMin + ((clientX - box.left) / box.width * CH.w - CH.l) / (CH.w - CH.l - CH.r) * (s.xMax - s.xMin);
+            let best = 0;
+            rows.forEach((r, i) => { if (Math.abs(r.value - v) < Math.abs(rows[best].value - v)) best = i; });
+            return best;
+        };
+        chart.addEventListener('pointermove', e => show(nearest(e.clientX)));
+        chart.addEventListener('pointerdown', e => show(nearest(e.clientX)));
+        chart.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && document.activeElement !== chart) hide(); });
+        chart.addEventListener('focus', () => { if (at < 0) show(rows.findIndex(r => r.place === 'quoted')); });
+        chart.addEventListener('blur', hide);
+        chart.addEventListener('keydown', e => {
+            const move = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+            if (move) { e.preventDefault(); show((at < 0 ? 0 : at) + move); }
+            if (e.key === 'Home') { e.preventDefault(); show(0); }
+            if (e.key === 'End') { e.preventDefault(); show(rows.length - 1); }
+            if (e.key === 'Escape' && at >= 0) { e.preventDefault(); e.stopPropagation(); hide(); }
+        });
+    }
 
     // No negative months: "−" stops at 0
     function syncStepper(input) {
@@ -528,6 +743,9 @@ function build() {
             else el.value = isNew && el.closest('.lp-stepper') ? ESCROW_DEFAULT : shown(kind, raw);
             if (el.closest('.lp-stepper')) syncStepper(el);
         });
+        savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
+        quoteBoxes().forEach((b, i) => { b.value = savedQuotes ? shown('rate', savedQuotes.quotes[i]) : ''; });
+        showMarkups();
         const feeList = sectionsEl.querySelector('[data-fee-list]');
         if (feeList) feeList.innerHTML = lenderFees(values['OTHER LENDER FEES']).map(feeRow).join('');
         const term = sectionsEl.querySelector('[data-term]');
@@ -560,6 +778,14 @@ function build() {
         const walk = (items, active, off) => items.forEach(it => {
             if (it.fixed) { values[it.col] = it.fixed; return; }
             if (it.tiles) { it.tiles.forEach(t => { values[t.col] = sectionsEl.querySelector('[data-col="' + t.col + '"]').checked ? 'TRUE' : 'FALSE'; }); return; }
+            if (it.quotes) {
+                values[it.quotes] = '';
+                if (!active) return;
+                const boxes = quoteBoxes();
+                boxes.forEach(b => need(b, b.value.trim()));
+                if (boxes.every(b => b.value.trim() !== '')) values[it.quotes] = JSON.stringify({ QUOTES: boxes.map(b => Number((Number(b.value.trim()) / 100).toPrecision(10))) });
+                return;
+            }
             if (it.fees) {
                 it.fees.standard.forEach(c => {
                     const el = sectionsEl.querySelector('[data-col="' + c + '"]');
@@ -604,7 +830,7 @@ function build() {
         });
         // A DPA product: everything regular is left blank
         const blanks = [];
-        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
@@ -616,7 +842,7 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
+    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
     form.addEventListener('input', clear);
     form.addEventListener('change', clear);
     form.addEventListener('change', syncLabels);
@@ -648,6 +874,7 @@ function build() {
         invalid_value: 'One of the answers isn’t valid. Percentages can’t be over 100.',
         not_found: 'That loan product couldn’t be found. Please refresh and try again.',
         no_lender_bank: 'Your account doesn’t have a lender bank on file yet. Please ask Andrew to add it.',
+        no_today_rate: 'Today’s interest rate isn’t set, so the quoted rates can’t be saved yet. Please ask Andrew to set it.',
     };
 
     form.addEventListener('submit', async e => {
@@ -655,6 +882,7 @@ function build() {
         message.textContent = '';
         const { values, missing } = read();
         if (missing) {
+            if (missing.matches('[data-quote]')) { problem(missing, 'Please quote a rate for every scenario (' + missing.getAttribute('aria-label') + ').'); return; }
             if (missing.matches('[data-fee-k]')) { problem(missing, missing.dataset.feeK === 'name' ? 'Please name the added fee (or remove it).' : 'Please enter the added fee’s amount (or remove it).'); return; }
             const field = missing.closest('.field');
             const name = field ? field.querySelector('label, .field-label').textContent : 'this question';
@@ -663,6 +891,8 @@ function build() {
         }
         const bad = [...sectionsEl.querySelectorAll('input[data-kind="rate"]')].find(el => el.offsetParent && Number(el.value) > 100);
         if (bad) { problem(bad, 'Percentages can’t be over 100.'); return; }
+        const badQuote = quoteBoxes().find(el => el.offsetParent && !(Number(el.value) > 0 && Number(el.value) <= 100));
+        if (badQuote) { problem(badQuote, 'Each quoted rate must be more than 0 and no more than 100 (' + badQuote.getAttribute('aria-label') + ').'); return; }
         saving = true;
         saveBtn.disabled = true;
         saveBtn.classList.add('is-loading');

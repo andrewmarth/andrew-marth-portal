@@ -11,7 +11,7 @@ You can edit it by hand in the Firebase console.
 | `accounts` | Each client and their roles (BUYER, SELLER, LENDER, ADMIN, CUM, ...) | the 10-digit phone number (ACCOUNT ID) |
 | `income` | Each client's jobs, debts and credit score | the 10-digit phone number (ACCOUNT ID) |
 | `pages` | Buyer Breakdowns, Seller Nets and Flips (PAGE TYPE says which) | the PAGE ID (e.g. `4274`) |
-| `loanProducts` | Lenders' loan products (ACCOUNT ID is the lender account that added it; LENDER NAME is its lender) | automatic |
+| `loanProducts` | Lenders' loan products (ACCOUNT ID is the lender account that added it; LENDER NAME is its lender; RATE QUOTES is the lender's 27 quoted rates as JSON { QUOTES, TODAY }, see /rate-markups.js) | automatic |
 | `lenders` | The admin Lenders card's lenders (NAME). A lender's loan products are those whose LENDER NAME is its name, and its linked lender accounts those whose LENDER BANK is its name | automatic |
 | `settings` | `interestRate`: TODAY INTEREST RATE | `interestRate` |
 | `homeInspectors`, `sewerInspectors`, `termiteInspectors` | Each inspector's price list | automatic |

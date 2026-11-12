@@ -1421,6 +1421,7 @@
         import { ensureStepFormStyles } from '/task-form.js';
         import { saleFees, BUYER_TYPES, pickableTitleDiscounts, DISCOUNT_APPLIES } from '/title-fees.js';
         import { lenderFees } from '/loan-products.js';
+        import { productMarkups } from '/rate-markups.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1448,6 +1449,9 @@
         const listingTemplate = listingCard.innerHTML;
 
         const FALLBACK_CREDIT_SCORE = 720;
+        // A product with quoted rates marks the rate up by the buyer's debt-to-income ratio; until every purchaser's income
+        // is in (and on Seller Net), this one is used
+        const FALLBACK_DTI = 0.35;
         const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
         // The escrow card shows whole dollars; the math underneath keeps the cents
         const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -1580,7 +1584,8 @@
             return lines;
         }
 
-        function calculate(page, product, rateRow, creditScoreRaw) {
+        // dtiRatio: the buyer's total debt-to-income ratio (null when it isn't known: FALLBACK_DTI is used)
+        function calculate(page, product, rateRow, creditScoreRaw, dtiRatio = null) {
             const price = num(col(page, 'PURCHASE PRICE'));
             const pointsPurchased = num(col(page, 'LENDER POINTS PURCHASED'));
 
@@ -1607,9 +1612,16 @@
             const miFinanced = isTrue(col(page, 'PREPAID MI APPLIED'));
             const loan = baseLoan + (miFinanced ? prepaidMI : 0);
 
-            // Interest rate: today's rate + credit score adjustment - (buydown per point x points)
-            const rate = num(col(rateRow, 'TODAY INTEREST RATE'))
-                + num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)))
+            // Interest rate: today's rate + the product's markup - (buydown per point x points). The markup comes from the
+            // lender's 27 quoted rates (RATE QUOTES: the starting markup + the credit score, DTI and LTV markups; see
+            // /rate-markups.js); a product without quotes uses its old credit score adjustment (PAR RATE CREDIT SCORE ...)
+            const markups = productMarkups(col(product, 'RATE QUOTES'));
+            const dtiKnown = dtiRatio !== null && dtiRatio !== undefined && isFinite(dtiRatio);
+            const dtiUsed = dtiKnown ? dtiRatio : FALLBACK_DTI;
+            const markup = markups
+                ? markups.start + markups.credit(creditScore) + markups.dti(dtiUsed) + markups.ltv(ltv)
+                : num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)));
+            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup
                 - num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100);
 
             // Dates
@@ -1757,7 +1769,7 @@
             };
 
             return { isCash, lines: allLines, cashToClose, cashLabel: cashLine.label, earnestMoney, giftFunds, appraisalDeposit,
-                payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes };
+                payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes, usesQuotes: Boolean(markups), dtiKnown, dtiUsed };
         }
 
         // --- Seller Net ---
@@ -2705,7 +2717,19 @@
             const credit = purchaserCreditScore();
             // The Loan Product picker's "Cash" choice decides whether this is a cash purchase
             const page = { ...data.page, ...draft, 'CASH PURCHASE': cashSelected ? 'TRUE' : 'FALSE' };
-            const result = calculate(page, product, data.interestRate || {}, String(credit.score));
+            let result = calculate(page, product, data.interestRate || {}, String(credit.score));
+            // Quoted rates: the DTI markup depends on the payment, which depends on the rate, so work it out again with the
+            // buyer's DTI until the rate settles (a few rounds; each changes it less)
+            if (result.usesQuotes && !result.isCash) {
+                for (let i = 0; i < 8; i++) {
+                    const dti = buyerDti(result.payment.totalMonthly);
+                    if (dti === null) break;
+                    const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti);
+                    const settled = Math.abs(next.rate - result.rate) < 1e-8;
+                    result = next;
+                    if (settled) break;
+                }
+            }
             result.hasScore = !credit.missing;
             result.scoreCount = credit.count;
             // Admins have every inspector's prices, so a newly picked inspector previews right away
@@ -2722,11 +2746,15 @@
         // Principal & Interest line: the rate and term, plus a disclaimer (*) when a credit score had to be estimated
         function principalInterestRow(result) {
             const p = result.payment;
-            const terms = p.termYears ? (result.rate * 100).toFixed(3) + '%' + (result.hasScore ? '' : '*') + ' for ' + p.termYears + ' years' : '';
-            const disclaimer = result.hasScore ? '' : '* ' + (result.scoreCount > 1
+            // With quoted rates, a DTI that isn't known yet is estimated too
+            const dtiGuess = result.usesQuotes && !result.dtiKnown;
+            const terms = p.termYears ? (result.rate * 100).toFixed(3) + '%' + (result.hasScore && !dtiGuess ? '' : '*') + ' for ' + p.termYears + ' years' : '';
+            const notes = [];
+            if (!result.hasScore) notes.push(result.scoreCount > 1
                 ? 'Not every purchaser has a credit score on file, so ' + FALLBACK_CREDIT_SCORE + ' was used for anyone missing one. This rate uses their average score of ' + result.creditScore + '.'
-                : 'We don\'t have a credit score on file yet, so this rate is estimated using a ' + FALLBACK_CREDIT_SCORE + ' credit score.')
-                + ' Your actual rate may be higher or lower.';
+                : 'We don\'t have a credit score on file yet, so this rate is estimated using a ' + FALLBACK_CREDIT_SCORE + ' credit score.');
+            if (dtiGuess) notes.push('Until every purchaser\'s income is entered, this rate assumes a ' + Math.round(FALLBACK_DTI * 100) + '% debt-to-income ratio.');
+            const disclaimer = notes.length ? '* ' + notes.join(' ') + ' Your actual rate may be higher or lower.' : '';
             return '<li><span class="k">Principal &amp; Interest'
                 + (terms ? '<small>' + escapeHtml(terms) + '</small>' : '')
                 + (disclaimer ? '<small class="rate-note">' + escapeHtml(disclaimer) + '</small>' : '')
@@ -2776,6 +2804,13 @@
         //   Total DTI = (total monthly obligation + existing debts) / total monthly income
         //   Housing only DTI = total monthly obligation / total monthly income
         const pct = n => (Math.round(n * 10000) / 100).toFixed(2) + '%';
+        // The purchasers' total DTI with this monthly obligation, or null until every purchaser has entered their income
+        function buyerDti(obligation) {
+            const people = purchasers().map(c => ({ monthly: c.income ? monthlyIncome(c.income) : 0, debts: c.income ? monthlyDebts(c.income) : 0 }));
+            if (!people.length || people.some(c => !(c.monthly > 0))) return null;
+            const income = people.reduce((s, c) => s + c.monthly, 0);
+            return (obligation + people.reduce((s, c) => s + c.debts, 0)) / income;
+        }
         function renderApproval(result, product) {
             const clients = purchasers();
             const people = clients.map(c => ({ ...c, monthly: c.income ? monthlyIncome(c.income) : 0, debts: c.income ? monthlyDebts(c.income) : 0 }));
