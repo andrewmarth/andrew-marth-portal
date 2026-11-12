@@ -31,6 +31,8 @@ const PAGE_SETTING_FIELDS = {
   'CENSUS DESIGNATION': ['Low', 'Moderate', 'Middle', 'Upper'], 'OFFER ACCEPTANCE DATE': 'date', 'ESCROW DURATION': 'int',
   'EARNEST MONEY DEPOSIT': 'money', 'GIFT FUNDS': 'money',
   'RETAIL LTV': 'rate', 'LENDER POINTS PURCHASED': 'rate', 'PREPAID MI APPLIED': 'bool',
+  // A conventional loan's mortgage insurance paid once at closing (an estimate from the annual premium) instead of monthly
+  'MI PAID UPFRONT': 'bool',
   'ESCROW FEE RATE': 'rate', 'OWNERS TITLE RATE': 'rate', 'ALTA TITLE RATE': 'rate', 'HOMEOWNERS INSURANCE RATE': 'rate',
   // Title & Escrow: the title company (a titleCompanies document ID; blank uses the three rates above) and this sale's details
   'TITLE COMPANY': 'id', 'SALE TYPE': ['Standard', 'Short Sale', 'REO'],
@@ -112,6 +114,45 @@ function cleanSetting_(kind, value) {
     if (quotes.some(q => !isFinite(q) || q <= 0 || q > 1)) return null;
     return JSON.stringify({ QUOTES: quotes.map(q => Math.round(q * 1e6) / 1e6) });
   }
+  // A loan product's rate buydown quotes: JSON { QUOTES: [the rate with 1%, 2%, 3% and 4% of the loan in points, each over
+  // 0 and at most 100%] }. More points can't make the rate higher.
+  if (kind === 'buydown') {
+    let v;
+    try { v = JSON.parse(raw); } catch (e) { return null; }
+    if (!v || !Array.isArray(v.QUOTES) || v.QUOTES.length !== 4) return null;
+    const quotes = v.QUOTES.map(q => Math.round(Number(q) * 1e6) / 1e6);
+    if (quotes.some((q, i) => !isFinite(q) || q <= 0 || q > 1 || (i > 0 && q > quotes[i - 1]))) return null;
+    return JSON.stringify({ QUOTES: quotes });
+  }
+  // A loan product's 27 annual mortgage insurance premiums: JSON { QUOTES: [27 decimals, each 0 to 10%] } (see
+  // /mortgage-insurance.js)
+  if (kind === 'miQuotes') {
+    let v;
+    try { v = JSON.parse(raw); } catch (e) { return null; }
+    if (!v || !Array.isArray(v.QUOTES) || v.QUOTES.length !== 27) return null;
+    const quotes = v.QUOTES.map(q => Math.round(Number(q) * 1e6) / 1e6);
+    if (quotes.some(q => !isFinite(q) || q < 0 || q > 0.1)) return null;
+    return JSON.stringify({ QUOTES: quotes });
+  }
+  // A credit score: a whole number from 300 to 850 (the lowest and highest possible)
+  if (kind === 'score') return /^\d{3}$/.test(raw) && +raw >= 300 && +raw <= 850 ? +raw : null;
+  // A loan product's max DTI tiers: JSON [{ SCORE, DTI, HOUSING }] (1 to 20, each credit score listed once, 300 to 850;
+  // the max total and housing-only DTI each over 0 and at most 100%), saved lowest score first. Each tier applies from its
+  // credit score up to the next tier's; the lowest also covers any score below it.
+  if (kind === 'dtiTiers') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(list) || !list.length || list.length > 20) return null;
+    const out = [];
+    for (const t of list) {
+      const score = Number(t && t.SCORE), dti = Number(t && t.DTI);
+      const housing = t && t.HOUSING !== undefined && t.HOUSING !== null && t.HOUSING !== '' ? Number(t.HOUSING) : dti;
+      if (!Number.isInteger(score) || score < 300 || score > 850 || out.some(o => o.SCORE === score)) return null;
+      if (!(dti > 0 && dti <= 1) || !(housing > 0 && housing <= 1)) return null;
+      out.push({ SCORE: score, DTI: Math.round(dti * 1e6) / 1e6, HOUSING: Math.round(housing * 1e6) / 1e6 });
+    }
+    return JSON.stringify(out.sort((a, b) => a.SCORE - b.SCORE));
+  }
   if (kind === 'date') {
     const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     return m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31 ? (+m[1]) + '/' + (+m[2]) + '/' + m[3] : null;
@@ -136,7 +177,6 @@ const LOAN_DPA = 'Down Payment Assistance';
 const LOAN_DPA_FIELDS = ['LOAN PRODUCT NAME', 'PRODUCT TYPE', 'SECOND LOAN ADJUSTABLE BY CLIENT', 'SECOND LOAN LTV MAX', 'SILENT SECOND'];
 const LOAN_RATE_TYPES = ['Fixed Rate', 'Adjustable Rate'];
 const LOAN_PRODUCT_FIELDS = (function () {
-  const dti = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
   const sections = [
     ['Product', [['LOAN PRODUCT NAME', 'text'], ['PRODUCT TYPE', LOAN_PRODUCT_TYPES], ['RATE TYPE', LOAN_RATE_TYPES], ['LOAN TERM', 'int']]],
     ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
@@ -150,14 +190,21 @@ const LOAN_PRODUCT_FIELDS = (function () {
     // The standard fees, then any others (OTHER LENDER FEES: JSON [{ NAME, AMOUNT }]; "[]" for none)
     ['Lender Fees', [['APPRAISAL FEE AT CLOSING', 'cents'], ['APPRAISAL DEPOSIT', 'cents'], ['APPRASIAL MANAGEMENT FEE', 'cents'],
       ['CREDIT REPORT FEE', 'cents'], ['FLOOD CERT FEE', 'cents'], ['TAX CERT FEE', 'cents'], ['ATTORNEY REVIEW FEE', 'cents'], ['OTHER LENDER FEES', 'fees']]],
-    ['Mortgage Insurance', [['PREPAID MORTGAGE INSURANCE RATE 0%-5% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 5%-10% DOWN', 'rate'],
-      ['PREPAID MORTGAGE INSURANCE RATE 10%-20% DOWN', 'rate'], ['PREPAID MORTGAGE INSURANCE RATE 20%+ DOWN', 'rate'],
-      ['PMI LTV THRESHOLD', 'rate'], ['LOAN PRODUCT PMI RATE', 'rate']]],
-    // RATE QUOTES: the lender's 27 quoted rates (JSON { QUOTES, TODAY }; see /rate-markups.js). The old PAR RATE CREDIT
-    // SCORE columns are no longer asked (pages still use them for a product without quotes).
-    ['Rates', [['RATE QUOTES', 'quotes'], ['POINT RATE BUYDOWN AMOUNT', 'rate']]],
-    ['Max DTI', dti.map(s => ['MAX DTI CREDIT SCORE ' + s, 'rate'])],
-    ['Max DTI Housing Only', dti.map(s => ['MAX DTI HOUSING ONLY CREDIT SCORE ' + s, 'rate'])],
+    // By product type (see /mortgage-insurance.js and cleanLoanProduct_): FHA's UFMIP and VA's funding fee are fixed (not
+    // asked); Conventional asks the 27 annual premiums (MI QUOTES); Jumbo and Non-Conforming ask whether the product has
+    // mortgage insurance guidelines (NO MI GUIDELINES) and, when it does, the 27 premiums. The old PREPAID MORTGAGE
+    // INSURANCE RATE ... DOWN, PMI LTV THRESHOLD and LOAN PRODUCT PMI RATE columns are no longer asked (pages still use
+    // them for a product saved before).
+    ['Mortgage Insurance', [['MI QUOTES', 'miQuotes'], ['NO MI GUIDELINES', 'bool']]],
+    // RATE QUOTES: the lender's 27 quoted rates (JSON { QUOTES, TODAY }); BUYDOWN QUOTES: the rate with 1%-4% in points
+    // for one scenario (JSON { QUOTES }); see /rate-markups.js. The old PAR RATE CREDIT SCORE columns and POINT RATE
+    // BUYDOWN AMOUNT are no longer asked (pages still use them for a product without quotes).
+    ['Rates', [['RATE QUOTES', 'quotes'], ['BUYDOWN QUOTES', 'buydown']]],
+    // MIN CREDIT SCORE: below it an applicant is denied (300, the lowest possible: no minimum). MAX DTI TIERS: the max total
+    // and housing-only DTI from each credit score the lender lists (JSON [{ SCORE, DTI, HOUSING }]). The old MAX DTI
+    // CREDIT SCORE ... and MAX DTI HOUSING ONLY CREDIT SCORE ... columns (set tiers) are no longer asked (pages still use
+    // them for a product without tiers).
+    ['Max DTI', [['MIN CREDIT SCORE', 'score'], ['MAX DTI TIERS', 'dtiTiers']]],
     ['Income Qualifying', [['SALARY QUALIFYING %', 'rate'], ['HOURLY QUALIFYING %', 'rate'], ['1099 QUALIFYING %', 'rate'],
       ['TIP QUALIFYING %', 'rate'], ['COMMISSION QUALIFYING %', 'rate'], ['BONUS QUALIFYING %', 'rate']]],
     ['Escrow', [['MONTHS COLLECTED FOR TAXES', 'int'], ['MONTHS COLLECTED FOR INSURANCE', 'int']]],
@@ -269,6 +316,7 @@ export async function handle(body, query) {
     if (body.action === 'saveLender') return await saveLender_(account, body);
     if (body.action === 'deleteLender') return await deleteLender_(account, body);
     if (body.action === 'saveLenderProduct') return await saveLenderProduct_(account, body);
+    if (body.action === 'saveMiSettings') return await saveMiSettings_(account, body);
     if (body.action === 'saveTitleCompany') return await saveTitleCompany_(account, body);
     if (body.action === 'deleteTitleCompany') return await deleteTitleCompany_(account, body);
     // Home page (admins): add a new property for a buyer
@@ -2098,6 +2146,9 @@ const CLIENT_FIELDS = [
   { col: 'LENDER', type: 'bool' }, { col: 'LENDER BANK', type: 'text' }, { col: 'WHOLESALER', type: 'bool' },
   { col: 'FLIPPER LLC', type: 'text' }, { col: 'FLIPPER TITLE', type: 'text' },
   { col: 'HARD MONEY LENDER', type: 'bool' }, { col: 'PREFLIPPER', type: 'bool' },
+  // Other: whether they're a veteran and have used a VA loan before (a VA loan's funding fee follows them; see
+  // /mortgage-insurance.js). Not asked when a client is added (they start as No).
+  { col: 'VETERAN', type: 'bool', optional: true }, { col: 'VA LOAN USED', type: 'bool', optional: true },
 ];
 
 // One account's editable details, by column name
@@ -2164,6 +2215,7 @@ async function adminCreateClient_(account, body) {
     const f = CLIENT_FIELDS[i];
     const raw = given[f.col];
     if (f.type === 'bool') {
+      if (raw !== true && raw !== false && f.optional) { values[f.col] = false; continue; }
       if (raw !== true && raw !== false) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
       values[f.col] = raw;
     } else if (f.type === 'email') {
@@ -2934,6 +2986,7 @@ async function pageData_(id, account, pageId) {
     // The buyer's side of the escrow breakdown: the loan products and today's rate, like a Buyer Breakdown
     result.loanProducts = await rows('loanProducts');
     result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
+    result.miSettings = await miSettingsRow_();
     result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
   }
   return result;
@@ -2981,7 +3034,7 @@ async function myPagesData_(id, account) {
     });
     // "My Loan Products": this lender's LOAN_PRODUCTS rows and the questions the form asks
     result.myLoanProducts = await lenderLoanProducts_(id);
-    result.loanProductFields = loanProductFields_(await columns('loanProducts'), await todayInterestRate_());
+    result.loanProductFields = loanProductFields_(await columns('loanProducts'), await todayInterestRate_(), await miSettingsRow_());
   }
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
@@ -3023,10 +3076,18 @@ async function myPagesData_(id, account) {
 
 // A loan product's answers, checked: { clean } or { error, field }. Every answer is required (the extra text columns
 // aren't), except that a Down Payment Assistance product needs only LOAN_DPA_FIELDS (the rest are saved blank).
+// Mortgage insurance follows the product type: MI QUOTES only for a Conventional product, or a Jumbo or Non-Conforming one
+// with guidelines (NO MI GUIDELINES FALSE), else blank; NO MI GUIDELINES is asked only of Jumbo and Non-Conforming (else
+// FALSE).
 function cleanLoanProduct_(fields, submitted) {
-  const dpa = String(submitted['PRODUCT TYPE'] || '').trim().toLowerCase() === LOAN_DPA.toLowerCase();
+  const type = String(submitted['PRODUCT TYPE'] || '').trim().toLowerCase();
+  const dpa = type === LOAN_DPA.toLowerCase();
+  const jumboLike = type === 'jumbo' || type === 'non-conforming';
+  const noGuidelines = jumboLike && /^true$/i.test(String(submitted['NO MI GUIDELINES'] || '').trim());
+  const miAsked = { 'MI QUOTES': type === 'conventional' || (jumboLike && !noGuidelines), 'NO MI GUIDELINES': jumboLike };
   const clean = {};
   for (const f of fields) {
+    if (!dpa && f.col in miAsked && !miAsked[f.col]) { clean[f.col] = f.col === 'NO MI GUIDELINES' ? false : ''; continue; }
     const asked = !dpa || LOAN_DPA_FIELDS.includes(f.col);
     const value = asked ? cleanSetting_(f.kind, submitted[f.col]) : '';
     if (value === null || (value === '' && asked && f.section !== 'Other')) return { error: 'invalid_value', field: f.col };
@@ -3041,8 +3102,9 @@ async function todayInterestRate_() {
   const n = r ? Number(r['TODAY INTEREST RATE']) : NaN;
   return isFinite(n) && n > 0 ? n : null;
 }
-// Adds TODAY to a cleaned product's RATE QUOTES: the saved one when the quotes haven't changed (old: the saved RATE
-// QUOTES), else today's interest rate, so each quote's markup is measured against the rate on the day it was quoted
+// Adds TODAY and DATE to a cleaned product's RATE QUOTES: the saved ones when the quotes haven't changed (old: the saved
+// RATE QUOTES), else today's interest rate and today's date (Arizona, YYYY-MM-DD), so each quote's markup is measured
+// against the rate on the day it was quoted. old null: always today's (a quote sheet submitted today).
 async function stampRateQuotes_(clean, old) {
   if (!clean['RATE QUOTES']) return null;
   const v = JSON.parse(clean['RATE QUOTES']);
@@ -3052,18 +3114,43 @@ async function stampRateQuotes_(clean, old) {
     && before.QUOTES.every((q, i) => Math.abs(Number(q) - v.QUOTES[i]) < 1e-9);
   const today = same ? Number(before.TODAY) : await todayInterestRate_();
   if (!today) return 'no_today_rate';
-  clean['RATE QUOTES'] = JSON.stringify({ QUOTES: v.QUOTES, TODAY: today });
+  const date = same ? String(before.DATE || '') : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' });
+  clean['RATE QUOTES'] = JSON.stringify(Object.assign({ QUOTES: v.QUOTES, TODAY: today }, date ? { DATE: date } : {}));
   return null;
 }
 
+// The rate quote sheet: a product's 27 quotes (RATE QUOTES) and 4 buydown quotes (BUYDOWN QUOTES). It's submitted on its
+// own (a save with body.quotesOnly) and then locked: a product's normal save keeps the saved sheet, and only a new sheet
+// (a requote, again with quotesOnly) replaces it.
+const quoteSheetLocked_ = values => !!(values && cleanSetting_('quotes', values['RATE QUOTES']) && cleanSetting_('buydown', values['BUYDOWN QUOTES']));
+function keepQuoteSheet_(submitted, old) {
+  if (!quoteSheetLocked_(old)) return;
+  submitted['RATE QUOTES'] = old['RATE QUOTES'];
+  submitted['BUYDOWN QUOTES'] = old['BUYDOWN QUOTES'];
+}
+// A submitted sheet for a saved product (old: its values): both columns, checked, stamped with today's rate and date
+async function quoteSheet_(submitted, old) {
+  if (!old) return { error: 'not_found' };
+  const clean = {};
+  for (const [col, kind] of [['RATE QUOTES', 'quotes'], ['BUYDOWN QUOTES', 'buydown']]) {
+    const v = cleanSetting_(kind, submitted && submitted[col]);
+    if (!v) return { error: 'invalid_value' };
+    clean[col] = v;
+  }
+  const stampError = await stampRateQuotes_(clean, null);
+  return stampError ? { error: stampError } : { clean };
+}
+
 // The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
-// (RATE QUOTES also carries today: today's interest rate, for the form's markup tables)
-function loanProductFields_(headers, today) {
-  const known = { 'LENDER NAME': true, 'OTHER FEE': true };
+// (RATE QUOTES also carries today: today's interest rate, for the form's markup tables; MI QUOTES carries mi: the
+// mortgage insurance settings, for its upfront premium tables)
+function loanProductFields_(headers, today, mi) {
+  const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true };
+  ['0%-5%', '5%-10%', '10%-20%', '20%+'].forEach(d => { known['PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN'] = true; });
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+']
-    .forEach(s => { known['PAR RATE CREDIT SCORE ' + s] = true; });
-  return LOAN_PRODUCT_FIELDS.map(f => (f.col === 'RATE QUOTES' ? Object.assign({ today }, f) : f)).concat(headers
+    .forEach(s => { ['PAR RATE CREDIT SCORE ', 'MAX DTI CREDIT SCORE ', 'MAX DTI HOUSING ONLY CREDIT SCORE '].forEach(p => { known[p + s] = true; }); });
+  return LOAN_PRODUCT_FIELDS.map(f => (f.col === 'RATE QUOTES' ? Object.assign({ today }, f) : f.col === 'MI QUOTES' ? Object.assign({ mi: mi || null }, f) : f)).concat(headers
     .map(h => String(h).trim().toUpperCase())
     .filter(h => h && h !== 'ACCOUNT ID' && !known[h])
     .map(h => ({ section: 'Other', col: h, kind: 'text' })));
@@ -3092,12 +3179,20 @@ async function saveLoanProduct_(id, account, body) {
   const bank = String(account['LENDER BANK'] || '').trim();
   if (!rowNumber && !bank) return { ok: false, error: 'no_lender_bank' };
   return withLock('loanProducts', async () => {
-    const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
-    if (checked.error) return { ok: false, error: checked.error, field: checked.field };
-    const clean = checked.clean;
     const mine = await lenderLoanProducts_(id);
     const target = rowNumber ? mine.find(p => p.row === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };
+    const products = async () => (await lenderLoanProducts_(id)).map(p => ({ row: p.row, values: p.values }));
+    if (body.quotesOnly) {
+      const sheet = await quoteSheet_(body.values, target && target.values);
+      if (sheet.error) return { ok: false, error: sheet.error };
+      await update('loanProducts', target.docId, sheet.clean);
+      return { ok: true, products: await products() };
+    }
+    keepQuoteSheet_(submitted, target && target.values);
+    const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
+    if (checked.error) return { ok: false, error: checked.error, field: checked.field };
+    const clean = checked.clean;
     const stampError = await stampRateQuotes_(clean, target ? target.values['RATE QUOTES'] : null);
     if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
@@ -3107,7 +3202,7 @@ async function saveLoanProduct_(id, account, body) {
     }
     if (target) await update('loanProducts', target.docId, clean);
     else await add('loanProducts', Object.assign({ 'ACCOUNT ID': id, 'LENDER NAME': bank }, clean));
-    return { ok: true, products: (await lenderLoanProducts_(id)).map(p => ({ row: p.row, values: p.values })) };
+    return { ok: true, products: await products() };
   });
 }
 
@@ -3149,7 +3244,31 @@ async function lenders_(account) {
   const lenderAccounts = (await rows('accounts')).filter(r => hasRole_(r, 'LENDER') && phoneToId_(r['ACCOUNT ID']))
     .map(r => ({ id: phoneToId_(r['ACCOUNT ID']), name: fullName_(r) || phoneToId_(r['ACCOUNT ID']), bank: String(r['LENDER BANK'] || '').trim() }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { ok: true, lenders: await lenderList_(), lenderAccounts, loanProductFields: loanProductFields_(await columns('loanProducts'), await todayInterestRate_()) };
+  return { ok: true, lenders: await lenderList_(), lenderAccounts, miSettings: await miSettingsRow_(),
+    loanProductFields: loanProductFields_(await columns('loanProducts'), await todayInterestRate_(), await miSettingsRow_()) };
+}
+// The upfront mortgage insurance estimate's settings (settings mortgageInsurance; see MI_SETTINGS in
+// /mortgage-insurance.js, which fills in a blank one with its default), or null
+const MI_SETTING_LIMITS = { 'MI REMOVAL LTV': [0.5, 0.95], 'HOME APPRECIATION': [0, 0.2], 'MI MIN YEARS': [0, 30], 'MI DISCOUNT RATE': [0, 0.3] };
+async function miSettingsRow_() {
+  return (await rows('settings')).find(r => r._id === 'mortgageInsurance') || null;
+}
+// Admins (the Lenders card): saves those settings. body.values: { column: number } (decimals for the percents, whole
+// years for MI MIN YEARS)
+async function saveMiSettings_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const given = body.values || {};
+  const clean = {};
+  for (const col of Object.keys(MI_SETTING_LIMITS)) {
+    const raw = String(given[col] === undefined || given[col] === null ? '' : given[col]).trim();
+    const n = Number(raw);
+    const [lo, hi] = MI_SETTING_LIMITS[col];
+    if (raw === '' || !isFinite(n) || n < lo || n > hi || (col === 'MI MIN YEARS' && !Number.isInteger(n))) return { ok: false, error: 'invalid_value', field: col };
+    clean[col] = Math.round(n * 1e6) / 1e6;
+  }
+  if (await miSettingsRow_()) await update('settings', 'mortgageInsurance', clean);
+  else await add('settings', clean, 'mortgageInsurance');
+  return { ok: true, miSettings: await miSettingsRow_() };
 }
 // Adds a lender or renames one, and sets which lender accounts are linked to it. body: { id, oldName, name, accounts: [id] }.
 // A rename moves its loan products (LENDER NAME) and linked accounts (LENDER BANK) to the new name. An account linked
@@ -3206,13 +3325,20 @@ async function saveLenderProduct_(account, body) {
   const rowNumber = body.row ? Number(body.row) : 0;
   const submitted = Object.assign({}, body.values || {}, { 'SILENT SECOND': 'TRUE' });
   return withLock('loanProducts', async () => {
+    const all = await rows('loanProducts');
+    const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
+    if (rowNumber && !target) return { ok: false, error: 'not_found' };
+    if (body.quotesOnly) {
+      const sheet = await quoteSheet_(body.values, target);
+      if (sheet.error) return { ok: false, error: sheet.error };
+      await update('loanProducts', target._id, sheet.clean);
+      return { ok: true, lenders: await lenderList_() };
+    }
+    keepQuoteSheet_(submitted, target);
     const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
     if (checked.error) return { ok: false, error: checked.error, field: checked.field };
     const clean = checked.clean;
     clean['LENDER NAME'] = lenderName;
-    const all = await rows('loanProducts');
-    const target = rowNumber ? all.find(r => r._order === rowNumber) : null;
-    if (rowNumber && !target) return { ok: false, error: 'not_found' };
     const stampError = await stampRateQuotes_(clean, target ? target['RATE QUOTES'] : null);
     if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
@@ -3247,6 +3373,8 @@ async function addBuyerBreakdownData_(result, page) {
   const own = await versionData_(page);
   result.loanProducts = await rows('loanProducts');
   result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
+  // The upfront mortgage insurance estimate's settings (see /mortgage-insurance.js)
+  result.miSettings = await miSettingsRow_();
   result.creditScore = own.creditScore;
   result.clients = own.clients;
   result.inspectors = own.inspectors;
@@ -3306,10 +3434,15 @@ async function inspectorRow_(collection, nameColumn, name) {
 }
 
 // Each person on the page (PRIMARY, then ALT 1-5) with their name, Purchaser/Collaborator type and INCOME row
-// (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate
+// (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate, and whether they're a
+// veteran and have used a VA loan before (for a VA loan's funding fee)
 async function pageClients_(page) {
-  const names = {};
-  (await rows('accounts')).forEach(r => { names[phoneToId_(r['ACCOUNT ID'])] = fullName_(r); });
+  const names = {}, va = {};
+  (await rows('accounts')).forEach(r => {
+    const rid = phoneToId_(r['ACCOUNT ID']);
+    names[rid] = fullName_(r);
+    va[rid] = { veteran: hasRole_(r, 'VETERAN'), vaUsed: hasRole_(r, 'VA LOAN USED') };
+  });
   const incomes = {};
   (await rows('income')).forEach(r => {
     const rid = phoneToId_(r['ACCOUNT ID'] || r['ID'] || r._id);
@@ -3321,7 +3454,8 @@ async function pageClients_(page) {
     return { id: phoneToId_(page[col]), type };
   })
     .filter(p => { if (!p.id || seen[p.id]) return false; seen[p.id] = true; return true; })
-    .map(p => ({ id: p.id, type: p.type, name: names[p.id] || '', income: incomes[p.id] || null }));
+    .map(p => ({ id: p.id, type: p.type, name: names[p.id] || '', income: incomes[p.id] || null,
+      veteran: va[p.id] ? va[p.id].veteran : false, vaUsed: va[p.id] ? va[p.id].vaUsed : false }));
 }
 
 // Interval columns must be one of INTERVALS, job titles/descriptions are short text,

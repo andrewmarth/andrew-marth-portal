@@ -1237,8 +1237,9 @@
             document.getElementById('loan-products-card').hidden = false;
             const row = (icon, title, sub) => '<span class="page-link-icon">' + icon + '</span>'
                 + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(title) + '</span><br><span class="page-link-sub">' + escapeHtml(sub) + '</span></span>';
-            const save = async (values, rowNumber) => {
-                const json = await api({ action: 'saveLoanProduct', row: rowNumber, values });
+            // opts.quotesOnly: just the rate quote sheet (submitted from the Rates section)
+            const save = async (values, rowNumber, opts = {}) => {
+                const json = await api({ action: 'saveLoanProduct', row: rowNumber, values, quotesOnly: !!opts.quotesOnly });
                 if (!json.ok) throw new Error(json.error || 'Request failed');
                 renderLoanProducts(json.products || [], fields);
             };

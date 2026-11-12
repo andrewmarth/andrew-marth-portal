@@ -8,12 +8,12 @@ You can edit it by hand in the Firebase console.
 
 | Collection | What's in it | Document ID |
 |---|---|---|
-| `accounts` | Each client and their roles (BUYER, SELLER, LENDER, ADMIN, CUM, ...) | the 10-digit phone number (ACCOUNT ID) |
+| `accounts` | Each client and their roles (BUYER, SELLER, LENDER, ADMIN, CUM, ...), and whether they're a veteran (VETERAN) and have used a VA loan before (VA LOAN USED) | the 10-digit phone number (ACCOUNT ID) |
 | `income` | Each client's jobs, debts and credit score | the 10-digit phone number (ACCOUNT ID) |
 | `pages` | Buyer Breakdowns, Seller Nets and Flips (PAGE TYPE says which) | the PAGE ID (e.g. `4274`) |
-| `loanProducts` | Lenders' loan products (ACCOUNT ID is the lender account that added it; LENDER NAME is its lender; RATE QUOTES is the lender's 27 quoted rates as JSON { QUOTES, TODAY }, see /rate-markups.js) | automatic |
+| `loanProducts` | Lenders' loan products (ACCOUNT ID is the lender account that added it; LENDER NAME is its lender; RATE QUOTES is the lender's 27 quoted rates as JSON { QUOTES, TODAY } and BUYDOWN QUOTES its rates with 1%-4% in points as JSON { QUOTES }, see /rate-markups.js; MIN CREDIT SCORE is the lowest score it accepts, 300 for none; MAX DTI TIERS is its max DTI from each credit score as JSON [{ SCORE, DTI, HOUSING }]; MI QUOTES is its 27 annual mortgage insurance premiums as JSON { QUOTES } and NO MI GUIDELINES is TRUE for a Jumbo or Non-Conforming product without mortgage insurance, see /mortgage-insurance.js) | automatic |
 | `lenders` | The admin Lenders card's lenders (NAME). A lender's loan products are those whose LENDER NAME is its name, and its linked lender accounts those whose LENDER BANK is its name | automatic |
-| `settings` | `interestRate`: TODAY INTEREST RATE | `interestRate` |
+| `settings` | `interestRate`: TODAY INTEREST RATE. `mortgageInsurance`: the upfront mortgage insurance estimate's settings (MI REMOVAL LTV, HOME APPRECIATION, MI MIN YEARS, MI DISCOUNT RATE; see /mortgage-insurance.js) | `interestRate`, `mortgageInsurance` |
 | `homeInspectors`, `sewerInspectors`, `termiteInspectors` | Each inspector's price list | automatic |
 | `cumTransactions`, `cumBalances` | Cash flow transactions and bank balances (a Roadhouse Paycheck has TYPE `Roadhouse Paycheck` and its shifts in ROADHOUSE SHIFTS as JSON: [{ hours, sales, tipPercent }]) | automatic |
 | `cumSettings` | Each CUM account's Roadhouse Paycheck Settings (TIP POOL PAYOUT %, TIP POOL RECEIVED %, HOURLY RATE, AZ / FITW / MED / SS TAX %; percents as decimals) and SAVINGS ALLOCATION (money set aside for savings; a Spending Budget transaction's own SAVINGS ALLOCATION is added to it on the budget's Monday, when the budget is checked off) | the 10-digit phone number (ACCOUNT ID) |

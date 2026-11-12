@@ -1420,8 +1420,9 @@
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
         import { saleFees, BUYER_TYPES, pickableTitleDiscounts, DISCOUNT_APPLIES } from '/title-fees.js';
-        import { lenderFees } from '/loan-products.js';
-        import { productMarkups } from '/rate-markups.js';
+        import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
+        import { productMarkups, productBuydown } from '/rate-markups.js';
+        import { loanMi } from '/mortgage-insurance.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1507,7 +1508,8 @@
             const low = Math.floor(score / 20) * 20;
             return low + '-' + (low + 20);
         }
-        // Prepaid mortgage insurance tiers by down payment: 0%-5%, 5%-10%, 10%-20%, 20%+ (lower number included)
+        // Prepaid mortgage insurance tiers by down payment: 0%-5%, 5%-10%, 10%-20%, 20%+ (lower number included; a loan
+        // product saved before its mortgage insurance followed its type, see calculate)
         function downPaymentTier(downPct) {
             const pct = Math.round(downPct * 1e6) / 1e4; // as a percent, rounded to avoid float noise
             if (pct < 5) return '0%-5%';
@@ -1584,8 +1586,9 @@
             return lines;
         }
 
-        // dtiRatio: the buyer's total debt-to-income ratio (null when it isn't known: FALLBACK_DTI is used)
-        function calculate(page, product, rateRow, creditScoreRaw, dtiRatio = null) {
+        // dtiRatio: the buyer's total debt-to-income ratio (null when it isn't known: FALLBACK_DTI is used).
+        // opts.vaUse: the purchasers' VA use for a VA loan's funding fee ({ firstUse, known }; see purchaserVaUse)
+        function calculate(page, product, rateRow, creditScoreRaw, dtiRatio = null, opts = {}) {
             const price = num(col(page, 'PURCHASE PRICE'));
             const pointsPurchased = num(col(page, 'LENDER POINTS PURCHASED'));
 
@@ -1594,7 +1597,7 @@
             const hasScore = parsedScore >= 300 && parsedScore <= 900;
             const creditScore = hasScore ? parsedScore : FALLBACK_CREDIT_SCORE;
 
-            // Loan amount: purchase price x retail LTV, plus the prepaid mortgage insurance when it's financed
+            // Loan amount: purchase price x retail LTV, plus the upfront mortgage insurance (below) when it's financed
             // into the loan (PREPAID MI APPLIED = TRUE). When FALSE, the buyer pays it at closing instead.
             // A blank MAX column means "no limit"
             const maxOf = name => text(col(product, name)) === '' ? Infinity : num(col(product, name));
@@ -1607,22 +1610,34 @@
                 ? ['Limited to this loan\'s ' + percent(maxLtv) + ' maximum loan-to-value (' + percent(enteredLtv) + ' was entered)'] : [];
             const baseLoan = isCash ? 0 : price * ltv;
             const downPct = price ? (price - baseLoan) / price : 0;
-            const pmiRate = num(col(product, 'PREPAID MORTGAGE INSURANCE RATE ' + downPaymentTier(downPct) + ' DOWN'));
-            const prepaidMI = baseLoan * pmiRate;
-            const miFinanced = isTrue(col(page, 'PREPAID MI APPLIED'));
-            const loan = baseLoan + (miFinanced ? prepaidMI : 0);
 
-            // Interest rate: today's rate + the product's markup - (buydown per point x points). The markup comes from the
-            // lender's 27 quoted rates (RATE QUOTES: the starting markup + the credit score, DTI and LTV markups; see
-            // /rate-markups.js); a product without quotes uses its old credit score adjustment (PAR RATE CREDIT SCORE ...)
+            // Interest rate: today's rate + the product's markup - the buydown for the points bought. The markup comes from
+            // the lender's 27 quoted rates (RATE QUOTES: the starting markup + the credit score, DTI and LTV markups; see
+            // /rate-markups.js); a product without quotes uses its old credit score adjustment (PAR RATE CREDIT SCORE ...).
+            // The buydown comes from the lender's quotes with 1%-4% in points (BUYDOWN QUOTES, a curve); a product without
+            // them uses its old buydown per point (POINT RATE BUYDOWN AMOUNT x points)
             const markups = productMarkups(col(product, 'RATE QUOTES'));
             const dtiKnown = dtiRatio !== null && dtiRatio !== undefined && isFinite(dtiRatio);
             const dtiUsed = dtiKnown ? dtiRatio : FALLBACK_DTI;
             const markup = markups
                 ? markups.start + markups.credit(creditScore) + markups.dti(dtiUsed) + markups.ltv(ltv)
                 : num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)));
+            const buydown = productBuydown(col(product, 'RATE QUOTES'), col(product, 'BUYDOWN QUOTES'));
             const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup
-                - num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100);
+                - (buydown ? buydown(pointsPurchased) : num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100));
+
+            // Mortgage insurance, by the product's type (/mortgage-insurance.js): FHA's 1.75% UFMIP and HUD's annual MIP; VA's
+            // funding fee (by the down payment and the purchasers' VA use); or the lender's annual premiums for the buyer's
+            // credit score, DTI and LTV (none at 80% LTV or less), paid monthly, or once at closing when the page's
+            // MI PAID UPFRONT is TRUE (estimated from the annual premium). The upfront part is financed or paid at closing as
+            // above. A product saved before that (no MI QUOTES) uses its old prepaid MI rate for the down payment, and its
+            // PMI rate above its PMI LTV THRESHOLD.
+            const termYears = num(col(product, 'LOAN TERM'));
+            const mi = isCash ? null : loanMi(name => col(product, name), { baseLoan, price, rate, termYears, credit: creditScore, dti: dtiUsed,
+                settings: data.miSettings || null, vaUse: opts.vaUse, upfront: isTrue(col(page, 'MI PAID UPFRONT')) });
+            const prepaidMI = baseLoan * (mi ? mi.upfront : num(col(product, 'PREPAID MORTGAGE INSURANCE RATE ' + downPaymentTier(downPct) + ' DOWN')));
+            const miFinanced = isTrue(col(page, 'PREPAID MI APPLIED'));
+            const loan = baseLoan + (miFinanced ? prepaidMI : 0);
 
             // Dates
             const acceptance = parseDate(col(page, 'OFFER ACCEPTANCE DATE'));
@@ -1684,7 +1699,9 @@
                 { section: 'Loan', label: 'Second Loan Amount', amount: titleCompanyOf(page) ? num(col(page, 'SECOND LOAN AMOUNT')) : 0, note: 'Its payment isn’t in the monthly cost',
                     hidden: !(titleCompanyOf(page) && num(col(page, 'SECOND LOAN AMOUNT')) > 0) },
                 // Seller credit can only help pay the prepaid MI when it isn't already financed into the loan
-                { section: 'Loan', cost: !miFinanced, label: 'Prepaid Mortgage Insurance', amount: -prepaidMI },
+                // (a type with nothing up front leaves it out)
+                { section: 'Loan', cost: !miFinanced, label: mi ? mi.upfrontLabel : 'Prepaid Mortgage Insurance', amount: -prepaidMI,
+                    note: mi && mi.upfront ? mi.upfrontNote : '', hidden: Boolean(mi) && !mi.upfront },
                 { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))) },
                 { section: 'Loan', cost: true, label: 'Prepaid Interest', amount: -(loan * rate / 360 * daysLeft), note: daysLeft + ' days' },
                 { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan) },
@@ -1754,22 +1771,25 @@
                 : loan / months;
             const monthlyTaxes = yearlyTaxes / 12;
             const monthlyInsurance = hoPremium / 12;
-            // Monthly mortgage insurance: only when the loan-to-value (loan before prepaid MI / price) is above the
-            // product's PMI LTV THRESHOLD, at LOAN PRODUCT PMI RATE x the full loan amount, per year / 12
+            // Monthly mortgage insurance: the yearly premium (above) x the full loan amount / 12. A product saved before
+            // that: only when the loan-to-value (loan before prepaid MI / price) is above its PMI LTV THRESHOLD, at its
+            // LOAN PRODUCT PMI RATE
             const pmiThreshold = num(col(product, 'PMI LTV THRESHOLD'));
             const loanToValue = price ? baseLoan / price : 0;
-            const monthlyPMI = !isCash && text(col(product, 'PMI LTV THRESHOLD')) !== '' && loanToValue > pmiThreshold + 1e-9
-                ? loan * num(col(product, 'LOAN PRODUCT PMI RATE')) / 12 : 0;
+            const monthlyPMI = isCash ? 0 : mi ? loan * mi.annual / 12
+                : text(col(product, 'PMI LTV THRESHOLD')) !== '' && loanToValue > pmiThreshold + 1e-9 ? loan * num(col(product, 'LOAN PRODUCT PMI RATE')) / 12 : 0;
             const mortgagePayment = principalInterest + monthlyTaxes + monthlyInsurance + monthlyPMI;
             const primaryDues = num(col(page, 'HOA PRIMARY MONTHLY DUES'));
             const masterDues = num(col(page, 'HOA MASTER MONTHLY DUES'));
             const payment = {
-                principalInterest, monthlyTaxes, monthlyInsurance, monthlyPMI, mortgagePayment, primaryDues, masterDues,
+                principalInterest, monthlyTaxes, monthlyInsurance, monthlyPMI, miNote: mi ? mi.annualNote : '', mortgagePayment, primaryDues, masterDues,
                 totalMonthly: mortgagePayment + primaryDues + masterDues, termYears: months / 12,
             };
 
             return { isCash, lines: allLines, cashToClose, cashLabel: cashLine.label, earnestMoney, giftFunds, appraisalDeposit,
-                payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes, usesQuotes: Boolean(markups), dtiKnown, dtiUsed };
+                payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes, usesQuotes: Boolean(markups), dtiKnown, dtiUsed,
+                // (the lender's mortgage insurance premiums depend on the DTI too)
+                usesMiQuotes: Boolean(mi && mi.kind === 'quotes' && (mi.annual || mi.upfront)) };
         }
 
         // --- Seller Net ---
@@ -2280,6 +2300,12 @@
 
         // Purchasers on this page (collaborators don't count toward the loan)
         const purchasers = () => (data.clients || []).filter(c => c.type !== 'Collaborator');
+        // A VA loan's funding fee: the first-use chart unless every purchaser who's a veteran has used a VA loan before (their
+        // Edit Clients > Other answers). With no purchaser marked as a veteran, it counts as a first use (known: false).
+        function purchaserVaUse() {
+            const vets = purchasers().filter(c => c.veteran);
+            return vets.length ? { firstUse: vets.some(c => !c.vaUsed), known: true } : { firstUse: true, known: false };
+        }
 
         // Credit score for the rate and DTI limits: the average of the purchasers' scores.
         // Anyone without a score on file counts as the 720 fallback, and the rate gets a disclaimer.
@@ -2717,15 +2743,16 @@
             const credit = purchaserCreditScore();
             // The Loan Product picker's "Cash" choice decides whether this is a cash purchase
             const page = { ...data.page, ...draft, 'CASH PURCHASE': cashSelected ? 'TRUE' : 'FALSE' };
-            let result = calculate(page, product, data.interestRate || {}, String(credit.score));
-            // Quoted rates: the DTI markup depends on the payment, which depends on the rate, so work it out again with the
-            // buyer's DTI until the rate settles (a few rounds; each changes it less)
-            if (result.usesQuotes && !result.isCash) {
+            const vaUse = purchaserVaUse();
+            let result = calculate(page, product, data.interestRate || {}, String(credit.score), null, { vaUse });
+            // Quoted rates (and quoted mortgage insurance): the DTI markup depends on the payment, which depends on the rate,
+            // so work it out again with the buyer's DTI until the payment settles (a few rounds; each changes it less)
+            if ((result.usesQuotes || result.usesMiQuotes) && !result.isCash) {
                 for (let i = 0; i < 8; i++) {
                     const dti = buyerDti(result.payment.totalMonthly);
                     if (dti === null) break;
-                    const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti);
-                    const settled = Math.abs(next.rate - result.rate) < 1e-8;
+                    const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti, { vaUse });
+                    const settled = Math.abs(next.rate - result.rate) < 1e-8 && Math.abs(next.payment.totalMonthly - result.payment.totalMonthly) < 0.005;
                     result = next;
                     if (settled) break;
                 }
@@ -2784,7 +2811,7 @@
                 '<section class="money-section"><h3 class="money-section-title">Mortgage Payment</h3><ul class="pay-list">'
                 + principalInterestRow(result)
                 // Hidden when it doesn't apply (or rounds to $0)
-                + (toDollars(p.monthlyPMI) > 0 ? row('Mortgage Insurance', p.monthlyPMI) : '')
+                + (toDollars(p.monthlyPMI) > 0 ? row('Mortgage Insurance', p.monthlyPMI, p.miNote) : '')
                 + row('Taxes', p.monthlyTaxes)
                 + row('Insurance', p.monthlyInsurance)
                 + total('Total Mortgage Payment', p.mortgagePayment)
@@ -2800,7 +2827,8 @@
 
         // --- Estimated approval ---
         // Each client's monthly income (same math as the settings page) and monthly debts, then two DTI checks
-        // against the loan product's limits for the buyer's credit score:
+        // against the loan product's limits for the buyer's credit score (its max DTI tier for that score; see
+        // productDtiTiers in /loan-products.js). A buyer below the product's minimum credit score is denied outright.
         //   Total DTI = (total monthly obligation + existing debts) / total monthly income
         //   Housing only DTI = total monthly obligation / total monthly income
         const pct = n => (Math.round(n * 10000) / 100).toFixed(2) + '%';
@@ -2831,10 +2859,11 @@
                     + '</li>';
             }).join('');
 
-            const tier = creditTier(result.creditScore);
+            const tier = dtiTierFor(productDtiTiers(name => col(product, name)), result.creditScore) || { dti: 0, housing: 0 };
+            const minScore = minCreditScore(col(product, 'MIN CREDIT SCORE'));
+            const scoreDenied = minScore !== null && result.creditScore < minScore;
             const scoreText = result.creditScore + (result.scoreCount > 1 ? ' average' : '') + (result.hasScore ? '' : ' (estimated)') + ' credit score';
-            const check = (label, debt, maxColumn) => {
-                const max = num(col(product, maxColumn + ' ' + tier));
+            const check = (label, debt, max) => {
                 const ratio = !incomeMissing && totalIncome > 0 ? debt / totalIncome : null;
                 return {
                     pass: ratio !== null && ratio <= max,
@@ -2842,9 +2871,12 @@
                         + ' (max ' + pct(max) + ')</li>',
                 };
             };
-            const total = check('Total DTI', obligation + totalDebts, 'MAX DTI CREDIT SCORE');
-            const housing = check('Housing Only DTI', obligation, 'MAX DTI HOUSING ONLY CREDIT SCORE');
-            const status = incomeMissing ? '<span class="status-pill is-pending">TBD</span>'
+            const total = check('Total DTI', obligation + totalDebts, tier.dti);
+            const housing = check('Housing Only DTI', obligation, tier.housing);
+            const scoreLine = minScore === null ? '' : '<li><strong>Credit Score</strong>: ' + result.creditScore + (scoreDenied ? ' ✗' : ' ✓')
+                + ' (min ' + minScore + (scoreDenied ? '; below it, applicants are denied' : '') + ')</li>';
+            const status = scoreDenied ? '<span class="status-pill is-fail">Not Approved</span>'
+                : incomeMissing ? '<span class="status-pill is-pending">TBD</span>'
                 : '<span class="status-pill ' + (total.pass && housing.pass ? 'is-pass">Approved' : 'is-fail">Not Approved') + '</span>';
 
             return '<div class="pay-grand approval-box">'
@@ -2852,7 +2884,7 @@
                 + '<ul class="approval-details">'
                 + clientLines
                 + '<li><strong>Total</strong>: ' + (incomeMissing ? 'TBD' : dollars(totalIncome) + '/mo income · ' + dollars(totalDebts) + '/mo debts') + '</li>'
-                + total.line + housing.line
+                + scoreLine + total.line + housing.line
                 + '<li>Limits are for a ' + scoreText + '.</li>'
                 + '</ul></div>'
                 + '<p class="fine-note">This is an estimate, not a loan approval. Your lender will verify your income, debts and credit.</p>';
@@ -3461,7 +3493,10 @@
             const loan = document.getElementById('loan-fields');
             loanAmountField(loan);
             percentField(loan, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']]);
+            toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']],
+                { help: 'The FHA UFMIP, the VA funding fee, or upfront mortgage insurance.' });
+            toggleField(loan, 'Conventional Mortgage Insurance', 'MI PAID UPFRONT', [['TRUE', 'Upfront'], ['FALSE', 'Monthly']],
+                { help: 'Conventional loans (and jumbo or non-conforming ones with mortgage insurance): paid monthly, or once at closing (estimated from the yearly premium).' });
 
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'buyer');
@@ -3861,7 +3896,10 @@
                 { help: 'Not used when Buyer’s Financing is Cash.' });
             percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
             percentField(buyerIn, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            toggleField(buyerIn, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']]);
+            toggleField(buyerIn, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']],
+                { help: 'The FHA UFMIP, the VA funding fee (a first-time use here), or upfront mortgage insurance.' });
+            toggleField(buyerIn, 'Conventional Mortgage Insurance', 'MI PAID UPFRONT', [['TRUE', 'Upfront'], ['FALSE', 'Monthly']],
+                { help: 'Conventional loans (and jumbo or non-conforming ones with mortgage insurance): paid monthly, or once at closing (estimated from the yearly premium).' });
             wholeField(buyerIn, 'Buyer Credit Score', 'BUYER CREDIT SCORE', { help: 'Blank uses ' + FALLBACK_CREDIT_SCORE + '.' });
             percentField(buyerIn, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE', { help: 'A yearly percent of the price.' });
             moneyField(buyerIn, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');

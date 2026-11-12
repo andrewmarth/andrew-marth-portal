@@ -4,7 +4,10 @@
 // Columns the API sends that LAYOUT doesn't mention are asked under "Other".
 // Uses the same pop-up styles as the income editor: a card on wide screens, a swipe-up sheet on phones.
 import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
-import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel } from '/rate-markups.js';
+import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel,
+    BUYDOWN_POINTS, BUYDOWN_SCENARIO, buydownQuotes, buydownBase, buydownModel } from '/rate-markups.js';
+import { MI_CREDIT, MI_DTI, MI_LTV, MI_REQUIRED_ABOVE, MI_REFERENCE, MI_MAX_QUOTE, FHA_UFMIP, VA_FUNDING_FEES, VA_DOWN_LABELS,
+    miQuotes, miModel, miSettings, upfrontFactor } from '/mortgage-insurance.js';
 
 const CSS = `
 .loan-dialog .income-section .type-fields { margin-top: 2px; }
@@ -84,6 +87,15 @@ const CSS = `
 .loan-dialog .lp-fees-extra:empty { display: none; }
 .loan-dialog .lp-add-fee { justify-self: start; margin-top: 2px; padding: 6px 4px; border: none; background: none; font-family: inherit; font-size: 0.92rem; font-weight: bold; color: var(--rust); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .loan-dialog .lp-fee-row .is-invalid { border-color: var(--rust); background: #fdf2f2; }
+/* Max DTI: a credit score and its max DTI (and housing-only max DTI, when there's a separate one) per row */
+.loan-dialog .lp-tier-list { display: grid; gap: 8px; }
+.loan-dialog .lp-tier-list:empty { display: none; }
+.loan-dialog .lp-tier-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; }
+.loan-dialog .lp-tiers.has-housing .lp-tier-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px; }
+.loan-dialog .lp-tiers:not(.has-housing) [data-tier-housing] { display: none; }
+.loan-dialog .lp-tier-row input { min-height: 46px; }
+.loan-dialog .lp-tier-sum { margin: 2px 0 0 6px; font-size: 0.86rem; line-height: 1.5; }
+.loan-dialog .lp-tier-sum:empty { display: none; }
 /* Rates: the lender's 27 quotes (one table per credit score: DTI down, LTV across), then the markups they work out to */
 .loan-dialog .lp-quotes { display: grid; gap: 12px; }
 .loan-dialog .lp-quote-block { padding: 10px 8px 6px; border: 2px solid rgba(14, 42, 59, 0.18); border-radius: 18px; background: #faf8f5; }
@@ -123,8 +135,46 @@ const CSS = `
 .loan-dialog .lp-markup-key { margin: 0 0 0 6px; font-size: 0.8rem; opacity: 0.75; }
 .loan-dialog .lp-key-line { display: inline-block; width: 18px; height: 0; margin: 0 3px 3px 0; vertical-align: middle; border-top: 2px solid #a65a35; }
 .loan-dialog .lp-key-line.is-dashed { border-top-style: dashed; }
+.loan-dialog .lp-markup-table tr.is-denied td { color: rgba(78, 81, 62, 0.6); background: rgba(14, 42, 59, 0.05); }
+.loan-dialog .lp-key-denied { display: inline-block; width: 12px; height: 10px; margin: 0 3px 1px 0; vertical-align: middle; border-radius: 2px; background: repeating-linear-gradient(45deg, rgba(14, 42, 59, 0.22) 0 2px, rgba(14, 42, 59, 0.05) 2px 5px); }
 .loan-dialog .lp-key-band { display: inline-block; width: 12px; height: 10px; margin: 0 3px 1px 0; vertical-align: middle; border-radius: 2px; background: rgba(192, 144, 80, 0.28); }
 .loan-dialog .lp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The rate quote sheet (27 quotes + 4 buydown quotes): being filled in (the boxes and Submit Quotes), or submitted (the
+   boxes hidden, the date it was submitted and Requote) */
+.loan-dialog [data-quote-entry][hidden], .loan-dialog .lp-sheet-status[hidden], .loan-dialog .lp-sheet-actions[hidden], .loan-dialog .lp-sheet-buttons .btn[hidden] { display: none; }
+.loan-dialog .lp-sheet-status { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 2px solid var(--olive); border-radius: 16px; background: #eef0e6; }
+.loan-dialog .lp-sheet-status p { flex: 1; margin: 0; font-size: 0.9rem; line-height: 1.45; }
+.loan-dialog .lp-sheet-status .btn { flex: none; }
+.loan-dialog .lp-sheet-actions { display: grid; gap: 8px; padding-top: 4px; }
+.loan-dialog .lp-sheet-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.loan-dialog .lp-sheet-note { margin: 0 0 0 6px; font-size: 0.86rem; opacity: 0.75; }
+.loan-dialog .lp-sheet-msg { margin: 0 0 0 6px; font-size: 0.92rem; font-weight: bold; color: var(--rust); }
+.loan-dialog .lp-sheet-msg:empty { display: none; }
+@media (max-width: 600px) {
+    .loan-dialog .lp-sheet-status { flex-direction: column; align-items: stretch; }
+}
+/* Mortgage insurance, by product type: FHA's fixed UFMIP, VA's funding fee charts, or the lender's annual premiums
+   (Jumbo and Non-Conforming first ask whether there are any) */
+.loan-dialog .lp-mi { display: grid; gap: 12px; }
+.loan-dialog .lp-mi-part { display: grid; gap: 12px; }
+.loan-dialog .lp-mi [data-mi-for][hidden] { display: none; }
+.loan-dialog .lp-fixed { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border: 2px dashed rgba(14, 42, 59, 0.3); border-radius: 18px; background: #f2ede6; }
+.loan-dialog .lp-fixed-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #e6ded2; color: var(--olive); }
+.loan-dialog .lp-fixed-icon svg { width: 18px; height: 18px; }
+.loan-dialog .lp-fixed-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.loan-dialog .lp-fixed-k { font-size: 0.86rem; font-weight: bold; opacity: 0.8; }
+.loan-dialog .lp-fixed-v { font-size: 1.6rem; font-weight: bold; color: var(--brown); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.loan-dialog .lp-fixed-tag { flex: none; padding: 4px 10px; border-radius: 999px; background: var(--olive); color: var(--cream); font-size: 0.78rem; font-weight: bold; }
+.loan-dialog .lp-va-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.loan-dialog .lp-va-charts td:last-child { font-weight: bold; }
+.loan-dialog .lp-check-row { display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 16px; border: 2px solid rgba(14, 42, 59, 0.35); border-radius: 18px; background: #f7f4f0; color: var(--brown); font-size: 0.95rem; font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.loan-dialog .lp-check-row input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--olive); cursor: pointer; }
+.loan-dialog .lp-check-row:has(input:checked) { border-color: var(--olive); background: #eef0e6; }
+.loan-dialog .lp-check-row:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 3px; }
+@media (max-width: 600px) {
+    .loan-dialog .lp-va-charts { grid-template-columns: 1fr; }
+    .loan-dialog .lp-fixed { flex-wrap: wrap; }
+}
 @media (max-width: 600px) {
     .loan-dialog .lp-metric-body { grid-template-columns: 1fr; }
     .loan-dialog .lp-chart { border-right: none; border-bottom: 1px solid rgba(14, 42, 59, 0.12); }
@@ -173,6 +223,44 @@ const LABEL_RULES = [
     { col: 'SECOND LOAN LTV MAX', when: ['SECOND LOAN ADJUSTABLE BY CLIENT', 'FALSE'], label: 'Second Loan LTV' },
 ];
 
+// --- Max DTI ---
+// Credit scores go from 300 to 850 (the lowest and highest possible)
+export const CREDIT_MIN = 300, CREDIT_MAX = 850;
+const scoreOk = v => /^\d{3}$/.test(String(v).trim()) && +v >= CREDIT_MIN && +v <= CREDIT_MAX;
+// The old set tiers (MAX DTI CREDIT SCORE <600 ... 800+), each from its lowest score
+const OLD_DTI_TIERS = [['<600', 300], ['600-620', 600], ['620-640', 620], ['640-660', 640], ['660-680', 660], ['680-700', 680],
+    ['700-720', 700], ['720-740', 720], ['740-760', 740], ['760-780', 760], ['780-800', 780], ['800+', 800]];
+/**
+ * A product's max DTI tiers, lowest credit score first: [{ score, dti, housing }] (decimals). Each applies from its credit
+ * score up to the next tier's; the lowest also covers any score below it. From MAX DTI TIERS, or (a product saved before
+ * those) its MAX DTI CREDIT SCORE ... and MAX DTI HOUSING ONLY CREDIT SCORE ... columns, with tiers in a row that have the
+ * same limits merged (none when they're all blank). get(column) → the product's value.
+ */
+export function productDtiTiers(get) {
+    const raw = String(get('MAX DTI TIERS') || '').trim();
+    if (raw) {
+        try {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+                return list.map(t => ({ score: Number(t && t.SCORE), dti: Number(t && t.DTI), housing: t && t.HOUSING !== undefined && t.HOUSING !== null && t.HOUSING !== '' ? Number(t.HOUSING) : Number(t && t.DTI) }))
+                    .filter(t => isFinite(t.score) && isFinite(t.dti) && isFinite(t.housing)).sort((a, b) => a.score - b.score);
+            }
+        } catch (e) { /* the old columns below */ }
+    }
+    const old = OLD_DTI_TIERS.map(([k, score]) => { const dti = num(get('MAX DTI CREDIT SCORE ' + k)); return { score, dti, housing: num(get('MAX DTI HOUSING ONLY CREDIT SCORE ' + k)) || dti }; });
+    if (old.every(t => !t.dti && !t.housing)) return [];
+    return old.filter((t, i) => i === 0 || t.dti !== old[i - 1].dti || t.housing !== old[i - 1].housing);
+}
+// The tier for a credit score (the lowest tier when the score is below them all), or null without tiers
+export function dtiTierFor(tiers, score) {
+    return tiers.length ? tiers.reduce((best, t) => (t.score <= score ? t : best), tiers[0]) : null;
+}
+// A product's MIN CREDIT SCORE (below it an applicant is denied), or null when there's none (blank, or 300: the lowest possible)
+export function minCreditScore(raw) {
+    const n = Math.round(num(raw));
+    return n > CREDIT_MIN && n <= CREDIT_MAX ? n : null;
+}
+
 // A product's OTHER LENDER FEES (JSON: [{ NAME, AMOUNT }]) as [{ name, amount }]
 export function lenderFees(raw) {
     try {
@@ -183,7 +271,6 @@ export function lenderFees(raw) {
     }
 }
 
-const DTI = ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+'];
 const DESIGNATIONS = ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'];
 const NO_INCOME_LIMIT = '99999999';
 const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
@@ -231,21 +318,24 @@ const LAYOUT = [
     { section: 'Lender Fees', items: [{ fees: {
         standard: ['APPRAISAL FEE AT CLOSING', 'APPRAISAL DEPOSIT', 'APPRASIAL MANAGEMENT FEE', 'CREDIT REPORT FEE', 'FLOOD CERT FEE', 'TAX CERT FEE', 'ATTORNEY REVIEW FEE'],
         col: 'OTHER LENDER FEES' } }] },
-    { section: 'Mortgage Insurance', items: [
-        { gate: 'prepaid', label: 'Is there prepaid mortgage insurance?',
-            items: ['0%-5%', '5%-10%', '10%-20%', '20%+'].map(d => ({ col: 'PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN' })),
-            isOn: anyAbove0(['0%-5%', '5%-10%', '10%-20%', '20%+'].map(d => 'PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN')) },
-        { col: 'PMI LTV THRESHOLD' }, { col: 'LOAN PRODUCT PMI RATE' },
-    ] },
-    // The lender's 27 quoted rates (RATE QUOTES) and the markups they work out to (see /rate-markups.js)
-    { section: 'Rates', items: [{ quotes: 'RATE QUOTES' }, { col: 'POINT RATE BUYDOWN AMOUNT' }] },
-    { section: 'Max DTI', items: DTI.map(s => ({ col: 'MAX DTI CREDIT SCORE ' + s })) },
-    // No separate housing-only DTI: each housing-only column gets the matching Max DTI answer
-    { section: 'Max DTI Housing Only', items: [
-        { gate: 'housing', label: 'Is there a separate metric for housing-only DTI?',
-            items: DTI.map(s => ({ col: 'MAX DTI HOUSING ONLY CREDIT SCORE ' + s })),
-            isOn: v => DTI.some(s => num(v['MAX DTI HOUSING ONLY CREDIT SCORE ' + s]) !== num(v['MAX DTI CREDIT SCORE ' + s])),
-            off: (col, v) => v[col.replace('MAX DTI HOUSING ONLY ', 'MAX DTI ')] },
+    // By Product Type (see /mortgage-insurance.js): FHA shows its fixed 1.75% UFMIP (the section reads "UFMIP"); VA shows
+    // the VA's funding fee charts (first and subsequent use; "VA Funding Fee"); Conventional asks the lender's 27 annual
+    // premiums (MI QUOTES) and shows the premium curves and the upfront premium worked out from them; Jumbo and
+    // Non-Conforming ask whether the product has no mortgage insurance guidelines (NO MI GUIDELINES, checked for a new
+    // product) and, when it has them, the same as Conventional
+    { section: 'Mortgage Insurance', items: [{ mi: { quotes: 'MI QUOTES', none: 'NO MI GUIDELINES' } }] },
+    // The lender's 27 quoted rates (RATE QUOTES) and the markups they work out to, then the 4 quotes with points bought
+    // (BUYDOWN QUOTES) and the buydown they work out to (see /rate-markups.js). They replace POINT RATE BUYDOWN AMOUNT.
+    { section: 'Rates', items: [{ quotes: 'RATE QUOTES' }, { buydown: 'BUYDOWN QUOTES' }] },
+    // The lowest credit score accepted (MIN CREDIT SCORE: below it an applicant is denied; 300, the lowest possible, when
+    // there's none), then the max DTI from each credit score the lender lists (MAX DTI TIERS, a list like Lender Fees'
+    // added fees), each with its own housing-only max when there's a separate one (else the same as its max DTI)
+    { section: 'Max DTI', items: [
+        { gate: 'minscore', label: 'Is there a minimum credit score? (Below it, an applicant is denied.)', items: [{ col: 'MIN CREDIT SCORE', label: 'Minimum Credit Score' }],
+            isOn: v => minCreditScore(v['MIN CREDIT SCORE']) !== null, off: () => String(CREDIT_MIN) },
+        { gate: 'housing', label: 'Is there a separate metric for housing-only DTI?', items: [],
+            isOn: v => productDtiTiers(c => v[c]).some(t => t.housing !== t.dti) },
+        { tiers: 'MAX DTI TIERS' },
     ] },
     { section: 'Income Qualifying', items: ['SALARY', 'HOURLY', '1099', 'TIP', 'COMMISSION', 'BONUS'].map(k => ({ col: k + ' QUALIFYING %' })) },
     { section: 'Escrow', items: [{ col: 'MONTHS COLLECTED FOR TAXES', input: 'stepper' }, { col: 'MONTHS COLLECTED FOR INSURANCE', input: 'stepper' }] },
@@ -281,7 +371,7 @@ function shown(kind, raw) {
     const n = Number(v.replace(/[$,%\s]/g, ''));
     if (!isFinite(n)) return '';
     if (kind === 'rate') return String(Number((n * 100).toPrecision(10)));
-    if (kind === 'int') return String(Math.round(n));
+    if (kind === 'int' || kind === 'score') return String(Math.round(n));
     return withCommas(String(Number(n.toFixed(2))));
 }
 // "1234567.5" → "1,234,567.5" (the cents part is left as typed)
@@ -329,6 +419,7 @@ function question(item, kind, section, n) {
     if (kind === 'money') return field(wrap('money-wrap', box('money', 'numeric')));
     if (kind === 'cents') return field(wrap('money-wrap', box('money', 'decimal')));
     if (kind === 'int') return field(box('digits', 'numeric'));
+    if (kind === 'score') return field(box('digits', 'numeric').replace('autocomplete="off"', 'autocomplete="off" maxlength="3" placeholder="300-850"'));
     return field(box('', 'text'), true);
 }
 
@@ -390,6 +481,9 @@ function build() {
                 return standard.length || kinds[it.fees.col] ? { fees: { standard, col: kinds[it.fees.col] ? it.fees.col : null } } : null;
             }
             if (it.quotes) { used[it.quotes] = true; return kinds[it.quotes] ? it : null; }
+            if (it.buydown) { used[it.buydown] = true; return kinds[it.buydown] ? it : null; }
+            if (it.tiers) { used[it.tiers] = true; return kinds[it.tiers] ? it : null; }
+            if (it.mi) { used[it.mi.quotes] = true; used[it.mi.none] = true; return kinds[it.mi.quotes] ? it : null; }
             if (it.gate) { if (it.col) used[it.col] = true; return { ...it, items: keep(it.items) }; }
             used[it.col] = true;
             return kinds[it.col] ? it : null;
@@ -405,6 +499,16 @@ function build() {
             const n = counter.n++;
             if (it.fixed) return '';
             if (it.quotes) return quotesHtml();
+            if (it.buydown) return buydownHtml();
+            if (it.mi) return miHtml();
+            if (it.tiers) {
+                return '<p class="lp-fees-help">List each credit score where the max DTI changes. Each max applies from its credit score up to the next one listed; the lowest also covers any score below it. Credit scores go from '
+                    + CREDIT_MIN + ' to ' + CREDIT_MAX + '.</p>'
+                    + '<div class="lp-fees lp-tiers" data-tiers><div class="lp-fee-row lp-tier-row is-head"><span>Credit Score</span><span>Max DTI</span><span data-tier-housing>Housing-Only Max DTI</span><span></span></div>'
+                    + '<div class="lp-tier-list" data-tier-list></div>'
+                    + '<button type="button" class="lp-add-fee" data-add-tier>+ Add Credit Score</button>'
+                    + '<p class="lp-tier-sum" data-tier-sum></p></div>';
+            }
             if (it.fees) {
                 return '<p class="lp-fees-help">Every product has the standard fees (0 if the lender doesn’t charge one). Add any other fee the lender charges. The buyer pays them at closing.</p>'
                     + '<div class="lp-fees"><div class="lp-fee-row is-head"><span>Fee</span><span>Amount</span><span></span></div>'
@@ -421,7 +525,7 @@ function build() {
             }
             if (it.gate) {
                 return '<div class="field span-2"><span class="field-label">' + escapeHtml(it.label) + '</span>' + yesNo('lp-gate-' + it.gate, 'data-gate="' + it.gate + '"') + '</div>'
-                    + '<div class="gate-body" data-gate-body="' + it.gate + '" hidden>' + itemsHtml(it.items, section, counter) + '</div>';
+                    + (it.items.length ? '<div class="gate-body" data-gate-body="' + it.gate + '" hidden>' + itemsHtml(it.items, section, counter) + '</div>' : '');
             }
             const q = question(it, kinds[it.col], section, n);
             return it.scope ? '<div class="lp-scope" data-scope="' + it.scope + '">' + q + '</div>' : q;
@@ -439,7 +543,7 @@ function build() {
             + '<div class="type-fields">' + itemsHtml(s.items, s.section, counter) + '</div></fieldset>').join('');
         sectionsEl.querySelectorAll('input[data-kind]').forEach(el => el.addEventListener('input', () => {
             const kind = el.dataset.kind;
-            if (kind === 'int') el.value = el.value.replace(/\D/g, '');
+            if (kind === 'int' || kind === 'score') el.value = el.value.replace(/\D/g, '');
             else if (kind === 'money') el.value = withCommas(el.value.replace(/\D/g, ''));
             else if (kind === 'cents') el.value = withCommas(decimalOnly(el.value, 2));
             else if (kind === 'rate') el.value = decimalOnly(el.value, 4);
@@ -520,7 +624,76 @@ function build() {
     const feeRow = (f = {}) => '<div class="lp-fee-row is-extra field"><input type="text" data-fee-k="name" maxlength="100" autocomplete="off" aria-label="Fee name" placeholder="Fee name" value="' + escapeHtml(f.name || '') + '">'
         + '<div class="money-wrap"><input class="money" data-fee-k="amount" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount" value="' + escapeHtml(f.amount === undefined || f.amount === null || f.amount === '' ? '' : shown('cents', f.amount)) + '"></div>'
         + '<button type="button" class="lp-fee-remove" data-remove-fee aria-label="Remove fee"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>';
+    // Max DTI: one row per credit score (its score, max DTI and housing-only max DTI)
+    const tierRow = (t = {}) => '<div class="lp-fee-row lp-tier-row field">'
+        + '<input class="digits" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="300-850" data-tier-k="score" aria-label="Credit score" value="' + (t.score ? escapeHtml(String(t.score)) : '') + '">'
+        + '<div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-tier-k="dti" aria-label="Max DTI" value="' + (t.dti ? escapeHtml(shown('rate', t.dti)) : '') + '"></div>'
+        + '<div class="pct-wrap" data-tier-housing><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-tier-k="housing" aria-label="Housing-only max DTI" value="' + (t.housing ? escapeHtml(shown('rate', t.housing)) : '') + '"></div>'
+        + '<button type="button" class="lp-fee-remove" data-remove-tier aria-label="Remove this credit score"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>';
+    const tierRows = () => [...sectionsEl.querySelectorAll('[data-tier-list] .lp-tier-row')];
+    // The minimum credit score as answered (null: none, or not a valid score yet)
+    function currentMinScore() {
+        if (gateAnswer('minscore') !== true) return null;
+        const el = sectionsEl.querySelector('[data-col="MIN CREDIT SCORE"]');
+        return el && scoreOk(el.value) ? minCreditScore(el.value) : null;
+    }
+    // The housing-only column (when there's a separate one) and the tiers as score ranges, e.g. "620–679: 43% · 680 and up: 45%"
+    function syncTiers() {
+        const box = sectionsEl.querySelector('[data-tiers]');
+        if (!box) return;
+        const housingOn = gateAnswer('housing') === true;
+        box.classList.toggle('has-housing', housingOn);
+        const tiers = tierRows().map(row => {
+            const v = k => row.querySelector('[data-tier-k="' + k + '"]').value.trim();
+            return { score: v('score'), dti: v('dti'), housing: v('housing') };
+        }).filter(t => scoreOk(t.score) && t.dti !== '').map(t => ({ ...t, score: +t.score })).sort((a, b) => a.score - b.score)
+            .filter((t, i, list) => !i || t.score !== list[i - 1].score);
+        const min = currentMinScore();
+        const parts = [];
+        tiers.forEach((t, i) => {
+            const lo = Math.max(i ? t.score : CREDIT_MIN, min || CREDIT_MIN), hi = i < tiers.length - 1 ? tiers[i + 1].score - 1 : CREDIT_MAX;
+            if (lo > hi) return;
+            const range = lo === CREDIT_MIN && hi === CREDIT_MAX ? 'Every credit score' : lo === CREDIT_MIN ? 'Up to ' + hi : hi === CREDIT_MAX ? lo + ' and up' : lo + '–' + hi;
+            parts.push(range + ': <b>' + Number(t.dti) + '%</b>' + (housingOn && t.housing !== '' ? ' (housing only ' + Number(t.housing) + '%)' : ''));
+        });
+        box.querySelector('[data-tier-sum]').innerHTML = parts.join(' · ') + (parts.length ? '.' : '') + (min !== null ? (parts.length ? ' ' : '') + 'Below ' + min + ': <b>denied</b>.' : '');
+    }
+    sectionsEl.addEventListener('change', e => {
+        if (e.target.closest('[data-gate="minscore"], [data-gate="housing"]')) { syncTiers(); showRateMarkups(); showMiOut(); }
+        if (e.target.matches('[data-mi-none]')) showMi();
+        // (the upfront premium follows the loan term)
+        if (e.target.closest('[data-term], [data-term-other]')) showMiOut();
+    });
     sectionsEl.addEventListener('click', e => {
+        if (e.target.closest('[data-add-tier]')) {
+            const list = sectionsEl.querySelector('[data-tier-list]');
+            list.insertAdjacentHTML('beforeend', tierRow());
+            list.lastElementChild.querySelector('input').focus();
+            e.target.closest('[data-add-tier]').classList.remove('is-invalid');
+            return;
+        }
+        const removeTier = e.target.closest('[data-remove-tier]');
+        if (removeTier) { removeTier.closest('.lp-tier-row').remove(); syncTiers(); return; }
+        if (e.target.closest('[data-submit-quotes]')) { submitSheet(); return; }
+        // Requote: every box blank, to fill in from scratch
+        if (e.target.closest('[data-requote]')) {
+            requoting = true;
+            sheetMode = 'open';
+            putSheet(null, null);
+            showSheet();
+            const first = quoteBoxes()[0];
+            first.closest('.lp-quotes').previousElementSibling.scrollIntoView({ block: 'start' });
+            first.focus({ preventScroll: true });
+            return;
+        }
+        if (e.target.closest('[data-cancel-requote]')) {
+            requoting = false;
+            sheetMode = 'locked';
+            putSheet(locked.quotes, locked.buys);
+            showSheet();
+            sectionsEl.querySelector('[data-sheet-status]').scrollIntoView({ block: 'nearest' });
+            return;
+        }
         if (e.target.closest('[data-add-fee]')) {
             const list = sectionsEl.querySelector('[data-fee-list]');
             list.insertAdjacentHTML('beforeend', feeRow());
@@ -531,9 +704,26 @@ function build() {
         if (remove) remove.closest('.lp-fee-row').remove();
     });
     sectionsEl.addEventListener('input', e => {
-        if (e.target.matches('[data-quote]')) { e.target.value = decimalOnly(e.target.value, 4); e.target.classList.remove('is-invalid'); showMarkups(); }
+        if (e.target.matches('[data-quote], [data-buy]')) {
+            e.target.value = decimalOnly(e.target.value, 4);
+            e.target.classList.remove('is-invalid');
+            const msg = sectionsEl.querySelector('[data-sheet-msg]');
+            if (msg) msg.textContent = '';
+            if (e.target.matches('[data-quote]')) showMarkups(); else showBuydown();
+        }
         if (e.target.matches('[data-fee-k="amount"]')) e.target.value = withCommas(decimalOnly(e.target.value, 2));
         if (e.target.matches('[data-fee-k]')) e.target.classList.remove('is-invalid');
+        if (e.target.matches('[data-tier-k]')) {
+            e.target.value = e.target.dataset.tierK === 'score' ? e.target.value.replace(/\D/g, '') : decimalOnly(e.target.value, 4);
+            e.target.classList.remove('is-invalid');
+            syncTiers();
+        }
+        if (e.target.matches('[data-col="MIN CREDIT SCORE"]')) { syncTiers(); showRateMarkups(); showMiOut(); }
+        if (e.target.matches('[data-miq]')) {
+            e.target.value = decimalOnly(e.target.value, 4);
+            e.target.classList.remove('is-invalid');
+            showMiOut();
+        }
     });
     // Closes an open picker when something else is clicked
     dialog.addEventListener('click', e => {
@@ -544,8 +734,9 @@ function build() {
     const pctText = v => String(Math.round(v * 100)) + '%';
     const quoteLabel = (c, d, l) => QUOTE_CREDIT[c] + ' credit score, ' + pctText(QUOTE_DTI[d]) + ' DTI, ' + pctText(QUOTE_LTV[l]) + ' LTV';
     function quotesHtml() {
-        return '<p class="lp-fees-help lp-quote-help">Quote the interest rate (no points bought) for each scenario. Today’s interest rate is <strong data-today>not set</strong>; each quote’s markup is how far it is above (or below) it.</p>'
-            + '<div class="field lp-quotes">' + QUOTE_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
+        return '<div class="lp-sheet-status" data-sheet-status hidden><p data-sheet-text></p><button type="button" class="btn btn-secondary" data-requote>Requote</button></div>'
+            + '<p class="lp-fees-help lp-quote-help" data-quote-entry>Quote the interest rate (no points bought) for each scenario. Today’s interest rate is <strong data-today>not set</strong>; each quote’s markup is how far it is above (or below) it.</p>'
+            + '<div class="field lp-quotes" data-quote-entry>' + QUOTE_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
                 + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
                 + QUOTE_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
                 + QUOTE_DTI.map((d, di) => '<tr><th scope="row">' + pctText(d) + ' DTI</th>' + QUOTE_LTV.map((l, li) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-quote="'
@@ -553,7 +744,36 @@ function build() {
                 + '</tbody></table></div>').join('') + '</div>'
             + '<div class="lp-markups" data-markups></div>';
     }
-    let savedQuotes = null;
+    // Rate buydown: the 4 quotes with points bought, for one scenario
+    const pointsText = v => String(Number((v * 100).toFixed(2))) + '%';
+    const scenarioText = BUYDOWN_SCENARIO.credit + ' credit score, ' + pctText(BUYDOWN_SCENARIO.dti) + ' DTI and ' + pctText(BUYDOWN_SCENARIO.ltv) + ' LTV';
+    const buyLabel = i => scenarioText + ', ' + pointsText(BUYDOWN_POINTS[i]) + ' in points';
+    function buydownHtml() {
+        return '<p class="lp-fees-help lp-quote-help" data-quote-entry>Rate buydown: quote the interest rate for a ' + scenarioText + ' with each amount of points bought (a percent of the loan). '
+            + 'With no points, that rate comes from the quotes above (<strong data-buy-base>…</strong>); each quote’s buydown is how far below it is.</p>'
+            + '<div class="field lp-quotes" data-quote-entry><div class="lp-quote-block"><p class="lp-quote-title">Points Purchased</p>'
+            + '<table class="lp-quote-grid"><thead><tr>' + BUYDOWN_POINTS.map(p => '<th scope="col">' + pointsText(p) + '</th>').join('') + '</tr></thead><tbody><tr>'
+            + BUYDOWN_POINTS.map((p, i) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-buy="' + i
+                + '" aria-label="' + escapeHtml(buyLabel(i)) + '"></div></td>').join('')
+            + '</tr></tbody></table></div></div>'
+            + '<div class="lp-markups" data-buydown></div>'
+            + '<div class="lp-sheet-actions" data-sheet-actions><p class="lp-sheet-note" data-sheet-note></p><p class="lp-sheet-msg" role="alert" data-sheet-msg></p>'
+            + '<div class="lp-sheet-buttons"><button type="button" class="btn" data-submit-quotes><span class="btn-spinner" aria-hidden="true"></span>Submit Quotes</button>'
+            + '<button type="button" class="btn btn-secondary" data-cancel-requote hidden>Keep Current Quotes</button></div></div>';
+    }
+    const buyBoxes = () => [...sectionsEl.querySelectorAll('[data-buy]')].sort((a, b) => a.dataset.buy - b.dataset.buy);
+    // The 4 buydown quotes as decimals, or null while any is blank or not over 0
+    function buyNow() {
+        const boxes = buyBoxes();
+        if (boxes.length !== BUYDOWN_POINTS.length || boxes.some(b => b.value.trim() === '')) return null;
+        const list = boxes.map(b => Number(b.value.trim()) / 100);
+        return list.every(q => isFinite(q) && q > 0) ? list : null;
+    }
+
+    // The quote sheet: 'open' while it's being filled in, 'locked' once submitted. locked: the submitted sheet ({ quotes,
+    // buys, today, date, pending }; pending: a new product's, saved when the product is added). requoting: a new sheet is
+    // being filled in over a submitted one (which stays until the new one is submitted).
+    let sheetMode = 'open', locked = null, requoting = false;
     const quoteBoxes = () => [...sectionsEl.querySelectorAll('[data-quote]')].sort((a, b) => a.dataset.quote - b.dataset.quote);
     const quotesField = () => (ctx && ctx.fields || []).find(f => f.col === 'RATE QUOTES');
     const fieldToday = () => { const f = quotesField(); return f && Number(f.today) > 0 ? Number(f.today) : null; };
@@ -564,15 +784,100 @@ function build() {
         const list = boxes.map(b => Number(b.value.trim()) / 100);
         return list.every(q => isFinite(q) && q > 0) ? list : null;
     }
-    // Today's rate the markups are measured from: the saved one while the quotes are unchanged, else today's
-    function todayFor(quotes) {
-        const same = savedQuotes && savedQuotes.today !== null && (!quotes || savedQuotes.quotes.every((q, i) => Math.abs(q - quotes[i]) < 1e-9));
-        return same ? { rate: savedQuotes.today, saved: true } : { rate: fieldToday(), saved: false };
+    // Today's rate the markups are measured from: a submitted sheet's (today's rate the day it was submitted), else today's
+    // (a sheet is stamped with today's rate when it's submitted)
+    function todayFor() {
+        return sheetMode === 'locked' && locked && !locked.pending && locked.today ? { rate: locked.today, saved: true } : { rate: fieldToday(), saved: false };
+    }
+    // Puts a sheet's rates in the boxes (null: blank)
+    function putSheet(quotes, buys) {
+        quoteBoxes().forEach((b, i) => { b.value = quotes ? shown('rate', quotes[i]) : ''; b.classList.remove('is-invalid'); });
+        buyBoxes().forEach((b, i) => { b.value = buys ? shown('rate', buys[i]) : ''; b.classList.remove('is-invalid'); });
+    }
+    const dateText = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+    // Open: the boxes, Submit Quotes (and Keep Current Quotes while requoting). Locked: the boxes hidden; when it was
+    // submitted, and Requote. The markup and buydown tables show either way.
+    function showSheet() {
+        const open = sheetMode === 'open';
+        sectionsEl.querySelectorAll('[data-quote-entry]').forEach(el => { el.hidden = !open; });
+        const status = sectionsEl.querySelector('[data-sheet-status]'), actions = sectionsEl.querySelector('[data-sheet-actions]');
+        if (status) {
+            status.hidden = open;
+            if (!open && locked) status.querySelector('[data-sheet-text]').innerHTML = locked.pending
+                ? '<b>Rate quotes ready.</b> They’re saved when you add the loan product, and can’t be edited after that. To change them, requote all of them.'
+                : '<b>Rate quotes submitted' + (locked.date ? ' on ' + dateText(locked.date) : '') + '</b>' + (locked.today ? ' (today’s interest rate was ' + rateText(locked.today) + ')' : '')
+                    + '. They can’t be edited. To change them, requote: enter all 27 rates and the 4 buydown rates again.';
+        }
+        if (actions) {
+            actions.hidden = !open;
+            actions.querySelector('[data-cancel-requote]').hidden = !requoting;
+            actions.querySelector('[data-sheet-note]').textContent = requoting
+                ? 'Your current quotes stay in place until you submit these. Submitting replaces them.'
+                : 'Once submitted, the quotes can’t be edited, only requoted from scratch.';
+            actions.querySelector('[data-sheet-msg]').textContent = '';
+        }
+        showMarkups();
+    }
+    // Submit Quotes: checks every box, then saves the sheet right away (a saved product) or holds it for the product's save
+    // (a new one), and locks it
+    async function submitSheet() {
+        const msg = sectionsEl.querySelector('[data-sheet-msg]');
+        const fail = (el, text) => {
+            if (el) { el.classList.add('is-invalid'); el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center' }); }
+            msg.textContent = text;
+        };
+        msg.textContent = '';
+        message.textContent = '';
+        const boxes = [...quoteBoxes(), ...buyBoxes()];
+        const blank = boxes.find(b => b.value.trim() === '');
+        if (blank) return fail(blank, 'Please quote a rate for ' + (blank.matches('[data-buy]') ? 'each amount of points' : 'every scenario') + ' (' + blank.getAttribute('aria-label') + ').');
+        const bad = boxes.find(b => !(Number(b.value) > 0 && Number(b.value) <= 100));
+        if (bad) return fail(bad, 'Each quoted rate must be more than 0 and no more than 100 (' + bad.getAttribute('aria-label') + ').');
+        // More points can't make the rate higher
+        const buys = buyBoxes();
+        const rising = buys.findIndex((el, i) => i > 0 && Number(el.value) > Number(buys[i - 1].value));
+        if (rising > 0) return fail(buys[rising], 'More points should lower the rate (or keep it the same), so the ' + pointsText(BUYDOWN_POINTS[rising])
+            + ' quote can’t be higher than the ' + pointsText(BUYDOWN_POINTS[rising - 1]) + ' quote.');
+        const today = fieldToday();
+        if (!today) return fail(null, ERRORS.no_today_rate);
+        const dec = el => Number((Number(el.value.trim()) / 100).toPrecision(10));
+        const sheet = { quotes: quoteBoxes().map(dec), buys: buys.map(dec), today, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }), pending: !ctx.product };
+        if (ctx.product) {
+            const values = { 'RATE QUOTES': JSON.stringify({ QUOTES: sheet.quotes }), 'BUYDOWN QUOTES': JSON.stringify({ QUOTES: sheet.buys }) };
+            const btn = sectionsEl.querySelector('[data-submit-quotes]');
+            saving = true;
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            saveBtn.disabled = true;
+            try {
+                await ctx.submit(values, ctx.product.row, { quotesOnly: true });
+            } catch (err) {
+                console.error(err);
+                return fail(null, ERRORS[err.message] || 'We couldn’t submit the quotes. Please try again.');
+            } finally {
+                saving = false;
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                saveBtn.disabled = false;
+            }
+            ctx.product.values['RATE QUOTES'] = JSON.stringify({ QUOTES: sheet.quotes, TODAY: today, DATE: sheet.date });
+            ctx.product.values['BUYDOWN QUOTES'] = values['BUYDOWN QUOTES'];
+        }
+        locked = sheet;
+        requoting = false;
+        sheetMode = 'locked';
+        showSheet();
+        sectionsEl.querySelector('[data-sheet-status]').scrollIntoView({ block: 'nearest' });
     }
     const markText = v => { const r = Math.round(v * 1e5) / 1e3; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(3) + '%'; };
     const rateText = v => String(Number((v * 100).toFixed(4))) + '%';
+    // Each markup (or the buydown): its chart beside its table
+    const metricTable = mt => '<div class="lp-mt-scroll"><table><thead><tr><th scope="col">' + mt.head + '</th><th scope="col">' + (mt.valueHead || 'Markup') + '</th></tr></thead><tbody>'
+        + mt.rows.map(r => '<tr class="is-' + r.place + '" data-v="' + r.value + '"><td>' + mt.label(r.value) + '</td><td>' + (r.place === 'denied' ? 'Denied' : (mt.fmt || markText)(r.markup)) + '</td></tr>').join('') + '</tbody></table></div>';
+    const metricCard = mt => '<div class="lp-markup-table" data-metric="' + mt.key + '"><h4>' + mt.title + '</h4><div class="lp-metric-body">' + markupChart(mt) + metricTable(mt) + '</div></div>';
+    function showMarkups() { showRateMarkups(); showBuydown(); }
     // The starting markup and the three markup tables (credit score 850 to 300, DTI 5% to 70%, LTV 5% to 100%)
-    function showMarkups() {
+    function showRateMarkups() {
         const el = sectionsEl.querySelector('[data-markups]');
         if (!el) return;
         const quotes = quotesNow();
@@ -582,21 +887,177 @@ function build() {
         if (!quotes) { el.innerHTML = '<p class="lp-markups-empty">Fill in all 27 quotes to see the rate markups.</p>'; return; }
         if (!today.rate) { el.innerHTML = '<p class="lp-markups-empty">Today’s interest rate isn’t set, so the markups can’t be worked out yet.</p>'; return; }
         const m = markupModel(quotes, today.rate);
+        // Below the minimum credit score (Max DTI) an applicant is denied: no markup there, and the curve stops at it
+        const minScore = currentMinScore();
+        const creditRows = minScore === null ? m.tables.credit : m.tables.credit.map(r => (r.value < minScore ? { ...r, place: 'denied' } : r));
         const metrics = [
-            { key: 'credit', title: 'Credit Score', head: 'Score', rows: m.tables.credit, fn: m.credit, quoted: QUOTE_CREDIT, label: v => String(v), tip: v => v + ' credit score', ticks: [300, 400, 500, 600, 700, 800], tick: v => String(v) },
+            { key: 'credit', title: 'Credit Score', head: 'Score', rows: creditRows, fn: m.credit, quoted: QUOTE_CREDIT, cutoff: minScore, label: v => String(v), tip: v => v + ' credit score', ticks: [300, 400, 500, 600, 700, 800], tick: v => String(v) },
             { key: 'dti', title: 'Debt-to-Income', head: 'DTI', rows: m.tables.dti, fn: m.dti, quoted: QUOTE_DTI, label: pctText, tip: v => pctText(v) + ' DTI', ticks: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], tick: pctText },
             { key: 'ltv', title: 'Loan-to-Value', head: 'LTV', rows: m.tables.ltv, fn: m.ltv, quoted: QUOTE_LTV, label: pctText, tip: v => pctText(v) + ' LTV', ticks: [0.2, 0.4, 0.6, 0.8, 1], tick: pctText },
         ];
-        const table = mt => '<div class="lp-mt-scroll"><table><thead><tr><th scope="col">' + mt.head + '</th><th scope="col">Markup</th></tr></thead><tbody>'
-            + mt.rows.map(r => '<tr class="is-' + r.place + '" data-v="' + r.value + '"><td>' + mt.label(r.value) + '</td><td>' + markText(r.markup) + '</td></tr>').join('') + '</tbody></table></div>';
         el.innerHTML = '<p class="lp-markups-head">Rate Markups</p>'
             + '<p class="lp-markup-sum">Starting markup (800 credit score, 20% DTI, 50% LTV): <b>' + markText(m.start) + '</b>. A buyer’s rate is today’s interest rate + the starting markup + the three markups below'
             + (m.worstMiss >= 0.00005 ? '; that comes within <b>' + (Math.round(m.worstMiss * 1e5) / 1e3).toFixed(3) + '%</b> of every quote.' : ', matching every quote.') + '</p>'
-            + '<div class="lp-metrics">' + metrics.map(mt => '<div class="lp-markup-table" data-metric="' + mt.key + '"><h4>' + mt.title + '</h4><div class="lp-metric-body">'
-                + markupChart(mt) + table(mt) + '</div></div>').join('') + '</div>'
+            + '<div class="lp-metrics">' + metrics.map(metricCard).join('') + '</div>'
             + '<p class="lp-markup-key"><span class="lp-key-band"></span>Shaded: the quoted range, where the curve passes through the quoted levels (the dots and <b>bold</b> rows). '
-            + '<span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past the quotes. The curve flattens out on one side and keeps bending on the other.</p>';
+            + '<span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past the quotes. The curve flattens out on one side and keeps bending on the other.'
+            + (minScore !== null ? ' <span class="lp-key-denied"></span>Hatched: below the ' + minScore + ' minimum credit score (Max DTI), where an applicant is denied.' : '') + '</p>';
         metrics.forEach(mt => wireChart(el.querySelector('[data-metric="' + mt.key + '"]'), mt));
+    }
+    // The buydown scenario's no-points rate, and the buydown table (no points to 5% by 0.25%) with its chart
+    function showBuydown() {
+        const el = sectionsEl.querySelector('[data-buydown]');
+        if (!el) return;
+        const quotes = quotesNow();
+        const baseBox = sectionsEl.querySelector('[data-buy-base]');
+        if (baseBox) baseBox.textContent = quotes ? (buydownBase(quotes) * 100).toFixed(3) + '%' : 'once all 27 are in';
+        const buys = buyNow();
+        if (!quotes || !buys) { el.innerHTML = '<p class="lp-markups-empty">Fill in all 27 quotes above and the 4 buydown quotes to see the buydown.</p>'; return; }
+        const b = buydownModel(quotes, buys);
+        const mt = { key: 'buydown', title: 'Rate Buydown', head: 'Points', valueHead: 'Rate Change', rows: b.table, fn: b.rateChange, quoted: BUYDOWN_POINTS,
+            band: [0, BUYDOWN_POINTS[BUYDOWN_POINTS.length - 1]], label: pointsText, tip: v => pointsText(v) + ' in points', ticks: [0, 0.01, 0.02, 0.03, 0.04, 0.05], tick: pointsText };
+        const top = BUYDOWN_POINTS.length;
+        const clampNote = !b.clamped ? '' : ' <b>The ' + (b.clamped === 1 ? pointsText(BUYDOWN_POINTS[0]) + ' quote isn’t' : pointsText(BUYDOWN_POINTS[0]) + ' to ' + pointsText(BUYDOWN_POINTS[b.clamped - 1]) + ' quotes aren’t')
+            + ' below the no-points rate</b>, so ' + (b.clamped === 1 ? 'it counts' : 'they count') + ' as no buydown.';
+        const past = b.fade <= 0 ? 'no more buydown than at ' + pointsText(BUYDOWN_POINTS[top - 1])
+            : b.fade >= 1 - 1e-9 ? 'each further point buys as much as the ' + top + 'th did'
+            : 'each further point buys ' + Math.round(b.fade * 100) + '% of what the point before it did (as the ' + top + 'th did of the ' + (top - 1) + 'rd)';
+        el.innerHTML = '<p class="lp-markups-head">Rate Buydown</p>'
+            + '<p class="lp-markup-sum">With no points, the rate for a ' + scenarioText + ' works out to <b>' + (b.base * 100).toFixed(3) + '%</b>, so ' + pointsText(BUYDOWN_POINTS[top - 1])
+            + ' in points buys the rate down <b>' + (b.levels[top] * 100).toFixed(3) + '%</b>. Points lower every buyer’s rate by the rate change below, whatever their credit score, DTI and LTV.' + clampNote + '</p>'
+            + '<div class="lp-metrics">' + metricCard(mt) + '</div>'
+            + '<p class="lp-markup-key"><span class="lp-key-band"></span>Shaded: no points to ' + pointsText(BUYDOWN_POINTS[top - 1]) + ', where the curve passes through each quote (the dots and <b>bold</b> rows). '
+            + '<span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past ' + pointsText(BUYDOWN_POINTS[top - 1]) + ', where ' + past + '.</p>';
+        wireChart(el.querySelector('[data-metric="buydown"]'), mt);
+    }
+
+    // --- Mortgage insurance ---
+    const LOCK_ICON = ICON('<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>');
+    const feeText = v => String(Number((v * 100).toFixed(3))) + '%';
+    const premText = v => (v * 100).toFixed(3) + '%';
+    const miQuoteLabel = (c, d, l) => MI_CREDIT[c] + ' credit score, ' + pctText(MI_DTI[d]) + ' DTI, ' + pctText(MI_LTV[l]) + ' LTV';
+    function miHtml() {
+        const vaChart = (key, title) => '<div class="lp-markup-table"><h4>' + title + '</h4><table><thead><tr><th scope="col">Down Payment</th><th scope="col">Funding Fee</th></tr></thead><tbody>'
+            + VA_FUNDING_FEES[key].map((t, i) => '<tr><td>' + VA_DOWN_LABELS[i] + '</td><td>' + feeText(t.fee) + '</td></tr>').join('') + '</tbody></table></div>';
+        return '<div class="lp-mi" data-mi>'
+            + '<p class="lp-fees-help" data-mi-for="pick">Choose the Product Type (under Product) to see its mortgage insurance.</p>'
+            + '<div class="lp-mi-part" data-mi-for="fha" hidden><div class="lp-fixed"><span class="lp-fixed-icon">' + LOCK_ICON + '</span>'
+                + '<span class="lp-fixed-text"><span class="lp-fixed-k">Upfront Mortgage Insurance Premium</span><span class="lp-fixed-v">' + feeText(FHA_UFMIP) + '</span></span>'
+                + '<span class="lp-fixed-tag">Set by HUD</span></div>'
+                + '<p class="lp-fees-help">Every FHA loan has an upfront mortgage insurance premium (UFMIP) of ' + feeText(FHA_UFMIP) + ' of the base loan amount, so it can’t be changed.</p></div>'
+            + '<div class="lp-mi-part" data-mi-for="va" hidden><p class="lp-fees-help">VA loans have no mortgage insurance. Instead, there’s the VA funding fee: a percent of the loan set by the VA, by the down payment, so it can’t be changed. '
+                + 'A buyer’s first VA loan uses the first chart; any later one uses the second.</p>'
+                + '<div class="lp-va-charts">' + vaChart('first', 'First-Time VA Use') + vaChart('subsequent', 'Subsequent VA Use') + '</div></div>'
+            + '<div class="lp-mi-part" data-mi-for="guide" hidden><label class="lp-check-row"><input type="checkbox" data-mi-none>This product does not have mortgage insurance guidelines</label></div>'
+            + '<div class="lp-mi-part" data-mi-for="quotes" hidden>'
+                + '<p class="lp-fees-help lp-quote-help">Quote the annual mortgage insurance premium (a percent of the loan each year) for each scenario. A loan at '
+                    + pctText(MI_REQUIRED_ABOVE) + ' LTV or less has no mortgage insurance, so the quotes are at ' + MI_LTV.map(pctText).join(', ').replace(/, ([^,]*)$/, ' and $1') + ' LTV.</p>'
+                + '<div class="field lp-quotes">' + MI_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
+                    + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
+                    + MI_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
+                    + MI_DTI.map((d, di) => '<tr><th scope="row">' + pctText(d) + ' DTI</th>' + MI_LTV.map((l, li) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-miq="'
+                        + quoteIndex(ci, di, li) + '" aria-label="' + escapeHtml(miQuoteLabel(ci, di, li)) + '"></div></td>').join('') + '</tr>').join('')
+                    + '</tbody></table></div>').join('') + '</div>'
+                + '<div class="lp-markups" data-mi-out></div></div>'
+            + '</div>';
+    }
+    const miBoxes = () => [...sectionsEl.querySelectorAll('[data-miq]')].sort((a, b) => a.dataset.miq - b.dataset.miq);
+    // The 27 premiums as decimals, or null while any is blank or not a number from 0 up
+    function miNow() {
+        const boxes = miBoxes();
+        if (boxes.length !== 27 || boxes.some(b => b.value.trim() === '')) return null;
+        const list = boxes.map(b => Number(b.value.trim()) / 100);
+        return list.every(q => isFinite(q) && q >= 0) ? list : null;
+    }
+    const productType = () => { const t = sectionsEl.querySelector('[data-col="PRODUCT TYPE"]'); return t ? t.value : ''; };
+    // The parts of the section that show for the Product Type: 'pick' (none chosen yet), 'fha', 'va', 'quotes' (the 27
+    // premiums), 'guide' (Jumbo / Non-Conforming: the checkbox, then the premiums when it's unchecked)
+    function miParts() {
+        const type = productType();
+        if (!type) return ['pick'];
+        if (type === 'FHA') return ['fha'];
+        if (type === 'VA') return ['va'];
+        if (type === 'Conventional') return ['quotes'];
+        if (type === 'Jumbo' || type === 'Non-Conforming') {
+            const none = sectionsEl.querySelector('[data-mi-none]');
+            return none && none.checked ? ['guide'] : ['guide', 'quotes'];
+        }
+        return [];
+    }
+    function showMi() {
+        const box = sectionsEl.querySelector('[data-mi]');
+        if (!box) return;
+        const parts = miParts();
+        box.querySelectorAll('[data-mi-for]').forEach(el => { el.hidden = !parts.includes(el.dataset.miFor); });
+        box.closest('fieldset').querySelector('.section-head h3').textContent = parts.includes('fha') ? 'UFMIP' : parts.includes('va') ? 'VA Funding Fee' : 'Mortgage Insurance';
+        showMiOut();
+    }
+    // The loan term as answered (years), or 30 until it's answered
+    function termYears() {
+        const term = sectionsEl.querySelector('[data-term]');
+        const years = !term ? 0 : term.value === 'other' ? num(sectionsEl.querySelector('[data-term-other] input').value) : num(term.value);
+        return years > 0 ? years : 30;
+    }
+    // The annual premium: the starting premium and three adjustment charts (like the rate markups). The upfront premium:
+    // one chart per metric (the other two held at MI_REFERENCE), worked out at today's rate over the loan term.
+    function showMiOut() {
+        const el = sectionsEl.querySelector('[data-mi-out]');
+        if (!el || !miParts().includes('quotes')) return;
+        const quotes = miNow();
+        if (!quotes) { el.innerHTML = '<p class="lp-markups-empty">Fill in all 27 premiums to see the premium curves and the upfront premium.</p>'; return; }
+        const m = miModel(quotes);
+        const minScore = currentMinScore();
+        const deny = list => (minScore === null ? list : list.map(r => (r.value < minScore ? { ...r, place: 'denied' } : r)));
+        const creditBase = { title: 'Credit Score', head: 'Score', quoted: MI_CREDIT, cutoff: minScore, label: v => String(v), tip: v => v + ' credit score', ticks: [300, 400, 500, 600, 700, 800], tick: v => String(v) };
+        const dtiBase = { title: 'Debt-to-Income', head: 'DTI', quoted: MI_DTI, label: pctText, tip: v => pctText(v) + ' DTI', ticks: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], tick: pctText };
+        const ltvBase = { title: 'Loan-to-Value', head: 'LTV', quoted: MI_LTV, label: pctText, tip: v => pctText(v) + ' LTV', ticks: [0.85, 0.9, 0.95, 1], tick: pctText };
+        const annual = [
+            { ...creditBase, key: 'mi-credit', rows: deny(m.tables.credit), fn: m.credit, valueHead: 'Adjustment' },
+            { ...dtiBase, key: 'mi-dti', rows: m.tables.dti, fn: m.dti, valueHead: 'Adjustment' },
+            { ...ltvBase, key: 'mi-ltv', rows: m.tables.ltv, fn: m.ltv, valueHead: 'Adjustment' },
+        ];
+        const R = MI_REFERENCE;
+        const refText = R.credit + ' credit score, ' + pctText(R.dti) + ' DTI and ' + pctText(R.ltv) + ' LTV';
+        let html = '<p class="lp-markups-head">Annual Premium</p>'
+            + '<p class="lp-markup-sum">Starting premium (' + MI_CREDIT[0] + ' credit score, ' + pctText(MI_DTI[0]) + ' DTI, ' + pctText(MI_LTV[0]) + ' LTV): <b>' + premText(m.start) + '</b> a year. '
+            + 'A buyer’s premium is the starting premium + the three adjustments below'
+            + (m.worstMiss >= 0.00005 ? '; that comes within <b>' + (Math.round(m.worstMiss * 1e5) / 1e3).toFixed(3) + '%</b> of every quote.' : ', matching every quote.')
+            + ' None at ' + pctText(MI_REQUIRED_ABOVE) + ' LTV or less. It’s paid monthly (the yearly premium ÷ 12), unless the buyer pays it up front.</p>'
+            + '<div class="lp-metrics">' + annual.map(metricCard).join('') + '</div>'
+            + '<p class="lp-markup-key"><span class="lp-key-band"></span>Shaded: the quoted range, where the curve passes through the quoted levels (the dots and <b>bold</b> rows). '
+            + '<span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past the quotes.'
+            + (minScore !== null ? ' <span class="lp-key-denied"></span>Hatched: below the ' + minScore + ' minimum credit score (Max DTI), where an applicant is denied.' : '') + '</p>';
+        // The upfront premium
+        const today = fieldToday();
+        const field = (ctx && ctx.fields || []).find(f => f.col === 'MI QUOTES');
+        const s = miSettings(field && field.mi);
+        const years = termYears();
+        let upMetrics = [];
+        html += '<p class="lp-markups-head">Upfront Premium</p>';
+        if (!today) html += '<p class="lp-markups-empty">Today’s interest rate isn’t set, so the upfront premium can’t be worked out yet.</p>';
+        else {
+            const factor = ltv => upfrontFactor(ltv, today, years, s);
+            const up = (c, d, l) => m.premium(c, d, l) * factor(l).factor;
+            const rowsOf = (list, fn) => list.map(r => ({ value: r.value, markup: fn(r.value), place: r.place }));
+            const fns = { credit: c => up(c, R.dti, R.ltv), dti: d => up(R.credit, d, R.ltv), ltv: l => up(R.credit, R.dti, l) };
+            const upBase = { unsigned: true, fmt: premText, valueHead: 'Upfront' };
+            upMetrics = [
+                { ...creditBase, ...upBase, key: 'up-credit', rows: deny(rowsOf(m.tables.credit, fns.credit)), fn: fns.credit },
+                { ...dtiBase, ...upBase, key: 'up-dti', rows: rowsOf(m.tables.dti, fns.dti), fn: fns.dti },
+                { ...ltvBase, ...upBase, key: 'up-ltv', rows: rowsOf(m.tables.ltv, fns.ltv), fn: fns.ltv },
+            ];
+            const ref = factor(R.ltv);
+            const pct = v => String(Number((v * 100).toFixed(2))) + '%';
+            html += '<p class="lp-markup-sum">Instead of monthly, the buyer can pay the premium once at closing. That upfront premium is estimated as the monthly premiums until the loan is expected to be at <b>'
+                + pct(s.removalLtv) + ' LTV</b>: the balance paid down at today’s ' + rateText(today) + ' rate over ' + years + ' years, and the home’s value growing ' + pct(s.appreciation)
+                + ' a year (at least ' + s.minYears + (s.minYears === 1 ? ' year' : ' years') + '), each premium discounted ' + pct(s.discount) + ' a year back to closing. '
+                + 'For a ' + refText + ', that’s <b>' + premText(up(R.credit, R.dti, R.ltv)) + '</b> of the loan (about ' + (Math.round(ref.months / 12 * 10) / 10) + ' years of its '
+                + premText(m.premium(R.credit, R.dti, R.ltv)) + ' annual premium). Each chart changes one metric and holds the other two at those.</p>'
+                + '<div class="lp-metrics">' + upMetrics.map(metricCard).join('') + '</div>'
+                + '<p class="lp-markup-key">Dots: the quoted levels. <span class="lp-key-line is-dashed"></span>Dashed and <i>italic</i>: estimated past the quotes. On the Buyer Breakdown, the buyer’s own rate, term and scenario are used.</p>';
+        }
+        el.innerHTML = html;
+        [...annual, ...upMetrics].forEach(mt => wireChart(el.querySelector('[data-metric="' + mt.key + '"]'), mt));
     }
 
     // A markup curve as an SVG line chart: the curve (solid across the quoted range, dashed past it), a dot at each quoted
@@ -606,7 +1067,9 @@ function build() {
         const xs = mt.rows.map(r => r.value);
         const xMin = Math.min(...xs), xMax = Math.max(...xs);
         const samples = Array.from({ length: 161 }, (_, i) => { const x = xMin + (xMax - xMin) * i / 160; return [x, mt.fn(x)]; });
-        let yMin = Math.min(0, ...samples.map(s => s[1])), yMax = Math.max(0, ...samples.map(s => s[1]));
+        // (only where the curve is drawn: not below a cutoff)
+        const drawn = mt.cutoff ? samples.filter(p => p[0] >= mt.cutoff).concat([[mt.cutoff, mt.fn(mt.cutoff)]]) : samples;
+        let yMin = Math.min(0, ...drawn.map(s => s[1])), yMax = Math.max(0, ...drawn.map(s => s[1]));
         if (yMax - yMin < 1e-5) { yMin -= 0.0005; yMax += 0.0005; }
         // A little room above and below the curve, and clean tick steps inside it (in decimals: 0.0025 is 0.25%)
         const pad = (yMax - yMin) * 0.06;
@@ -620,15 +1083,26 @@ function build() {
     }
     function markupChart(mt) {
         const s = chartScales(mt);
-        const qMin = Math.min(...mt.quoted), qMax = Math.max(...mt.quoted);
+        let [qMin, qMax] = mt.band || [Math.min(...mt.quoted), Math.max(...mt.quoted)];
+        // A cutoff (the minimum credit score): nothing is drawn below it but a hatched "Denied" area
+        const cut = mt.cutoff && mt.cutoff > s.xMin ? mt.cutoff : null;
+        if (cut) qMin = Math.max(qMin, cut);
+        const dots = mt.quoted.filter(q => !cut || q >= cut);
         // As many decimals as the step needs (2.5% steps: "+2.5%", "+5.0%")
         const stepPct = Math.round(s.step * 1e6) / 1e4;
         const dec = [0, 1, 2, 3].find(d => Math.abs(stepPct * Math.pow(10, d) - Math.round(stepPct * Math.pow(10, d))) < 1e-6);
-        const yLabel = v => { const p = Math.round(v * 1e6) / 1e4; return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(dec) + '%'; };
+        const yLabel = v => { const p = Math.round(v * 1e6) / 1e4; return (mt.unsigned ? (p < 0 ? '−' : '') : p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(dec) + '%'; };
         const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + s.x(p[0]).toFixed(1) + ' ' + s.y(p[1]).toFixed(1)).join('');
         // The curve in three pieces: below the quoted range, across it, above it (each sampled finely, sharing their ends)
         const piece = (from, to) => { const pts = s.samples.filter(p => p[0] >= from && p[0] <= to); pts.unshift([from, mt.fn(from)]); pts.push([to, mt.fn(to)]); return pts; };
-        const parts = [[s.xMin, qMin, true], [qMin, qMax, false], [qMax, s.xMax, true]].filter(p => p[1] > p[0]);
+        const parts = [[s.xMin, qMin, true], [qMin, qMax, false], [qMax, s.xMax, true]].map(([a, b, d]) => [cut ? Math.max(a, cut) : a, b, d]).filter(p => p[1] > p[0]);
+        const plotB = CH.h - CH.b, cx = cut ? s.x(cut) : 0;
+        const denied = !cut ? '' : '<defs><pattern id="lp-denied-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="rgba(14,42,59,0.03)"/>'
+            + '<line x1="0" y1="0" x2="0" y2="6" stroke="rgba(14,42,59,0.12)" stroke-width="2"/></pattern></defs>'
+            + '<rect x="' + CH.l + '" y="' + CH.t + '" width="' + (cx - CH.l).toFixed(1) + '" height="' + (plotB - CH.t) + '" fill="url(#lp-denied-hatch)"/>';
+        const deniedMark = !cut ? '' : '<line x1="' + cx.toFixed(1) + '" x2="' + cx.toFixed(1) + '" y1="' + CH.t + '" y2="' + plotB + '" stroke="rgba(79,45,44,0.6)" stroke-width="1.5"/>'
+            + (cx - CH.l > 70 ? '<text x="' + ((CH.l + cx) / 2).toFixed(1) + '" y="' + (CH.t + 16) + '" text-anchor="middle" style="font-weight: bold">Denied</text>'
+                + '<text x="' + ((CH.l + cx) / 2).toFixed(1) + '" y="' + (CH.t + 30) + '" text-anchor="middle">below ' + cut + '</text>' : '');
         let grid = '';
         for (let v = Math.ceil(s.yMin / s.step - 1e-9) * s.step; v <= s.yMax + 1e-12; v += s.step) {
             const y = s.y(v).toFixed(1), zero = Math.abs(v) < s.step / 2;
@@ -636,13 +1110,16 @@ function build() {
                 + '<text x="' + (CH.l - 6) + '" y="' + y + '" text-anchor="end" dominant-baseline="middle">' + yLabel(zero ? 0 : v) + '</text>';
         }
         const xTicks = mt.ticks.map(v => '<text x="' + s.x(v).toFixed(1) + '" y="' + (CH.h - 6) + '" text-anchor="middle">' + escapeHtml(mt.tick(v)) + '</text>').join('');
-        const top = mt.rows.reduce((a, r) => (Math.abs(r.markup) > Math.abs(a.markup) ? r : a), mt.rows[0]);
-        const label = mt.title + ' markup chart: ' + mt.quoted.map(q => mt.tip(q) + ' ' + markText(mt.fn(q))).join(', ') + '; ' + mt.tip(top.value) + ' ' + markText(top.markup) + ' (estimated). The table beside it lists every value.';
+        const live = mt.rows.filter(r => r.place !== 'denied');
+        const top = live.reduce((a, r) => (Math.abs(r.markup) > Math.abs(a.markup) ? r : a), live[0]);
+        const fmt = mt.fmt || markText;
+        const label = mt.title + ' chart: ' + dots.map(q => mt.tip(q) + ' ' + fmt(mt.fn(q))).join(', ') + '; ' + mt.tip(top.value) + ' ' + fmt(top.markup) + ' (estimated)'
+            + (cut ? '; denied below ' + cut : '') + '. The table beside it lists every value.';
         return '<div class="lp-chart" tabindex="0" role="img" aria-label="' + escapeHtml(label) + '"><svg viewBox="0 0 ' + CH.w + ' ' + CH.h + '" aria-hidden="true">'
-            + '<rect x="' + s.x(qMin).toFixed(1) + '" y="' + CH.t + '" width="' + (s.x(qMax) - s.x(qMin)).toFixed(1) + '" height="' + (CH.h - CH.t - CH.b) + '" fill="rgba(192,144,80,0.16)"/>'
-            + grid + xTicks
+            + denied + (qMax > qMin ? '<rect x="' + s.x(qMin).toFixed(1) + '" y="' + CH.t + '" width="' + (s.x(qMax) - s.x(qMin)).toFixed(1) + '" height="' + (CH.h - CH.t - CH.b) + '" fill="rgba(192,144,80,0.16)"/>' : '')
+            + grid + xTicks + deniedMark
             + parts.map(([a, b, dashed]) => '<path d="' + path(piece(a, b)) + '" fill="none" stroke="' + CH.line + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' + (dashed ? ' stroke-dasharray="5 4"' : '') + '/>').join('')
-            + mt.quoted.map(q => '<circle cx="' + s.x(q).toFixed(1) + '" cy="' + s.y(mt.fn(q)).toFixed(1) + '" r="4.5" fill="' + CH.line + '" stroke="#fff" stroke-width="2"/>').join('')
+            + dots.map(q => '<circle cx="' + s.x(q).toFixed(1) + '" cy="' + s.y(mt.fn(q)).toFixed(1) + '" r="4.5" fill="' + CH.line + '" stroke="#fff" stroke-width="2"/>').join('')
             + '<g data-hover style="display: none"><line data-cross y1="' + CH.t + '" y2="' + (CH.h - CH.b) + '" stroke="rgba(14,42,59,0.45)" stroke-width="1"/><circle data-dot r="5" fill="#fff" stroke="' + CH.line + '" stroke-width="2.5"/></g>'
             + '</svg><div class="lp-tip" hidden><b data-tip-v></b><span data-tip-k></span></div></div>';
     }
@@ -658,12 +1135,14 @@ function build() {
         const show = i => {
             at = Math.max(0, Math.min(rows.length - 1, i));
             const r = rows[at];
-            const px = s.x(r.value), py = s.y(r.markup);
+            const isDenied = r.place === 'denied';
+            const px = s.x(r.value);
             hover.style.display = '';
             cross.setAttribute('x1', px); cross.setAttribute('x2', px);
-            dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-            tip.querySelector('[data-tip-v]').textContent = markText(r.markup);
-            tip.querySelector('[data-tip-k]').textContent = mt.tip(r.value) + (r.place === 'estimated' ? ' · estimated' : r.place === 'quoted' ? ' · quoted' : '');
+            dot.style.display = isDenied ? 'none' : '';
+            if (!isDenied) { dot.setAttribute('cx', px); dot.setAttribute('cy', s.y(r.markup)); }
+            tip.querySelector('[data-tip-v]').textContent = isDenied ? 'Denied' : (mt.fmt || markText)(r.markup);
+            tip.querySelector('[data-tip-k]').textContent = mt.tip(r.value) + (isDenied ? ' · below the ' + mt.cutoff + ' minimum' : r.place === 'estimated' ? ' · estimated' : r.place === 'quoted' ? ' · quoted' : '');
             tip.hidden = false;
             const box = svg.getBoundingClientRect(), outer = chart.getBoundingClientRect();
             const left = px * box.width / CH.w + box.left - outer.left;
@@ -709,6 +1188,7 @@ function build() {
     const scopeOn = scope => (scope === 'dpa' ? isDpa() : scope === 'regular' ? !isDpa() : true);
     function showScopes() {
         sectionsEl.querySelectorAll('[data-scope]').forEach(el => { el.hidden = !scopeOn(el.dataset.scope); });
+        showMi();
     }
     function showTerm() {
         const term = sectionsEl.querySelector('[data-term]');
@@ -745,11 +1225,32 @@ function build() {
             else el.value = isNew && el.closest('.lp-stepper') ? ESCROW_DEFAULT : shown(kind, raw);
             if (el.closest('.lp-stepper')) syncStepper(el);
         });
-        savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
-        quoteBoxes().forEach((b, i) => { b.value = savedQuotes ? shown('rate', savedQuotes.quotes[i]) : ''; });
-        showMarkups();
+        // A saved product with both its quotes and its buydown quotes has submitted its sheet (locked); otherwise it's
+        // filled in here, starting from any quotes it has
+        const savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
+        const savedBuys = isNew ? null : buydownQuotes(values['BUYDOWN QUOTES']);
+        locked = savedQuotes && savedBuys ? { quotes: savedQuotes.quotes, buys: savedBuys, today: savedQuotes.today, date: savedQuotes.date, pending: false } : null;
+        requoting = false;
+        sheetMode = locked ? 'locked' : 'open';
+        putSheet(savedQuotes && savedQuotes.quotes, savedBuys);
+        showSheet();
         const feeList = sectionsEl.querySelector('[data-fee-list]');
         if (feeList) feeList.innerHTML = lenderFees(values['OTHER LENDER FEES']).map(feeRow).join('');
+        // Mortgage insurance: the saved premiums; a Jumbo / Non-Conforming product's checkbox starts checked (a new product,
+        // or one saved before it that has no premiums)
+        const savedMi = isNew ? null : miQuotes(values['MI QUOTES']);
+        miBoxes().forEach((b, i) => { b.value = savedMi ? shown('rate', savedMi[i]) : ''; b.classList.remove('is-invalid'); });
+        const noneBox = sectionsEl.querySelector('[data-mi-none]');
+        if (noneBox) {
+            const raw = String(values['NO MI GUIDELINES'] || '').trim().toUpperCase();
+            noneBox.checked = isNew || raw === 'TRUE' || (raw !== 'FALSE' && !savedMi);
+        }
+        // A product's tiers (one saved before the tier list: its old set tiers); a new one starts with one blank row
+        const tierList = sectionsEl.querySelector('[data-tier-list]');
+        if (tierList) {
+            const tiers = isNew ? [] : productDtiTiers(c => values[c]);
+            tierList.innerHTML = (tiers.length ? tiers : [{}]).map(tierRow).join('');
+        }
         const term = sectionsEl.querySelector('[data-term]');
         if (term) {
             const years = String(values['LOAN TERM'] || '').trim();
@@ -763,6 +1264,7 @@ function build() {
         showScopes();
         sectionsEl.querySelectorAll('.lp-picker.is-open').forEach(p => p.classList.remove('is-open'));
         showGates();
+        syncTiers();
     }
 
     // Every field's value to save (rates back to decimals). missing: the first unanswered question shown.
@@ -780,12 +1282,39 @@ function build() {
         const walk = (items, active, off) => items.forEach(it => {
             if (it.fixed) { values[it.col] = it.fixed; return; }
             if (it.tiles) { it.tiles.forEach(t => { values[t.col] = sectionsEl.querySelector('[data-col="' + t.col + '"]').checked ? 'TRUE' : 'FALSE'; }); return; }
-            if (it.quotes) {
-                values[it.quotes] = '';
+            // The submitted sheet (a saved product's is kept by the API whatever is sent: only a requote replaces it)
+            if (it.quotes) { values[it.quotes] = active && locked ? JSON.stringify({ QUOTES: locked.quotes }) : ''; return; }
+            if (it.buydown) { values[it.buydown] = active && locked ? JSON.stringify({ QUOTES: locked.buys }) : ''; return; }
+            // Max DTI tiers: each row filled in (a blank row is skipped); no separate housing-only max: the same as its max DTI
+            if (it.tiers) {
+                values[it.tiers] = '';
                 if (!active) return;
-                const boxes = quoteBoxes();
-                boxes.forEach(b => need(b, b.value.trim()));
-                if (boxes.every(b => b.value.trim() !== '')) values[it.quotes] = JSON.stringify({ QUOTES: boxes.map(b => Number((Number(b.value.trim()) / 100).toPrecision(10))) });
+                const housingOn = gateAnswer('housing') === true;
+                const dec = v => Number((Number(v) / 100).toPrecision(10));
+                const list = [];
+                tierRows().forEach(row => {
+                    const box = k => row.querySelector('[data-tier-k="' + k + '"]');
+                    const s = box('score').value.trim(), d = box('dti').value.trim(), h = box('housing').value.trim();
+                    if (!s && !d && !(housingOn && h)) return;
+                    need(box('score'), s);
+                    need(box('dti'), d);
+                    if (housingOn) need(box('housing'), h);
+                    if (s && d && (!housingOn || h)) list.push({ SCORE: Number(s), DTI: dec(d), HOUSING: housingOn ? dec(h) : dec(d) });
+                });
+                if (!list.length) need(sectionsEl.querySelector('[data-add-tier]'), '');
+                values[it.tiers] = JSON.stringify(list.sort((a, b) => a.SCORE - b.SCORE));
+                return;
+            }
+            // Mortgage insurance: the 27 premiums when the type asks them, and the Jumbo / Non-Conforming checkbox
+            if (it.mi) {
+                const parts = miParts();
+                values[it.mi.none] = parts.includes('guide') && sectionsEl.querySelector('[data-mi-none]').checked ? 'TRUE' : 'FALSE';
+                values[it.mi.quotes] = '';
+                if (active && parts.includes('quotes')) {
+                    const boxes = miBoxes();
+                    boxes.forEach(b => need(b, b.value.trim()));
+                    if (boxes.every(b => b.value.trim() !== '')) values[it.mi.quotes] = JSON.stringify({ QUOTES: boxes.map(b => Number((Number(b.value.trim()) / 100).toPrecision(10))) });
+                }
                 return;
             }
             if (it.fees) {
@@ -832,7 +1361,7 @@ function build() {
         });
         // A DPA product: everything regular is left blank
         const blanks = [];
-        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        const blank = it => { if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.buydown) blanks.push(it.buydown); else if (it.tiers) blanks.push(it.tiers); else if (it.mi) blanks.push(it.mi.quotes, it.mi.none); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
@@ -844,10 +1373,14 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
+    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote], [data-buy], [data-miq]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
     form.addEventListener('input', clear);
     form.addEventListener('change', clear);
     form.addEventListener('change', syncLabels);
+    // Credit scores (the minimum and each tier's): one that can't be (not 300 to 850) is outlined in red as soon as it's typed
+    const scoreBox = el => el.matches('[data-tier-k="score"], [data-kind="score"]');
+    form.addEventListener('input', e => { if (scoreBox(e.target) && e.target.value.length === 3 && !scoreOk(e.target.value)) e.target.classList.add('is-invalid'); });
+    form.addEventListener('change', e => { if (scoreBox(e.target) && e.target.value !== '' && !scoreOk(e.target.value)) e.target.classList.add('is-invalid'); });
     // Each LABEL_RULES label: its own text while the other answer matches, else the usual one
     function syncLabels() {
         LABEL_RULES.forEach(r => {
@@ -884,7 +1417,9 @@ function build() {
         message.textContent = '';
         const { values, missing } = read();
         if (missing) {
-            if (missing.matches('[data-quote]')) { problem(missing, 'Please quote a rate for every scenario (' + missing.getAttribute('aria-label') + ').'); return; }
+            if (missing.matches('[data-add-tier]')) { problem(missing, 'Please add at least one credit score and its max DTI.'); return; }
+            if (missing.matches('[data-tier-k]')) { problem(missing, 'Please fill in each credit score’s row (or remove it).'); return; }
+            if (missing.matches('[data-miq]')) { problem(missing, 'Please quote the annual mortgage insurance premium for every scenario (' + missing.getAttribute('aria-label') + ').'); return; }
             if (missing.matches('[data-fee-k]')) { problem(missing, missing.dataset.feeK === 'name' ? 'Please name the added fee (or remove it).' : 'Please enter the added fee’s amount (or remove it).'); return; }
             const field = missing.closest('.field');
             const name = field ? field.querySelector('label, .field-label').textContent : 'this question';
@@ -893,8 +1428,24 @@ function build() {
         }
         const bad = [...sectionsEl.querySelectorAll('input[data-kind="rate"]')].find(el => el.offsetParent && Number(el.value) > 100);
         if (bad) { problem(bad, 'Percentages can’t be over 100.'); return; }
-        const badQuote = quoteBoxes().find(el => el.offsetParent && !(Number(el.value) > 0 && Number(el.value) <= 100));
-        if (badQuote) { problem(badQuote, 'Each quoted rate must be more than 0 and no more than 100 (' + badQuote.getAttribute('aria-label') + ').'); return; }
+        const badMi = miBoxes().find(el => el.offsetParent && el.value.trim() !== '' && !(Number(el.value) >= 0 && Number(el.value) <= MI_MAX_QUOTE * 100));
+        if (badMi) { problem(badMi, 'Each annual premium must be from 0 to ' + MI_MAX_QUOTE * 100 + '% of the loan a year (' + badMi.getAttribute('aria-label') + ').'); return; }
+        // Credit scores from 300 to 850, each tier's listed once, and each max DTI over 0
+        const badScore = [...sectionsEl.querySelectorAll('[data-kind="score"], [data-tier-k="score"]')].find(el => el.offsetParent && el.value.trim() !== '' && !scoreOk(el.value));
+        if (badScore) { problem(badScore, 'Credit scores go from ' + CREDIT_MIN + ' (the lowest possible) to ' + CREDIT_MAX + ' (the highest).'); return; }
+        const tierScores = tierRows().map(r => r.querySelector('[data-tier-k="score"]')).filter(el => el.offsetParent && el.value.trim() !== '');
+        const twice = tierScores.find((el, i) => tierScores.findIndex(o => +o.value === +el.value) !== i);
+        if (twice) { problem(twice, 'Each credit score can only be listed once (' + twice.value.trim() + ' is listed twice).'); return; }
+        const badDti = [...sectionsEl.querySelectorAll('[data-tier-k="dti"], [data-tier-k="housing"]')].find(el => el.offsetParent && el.value.trim() !== '' && !(Number(el.value) > 0 && Number(el.value) <= 100));
+        if (badDti) { problem(badDti, 'Each max DTI must be more than 0 and no more than 100.'); return; }
+        // The rate quotes are submitted on their own first (Submit Quotes, in Rates)
+        const submitQuotes = sectionsEl.querySelector('[data-submit-quotes]');
+        if (submitQuotes && !isDpa() && sheetMode === 'open') {
+            submitQuotes.closest('[data-sheet-actions]').scrollIntoView({ block: 'center' });
+            submitQuotes.focus({ preventScroll: true });
+            message.textContent = requoting ? 'Please submit the new rate quotes (under Rates), or keep the current ones.' : 'Please submit the rate quotes (Submit Quotes, under Rates) first.';
+            return;
+        }
         saving = true;
         saveBtn.disabled = true;
         saveBtn.classList.add('is-loading');

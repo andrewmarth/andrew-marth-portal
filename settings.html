@@ -610,6 +610,22 @@
         .mp-foot .btn { margin: 0; }
         .mp-foot .btn svg { width: 18px; height: 18px; }
         .mp-foot .cf-saved { margin: 0; }
+        /* Lenders card: how the upfront mortgage insurance premium is estimated (one line per setting) */
+        .mi-set { margin-top: 26px; padding-top: 18px; border-top: 1px solid rgba(233, 226, 216, 0.25); }
+        .mi-set[hidden] { display: none; }
+        .mi-set .cf-group-title { margin: 0; }
+        .mi-rows { margin-top: 8px; }
+        .mi-row { display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 10px 0; border-bottom: 1px solid rgba(233, 226, 216, 0.18); }
+        .mi-row label { flex: 1; min-width: 0; font-weight: bold; }
+        .mi-row label small { display: block; margin-top: 2px; font-weight: normal; font-size: 0.84rem; opacity: 0.75; }
+        .mi-input { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+        .mi-input .cf-input { width: 96px; text-align: right; }
+        .mi-unit { width: 64px; font-size: 0.9rem; opacity: 0.85; }
+        .mi-set .cf-error { font-size: 0.9rem; font-weight: bold; color: #f2b8a8; }
+        @media (max-width: 600px) {
+            .mi-row { flex-wrap: wrap; gap: 8px; }
+            .mi-row label { flex: 1 0 100%; }
+        }
         .edit-dialog.mp-dialog { max-width: 540px; max-height: calc(100dvh - 40px); overflow-y: auto; }
         .mp-fields { display: grid; gap: 16px; margin-top: 14px; }
         .mp-optional { font-weight: normal; opacity: 0.65; }
@@ -1029,6 +1045,17 @@
                 </button>
                 <span class="cf-saved" id="ln-saved" role="status"></span>
             </div>
+            <!-- How a conventional loan's upfront mortgage insurance is estimated (settings mortgageInsurance) -->
+            <form class="mi-set" id="mi-set" novalidate hidden>
+                <h3 class="cf-group-title">Upfront Mortgage Insurance</h3>
+                <p class="mp-intro">For conventional loans (and jumbo or non-conforming ones with mortgage insurance), paying the premium once at closing is estimated from the lender’s annual premium: the monthly premiums until the loan is expected to reach the LTV below, as the balance is paid down and the home’s value grows, each discounted back to closing. Every lender’s loan products use these.</p>
+                <div class="mi-rows" id="mi-rows"></div>
+                <div class="mp-foot">
+                    <button type="submit" class="btn" id="mi-save"><span class="btn-spinner" aria-hidden="true"></span>Save</button>
+                    <span class="cf-error" id="mi-error" role="alert"></span>
+                    <span class="cf-saved" id="mi-saved" role="status"></span>
+                </div>
+            </form>
         </section>
     </main>
 
@@ -1238,6 +1265,7 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
         import { openLoanProductForm } from '/loan-products.js';
+        import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
         import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, BUYER_TYPES, DISCOUNT_CATEGORIES, DISCOUNT_APPLIES } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
@@ -1460,6 +1488,11 @@
             { key: 'flipper-title', label: 'Flipper Title', cols: ['FLIPPER TITLE'], kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
             { key: 'hard-money', label: 'Hard Money Lender', cols: ['HARD MONEY LENDER'], kind: 'bool' },
             { key: 'preflipper', label: 'Preflipper', cols: ['PREFLIPPER'], kind: 'bool' },
+            // Other: a VA loan's funding fee on the Buyer Breakdown follows these (first-time use, unless every veteran buying
+            // has used a VA loan before). Not asked when a client is added (noNew: they start as No).
+            { group: 'Other', noNew: true },
+            { key: 'veteran', label: 'Are you a Veteran?', saved: 'the veteran answer', cols: ['VETERAN'], kind: 'bool', noNew: true },
+            { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => v['VETERAN'], noNew: true },
         ];
         const CF_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
         const clientList = document.getElementById('client-list');
@@ -1576,7 +1609,7 @@
                 cfBusy = false;
                 editing = null;
                 renderClient();
-                cfSaved.textContent = 'Saved ' + line.label + '.';
+                cfSaved.textContent = 'Saved ' + (line.saved || line.label) + '.';
                 const b = clientList.querySelector('[data-edit="' + line.key + '"]');
                 if (b) b.focus();
             } catch (err) {
@@ -2804,6 +2837,8 @@
                 lnFields = data.loanProductFields || [];
                 renderLenders();
                 lnAdd.disabled = false;
+                miRow = data.miSettings || null;
+                renderMiSettings();
             } catch (err) {
                 console.error(err);
                 lnList.innerHTML = '<li class="client-empty">We couldn’t load the lenders. Please refresh to try again.</li>';
@@ -2835,12 +2870,14 @@
             const [i, j] = (isNew ? productBtn.dataset.lnNewProduct + ':' : productBtn.dataset.lnProduct).split(':').map(Number);
             const lender = lnLenders[i];
             const product = isNew ? null : lender.products[j];
-            openLoanProductForm({ fields: lnFields, product, submit: async (values, row) => {
-                const data = await callApi(lnUser, { action: 'saveLenderProduct', lender: lender.name, row, values });
+            // opts.quotesOnly: just the rate quote sheet (submitted from the Rates section)
+            openLoanProductForm({ fields: lnFields, product, submit: async (values, row, opts = {}) => {
+                const data = await callApi(lnUser, { action: 'saveLenderProduct', lender: lender.name, row, values, quotesOnly: !!opts.quotesOnly });
                 if (!data.ok) throw new Error(data.error);
                 lnLenders = data.lenders || [];
                 renderLenders();
-                lnSaved.textContent = (isNew ? 'Added ' : 'Saved ') + (values['LOAN PRODUCT NAME'] || 'the loan product') + '.';
+                lnSaved.textContent = opts.quotesOnly ? 'Saved the rate quotes for ' + (product.values['LOAN PRODUCT NAME'] || 'the loan product') + '.'
+                    : (isNew ? 'Added ' : 'Saved ') + (values['LOAN PRODUCT NAME'] || 'the loan product') + '.';
             } });
         });
         const lnClose = () => { if (!lnBusy) lnDialog.close(); };
@@ -2906,10 +2943,75 @@
             }
         });
 
+        // --- Lenders card: the upfront mortgage insurance estimate's settings (/mortgage-insurance.js MI_SETTINGS) ---
+        const miSet = document.getElementById('mi-set');
+        const miRows = document.getElementById('mi-rows');
+        const miError = document.getElementById('mi-error');
+        const miSavedEl = document.getElementById('mi-saved');
+        const miSaveBtn = document.getElementById('mi-save');
+        let miRow = null;
+        let miBusy = false;
+        const miShown = (x, v) => String(x.pct ? Number((v * 100).toFixed(4)) : v);
+        function renderMiSettings() {
+            const s = miSettings(miRow);
+            miRows.innerHTML = MI_SETTINGS.map(x => '<div class="mi-row"><label for="mi-' + x.key + '">' + esc(x.label) + '<small>' + esc(x.help) + '</small></label>'
+                + '<div class="mi-input"><input class="cf-input" id="mi-' + x.key + '" data-mi-key="' + x.key + '" type="text" inputmode="decimal" autocomplete="off" value="' + esc(miShown(x, s[x.key])) + '">'
+                + '<span class="mi-unit">' + esc(x.unit) + '</span></div></div>').join('');
+            miSet.hidden = false;
+        }
+        miRows.addEventListener('input', e => {
+            if (!e.target.matches('[data-mi-key]')) return;
+            e.target.value = e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+            e.target.classList.remove('is-invalid');
+            miError.textContent = '';
+            miSavedEl.textContent = '';
+        });
+        miSet.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (miBusy) return;
+            miError.textContent = '';
+            miSavedEl.textContent = '';
+            const values = {};
+            for (const x of MI_SETTINGS) {
+                const input = miRows.querySelector('[data-mi-key="' + x.key + '"]');
+                const raw = input.value.trim();
+                const n = Number(raw);
+                const v = x.pct ? n / 100 : n;
+                const range = x.pct ? (x.min * 100) + ' to ' + (x.max * 100) : x.min + ' to ' + x.max;
+                if (raw === '' || !isFinite(n) || v < x.min - 1e-12 || v > x.max + 1e-12 || (!x.pct && !Number.isInteger(n))) {
+                    input.classList.add('is-invalid');
+                    input.focus();
+                    miError.textContent = x.label + ' must be ' + (x.pct ? '' : 'a whole number ') + 'from ' + range + ' (' + x.unit + ').';
+                    return;
+                }
+                values[x.col] = Number(v.toPrecision(10));
+            }
+            miBusy = true;
+            miSaveBtn.disabled = true;
+            miSaveBtn.classList.add('is-loading');
+            try {
+                const data = await callApi(lnUser, { action: 'saveMiSettings', values });
+                if (!data.ok) throw new Error(data.error);
+                miRow = data.miSettings || null;
+                // The loan product form's upfront tables use them too
+                const field = lnFields.find(f => f.col === 'MI QUOTES');
+                if (field) field.mi = miRow;
+                renderMiSettings();
+                miSavedEl.textContent = 'Saved.';
+            } catch (err) {
+                console.error(err);
+                miError.textContent = err.message === 'invalid_value' ? 'One of the settings isn’t valid. Please check them.' : 'We couldn’t save that. Please try again.';
+            } finally {
+                miBusy = false;
+                miSaveBtn.disabled = false;
+                miSaveBtn.classList.remove('is-loading');
+            }
+        });
+
         // --- New client: every question open at once ---
         const digitsOnly = v => String(v || '').replace(/\D/g, '');
         const formatTyped = d => !d ? '' : d.length < 4 ? '(' + d : d.length < 7 ? '(' + d.slice(0, 3) + ') ' + d.slice(3) : '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
-        const NEW_LINES = CLIENT_LINES.flatMap(line => line.key === 'legal'
+        const NEW_LINES = CLIENT_LINES.filter(line => !line.noNew).flatMap(line => line.key === 'legal'
             ? [line, { key: 'phone', label: 'Phone', kind: 'phone' }]
             : [line]);
         const TILE_ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
