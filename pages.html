@@ -1423,6 +1423,7 @@
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
         import { productMarkups, productBuydown } from '/rate-markups.js';
         import { loanMi } from '/mortgage-insurance.js';
+        import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText } from '/dpa.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1557,14 +1558,16 @@
         }
         // This sale's fees from its title company (null without one). loanAmount: the buyer's loan (0 for cash).
         // loanName: the buyer's loan product (a VA product counts as a VA loan unless BUYER FINANCING says otherwise).
-        function titleSale(page, loanAmount, { sellerHasPayoff, loanName } = {}) {
+        // loanType / secondLoan: given, they're the buyer's own (from their loan products) instead of BUYER FINANCING and
+        // SECOND LOAN AMOUNT.
+        function titleSale(page, loanAmount, { sellerHasPayoff, loanName, loanType: givenType, secondLoan } = {}) {
             const company = titleCompanyOf(page);
             if (!company) return null;
             const financing = text(col(page, 'BUYER FINANCING'));
-            const loanType = financing === 'VA Loan' || (!financing && /\bVA\b/i.test(loanName || '')) ? 'va' : financing === 'Adjustable Rate Loan' ? 'arm' : 'fixed';
+            const loanType = givenType || (financing === 'VA Loan' || (!financing && /\bVA\b/i.test(loanName || '')) ? 'va' : financing === 'Adjustable Rate Loan' ? 'arm' : 'fixed');
             return saleFees(company, num(col(page, 'PURCHASE PRICE')), loanAmount, {
                 property: titlePropertyKind(page), loanType, saleType: text(col(page, 'SALE TYPE')) || 'Standard',
-                secondLoan: num(col(page, 'SECOND LOAN AMOUNT')), sellerHasPayoff,
+                secondLoan: secondLoan !== undefined ? secondLoan : num(col(page, 'SECOND LOAN AMOUNT')), sellerHasPayoff,
                 fincen: isTrue(col(page, 'FINCEN REPORT')), extraFees: listOf(col(page, 'EXTRA TITLE FEES')),
                 ownerPayer: text(col(page, 'WHO PAYS OWNERS POLICY')) || undefined,
                 sellerDiscount: text(col(page, 'SELLER ESCROW DISCOUNT')), buyerDiscount: text(col(page, 'BUYER ESCROW DISCOUNT')),
@@ -1586,8 +1589,41 @@
             return lines;
         }
 
+        // --- Down payment assistance ---
+        // A Down Payment Assistance product is a second loan (or a grant) toward the down payment, picked on its own
+        // (SECOND LOAN PRODUCT), never as the buyer's main loan (see /dpa.js for its answers). Its amount is a share of the
+        // price (SECOND LOAN LTV MAX) or a flat amount (SECOND LOAN FLAT AMOUNT): that when the client can't adjust it, else
+        // the page's SECOND LOAN LTV or SECOND LOAN DOLLAR AMOUNT (blank: the product's), at most the product's.
+        const DPA_TYPE = 'Down Payment Assistance';
+        const isDpaProduct = p => text(col(p, 'PRODUCT TYPE')).toLowerCase() === DPA_TYPE.toLowerCase();
+        const dpaProducts = () => (data.loanProducts || []).filter(isDpaProduct);
+        const dpaProductOf = page => { const name = text(col(page, 'SECOND LOAN PRODUCT')); return name ? dpaProducts().find(p => text(col(p, 'LOAN PRODUCT NAME')) === name) || null : null; };
+        const dpaInfoOf = p => dpaInfo(name => col(p, name));
+        function dpaAsked(page, p, price) {
+            const info = dpaInfoOf(p);
+            const max = dpaMax(info, price);
+            const asked = text(col(page, info.flat ? 'SECOND LOAN DOLLAR AMOUNT' : 'SECOND LOAN LTV'));
+            if (!info.adjustable || asked === '') return max;
+            return Math.min(info.flat ? Math.round(num(asked)) : Math.round(price * num(asked)), max);
+        }
+        // How much it is, in a few words: "3.5% of the price", "up to $10,000"
+        const dpaMaxText = info => (info.adjustable ? 'up to ' : '') + (info.flat ? wholeMoney.format(info.flatAmount) : percent(info.ltvMax) + ' of the price');
+        // A rate markup like 0.00125 as "0.125%"
+        const ratePct = n => String(Number((n * 100).toFixed(3))) + '%';
+        // The purchasers' details a DPA program's qualifications check (see dpaDisclaimers in /dpa.js)
+        const dpaBuyers = () => purchasers().map(c => {
+            const score = parseInt(text(col(c.income || {}, 'CREDIT SCORE')), 10);
+            const monthly = c.income ? monthlyIncome(c.income) : 0;
+            return { name: c.name || '', score: score >= 300 && score <= 850 ? score : null, groups: c.groups || [], lastOwned: c.lastOwned || '',
+                education: Boolean(c.education), monthlyIncome: monthly > 0 ? monthly : null };
+        });
+        // The title company's loan type for the buyer's loan product: VA, adjustable rate or fixed rate
+        const productLoanType = p => (text(col(p, 'PRODUCT TYPE')) === 'VA' ? 'va' : text(col(p, 'RATE TYPE')) === 'Adjustable Rate' ? 'arm' : 'fixed');
+
         // dtiRatio: the buyer's total debt-to-income ratio (null when it isn't known: FALLBACK_DTI is used).
         // opts.vaUse: the purchasers' VA use for a VA loan's funding fee ({ firstUse, known }; see purchaserVaUse)
+        // opts.dpaBuyers: the purchasers' details for a down payment assistance program's qualifications (see dpaBuyers;
+        // without them only the price and census designation are checked)
         function calculate(page, product, rateRow, creditScoreRaw, dtiRatio = null, opts = {}) {
             const price = num(col(page, 'PURCHASE PRICE'));
             const pointsPurchased = num(col(page, 'LENDER POINTS PURCHASED'));
@@ -1610,6 +1646,17 @@
                 ? ['Limited to this loan\'s ' + percent(maxLtv) + ' maximum loan-to-value (' + percent(enteredLtv) + ' was entered)'] : [];
             const baseLoan = isCash ? 0 : price * ltv;
             const downPct = price ? (price - baseLoan) / price : 0;
+            // Down payment assistance: a second loan (or a grant) toward the down payment. A program whose loans can't add up
+            // to more than the price covers the down payment at most (its refund rule is applied below, with the cash to close).
+            const dpa = isCash ? null : dpaProductOf(page);
+            const dpaI = dpa ? dpaInfoOf(dpa) : null;
+            let secondLoan = dpa ? dpaAsked(page, dpa, price) : 0;
+            const dpaWarnings = [];
+            if (dpaI && !dpaI.canExceed && secondLoan > Math.max(0, price - baseLoan) + 0.5) {
+                const room = Math.max(0, Math.round(price - baseLoan));
+                dpaWarnings.push('Limited to the ' + wholeMoney.format(room) + ' down payment: this program’s loans can’t add up to more than the price (' + wholeMoney.format(secondLoan) + ' would be its amount)');
+                secondLoan = room;
+            }
 
             // Interest rate: today's rate + the product's markup - the buydown for the points bought. The markup comes from
             // the lender's 27 quoted rates (RATE QUOTES: the starting markup + the credit score, DTI and LTV markups; see
@@ -1623,7 +1670,8 @@
                 ? markups.start + markups.credit(creditScore) + markups.dti(dtiUsed) + markups.ltv(ltv)
                 : num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)));
             const buydown = productBuydown(col(product, 'RATE QUOTES'), col(product, 'BUYDOWN QUOTES'));
-            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup
+            // (a down payment assistance program can raise the first loan's rate: its average markup)
+            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup + (dpaI ? dpaI.rateMarkup : 0)
                 - (buydown ? buydown(pointsPurchased) : num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100));
 
             // Mortgage insurance, by the product's type (/mortgage-insurance.js): FHA's 1.75% UFMIP and HUD's annual MIP; VA's
@@ -1675,7 +1723,17 @@
                 : enteredSellerPct > maxSellerPct
                     ? ['Limited to this loan\'s ' + percent(maxSellerPct) + ' maximum seller credit (' + percent(enteredSellerPct) + ' was entered)'] : [];
 
-            const buyerTitle = titleSale(page, isCash ? 0 : loan, { loanName: text(col(product, 'LOAN PRODUCT NAME')) });
+            // The title company prices the buyer's loan type and second loan from their loan products (a grant isn't a loan)
+            const buyerTitle = titleSale(page, isCash ? 0 : loan, { loanName: text(col(product, 'LOAN PRODUCT NAME')), loanType: isCash ? undefined : productLoanType(product),
+                secondLoan: dpaI && !dpaI.isGrant ? secondLoan : 0 });
+            // The down payment assistance line's note: the program, what kind it is and how much, and how it's paid back
+            const dpaNote = !dpaI ? '' : text(col(dpa, 'LOAN PRODUCT NAME')) + ' (' + dpaKindText(dpaI) + ', '
+                + (dpaI.flat ? wholeMoney.format(secondLoan) : percent(price ? secondLoan / price : 0) + ' of the price') + ')'
+                + (dpaI.isGrant ? '; not paid back' : dpaI.hasPayment ? '; its payment is in the monthly cost' : '; no monthly payment')
+                + (dpaI.matchRatio ? '; matches the buyer’s savings ' + dpaI.matchRatio + ' to 1' : '')
+                + (dpaI.rateMarkup ? '; adds ' + ratePct(dpaI.rateMarkup) + ' to the first loan’s rate' : '');
+            // ...and the program's qualifications this purchase doesn't meet
+            const dpaNotes = dpaI ? dpaDisclaimers(dpaI, { price, census: text(col(page, 'CENSUS DESIGNATION')), purchasers: opts.dpaBuyers || null }) : [];
             // HOA fees only count when the buyer pays them
             const hoaFee = (section, name, key) => {
                 const amount = num(col(page, 'HOA ' + key + ' FEE'));
@@ -1694,10 +1752,9 @@
                 { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit },
 
                 { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings },
-                // A second loan (a piggyback or down payment assistance loan) set in Title & Escrow: its proceeds (its payment
-                // isn't in the monthly cost)
-                { section: 'Loan', label: 'Second Loan Amount', amount: titleCompanyOf(page) ? num(col(page, 'SECOND LOAN AMOUNT')) : 0, note: 'Its payment isn’t in the monthly cost',
-                    hidden: !(titleCompanyOf(page) && num(col(page, 'SECOND LOAN AMOUNT')) > 0) },
+                // Down payment assistance: its proceeds (a second loan or a grant), with any qualification it doesn't meet
+                { section: 'Loan', dpa: true, label: dpaI && dpaI.isGrant ? 'Down Payment Assistance Grant' : 'Down Payment Assistance', amount: secondLoan, hidden: !dpa,
+                    warnings: [...dpaWarnings, ...dpaNotes.map(n => 'May not qualify: ' + n)], note: dpaNote },
                 // Seller credit can only help pay the prepaid MI when it isn't already financed into the loan
                 // (a type with nothing up front leaves it out)
                 { section: 'Loan', cost: !miFinanced, label: mi ? mi.upfrontLabel : 'Prepaid Mortgage Insurance', amount: -prepaidMI,
@@ -1755,7 +1812,20 @@
 
             // Cash to close balances everything above to zero: positive means the buyer still owes it,
             // negative means the credits cover more than the costs and the buyer gets a refund
-            const cashToClose = -round2([...lines, ...funds].reduce((sum, l) => sum + l.amount, 0));
+            const balance = () => -round2([...lines, ...funds].reduce((sum, l) => sum + l.amount, 0));
+            let cashToClose = balance();
+            // Down payment assistance that can't be refunded to the buyer only covers what's owed: it's lowered by any refund
+            // it would make before the buyer's own money (earnest money, gift funds, the appraisal deposit) is counted, so
+            // only their own money can come back to them
+            const dpaLine = lines.find(l => l.dpa);
+            const owedBeforeOwnFunds = cashToClose + round2(funds.reduce((sum, l) => sum + l.amount, 0));
+            if (dpaI && !dpaI.refund && dpaLine && dpaLine.amount > 0 && owedBeforeOwnFunds < -0.004) {
+                const cut = Math.min(dpaLine.amount, round2(-owedBeforeOwnFunds));
+                dpaLine.amount = round2(dpaLine.amount - cut);
+                secondLoan = dpaLine.amount;
+                dpaLine.warnings = [...dpaLine.warnings, 'Lowered by ' + wholeMoney.format(cut) + ': this program can’t be refunded to the buyer, so it only covers what’s owed'];
+                cashToClose = balance();
+            }
             const cashLine = { section: 'Financial', label: cashToClose < 0 ? 'Refund To Buyer' : 'Cash To Close', amount: cashToClose };
 
             // Financial lines first (price, seller credit, the funds, then cash to close), then everything else
@@ -1778,11 +1848,18 @@
             const loanToValue = price ? baseLoan / price : 0;
             const monthlyPMI = isCash ? 0 : mi ? loan * mi.annual / 12
                 : text(col(product, 'PMI LTV THRESHOLD')) !== '' && loanToValue > pmiThreshold + 1e-9 ? loan * num(col(product, 'LOAN PRODUCT PMI RATE')) / 12 : 0;
-            const mortgagePayment = principalInterest + monthlyTaxes + monthlyInsurance + monthlyPMI;
+            // A second mortgage (down payment assistance with a payment): its own payment, at the first loan's rate or its
+            // markup / discount from it, over its term
+            const secondRate = dpaI && dpaI.hasPayment ? rate + dpaI.secondMarkup : 0;
+            const secondMonths = dpaI && dpaI.hasPayment ? dpaI.termYears * 12 : 0;
+            const secondPayment = !secondLoan || !secondMonths ? 0
+                : secondRate > 0 ? secondLoan * (secondRate / 12) / (1 - Math.pow(1 + secondRate / 12, -secondMonths)) : secondLoan / secondMonths;
+            const mortgagePayment = principalInterest + monthlyTaxes + monthlyInsurance + monthlyPMI + secondPayment;
             const primaryDues = num(col(page, 'HOA PRIMARY MONTHLY DUES'));
             const masterDues = num(col(page, 'HOA MASTER MONTHLY DUES'));
             const payment = {
                 principalInterest, monthlyTaxes, monthlyInsurance, monthlyPMI, miNote: mi ? mi.annualNote : '', mortgagePayment, primaryDues, masterDues,
+                secondPayment, secondNote: secondPayment ? ratePct(secondRate) + ' for ' + dpaI.termYears + ' years' : '',
                 totalMonthly: mortgagePayment + primaryDues + masterDues, termYears: months / 12,
             };
 
@@ -2744,14 +2821,15 @@
             // The Loan Product picker's "Cash" choice decides whether this is a cash purchase
             const page = { ...data.page, ...draft, 'CASH PURCHASE': cashSelected ? 'TRUE' : 'FALSE' };
             const vaUse = purchaserVaUse();
-            let result = calculate(page, product, data.interestRate || {}, String(credit.score), null, { vaUse });
+            const opts = { vaUse, dpaBuyers: dpaBuyers() };
+            let result = calculate(page, product, data.interestRate || {}, String(credit.score), null, opts);
             // Quoted rates (and quoted mortgage insurance): the DTI markup depends on the payment, which depends on the rate,
             // so work it out again with the buyer's DTI until the payment settles (a few rounds; each changes it less)
             if ((result.usesQuotes || result.usesMiQuotes) && !result.isCash) {
                 for (let i = 0; i < 8; i++) {
                     const dti = buyerDti(result.payment.totalMonthly);
                     if (dti === null) break;
-                    const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti, { vaUse });
+                    const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti, opts);
                     const settled = Math.abs(next.rate - result.rate) < 1e-8 && Math.abs(next.payment.totalMonthly - result.payment.totalMonthly) < 0.005;
                     result = next;
                     if (settled) break;
@@ -2812,6 +2890,8 @@
                 + principalInterestRow(result)
                 // Hidden when it doesn't apply (or rounds to $0)
                 + (toDollars(p.monthlyPMI) > 0 ? row('Mortgage Insurance', p.monthlyPMI, p.miNote) : '')
+                // A second mortgage from down payment assistance
+                + (toDollars(p.secondPayment) > 0 ? row('Second Mortgage (Down Payment Assistance)', p.secondPayment, p.secondNote) : '')
                 + row('Taxes', p.monthlyTaxes)
                 + row('Insurance', p.monthlyInsurance)
                 + total('Total Mortgage Payment', p.mortgagePayment)
@@ -3044,8 +3124,9 @@
             makePicker({
                 mount: document.getElementById('loan-picker'),
                 labelId: 'loan-label',
+                // (Down Payment Assistance products are second loans: picked under Down Payment Assistance)
                 items: [{ value: 'cash', main: 'Cash', secondary: 'Cash purchase, no loan', icon: 'cash' }]
-                    .concat(products.map((p, i) => ({ value: String(i), main: text(col(p, 'LOAN PRODUCT NAME')) || 'Loan product ' + (i + 1), secondary: text(col(p, 'LENDER NAME')) }))),
+                    .concat(products.map((p, i) => ({ p, i })).filter(x => !isDpaProduct(x.p)).map(({ p, i }) => ({ value: String(i), main: text(col(p, 'LOAN PRODUCT NAME')) || 'Loan product ' + (i + 1), secondary: text(col(p, 'LENDER NAME')) }))),
                 selected: [cashSelected ? 'cash' : String(loanIndex)],
                 onChange: value => {
                     // Re-run the checks (seller credit, loan amount...) against the product just picked.
@@ -3469,6 +3550,15 @@
             }
             fieldBad('RETAIL LTV', loanError);
 
+            // Down payment assistance: no more than its product's max (a share of the price, or a flat amount)
+            const dpa = isSellerNet() || pickedCash ? null : dpaProductOf(page);
+            const dpaI = dpa ? dpaInfoOf(dpa) : null;
+            if (settingsBlocks.some(b => b.key === 'DOWN PAYMENT ASSISTANCE') && fieldErrors['DOWN PAYMENT ASSISTANCE'] !== 'Please enter a number.') {
+                const asked = dpaI ? text(col(page, dpaI.flat ? 'SECOND LOAN DOLLAR AMOUNT' : 'SECOND LOAN LTV')) : '';
+                const over = dpaI && dpaI.adjustable && asked !== '' && (dpaI.flat ? num(asked) > dpaI.flatAmount + 0.5 : num(asked) > dpaI.ltvMax + 1e-9);
+                fieldBad('DOWN PAYMENT ASSISTANCE', over ? 'Can\'t be more than this program\'s ' + (dpaI.flat ? wholeMoney.format(dpaI.flatAmount) : percent(dpaI.ltvMax)) + ' maximum.' : '');
+            }
+
             settingsBlocks.forEach(b => { b.error.textContent = fieldErrors[b.key] || ''; b.error.hidden = !fieldErrors[b.key]; });
             refreshDisplays();
         }
@@ -3492,6 +3582,7 @@
 
             const loan = document.getElementById('loan-fields');
             loanAmountField(loan);
+            dpaField(loan);
             percentField(loan, 'Points Purchased', 'LENDER POINTS PURCHASED');
             toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']],
                 { help: 'The FHA UFMIP, the VA funding fee, or upfront mortgage insurance.' });
@@ -3653,6 +3744,30 @@
             return { wrap: f.wrap, invalid: () => bad.size > 0 };
         }
 
+        // Buyer Breakdown: the down payment assistance program (a Down Payment Assistance product) and, when the client can
+        // adjust it, its amount as a percent of the price or in dollars (up to the product's max; blank is the max)
+        function dpaField(parent) {
+            const io = SETTINGS_IO;
+            const picked = () => dpaProductOf({ 'SECOND LOAN PRODUCT': io.get('SECOND LOAN PRODUCT') });
+            const pickedInfo = () => { const p = picked(); return p ? dpaInfoOf(p) : null; };
+            groupField(parent, 'Down Payment Assistance', [
+                { label: 'Program', column: 'SECOND LOAN PRODUCT', kind: 'choice', icon: 'bank', rebuild: true, blank: 'None',
+                    items: () => [{ value: '', main: 'None', secondary: 'No down payment assistance', icon: 'none' }].concat(dpaProducts().map(p => {
+                        const info = dpaInfoOf(p);
+                        return { value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')),
+                            secondary: [text(col(p, 'LENDER NAME')), dpaKindText(info), dpaMaxText(info)].filter(Boolean).join(' · ') };
+                    })),
+                    // A new pick starts at its max (a product the client can't adjust is always its own)
+                    then: () => {
+                        const info = pickedInfo();
+                        io.put('SECOND LOAN LTV', info && !info.flat ? String(info.ltvMax) : '');
+                        io.put('SECOND LOAN DOLLAR AMOUNT', info && info.flat ? String(info.flatAmount) : '');
+                    } },
+                { label: 'Amount (% of price)', column: 'SECOND LOAN LTV', kind: 'rate', short: 'Amount:', show: () => { const i = pickedInfo(); return Boolean(i) && i.adjustable && !i.flat; } },
+                { label: 'Amount', column: 'SECOND LOAN DOLLAR AMOUNT', kind: 'money', short: 'Amount:', show: () => { const i = pickedInfo(); return Boolean(i) && i.adjustable && i.flat; } },
+            ], { key: 'DOWN PAYMENT ASSISTANCE', help: dpaProducts().length ? 'Help toward the down payment from a Down Payment Assistance program: a second loan or a grant. Any qualification the purchasers don’t meet shows under it in the breakdown.' : 'No Down Payment Assistance loan products are set up yet.' });
+        }
+
         // Title & Escrow (both page types): the title company, then this sale's details. side: 'buyer' or 'seller'.
         let titleRateFields = [];
         // The old rate fields only show for a page without a title company
@@ -3670,10 +3785,9 @@
                     // A company's own discounts don't carry over to another company
                     then: () => ['SELLER ESCROW DISCOUNT', 'BUYER ESCROW DISCOUNT', 'OWNERS TITLE DISCOUNT', 'EXTRA TITLE FEES'].forEach(c => io.put(c, '')) },
                 { label: 'Sale Type', column: 'SALE TYPE', kind: 'seg', items: [['Standard', 'Standard'], ['Short Sale', 'Short Sale'], ['REO', 'REO']].map(([value, main]) => ({ value, main })), show: has, blank: 'Standard', fallback: () => 'Standard' },
-                { label: side === 'buyer' ? 'Buyer’s Loan' : 'Buyer’s Financing', column: 'BUYER FINANCING', kind: 'choice', icon: 'bank', short: '',
-                    items: (side === 'buyer' ? ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan'] : ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash']).map(v => ({ value: v, main: v })),
-                    show: () => has() && (side === 'seller' || !cash()), blank: side === 'buyer' ? 'Fixed Rate Loan' : '' },
-                ...(side === 'buyer' ? [{ label: 'Second Loan', column: 'SECOND LOAN AMOUNT', kind: 'money', short: 'Second Loan', show: () => has() && !cash() }] : []),
+                // (a Buyer Breakdown's loan type and second loan come from its loan products: the Loan section)
+                ...(side === 'seller' ? [{ label: 'Buyer’s Financing', column: 'BUYER FINANCING', kind: 'choice', icon: 'bank', short: '',
+                    items: ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'].map(v => ({ value: v, main: v })), show: has, blank: '' }] : []),
                 { label: 'Owner’s Policy Paid By', column: 'WHO PAYS OWNERS POLICY', kind: 'seg', short: 'Owner’s Policy:', items: [{ value: 'Seller', main: 'Seller' }, { value: 'Buyer', main: 'Buyer' }], show: has,
                     // Blank: the company's custom (the seller in Arizona)
                     fallback: () => (((company() || {}).sellerOwnerShare ?? 1) >= 0.5 ? 'Seller' : 'Buyer') },
@@ -3695,7 +3809,7 @@
             ];
             groupField(parent, 'Title & Escrow', parts, {
                 help: side === 'buyer'
-                    ? 'The title company’s filed rates price the escrow fee, recording, title policies and endorsements. Condo, HOA and manufactured home endorsements follow the property.'
+                    ? 'The title company’s filed rates price the escrow fee, recording, title policies and endorsements. Condo, HOA and manufactured home endorsements follow the property; the loan type (fixed, adjustable or VA) and any second loan follow the loan products.'
                     : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. Buyer’s Financing and Buyer Type are what you expect the buyer to be: a buyer’s discount on the owner’s policy only lowers the seller’s cost when the company takes it off the whole policy.',
             });
         }
@@ -3891,7 +4005,7 @@
             // Buyer Inputs: the buyer's side of the escrow breakdown
             document.getElementById('buyer-inputs-section').hidden = false;
             const buyerIn = document.getElementById('buyer-inputs-fields');
-            choiceField(buyerIn, 'Loan Product', 'BUYER LOAN PRODUCT', (data.loanProducts || []).map(p => ({
+            choiceField(buyerIn, 'Loan Product', 'BUYER LOAN PRODUCT', (data.loanProducts || []).filter(p => !isDpaProduct(p)).map(p => ({
                 value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')), secondary: text(col(p, 'LENDER NAME')), icon: 'bank' })),
                 { help: 'Not used when Buyer’s Financing is Cash.' });
             percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
@@ -4263,7 +4377,9 @@
         function showBuyerBreakdown() {
             if (!(data.loanProducts || []).length) { showProblem('No loan products are set up yet. Please check back soon.'); return; }
             // A shared link can name the loan product (?loan=); otherwise use the first one
-            loanIndex = Math.max(0, data.loanProducts.findIndex(p => text(col(p, 'LOAN PRODUCT NAME')) === params.get('loan')));
+            // (never a Down Payment Assistance product: that's a second loan)
+            const named = data.loanProducts.findIndex(p => !isDpaProduct(p) && text(col(p, 'LOAN PRODUCT NAME')) === params.get('loan'));
+            loanIndex = named >= 0 ? named : Math.max(0, data.loanProducts.findIndex(p => !isDpaProduct(p)));
             cashSelected = isTrue(col(data.page, 'CASH PURCHASE'));
             pickedLoanIndex = loanIndex;
             pickedCash = cashSelected;

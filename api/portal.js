@@ -37,6 +37,11 @@ const PAGE_SETTING_FIELDS = {
   // Title & Escrow: the title company (a titleCompanies document ID; blank uses the three rates above) and this sale's details
   'TITLE COMPANY': 'id', 'SALE TYPE': ['Standard', 'Short Sale', 'REO'],
   'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
+  // Buyer Breakdown: the down payment assistance loan (a Down Payment Assistance product, by name) and its amount as a
+  // share of the price (a product the client can't adjust always uses its own)
+  'SECOND LOAN PRODUCT': 'text', 'SECOND LOAN LTV': 'rate',
+  // (a product that's a flat dollar amount the client can adjust: the amount they're using, up to the product's)
+  'SECOND LOAN DOLLAR AMOUNT': 'money',
   'WHO PAYS OWNERS POLICY': 'payer', 'OWNERS TITLE DISCOUNT': 'text', 'SELLER ESCROW DISCOUNT': 'text', 'BUYER ESCROW DISCOUNT': 'text',
   'FINCEN REPORT': 'bool', 'EXTRA TITLE FEES': 'list',
   // Seller Net's Buyer Inputs (the buyer's side of the escrow breakdown): the loan product by name and the buyer's credit
@@ -134,6 +139,48 @@ function cleanSetting_(kind, value) {
     if (quotes.some(q => !isFinite(q) || q < 0 || q > 0.1)) return null;
     return JSON.stringify({ QUOTES: quotes });
   }
+  // A Down Payment Assistance product's professions / groups: JSON [names from DPA_GROUPS] (at least one), saved in
+  // DPA_GROUPS' order
+  if (kind === 'groups') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(list) || !list.length || list.some(g => !DPA_GROUPS.includes(g))) return null;
+    return JSON.stringify(DPA_GROUPS.filter(g => list.includes(g)));
+  }
+  // A Down Payment Assistance product's qualifications: JSON [{ TYPE, VALUE }] ("[]" for none), each of
+  // DPA_QUALIFICATION_TYPES at most once: an income limit or home price maximum (dollars over 0), census designations
+  // (a list from DPA_CENSUS), a minimum credit score (300-850), first-time homebuyer (whole years without a home, 1-99)
+  // or a homebuyer education class (no VALUE). Saved in DPA_QUALIFICATION_TYPES' order.
+  if (kind === 'dpaQuals') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    const order = Object.keys(DPA_QUALIFICATION_TYPES);
+    if (!Array.isArray(list) || list.length > order.length) return null;
+    const out = [];
+    for (const q of list) {
+      const type = String((q && q.TYPE) || '').trim();
+      const input = DPA_QUALIFICATION_TYPES[type];
+      if (!input || out.some(o => o.TYPE === type)) return null;
+      if (input === 'none') { out.push({ TYPE: type }); continue; }
+      if (input === 'census') {
+        const v = q.VALUE;
+        if (!Array.isArray(v) || !v.length || v.some(d => !DPA_CENSUS.includes(d))) return null;
+        out.push({ TYPE: type, VALUE: DPA_CENSUS.filter(d => v.includes(d)) });
+        continue;
+      }
+      const n = Number(q.VALUE);
+      const ok = input === 'score' ? Number.isInteger(n) && n >= 300 && n <= 850
+        : input === 'years' ? Number.isInteger(n) && n >= 1 && n <= 99 : n > 0 && n <= 100000000;
+      if (!ok) return null;
+      out.push({ TYPE: type, VALUE: input === 'money' ? Math.round(n) : n });
+    }
+    return JSON.stringify(out.sort((a, b) => order.indexOf(a.TYPE) - order.indexOf(b.TYPE)));
+  }
+  // A rate that may be negative (a second mortgage's markup from the first loan's rate: -100% to 100%)
+  if (kind === 'signedRate') {
+    const s = Number(raw.replace(/[%\s]/g, ''));
+    return isFinite(s) && s >= -1 && s <= 1 ? Math.round(s * 1e6) / 1e6 : null;
+  }
   // A credit score: a whole number from 300 to 850 (the lowest and highest possible)
   if (kind === 'score') return /^\d{3}$/.test(raw) && +raw >= 300 && +raw <= 850 ? +raw : null;
   // A loan product's max DTI tiers: JSON [{ SCORE, DTI, HOUSING }] (1 to 20, each credit score listed once, 300 to 850;
@@ -161,6 +208,8 @@ function cleanSetting_(kind, value) {
   if (!isFinite(n) || n < 0) return null;
   if (kind === 'rate') return n <= 1 ? Math.round(n * 1e6) / 1e6 : null;
   if (kind === 'cents') return n <= 100000000 ? Math.round(n * 100) / 100 : null;
+  // A match ratio (an Individual Development Account's "4 to 1"): over 0, up to 100, 2 decimals
+  if (kind === 'ratio') return n > 0 && n <= 100 ? Math.round(n * 100) / 100 : null;
   return n <= 100000000 ? Math.round(n) : null;
 }
 
@@ -171,18 +220,71 @@ function cleanSetting_(kind, value) {
 // listed here is asked as text under "Other".
 // The form (loan-products.js) lays these out with its own yes/no questions and fills in every column before saving.
 const LOAN_PRODUCT_TYPES = ['Conventional', 'FHA', 'VA', 'Jumbo', 'Non-Conforming', 'Down Payment Assistance'];
-// A Down Payment Assistance product is a second "piggy back" loan: only these are asked (the rest are left blank), and
-// any other product's piggy back answers are 0 / FALSE
+// A Down Payment Assistance product is a second loan (or a grant) toward the down payment: it's asked only
+// LOAN_DPA_FIELDS and the DPA_ONLY_FIELDS its answers call for (dpaAsked_); the rest are left blank. Any other product's
+// SECOND LOAN ADJUSTABLE BY CLIENT and SECOND LOAN LTV MAX are FALSE / 0, and its DPA_ONLY_FIELDS blank.
 const LOAN_DPA = 'Down Payment Assistance';
-const LOAN_DPA_FIELDS = ['LOAN PRODUCT NAME', 'PRODUCT TYPE', 'SECOND LOAN ADJUSTABLE BY CLIENT', 'SECOND LOAN LTV MAX', 'SILENT SECOND'];
+const LOAN_DPA_FIELDS = ['LOAN PRODUCT NAME', 'PRODUCT TYPE', 'SECOND LOAN ADJUSTABLE BY CLIENT', 'SILENT SECOND'];
+// The lists the DPA questions choose from (the same as /dpa.js)
+const DPA_LOAN_TYPES = ['Deferred Silent Second', 'Forgivable Silent Second', 'Second Mortgage', 'Grant'];
+const DPA_GRANT_TYPES = ['Arizona Department of Housing', 'Individual Development Accounts', 'Profession/Group-Specific'];
+const DPA_AMOUNT_TYPES = ['Percentage', 'Flat Dollar Amount'];
+const DPA_GROUPS = ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs',
+  'Healthcare Worker (Anyone employed by a healthcare provider)', 'Healthcare Worker (Any clinical role)',
+  'Healthcare Professional (Qualified physician)', 'Veteran (With benefits)', 'Veteran (Without benefits)',
+  'Legally Disabled', 'Native American'];
+const DPA_CENSUS = ['Low', 'Moderate', 'Middle', 'Upper'];
+const DPA_QUALIFICATION_TYPES = { 'Income Limit': 'money', 'Census Designation': 'census', 'Minimum Credit Score': 'score',
+  'First Time Homebuyer': 'years', 'Homebuyer Education Class': 'none', 'Home Price Maximum': 'money' };
+const DPA_ONLY_FIELDS = ['DPA LOAN TYPE', 'FORGIVEN AFTER YEARS', 'SECOND LOAN TERM', 'SAME RATE AS FIRST LOAN', 'SECOND LOAN RATE MARKUP',
+  'GRANT TYPE', 'IDA MATCH RATIO', 'GROUP SPECIFIC', 'ELIGIBLE GROUPS', 'SECOND LOAN AMOUNT TYPE', 'SECOND LOAN FLAT AMOUNT',
+  'COMBINED LOANS CAN EXCEED PRICE', 'EXCESS REFUNDED TO BUYER', 'AFFECTS FIRST LOAN RATE', 'FIRST LOAN RATE MARKUP', 'DPA QUALIFICATIONS'];
+// (these can't be 0 on a DPA product)
+const DPA_OVER_ZERO = ['FORGIVEN AFTER YEARS', 'SECOND LOAN TERM', 'SECOND LOAN LTV MAX', 'SECOND LOAN FLAT AMOUNT'];
+// The DPA questions a DPA product's answers call for (get(column) → its submitted answer), besides LOAN_DPA_FIELDS:
+// its Loan Type (DPA LOAN TYPE) and that type's questions (a forgivable silent second: the years until it's forgiven; a
+// silent second: whether it's for certain professions / groups, and which; a second mortgage: its term and its rate as
+// the first loan's or a markup from it; a grant: its type, and an Individual Development Account's match ratio or a
+// profession / group grant's groups), the amount (a percentage of the price or a flat amount), whether the two loans can
+// go past the price (and if so, whether what's left over can be refunded), whether it changes the first loan's rate
+// (and by how much), and its qualifications
+function dpaAsked_(get) {
+  const is = (c, v) => String(get(c) || '').trim().toLowerCase() === v.toLowerCase();
+  const yes = c => /^true$/i.test(String(get(c) || '').trim());
+  const asked = ['DPA LOAN TYPE', 'SECOND LOAN AMOUNT TYPE', 'COMBINED LOANS CAN EXCEED PRICE', 'AFFECTS FIRST LOAN RATE', 'DPA QUALIFICATIONS'];
+  asked.push(is('SECOND LOAN AMOUNT TYPE', 'Flat Dollar Amount') ? 'SECOND LOAN FLAT AMOUNT' : 'SECOND LOAN LTV MAX');
+  if (yes('COMBINED LOANS CAN EXCEED PRICE')) asked.push('EXCESS REFUNDED TO BUYER');
+  if (yes('AFFECTS FIRST LOAN RATE')) asked.push('FIRST LOAN RATE MARKUP');
+  if (is('DPA LOAN TYPE', 'Forgivable Silent Second')) asked.push('FORGIVEN AFTER YEARS');
+  if (is('DPA LOAN TYPE', 'Deferred Silent Second') || is('DPA LOAN TYPE', 'Forgivable Silent Second')) {
+    asked.push('GROUP SPECIFIC');
+    if (yes('GROUP SPECIFIC')) asked.push('ELIGIBLE GROUPS');
+  }
+  if (is('DPA LOAN TYPE', 'Second Mortgage')) {
+    asked.push('SECOND LOAN TERM', 'SAME RATE AS FIRST LOAN');
+    if (!yes('SAME RATE AS FIRST LOAN')) asked.push('SECOND LOAN RATE MARKUP');
+  }
+  if (is('DPA LOAN TYPE', 'Grant')) {
+    asked.push('GRANT TYPE');
+    if (is('GRANT TYPE', 'Individual Development Accounts')) asked.push('IDA MATCH RATIO');
+    if (is('GRANT TYPE', 'Profession/Group-Specific')) asked.push('ELIGIBLE GROUPS');
+  }
+  return asked;
+}
 const LOAN_RATE_TYPES = ['Fixed Rate', 'Adjustable Rate'];
 const LOAN_PRODUCT_FIELDS = (function () {
   const sections = [
     ['Product', [['LOAN PRODUCT NAME', 'text'], ['PRODUCT TYPE', LOAN_PRODUCT_TYPES], ['RATE TYPE', LOAN_RATE_TYPES], ['LOAN TERM', 'int']]],
+    // (INCOME LIMIT is no longer asked: a Down Payment Assistance product's qualifications can have one)
     ['Loan Limits', [['MAX LTV', 'rate'], ['MIN LOAN AMOUNT', 'money'], ['MAX LOAN AMOUNT', 'money'], ['MAX SELLER CREDIT %', 'rate'],
-      ['INCOME LIMIT', 'money'], ['SILENT SECOND', 'bool']]],
-    // (Down Payment Assistance products only)
-    ['Down Payment Assistance', [['SECOND LOAN ADJUSTABLE BY CLIENT', 'bool'], ['SECOND LOAN LTV MAX', 'rate']]],
+      ['SILENT SECOND', 'bool']]],
+    // (Down Payment Assistance products only; see dpaAsked_ and /dpa.js)
+    ['Down Payment Assistance', [['DPA LOAN TYPE', DPA_LOAN_TYPES], ['FORGIVEN AFTER YEARS', 'int'], ['SECOND LOAN TERM', 'int'],
+      ['SAME RATE AS FIRST LOAN', 'bool'], ['SECOND LOAN RATE MARKUP', 'signedRate'], ['GRANT TYPE', DPA_GRANT_TYPES], ['IDA MATCH RATIO', 'ratio'],
+      ['GROUP SPECIFIC', 'bool'], ['ELIGIBLE GROUPS', 'groups'],
+      ['SECOND LOAN ADJUSTABLE BY CLIENT', 'bool'], ['SECOND LOAN AMOUNT TYPE', DPA_AMOUNT_TYPES], ['SECOND LOAN LTV MAX', 'rate'],
+      ['SECOND LOAN FLAT AMOUNT', 'money'], ['COMBINED LOANS CAN EXCEED PRICE', 'bool'], ['EXCESS REFUNDED TO BUYER', 'bool'],
+      ['AFFECTS FIRST LOAN RATE', 'bool'], ['FIRST LOAN RATE MARKUP', 'rate'], ['DPA QUALIFICATIONS', 'dpaQuals']]],
     ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
     ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'],
       ['LENDER CREDIT % OF PURCHASE PRICE', 'rate'], ['LENDER CREDIT % OF LOAN AMOUNT', 'rate'], ['LENDER CREDIT FLAT $', 'cents'],
@@ -328,6 +430,10 @@ export async function handle(body, query) {
     // pages.html (admins): change who can see the page
     if (body.action === 'updatePageAccess') return await updatePageAccess_(id, account, body);
     if (body.action === 'saveClientInput') return await saveClientInput_(id, account, body);
+
+    // Settings page: a buyer's own details (veteran, VA loan used, professions / groups, last owned a home, homebuyer
+    // education) and credit score
+    if (body.action === 'updateMyDetails') return await updateMyDetails_(id, found, body.values);
 
     // Settings page: save this client's income and debt (adds their row if they don't have one yet)
     if (body.action === 'updateIncome') {
@@ -2149,7 +2255,73 @@ const CLIENT_FIELDS = [
   // Other: whether they're a veteran and have used a VA loan before (a VA loan's funding fee follows them; see
   // /mortgage-insurance.js). Not asked when a client is added (they start as No).
   { col: 'VETERAN', type: 'bool', optional: true }, { col: 'VA LOAN USED', type: 'bool', optional: true },
+  // The details a Down Payment Assistance program can ask about (see /dpa.js): the professions / groups they're in
+  // (JSON [names from DPA_GROUPS]), when they last owned a home ('Never', or the year; blank: not said) and whether
+  // they've taken a homebuyer education class. Their credit score is kept with their income (CLIENT_CREDIT).
+  { col: 'PROFESSION GROUPS', type: 'groups', optional: true }, { col: 'LAST OWNED HOME', type: 'owned', optional: true },
+  { col: 'HOMEBUYER EDUCATION', type: 'bool', optional: true },
 ];
+// A client's credit score: their income document's CREDIT SCORE (Edit Clients shows and saves it with the rest)
+const CLIENT_CREDIT = 'CREDIT SCORE';
+// The details a client can answer for themselves on the Settings page (updateMyDetails), besides their credit score
+const MY_DETAIL_FIELDS = ['VETERAN', 'VA LOAN USED', 'PROFESSION GROUPS', 'LAST OWNED HOME', 'HOMEBUYER EDUCATION'];
+
+// One client detail of a groups or owned kind, checked: the value to save, or null when it isn't allowed.
+//   groups: a list (or its JSON) of DPA_GROUPS names (none is fine), saved as JSON in DPA_GROUPS' order
+//   owned: 'Never', a year from 1900 to this year, or blank
+function cleanClientDetail_(type, raw) {
+  if (type === 'groups') {
+    let list = raw;
+    if (!Array.isArray(list)) {
+      const s = String(raw === null || raw === undefined ? '' : raw).trim();
+      try { list = s ? JSON.parse(s) : []; } catch (e) { return null; }
+    }
+    if (!Array.isArray(list) || list.some(g => !DPA_GROUPS.includes(g))) return null;
+    return JSON.stringify(DPA_GROUPS.filter(g => list.includes(g)));
+  }
+  if (type === 'owned') {
+    const v = String(raw === null || raw === undefined ? '' : raw).trim();
+    if (!v) return '';
+    if (/^never$/i.test(v)) return 'Never';
+    const year = Number(v);
+    const now = Number(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).slice(0, 4));
+    return Number.isInteger(year) && year >= 1900 && year <= now ? String(year) : null;
+  }
+  return null;
+}
+// Saves a client's credit score (300-850, or blank to clear it) to their income document, adding one if they have none.
+// Returns an error code, or '' when saved.
+async function saveCreditScore_(id, raw) {
+  const v = String(raw === null || raw === undefined ? '' : raw).trim();
+  if (v !== '' && !(/^\d{3}$/.test(v) && +v >= 300 && +v <= 850)) return 'invalid_credit_score';
+  const existing = await findIncome_(id);
+  if (existing) await update('income', existing._id, { [CLIENT_CREDIT]: v === '' ? '' : +v });
+  else if (v !== '') await add('income', { 'ACCOUNT ID': id, [CLIENT_CREDIT]: +v }, id);
+  return '';
+}
+// Settings page: a client's own answers to MY_DETAIL_FIELDS and their credit score (only what's given is saved; someone
+// who isn't a veteran hasn't used a VA loan). Returns their account and income again.
+async function updateMyDetails_(id, found, given) {
+  given = given || {};
+  const next = {};
+  for (const col of MY_DETAIL_FIELDS) {
+    if (!(col in given)) continue;
+    const f = CLIENT_FIELDS.find(x => x.col === col);
+    if (f.type === 'bool') next[col] = given[col] === true || /^true$/i.test(String(given[col]));
+    else {
+      const v = cleanClientDetail_(f.type, given[col]);
+      if (v === null) return { ok: false, error: 'invalid_value' };
+      next[col] = v;
+    }
+  }
+  if (next['VETERAN'] === false) next['VA LOAN USED'] = false;
+  if (CLIENT_CREDIT in given) {
+    const err = await saveCreditScore_(id, given[CLIENT_CREDIT]);
+    if (err) return { ok: false, error: err };
+  }
+  if (Object.keys(next).length) await update('accounts', found.docId, next);
+  return { ok: true, id, row: (await findAccount_(id)).row, income: await findIncome_(id) };
+}
 
 // One account's editable details, by column name
 function clientValues_(r) {
@@ -2161,12 +2333,24 @@ function clientValues_(r) {
   CLIENT_FIELDS.forEach(f => { values[f.col] = f.type === 'bool' ? get(f.col).toUpperCase() === 'TRUE' : get(f.col); });
   return values;
 }
+// ...plus their credit score, from their income document (blank without one)
+function clientDetails_(r, income) {
+  const values = clientValues_(r);
+  const score = income ? String(income[CLIENT_CREDIT] === undefined || income[CLIENT_CREDIT] === null ? '' : income[CLIENT_CREDIT]).trim() : '';
+  values[CLIENT_CREDIT] = score;
+  return values;
+}
 
 async function adminClients_(account) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const incomes = {};
+  (await rows('income')).forEach(r => {
+    const rid = phoneToId_(r['ACCOUNT ID'] || r['ID'] || r._id);
+    if (rid && !incomes[rid]) incomes[rid] = r;
+  });
   const clients = (await rows('accounts'))
     .map(r => {
-      const values = clientValues_(r);
+      const values = clientDetails_(r, incomes[phoneToId_(r['ACCOUNT ID'])]);
       return { id: phoneToId_(r['ACCOUNT ID']), name: [values['FIRST NAME'], values['LAST NAME']].filter(String).join(' '), values };
     })
     .filter(c => c.id)
@@ -2192,14 +2376,23 @@ async function adminUpdateClient_(account, body) {
       const email = String(raw || '').trim().toLowerCase().slice(0, 120);
       if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
       next[f.col] = email;
+    } else if (f.type === 'groups' || f.type === 'owned') {
+      const v = cleanClientDetail_(f.type, raw);
+      if (v === null) return { ok: false, error: 'invalid_value' };
+      next[f.col] = v;
     } else {
       const text = cleanText_(raw, 100);
       if (f.required && !text) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
       next[f.col] = text;
     }
   }
+  // (their credit score is kept with their income)
+  if (CLIENT_CREDIT in given) {
+    const err = await saveCreditScore_(clientId, given[CLIENT_CREDIT]);
+    if (err) return { ok: false, error: err };
+  }
   if (Object.keys(next).length) await update('accounts', found.docId, next);
-  return { ok: true, client: { id: clientId, values: clientValues_((await findAccount_(clientId)).row) } };
+  return { ok: true, client: { id: clientId, values: clientDetails_((await findAccount_(clientId)).row, await findIncome_(clientId)) } };
 }
 
 // Admins: a new ACCOUNT LIST document from the Settings page's New Client form. Every shown answer is required except
@@ -2222,6 +2415,9 @@ async function adminCreateClient_(account, body) {
       const email = String(raw || '').trim().toLowerCase().slice(0, 120);
       if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
       values[f.col] = email;
+    } else if (f.type === 'groups' || f.type === 'owned') {
+      // (not asked when a client is added)
+      values[f.col] = f.type === 'groups' ? '[]' : '';
     } else {
       values[f.col] = cleanText_(raw, 100);
     }
@@ -3075,7 +3271,8 @@ async function myPagesData_(id, account) {
 }
 
 // A loan product's answers, checked: { clean } or { error, field }. Every answer is required (the extra text columns
-// aren't), except that a Down Payment Assistance product needs only LOAN_DPA_FIELDS (the rest are saved blank).
+// aren't), except that a Down Payment Assistance product needs only LOAN_DPA_FIELDS and the questions its answers call for
+// (dpaAsked_; the rest are saved blank), and any other product's DPA_ONLY_FIELDS are blank.
 // Mortgage insurance follows the product type: MI QUOTES only for a Conventional product, or a Jumbo or Non-Conforming one
 // with guidelines (NO MI GUIDELINES FALSE), else blank; NO MI GUIDELINES is asked only of Jumbo and Non-Conforming (else
 // FALSE).
@@ -3085,12 +3282,15 @@ function cleanLoanProduct_(fields, submitted) {
   const jumboLike = type === 'jumbo' || type === 'non-conforming';
   const noGuidelines = jumboLike && /^true$/i.test(String(submitted['NO MI GUIDELINES'] || '').trim());
   const miAsked = { 'MI QUOTES': type === 'conventional' || (jumboLike && !noGuidelines), 'NO MI GUIDELINES': jumboLike };
+  const dpaAsked = dpa ? LOAN_DPA_FIELDS.concat(dpaAsked_(c => submitted[c])) : null;
   const clean = {};
   for (const f of fields) {
     if (!dpa && f.col in miAsked && !miAsked[f.col]) { clean[f.col] = f.col === 'NO MI GUIDELINES' ? false : ''; continue; }
-    const asked = !dpa || LOAN_DPA_FIELDS.includes(f.col);
+    if (!dpa && DPA_ONLY_FIELDS.includes(f.col)) { clean[f.col] = ''; continue; }
+    const asked = !dpa || dpaAsked.includes(f.col);
     const value = asked ? cleanSetting_(f.kind, submitted[f.col]) : '';
     if (value === null || (value === '' && asked && f.section !== 'Other')) return { error: 'invalid_value', field: f.col };
+    if (dpa && asked && DPA_OVER_ZERO.includes(f.col) && !(Number(value) > 0)) return { error: 'invalid_value', field: f.col };
     clean[f.col] = value;
   }
   return { clean };
@@ -3145,7 +3345,7 @@ async function quoteSheet_(submitted, old) {
 // (RATE QUOTES also carries today: today's interest rate, for the form's markup tables; MI QUOTES carries mi: the
 // mortgage insurance settings, for its upfront premium tables)
 function loanProductFields_(headers, today, mi) {
-  const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true };
+  const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true, 'INCOME LIMIT': true };
   ['0%-5%', '5%-10%', '10%-20%', '20%+'].forEach(d => { known['PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN'] = true; });
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+']
@@ -3434,14 +3634,20 @@ async function inspectorRow_(collection, nameColumn, name) {
 }
 
 // Each person on the page (PRIMARY, then ALT 1-5) with their name, Purchaser/Collaborator type and INCOME row
-// (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate, and whether they're a
-// veteran and have used a VA loan before (for a VA loan's funding fee)
+// (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate, whether they're a
+// veteran and have used a VA loan before (for a VA loan's funding fee), and the details a Down Payment Assistance
+// program can ask about (groups: their PROFESSION GROUPS names; lastOwned: LAST OWNED HOME; education: HOMEBUYER EDUCATION)
 async function pageClients_(page) {
   const names = {}, va = {};
   (await rows('accounts')).forEach(r => {
     const rid = phoneToId_(r['ACCOUNT ID']);
     names[rid] = fullName_(r);
-    va[rid] = { veteran: hasRole_(r, 'VETERAN'), vaUsed: hasRole_(r, 'VA LOAN USED') };
+    let groups = [];
+    try { groups = JSON.parse(String(r['PROFESSION GROUPS'] || '[]')); } catch (e) { groups = []; }
+    va[rid] = { veteran: hasRole_(r, 'VETERAN'), vaUsed: hasRole_(r, 'VA LOAN USED'),
+      groups: Array.isArray(groups) ? groups.filter(g => DPA_GROUPS.includes(g)) : [],
+      lastOwned: String(r['LAST OWNED HOME'] === undefined || r['LAST OWNED HOME'] === null ? '' : r['LAST OWNED HOME']).trim(),
+      education: hasRole_(r, 'HOMEBUYER EDUCATION') };
   });
   const incomes = {};
   (await rows('income')).forEach(r => {
@@ -3455,7 +3661,8 @@ async function pageClients_(page) {
   })
     .filter(p => { if (!p.id || seen[p.id]) return false; seen[p.id] = true; return true; })
     .map(p => ({ id: p.id, type: p.type, name: names[p.id] || '', income: incomes[p.id] || null,
-      veteran: va[p.id] ? va[p.id].veteran : false, vaUsed: va[p.id] ? va[p.id].vaUsed : false }));
+      veteran: va[p.id] ? va[p.id].veteran : false, vaUsed: va[p.id] ? va[p.id].vaUsed : false,
+      groups: va[p.id] ? va[p.id].groups : [], lastOwned: va[p.id] ? va[p.id].lastOwned : '', education: va[p.id] ? va[p.id].education : false }));
 }
 
 // Interval columns must be one of INTERVALS, job titles/descriptions are short text,

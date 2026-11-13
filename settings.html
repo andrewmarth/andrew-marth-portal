@@ -431,6 +431,27 @@
         .yn input:checked + label { background: var(--cream); color: var(--brown); }
         .yn input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
         .cf-saved { margin-top: 12px; min-height: 1.4em; font-weight: bold; color: #cfe3b5; }
+        /* A client's details for loan programs (Edit Clients' lines and the client's own pop-up): professions / groups to
+           tick, and whether they've owned a home (and the year they last did) */
+        .cf-editor.is-wide { flex: 1 0 100%; display: block; }
+        .dd-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; width: 100%; }
+        .dd-check { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1.5px solid rgba(233, 226, 216, 0.35); border-radius: 14px; font-size: 0.92rem; font-weight: bold; line-height: 1.3; cursor: pointer; }
+        .dd-check input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--gold); cursor: pointer; }
+        .dd-check:has(input:checked) { background: rgba(233, 226, 216, 0.14); border-color: var(--gold); }
+        .dd-check:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
+        .dd-owned { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
+        .dd-owned .cf-input { max-width: 190px; }
+        .dd-year[hidden] { display: none; }
+        .detail-dialog { max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .detail-dialog .dd-editor { margin: 4px 0 2px; }
+        .detail-dialog .dd-owned { justify-content: flex-start; }
+        .detail-dialog .cf-input { max-width: 220px; }
+        .detail-dialog .yn { background: #f2ede6; }
+        .detail-dialog .yn label { color: var(--brown); }
+        .detail-dialog .yn input:checked + label { background: var(--olive); color: var(--cream); }
+        .detail-dialog .dd-check { border-color: rgba(78, 81, 62, 0.25); }
+        .detail-dialog .dd-check input { accent-color: var(--olive); }
+        .detail-dialog .dd-check:has(input:checked) { background: #eef0e6; border-color: var(--olive); }
         .client-empty { margin-top: 14px; opacity: 0.85; }
 
         /* --- Usage (admins): one section per kind of usage --- */
@@ -1254,6 +1275,28 @@
         </form>
     </dialog>
 
+    <!-- A buyer's details for loan programs (credit score, veteran, professions / groups, home ownership, education) -->
+    <dialog class="edit-dialog detail-dialog" id="detail-dialog" aria-labelledby="detail-dialog-title">
+        <form class="dialog-inner" id="detail-form" novalidate>
+            <div class="dialog-head">
+                <h2 id="detail-dialog-title">Details</h2>
+                <button type="button" class="close-btn" data-close-detail aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted" id="detail-help"></p>
+            <div class="dd-editor" id="detail-editor"></div>
+            <p class="form-message" id="detail-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" data-close-detail>Cancel</button>
+                <button type="submit" class="btn" id="detail-save">
+                    <span class="btn-spinner" aria-hidden="true"></span>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </dialog>
+
     <footer>
         <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
         <p class="footer-disclosure">
@@ -1265,6 +1308,7 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
         import { openLoanProductForm } from '/loan-products.js';
+        import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
         import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, BUYER_TYPES, DISCOUNT_CATEGORIES, DISCOUNT_APPLIES } from '/title-fees.js';
 
@@ -1310,7 +1354,9 @@
             btn.disabled = false;
         }
 
+        let lastAccountRow = null;
         function showProfile(row) {
+            lastAccountRow = row;
             profile = { firstName: findValue(row, 'first name'), lastName: findValue(row, 'last name'), preferred: String(findValue(row, 'preferred name')).trim(), email: String(findValue(row, 'email')).trim() };
             const full = `${profile.firstName} ${profile.lastName}`.trim();
             nameValue.textContent = full || 'Not added yet';
@@ -1344,8 +1390,11 @@
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
                     if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); await loadClients(user); }
-                    // Income & Debt is only for buyers
-                    document.getElementById('income-row').hidden = String(findValue(data.row, 'buyer')).trim().toUpperCase() !== 'TRUE';
+                    // Income & Debt (and the details loan programs ask about) are only for buyers
+                    const isBuyer = String(findValue(data.row, 'buyer')).trim().toUpperCase() === 'TRUE';
+                    document.getElementById('income-row').hidden = !isBuyer;
+                    document.querySelectorAll('[data-my-detail]').forEach(r => { r.dataset.buyer = isBuyer ? 'yes' : ''; });
+                    showDetails(data.row, data.income);
                 }
                 else if (data.error === 'not_found') { nameValue.textContent = ''; preferredValue.textContent = ''; emailValue.textContent = ''; incomeValue.textContent = ''; setPageMessage('We don\'t have your details on file yet. Andrew will add them soon!'); }
                 else throw new Error(data.error);
@@ -1491,9 +1540,77 @@
             // Other: a VA loan's funding fee on the Buyer Breakdown follows these (first-time use, unless every veteran buying
             // has used a VA loan before). Not asked when a client is added (noNew: they start as No).
             { group: 'Other', noNew: true },
+            // ...and the details Down Payment Assistance programs ask about (their credit score is kept with their income)
+            { key: 'credit', label: 'Credit Score', saved: 'the credit score', cols: ['CREDIT SCORE'], kind: 'score', noNew: true },
             { key: 'veteran', label: 'Are you a Veteran?', saved: 'the veteran answer', cols: ['VETERAN'], kind: 'bool', noNew: true },
             { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => v['VETERAN'], noNew: true },
+            { key: 'groups', label: 'Professions & Groups', saved: 'the professions and groups', cols: ['PROFESSION GROUPS'], kind: 'groups', noNew: true },
+            { key: 'owned', label: 'Have you owned a home before?', saved: 'the home ownership answer', cols: ['LAST OWNED HOME'], kind: 'owned', noNew: true },
+            { key: 'education', label: 'Have you taken a homebuyer education class?', saved: 'the homebuyer education answer', cols: ['HOMEBUYER EDUCATION'], kind: 'bool', noNew: true },
         ];
+
+        // A client's details for loan programs: how each kind shows, its editor and reading it back (Edit Clients' lines
+        // and the client's own pop-up share these). score: a credit score (300-850); groups: professions / groups to tick
+        // (saved as a JSON list); owned: whether they've owned a home ('Never', or the year they last did).
+        const DETAIL_KINDS = ['score', 'groups', 'owned'];
+        const THIS_YEAR = new Date().getFullYear();
+        function detailText(kind, raw) {
+            const v = String(raw === undefined || raw === null ? '' : raw).trim();
+            if (kind === 'groups') { const list = groupList(v); return list.length ? list.join(', ') : 'None'; }
+            if (kind === 'owned') return !v ? '' : v === 'Never' ? 'No, never' : 'Yes, last in ' + v;
+            return v;
+        }
+        const ynHtml = (name, label, on) => '<div class="yn" role="radiogroup" aria-label="' + escapeHtml(label) + '">'
+            + '<input type="radio" name="' + name + '" id="' + name + '-yes" value="yes"' + (on === true ? ' checked' : '') + '><label for="' + name + '-yes">Yes</label>'
+            + '<input type="radio" name="' + name + '" id="' + name + '-no" value="no"' + (on === false ? ' checked' : '') + '><label for="' + name + '-no">No</label></div>';
+        function detailEditorHtml(kind, raw, name, label) {
+            const v = String(raw === undefined || raw === null ? '' : raw).trim();
+            if (kind === 'score') return '<input class="cf-input" data-detail="score" type="text" inputmode="numeric" maxlength="3" placeholder="300-850" autocomplete="off" aria-label="' + escapeHtml(label) + '" value="' + escapeHtml(v) + '">';
+            if (kind === 'groups') {
+                const picked = groupList(v);
+                return '<div class="dd-checks" role="group" aria-label="' + escapeHtml(label) + '">' + PROFESSION_GROUPS.map(g => '<label class="dd-check"><input type="checkbox" value="' + escapeHtml(g) + '"'
+                    + (picked.includes(g) ? ' checked' : '') + '><span>' + escapeHtml(g) + '</span></label>').join('') + '</div>';
+            }
+            if (kind === 'owned') {
+                const owned = v !== '' && v !== 'Never';
+                return '<div class="dd-owned">' + ynHtml(name, label, v === '' ? null : owned)
+                    + '<input class="cf-input dd-year" data-detail="year" type="text" inputmode="numeric" maxlength="4" placeholder="Year you last owned one" autocomplete="off" aria-label="The year you last owned a home"'
+                    + (owned ? '' : ' hidden') + ' value="' + (owned ? escapeHtml(v) : '') + '"></div>';
+            }
+            if (kind === 'bool') return ynHtml(name, label, v === 'true' || v === 'TRUE');
+            return '';
+        }
+        // The answer in an editor: { value } or { error, input }
+        function readDetail(kind, root, name) {
+            if (kind === 'score') {
+                const input = root.querySelector('[data-detail="score"]');
+                const v = input.value.trim();
+                if (v && !(/^\d{3}$/.test(v) && +v >= 300 && +v <= 850)) return { error: 'Credit scores go from 300 to 850.', input };
+                return { value: v };
+            }
+            if (kind === 'groups') return { value: JSON.stringify([...root.querySelectorAll('.dd-check input:checked')].map(i => i.value)) };
+            if (kind === 'owned') {
+                const pick = root.querySelector('input[name="' + name + '"]:checked');
+                if (!pick) return { error: 'Please answer yes or no.', input: root.querySelector('input[name="' + name + '"]') };
+                if (pick.value === 'no') return { value: 'Never' };
+                const input = root.querySelector('[data-detail="year"]');
+                const y = Number(input.value.trim());
+                if (!(Number.isInteger(y) && y >= 1900 && y <= THIS_YEAR)) return { error: 'Please enter the year you last owned a home (' + THIS_YEAR + ' if you own one now).', input };
+                return { value: String(y) };
+            }
+            return { value: null };
+        }
+        // Owned a home: the year box shows for a yes; credit scores and years are digits only
+        document.addEventListener('change', e => {
+            const owned = e.target.closest('.dd-owned');
+            if (owned && e.target.type === 'radio') {
+                const year = owned.querySelector('[data-detail="year"]');
+                year.hidden = e.target.value !== 'yes';
+                if (!year.hidden) year.focus();
+            }
+        });
+        document.addEventListener('input', e => { if (e.target.matches('[data-detail="score"], [data-detail="year"]')) e.target.value = e.target.value.replace(/\D/g, ''); });
+        const sameDetail = (kind, a, b) => (kind === 'groups' ? JSON.stringify(groupList(a)) === JSON.stringify(groupList(b)) : String(a === undefined || a === null ? '' : a) === String(b === undefined || b === null ? '' : b));
         const CF_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
         const clientList = document.getElementById('client-list');
         const cfSaved = document.getElementById('cf-saved');
@@ -1505,10 +1622,12 @@
 
         function lineValue(line, v) {
             if (line.kind === 'bool') return v[line.cols[0]] ? 'Yes' : 'No';
+            if (DETAIL_KINDS.includes(line.kind)) return detailText(line.kind, v[line.cols[0]]);
             if (line.kind === 'name') return [v['FIRST NAME'], v['LAST NAME']].filter(Boolean).join(' ');
             return v[line.cols[0]] || '';
         }
         function editorHtml(line, v) {
+            if (DETAIL_KINDS.includes(line.kind)) return detailEditorHtml(line.kind, v[line.cols[0]], 'cf-detail', line.label);
             if (line.kind === 'bool') {
                 const on = v[line.cols[0]];
                 return '<div class="yn" role="radiogroup" aria-label="' + escapeHtml(line.label) + '">'
@@ -1531,13 +1650,13 @@
                 const hidden = line.when && !line.when(v) ? ' hidden' : '';
                 if (line.key === editing) {
                     return '<form class="cf-row is-editing" data-line="' + line.key + '" novalidate><span class="cf-label">' + escapeHtml(line.label) + '</span>'
-                        + '<div class="cf-editor' + (line.kind === 'name' ? ' is-names' : '') + '">' + editorHtml(line, v) + '</div>'
+                        + '<div class="cf-editor' + (line.kind === 'name' ? ' is-names' : line.kind === 'groups' ? ' is-wide' : '') + '">' + editorHtml(line, v) + '</div>'
                         + '<div class="cf-actions"><span class="cf-error" role="alert"></span>'
                         + '<button type="button" class="btn btn-secondary" data-cancel>Cancel</button>'
                         + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save</button></div></form>';
                 }
                 const value = lineValue(line, v);
-                const cls = line.kind === 'bool' ? (v[line.cols[0]] ? ' is-yes' : ' is-no') : (value ? '' : ' is-empty');
+                const cls = line.kind === 'bool' ? (v[line.cols[0]] ? ' is-yes' : ' is-no') : (value && value !== 'None' ? '' : ' is-empty');
                 return '<div class="cf-row" data-line="' + line.key + '"' + hidden + '><span class="cf-label">' + escapeHtml(line.label) + '</span>'
                     + '<span class="cf-value' + cls + '">' + escapeHtml(value || 'Not added') + '</span>'
                     + '<button type="button" class="cf-edit" data-edit="' + line.key + '" aria-label="Edit ' + escapeHtml(line.label) + '" title="Edit"' + (editing || cfBusy ? ' disabled' : '') + '>' + CF_PENCIL + '</button></div>';
@@ -1572,6 +1691,8 @@
             missing_first_name: 'Please enter the legal first name.',
             missing_last_name: 'Please enter the legal last name.',
             invalid_email: 'That email doesn’t look right.',
+            invalid_credit_score: 'Credit scores go from 300 to 850.',
+            invalid_value: 'That answer isn’t valid.',
         };
         clientList.addEventListener('submit', async e => {
             e.preventDefault();
@@ -1581,7 +1702,11 @@
             const errorEl = form.querySelector('.cf-error');
             const fail = (input, text) => { if (input) { input.classList.add('is-invalid'); input.focus(); } errorEl.textContent = text; };
             const values = {};
-            if (line.kind === 'bool') {
+            if (DETAIL_KINDS.includes(line.kind)) {
+                const read = readDetail(line.kind, form, 'cf-detail');
+                if (read.error) return fail(read.input, read.error);
+                values[line.cols[0]] = read.value;
+            } else if (line.kind === 'bool') {
                 values[line.cols[0]] = (form.querySelector('input[name="cf-yn"]:checked') || {}).value === 'yes';
             } else {
                 for (const input of form.querySelectorAll('.cf-input')) values[input.dataset.col] = input.value.trim();
@@ -1593,7 +1718,7 @@
                 if (line.kind === 'email' && values['EMAIL'] && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(values['EMAIL'])) return fail(form.querySelector('.cf-input'), CLIENT_ERRORS.invalid_email);
             }
             // Nothing changed: just close the line
-            if (line.cols.every(col => values[col] === client.values[col])) { editing = null; renderClient(); return; }
+            if (line.cols.every(col => sameDetail(line.kind, values[col], client.values[col]))) { editing = null; renderClient(); return; }
             const save = form.querySelector('[data-save]');
             cfBusy = true;
             form.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
@@ -3167,6 +3292,114 @@
             incomeEditor.open(incomeRow);
         });
 
+        // --- A buyer's details for loan programs (rows under Income & Debt; each opens the detail pop-up) ---
+        // Their credit score is kept with their income; the rest are on their account (the same as Edit Clients' Other).
+        const MY_DETAILS = [
+            { key: 'credit', label: 'Credit Score', title: 'Credit Score', col: 'CREDIT SCORE', kind: 'score', what: 'your credit score',
+                help: 'Your best estimate is fine. It helps estimate your interest rate and which loan programs you qualify for.' },
+            { key: 'veteran', label: 'Veteran', title: 'Are you a Veteran?', col: 'VETERAN', kind: 'bool', what: 'whether you’re a veteran',
+                help: 'Veterans can use VA loans, and some programs are only for veterans.' },
+            { key: 'va-used', label: 'Used a VA Loan', title: 'Have you used a VA loan before?', col: 'VA LOAN USED', kind: 'bool', what: 'whether you’ve used a VA loan', when: v => v['VETERAN'],
+                help: 'A VA loan’s funding fee is lower the first time you use one.' },
+            { key: 'groups', label: 'Professions & Groups', title: 'Professions & Groups', col: 'PROFESSION GROUPS', kind: 'groups', what: 'your professions and groups',
+                help: 'Some down payment assistance programs are only for certain professions or groups. Choose any that describe you.' },
+            { key: 'owned', label: 'Owned a Home Before', title: 'Have you owned a home before?', col: 'LAST OWNED HOME', kind: 'owned', what: 'whether you’ve owned a home',
+                help: 'First-time homebuyer programs usually count you as first-time if you haven’t owned a home in the last few years.' },
+            { key: 'education', label: 'Homebuyer Education', title: 'Have you taken a homebuyer education class?', col: 'HOMEBUYER EDUCATION', kind: 'bool', what: 'whether you’ve taken a homebuyer education class',
+                help: 'Some down payment assistance programs ask for one before closing.' },
+        ];
+        let myValues = {};
+        const detailRows = {};
+        // The rows go right after Income & Debt
+        (() => {
+            let after = document.getElementById('income-row');
+            MY_DETAILS.forEach(d => {
+                const li = document.createElement('li');
+                li.className = 'setting-row';
+                li.hidden = true;
+                li.dataset.myDetail = d.key;
+                li.innerHTML = '<span class="setting-label">' + escapeHtml(d.label) + '</span><span class="setting-value">Loading...</span>'
+                    + '<button type="button" class="edit-btn" aria-label="Edit ' + escapeHtml(d.what) + '" title="Edit" disabled>' + PENCIL_ICON + '</button>';
+                li.querySelector('button').addEventListener('click', () => openDetail(d));
+                after.after(li);
+                after = li;
+                detailRows[d.key] = li;
+            });
+        })();
+        function showDetails(row, income) {
+            const get = name => String(findValue(row, name.toLowerCase())).trim();
+            const yes = name => get(name).toUpperCase() === 'TRUE';
+            const score = income ? String(income['CREDIT SCORE'] === undefined || income['CREDIT SCORE'] === null ? '' : income['CREDIT SCORE']).trim() : '';
+            myValues = { 'CREDIT SCORE': score, 'VETERAN': yes('VETERAN'), 'VA LOAN USED': yes('VA LOAN USED'),
+                'PROFESSION GROUPS': get('PROFESSION GROUPS'), 'LAST OWNED HOME': get('LAST OWNED HOME'), 'HOMEBUYER EDUCATION': yes('HOMEBUYER EDUCATION') };
+            MY_DETAILS.forEach(d => {
+                const li = detailRows[d.key];
+                li.hidden = li.dataset.buyer !== 'yes' || Boolean(d.when && !d.when(myValues));
+                const raw = myValues[d.col];
+                const text = d.kind === 'bool' ? (raw ? 'Yes' : 'No') : detailText(d.kind, raw);
+                const valueEl = li.querySelector('.setting-value');
+                valueEl.textContent = text || 'Not added yet';
+                valueEl.classList.toggle('is-empty', !text || text === 'None');
+                setLineButton(li.querySelector('button'), d.kind === 'bool' || Boolean(text && text !== 'None'), d.what);
+            });
+        }
+        const detailDialog = document.getElementById('detail-dialog');
+        const detailForm = document.getElementById('detail-form');
+        const detailEditor = document.getElementById('detail-editor');
+        const detailSave = document.getElementById('detail-save');
+        const detailMsg = document.getElementById('detail-message');
+        let detailOpen = null;
+        let saveDetails = null;
+        function openDetail(d) {
+            detailOpen = d;
+            document.getElementById('detail-dialog-title').textContent = d.title;
+            document.getElementById('detail-help').textContent = d.help;
+            const raw = myValues[d.col];
+            detailEditor.innerHTML = detailEditorHtml(d.kind, d.kind === 'bool' ? (raw ? 'TRUE' : 'FALSE') : raw, 'my-detail', d.title);
+            detailMsg.textContent = '';
+            setPageMessage('');
+            detailDialog.showModal();
+            const first = detailEditor.querySelector('input:checked, input:not([hidden])');
+            if (first) first.focus();
+        }
+        const closeDetail = () => { if (!detailSave.disabled) detailDialog.close(); };
+        detailDialog.querySelectorAll('[data-close-detail]').forEach(b => b.addEventListener('click', closeDetail));
+        detailDialog.addEventListener('click', e => { if (e.target === detailDialog) closeDetail(); });
+        detailDialog.addEventListener('cancel', e => { if (detailSave.disabled) e.preventDefault(); });
+        detailEditor.addEventListener('input', () => { detailMsg.textContent = ''; detailEditor.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid')); });
+        detailForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const d = detailOpen;
+            if (!d || !saveDetails) return;
+            const read = d.kind === 'bool'
+                ? { value: (detailEditor.querySelector('input[name="my-detail"]:checked') || {}).value === 'yes' }
+                : readDetail(d.kind, detailEditor, 'my-detail');
+            if (read.error) {
+                detailMsg.textContent = read.error;
+                if (read.input) { read.input.classList.add('is-invalid'); read.input.focus(); }
+                return;
+            }
+            if (sameDetail(d.kind, read.value, myValues[d.col])) { detailDialog.close(); return; }
+            const busy = on => {
+                detailForm.querySelectorAll('input, button').forEach(el => { el.disabled = on; });
+                detailSave.classList.toggle('is-loading', on);
+            };
+            busy(true);
+            try {
+                const data = await saveDetails({ [d.col]: read.value });
+                showProfile(data.row);
+                if (d.key === 'credit') showIncome(data.income);
+                showDetails(data.row, data.income);
+                busy(false);
+                detailDialog.close();
+                setPageMessage('Saved! ' + d.label + ' has been updated.', 'success');
+            } catch (err) {
+                console.error(err);
+                detailMsg.textContent = err.message === 'invalid_credit_score' ? 'Credit scores go from 300 to 850.' : 'We couldn\'t save your changes. Please try again.';
+                busy(false);
+            }
+        });
+
         function initReveal() {
             const items = document.querySelectorAll('.reveal');
             if (!('IntersectionObserver' in window)) {
@@ -3241,14 +3474,23 @@
                 return data.row;
             };
 
+            saveDetails = async values => {
+                const data = await callApi(currentUser, { action: 'updateMyDetails', values });
+                if (!data.ok) throw new Error(data.error);
+                return data;
+            };
+
             incomeEditor = createIncomeEditor({
                 save: async income => {
                     const data = await callApi(currentUser, { action: 'updateIncome', income });
                     if (!data.ok) throw new Error(data.error);
+                    lastAccountRow = data.row || lastAccountRow;
                     return data.income;
                 },
                 onSaved: row => {
                     showIncome(row);
+                    // (the income pop-up asks for the credit score too)
+                    if (lastAccountRow) showDetails(lastAccountRow, row);
                     setPageMessage('Saved! Your income has been updated.', 'success');
                 },
             });
