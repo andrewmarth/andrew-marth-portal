@@ -6,6 +6,7 @@ import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from '
 import { db } from './lib/store.js';
 import { lookupPropertyFacts } from './lib/property-facts.js';
 import { FieldValue } from 'firebase-admin/firestore';
+import { fetchMndIndex, easternDate, rateCheckStep, MND_MAIN_PRODUCT } from './lib/mnd-rate.js';
 
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
 const PAGE_PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3',
@@ -388,6 +389,8 @@ export async function handle(body, query) {
     // Settings page (admins): every client's details, and saving one client's details
     if (body.action === 'adminClients') return await adminClients_(account);
     if (body.action === 'adminUpdateClient') return await adminUpdateClient_(account, body);
+    // Settings page (admins): run the daily Mortgage News Daily rate check now (it also runs on its own: see index.js)
+    if (body.action === 'adminCheckRate') return isAdmin_(account) ? await checkTodayRate() : { ok: false, error: 'not_admin' };
     // Settings page (admins): save a client's income and debt (the same checks as a client's own)
     if (body.action === 'adminUpdateIncome') return await adminUpdateIncome_(account, body);
     if (body.action === 'adminCreateClient') return await adminCreateClient_(account, body);
@@ -3333,6 +3336,37 @@ function cleanLoanProduct_(fields, submitted) {
     clean[f.col] = value;
   }
   return { clean };
+}
+
+// --- Today's interest rate, from Mortgage News Daily ---
+// Cloud Scheduler calls checkTodayRate every 15 minutes on weekday afternoons, Eastern time (see index.js), and an admin
+// can run it from the API (adminCheckRate). Once today's rate is saved it does nothing more that day. Otherwise it reads
+// MND's index table (lib/mnd-rate.js) and, when its newest row is today's (Eastern), saves that day's 30 year fixed rate
+// as TODAY INTEREST RATE (settings interestRate) with RATE DATE (the MND day, YYYY-MM-DD), PREVIOUS INTEREST RATE,
+// RATE SOURCE and RATE UPDATED AT, and every product's rate that day in rateHistory (document ID: the date). A flat day
+// (the same rate as yesterday) still counts: the row's date says it's been updated.
+const isoDate_ = v => { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0') : s; };
+export async function checkTodayRate(now = new Date()) {
+  const today = easternDate(now);
+  const setting = (await rows('settings')).find(r => r._id === 'interestRate') || null;
+  const storedDate = setting ? isoDate_(setting['RATE DATE']) : '';
+  if (storedDate === today) return { ok: true, status: 'done', date: today, rate: Number(setting['TODAY INTEREST RATE']) };
+  let index = null;
+  try { index = await fetchMndIndex(); } catch (err) { console.error('MND rate check', err); }
+  const step = rateCheckStep(storedDate, index, today);
+  if (step !== 'save') return { ok: true, status: step, today, newest: index ? index.date : null };
+  const rate = index.rates[MND_MAIN_PRODUCT];
+  const previous = setting ? Number(setting['TODAY INTEREST RATE']) : NaN;
+  const fields = {
+    'TODAY INTEREST RATE': rate, 'RATE DATE': today, 'PREVIOUS INTEREST RATE': isFinite(previous) && previous > 0 ? previous : '',
+    'RATE SOURCE': 'Mortgage News Daily', 'RATE UPDATED AT': now.toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
+  };
+  if (setting) await update('settings', 'interestRate', fields); else await add('settings', fields, 'interestRate');
+  // (field names without dots: "30 Yr. Fixed" is saved as "30 YR FIXED")
+  const history = { DATE: today };
+  Object.keys(index.rates).forEach(k => { history[k.replace(/\./g, '').toUpperCase()] = index.rates[k]; });
+  try { await add('rateHistory', history, today); } catch (err) { await update('rateHistory', today, history); }
+  return { ok: true, status: 'saved', date: today, rate, previous: fields['PREVIOUS INTEREST RATE'] || null };
 }
 
 // Today's interest rate (settings interestRate: TODAY INTEREST RATE, a decimal), or null
