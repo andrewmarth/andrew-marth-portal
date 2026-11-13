@@ -138,6 +138,21 @@ const CSS = `
 .loan-dialog .lp-tiers:not(.has-housing) [data-tier-housing] { display: none; }
 .loan-dialog .lp-tier-row input { min-height: 46px; }
 .loan-dialog .lp-tier-sum { margin: 2px 0 0 6px; font-size: 0.86rem; line-height: 1.5; }
+/* The table's first line: the minimum credit score, with its checkbox (checked when there is one) */
+.loan-dialog .lp-min-row { padding: 6px 4px; border-radius: 14px; background: #f2ede6; }
+.loan-dialog .lp-min-score { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.loan-dialog .field .lp-min-score input[type="checkbox"] { flex: none; width: 22px; height: 22px; min-height: 0; margin: 0 0 0 6px; padding: 0; accent-color: var(--olive); cursor: pointer; }
+.loan-dialog .lp-min-score input[data-min-score] { flex: 1; min-width: 0; }
+.loan-dialog .lp-min-score input[data-min-score]:disabled { opacity: 0.45; cursor: not-allowed; }
+.loan-dialog .lp-min-note { grid-column: 2 / -1; font-size: 0.88rem; font-weight: bold; line-height: 1.35; }
+.loan-dialog .lp-min-note label { display: inline; margin: 0; font-size: inherit; cursor: pointer; }
+.loan-dialog .lp-min-row:not(.is-on) .lp-min-note { opacity: 0.6; }
+.loan-dialog .lp-tiers > .lp-check-row { margin-bottom: 4px; }
+/* (on a phone with the housing-only column, the minimum score's box takes two columns' room so it isn't squeezed) */
+@media (max-width: 600px) {
+    .loan-dialog .lp-tiers.has-housing .lp-min-score { grid-column: 1 / 3; }
+    .loan-dialog .lp-tiers.has-housing .lp-min-note { grid-column: 3 / -1; font-size: 0.8rem; }
+}
 .loan-dialog .lp-tier-sum:empty { display: none; }
 /* Rates: the lender's 27 quotes (one table per credit score: DTI down, LTV across), then the markups they work out to */
 .loan-dialog .lp-quotes { display: grid; gap: 12px; }
@@ -201,6 +216,11 @@ const CSS = `
 .loan-dialog .lp-mi { display: grid; gap: 12px; }
 .loan-dialog .lp-mi-part { display: grid; gap: 12px; }
 .loan-dialog .lp-mi [data-mi-for][hidden] { display: none; }
+/* (a Conventional product's Mortgage Insurance section has nothing to ask: its premiums are in the quote sheet) */
+.loan-dialog .income-section[data-mi-empty] { display: none; }
+/* The mortgage insurance premiums, in the quote sheet (for a product type that has them) */
+.loan-dialog .lp-mi-sheet { display: grid; gap: 12px; }
+.loan-dialog .lp-mi-sheet[hidden] { display: none; }
 .loan-dialog .lp-fixed { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border: 2px dashed rgba(14, 42, 59, 0.3); border-radius: 18px; background: #f2ede6; }
 .loan-dialog .lp-fixed-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #e6ded2; color: var(--olive); }
 .loan-dialog .lp-fixed-icon svg { width: 18px; height: 18px; }
@@ -436,19 +456,17 @@ const LAYOUT = [
     // Non-Conforming ask whether the product has no mortgage insurance guidelines (NO MI GUIDELINES, checked for a new
     // product) and, when it has them, the same as Conventional
     { section: 'Mortgage Insurance', items: [{ mi: { quotes: 'MI QUOTES', none: 'NO MI GUIDELINES' } }] },
-    // The lender's 27 quoted rates (RATE QUOTES) and the markups they work out to, then the 4 quotes with points bought
-    // (BUYDOWN QUOTES) and the buydown they work out to (see /rate-markups.js). They replace POINT RATE BUYDOWN AMOUNT.
-    { section: 'Rates', items: [{ quotes: 'RATE QUOTES' }, { buydown: 'BUYDOWN QUOTES' }] },
-    // The lowest credit score accepted (MIN CREDIT SCORE: below it an applicant is denied; 300, the lowest possible, when
-    // there's none), then the max DTI from each credit score the lender lists (MAX DTI TIERS, a list like Lender Fees'
-    // added fees), each with its own housing-only max when there's a separate one (else the same as its max DTI)
-    { section: 'Max DTI', items: [
-        { gate: 'minscore', label: 'Is there a minimum credit score? (Below it, an applicant is denied.)', items: [{ col: 'MIN CREDIT SCORE', label: 'Minimum Credit Score' }],
-            isOn: v => minCreditScore(v['MIN CREDIT SCORE']) !== null, off: () => String(CREDIT_MIN) },
-        { gate: 'housing', label: 'Is there a separate metric for housing-only DTI?', items: [],
-            isOn: v => productDtiTiers(c => v[c]).some(t => t.housing !== t.dti) },
-        { tiers: 'MAX DTI TIERS' },
-    ] },
+    // One quote sheet, submitted all at once and requoted all at once: the lender's 27 quoted rates (RATE QUOTES) and the
+    // markups they work out to, the 4 quotes with points bought (BUYDOWN QUOTES) and the buydown they work out to (see
+    // /rate-markups.js; they replace POINT RATE BUYDOWN AMOUNT), and, for a product type with mortgage insurance quotes,
+    // the 27 annual premiums (MI QUOTES; see Mortgage Insurance above) and what they work out to. The section reads
+    // "Rate & Mortgage Insurance Quotes" when the premiums are part of it, else "Rate Quotes".
+    { section: 'Rate Quotes', items: [{ quotes: 'RATE QUOTES' }, { buydown: 'BUYDOWN QUOTES' }] },
+    // One table: its first line is the lowest credit score accepted (MIN CREDIT SCORE, with a checkbox when there is one:
+    // below it an applicant is denied; 300, the lowest possible, when there's none), then the max DTI from each credit score
+    // the lender lists (MAX DTI TIERS, a list like Lender Fees' added fees), each with its own housing-only max when the
+    // "separate housing-only max DTI" checkbox is checked (else the same as its max DTI)
+    { section: 'Max DTI', items: [{ tiers: 'MAX DTI TIERS', min: 'MIN CREDIT SCORE' }] },
     { section: 'Income Qualifying', items: ['SALARY', 'HOURLY', '1099', 'TIP', 'COMMISSION', 'BONUS'].map(k => ({ col: k + ' QUALIFYING %' })) },
     { section: 'Escrow', items: [{ col: 'MONTHS COLLECTED FOR TAXES', input: 'stepper' }, { col: 'MONTHS COLLECTED FOR INSURANCE', input: 'stepper' }] },
 ];
@@ -610,7 +628,7 @@ function build() {
             }
             if (it.quotes) { used[it.quotes] = true; return kinds[it.quotes] ? it : null; }
             if (it.buydown) { used[it.buydown] = true; return kinds[it.buydown] ? it : null; }
-            if (it.tiers) { used[it.tiers] = true; return kinds[it.tiers] ? it : null; }
+            if (it.tiers) { used[it.tiers] = true; if (it.min) used[it.min] = true; return kinds[it.tiers] ? it : null; }
             if (it.mi) { used[it.mi.quotes] = true; used[it.mi.none] = true; return kinds[it.mi.quotes] ? it : null; }
             if (it.groups) { used[it.groups] = true; return kinds[it.groups] ? it : null; }
             if (it.quals) { used[it.quals] = true; return kinds[it.quals] ? it : null; }
@@ -652,9 +670,15 @@ function build() {
                     + '<button type="button" class="lp-add-fee" data-add-qual>+ Add Qualification</button></div>';
             }
             if (it.tiers) {
-                return '<p class="lp-fees-help">List each credit score where the max DTI changes. Each max applies from its credit score up to the next one listed; the lowest also covers any score below it. Credit scores go from '
-                    + CREDIT_MIN + ' to ' + CREDIT_MAX + '.</p>'
-                    + '<div class="lp-fees lp-tiers" data-tiers><div class="lp-fee-row lp-tier-row is-head"><span>Credit Score</span><span>Max DTI</span><span data-tier-housing>Housing-Only Max DTI</span><span></span></div>'
+                return '<p class="lp-fees-help">Check the first line if there’s a minimum credit score (below it, an applicant is denied). Then list each credit score where the max DTI changes. '
+                    + 'Each max applies from its credit score up to the next one listed; the lowest also covers any score below it. Credit scores go from ' + CREDIT_MIN + ' to ' + CREDIT_MAX + '.</p>'
+                    + '<div class="lp-fees lp-tiers" data-tiers>'
+                    + '<label class="lp-check-row"><input type="checkbox" data-housing-on>There’s a separate max DTI for housing only</label>'
+                    + '<div class="lp-fee-row lp-tier-row is-head"><span>Credit Score</span><span>Max DTI</span><span data-tier-housing>Housing-Only Max DTI</span><span></span></div>'
+                    + (it.min ? '<div class="lp-fee-row lp-tier-row lp-min-row field" data-min-row><div class="lp-min-score">'
+                        + '<input type="checkbox" id="lp-min-on" data-min-on aria-label="There’s a minimum credit score">'
+                        + '<input class="digits" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="300-850" data-kind="score" data-min-score aria-label="Minimum credit score" disabled></div>'
+                        + '<span class="lp-min-note"><label for="lp-min-on">Minimum credit score</label>: below it, an applicant is denied</span></div>' : '')
                     + '<div class="lp-tier-list" data-tier-list></div>'
                     + '<button type="button" class="lp-add-fee" data-add-tier>+ Add Credit Score</button>'
                     + '<p class="lp-tier-sum" data-tier-sum></p></div>';
@@ -783,17 +807,30 @@ function build() {
         + '<div class="pct-wrap" data-tier-housing><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-tier-k="housing" aria-label="Housing-only max DTI" value="' + (t.housing ? escapeHtml(shown('rate', t.housing)) : '') + '"></div>'
         + '<button type="button" class="lp-fee-remove" data-remove-tier aria-label="Remove this credit score"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>';
     const tierRows = () => [...sectionsEl.querySelectorAll('[data-tier-list] .lp-tier-row')];
+    // The Max DTI table's checkboxes: a minimum credit score, and a separate housing-only max DTI
+    const minChecked = () => { const c = sectionsEl.querySelector('[data-min-on]'); return Boolean(c && c.checked); };
+    const housingChecked = () => { const c = sectionsEl.querySelector('[data-housing-on]'); return Boolean(c && c.checked); };
+    // The minimum score's box can be typed in only while it's checked
+    function syncMinRow() {
+        const row = sectionsEl.querySelector('[data-min-row]');
+        if (!row) return;
+        const on = minChecked();
+        row.classList.toggle('is-on', on);
+        const box = row.querySelector('[data-min-score]');
+        box.disabled = !on;
+        if (!on) box.classList.remove('is-invalid');
+    }
     // The minimum credit score as answered (null: none, or not a valid score yet)
     function currentMinScore() {
-        if (gateAnswer('minscore') !== true) return null;
-        const el = sectionsEl.querySelector('[data-col="MIN CREDIT SCORE"]');
+        if (!minChecked()) return null;
+        const el = sectionsEl.querySelector('[data-min-score]');
         return el && scoreOk(el.value) ? minCreditScore(el.value) : null;
     }
     // The housing-only column (when there's a separate one) and the tiers as score ranges, e.g. "620–679: 43% · 680 and up: 45%"
     function syncTiers() {
         const box = sectionsEl.querySelector('[data-tiers]');
         if (!box) return;
-        const housingOn = gateAnswer('housing') === true;
+        const housingOn = housingChecked();
         box.classList.toggle('has-housing', housingOn);
         const tiers = tierRows().map(row => {
             const v = k => row.querySelector('[data-tier-k="' + k + '"]').value.trim();
@@ -816,7 +853,13 @@ function build() {
         if (e.target.matches('[data-qual-type]')) { renderQualValue(e.target.closest('[data-qual-row]')); syncQuals(); }
         if (e.target.matches('[data-credit-when]')) renderCreditCond(e.target.closest('[data-credit-row]'));
         if (e.target.matches('[data-credit-type]')) renderCreditAmount(e.target.closest('[data-credit-row]'), null, true);
-        if (e.target.closest('[data-gate="minscore"], [data-gate="housing"]')) { syncTiers(); showRateMarkups(); showMiOut(); }
+        if (e.target.matches('[data-min-on], [data-housing-on]')) {
+            if (e.target.matches('[data-min-on]')) {
+                syncMinRow();
+                if (minChecked()) sectionsEl.querySelector('[data-min-score]').focus();
+            }
+            syncTiers(); showRateMarkups(); showMiOut();
+        }
         if (e.target.matches('[data-mi-none]')) showMi();
         // (the upfront premium follows the loan term)
         if (e.target.closest('[data-term], [data-term-other]')) showMiOut();
@@ -862,7 +905,7 @@ function build() {
         if (e.target.closest('[data-requote]')) {
             requoting = true;
             sheetMode = 'open';
-            putSheet(null, null);
+            putSheet(null, null, null);
             showSheet();
             const first = quoteBoxes()[0];
             first.closest('.lp-quotes').previousElementSibling.scrollIntoView({ block: 'start' });
@@ -872,7 +915,7 @@ function build() {
         if (e.target.closest('[data-cancel-requote]')) {
             requoting = false;
             sheetMode = 'locked';
-            putSheet(locked.quotes, locked.buys);
+            putSheet(locked.quotes, locked.buys, locked.mi);
             showSheet();
             sectionsEl.querySelector('[data-sheet-status]').scrollIntoView({ block: 'nearest' });
             return;
@@ -901,7 +944,7 @@ function build() {
             e.target.classList.remove('is-invalid');
             syncTiers();
         }
-        if (e.target.matches('[data-col="MIN CREDIT SCORE"]')) { syncTiers(); showRateMarkups(); showMiOut(); }
+        if (e.target.matches('[data-min-score]')) { syncTiers(); showRateMarkups(); showMiOut(); }
         if (e.target.matches('[data-qual-k="money"]')) e.target.value = withCommas(e.target.value.replace(/\D/g, ''));
         if (e.target.matches('[data-qual-k="score"], [data-qual-k="years"]')) e.target.value = e.target.value.replace(/\D/g, '');
         if (e.target.matches('[data-qual-k]')) e.target.classList.remove('is-invalid');
@@ -912,6 +955,8 @@ function build() {
         if (e.target.matches('[data-miq]')) {
             e.target.value = decimalOnly(e.target.value, 4);
             e.target.classList.remove('is-invalid');
+            const msg = sectionsEl.querySelector('[data-sheet-msg]');
+            if (msg) msg.textContent = '';
             showMiOut();
         }
     });
@@ -947,6 +992,7 @@ function build() {
                 + '" aria-label="' + escapeHtml(buyLabel(i)) + '"></div></td>').join('')
             + '</tr></tbody></table></div></div>'
             + '<div class="lp-markups" data-buydown></div>'
+            + miSheetHtml()
             + '<div class="lp-sheet-actions" data-sheet-actions><p class="lp-sheet-note" data-sheet-note></p><p class="lp-sheet-msg" role="alert" data-sheet-msg></p>'
             + '<div class="lp-sheet-buttons"><button type="button" class="btn" data-submit-quotes><span class="btn-spinner" aria-hidden="true"></span>Submit Quotes</button>'
             + '<button type="button" class="btn btn-secondary" data-cancel-requote hidden>Keep Current Quotes</button></div></div>';
@@ -963,7 +1009,23 @@ function build() {
     // The quote sheet: 'open' while it's being filled in, 'locked' once submitted. locked: the submitted sheet ({ quotes,
     // buys, today, date, pending }; pending: a new product's, saved when the product is added). requoting: a new sheet is
     // being filled in over a submitted one (which stays until the new one is submitted).
-    let sheetMode = 'open', locked = null, requoting = false;
+    // The sheet also holds the 27 mortgage insurance premiums for a product type that has them (mi; null otherwise).
+    // saved: the sheet as saved (or held for a new product), each part null when it's missing.
+    let sheetMode = 'open', locked = null, requoting = false, saved = null;
+    const needsMi = () => miParts().includes('quotes');
+    // Locked once everything this product type quotes is in (the 27 rates, the 4 buydown rates, and the 27 premiums when
+    // it has them); otherwise open, starting from whatever's saved (a product that now needs premiums it doesn't have:
+    // its rates are filled in, the premiums blank). init: put the saved quotes in the boxes either way.
+    function syncSheetLock(init) {
+        if (requoting && !init) { showSheet(); return; }
+        const s = saved || {};
+        const complete = Boolean(s.quotes && s.buys && (!needsMi() || s.mi));
+        const was = sheetMode;
+        locked = complete ? { quotes: s.quotes, buys: s.buys, mi: s.mi || null, today: s.today, date: s.date, pending: Boolean(s.pending) } : null;
+        sheetMode = complete ? 'locked' : 'open';
+        if (init || (was === 'locked' && !complete)) putSheet(s.quotes, s.buys, s.mi);
+        showSheet();
+    }
     const quoteBoxes = () => [...sectionsEl.querySelectorAll('[data-quote]')].sort((a, b) => a.dataset.quote - b.dataset.quote);
     const quotesField = () => (ctx && ctx.fields || []).find(f => f.col === 'RATE QUOTES');
     const fieldToday = () => { const f = quotesField(); return f && Number(f.today) > 0 ? Number(f.today) : null; };
@@ -980,9 +1042,10 @@ function build() {
         return sheetMode === 'locked' && locked && !locked.pending && locked.today ? { rate: locked.today, saved: true } : { rate: fieldToday(), saved: false };
     }
     // Puts a sheet's rates in the boxes (null: blank)
-    function putSheet(quotes, buys) {
+    function putSheet(quotes, buys, mi) {
         quoteBoxes().forEach((b, i) => { b.value = quotes ? shown('rate', quotes[i]) : ''; b.classList.remove('is-invalid'); });
         buyBoxes().forEach((b, i) => { b.value = buys ? shown('rate', buys[i]) : ''; b.classList.remove('is-invalid'); });
+        miBoxes().forEach((b, i) => { b.value = mi ? shown('rate', mi[i]) : ''; b.classList.remove('is-invalid'); });
     }
     const dateText = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
     // Open: the boxes, Submit Quotes (and Keep Current Quotes while requoting). Locked: the boxes hidden; when it was
@@ -991,22 +1054,25 @@ function build() {
         const open = sheetMode === 'open';
         sectionsEl.querySelectorAll('[data-quote-entry]').forEach(el => { el.hidden = !open; });
         const status = sectionsEl.querySelector('[data-sheet-status]'), actions = sectionsEl.querySelector('[data-sheet-actions]');
+        // What this sheet holds: "all 27 rates, the 4 buydown rates and the 27 mortgage insurance premiums"
+        const what = needsMi() ? 'all 27 rates, the 4 buydown rates and the 27 mortgage insurance premiums' : 'all 27 rates and the 4 buydown rates';
         if (status) {
             status.hidden = open;
             if (!open && locked) status.querySelector('[data-sheet-text]').innerHTML = locked.pending
-                ? '<b>Rate quotes ready.</b> They’re saved when you add the loan product, and can’t be edited after that. To change them, requote all of them.'
-                : '<b>Rate quotes submitted' + (locked.date ? ' on ' + dateText(locked.date) : '') + '</b>' + (locked.today ? ' (today’s interest rate was ' + rateText(locked.today) + ')' : '')
-                    + '. They can’t be edited. To change them, requote: enter all 27 rates and the 4 buydown rates again.';
+                ? '<b>Quotes ready.</b> They’re saved when you add the loan product, and can’t be edited after that. To change them, requote all of them.'
+                : '<b>Quotes submitted' + (locked.date ? ' on ' + dateText(locked.date) : '') + '</b>' + (locked.today ? ' (today’s interest rate was ' + rateText(locked.today) + ')' : '')
+                    + '. They can’t be edited. To change them, requote: enter ' + what + ' again.';
         }
         if (actions) {
             actions.hidden = !open;
             actions.querySelector('[data-cancel-requote]').hidden = !requoting;
             actions.querySelector('[data-sheet-note]').textContent = requoting
-                ? 'Your current quotes stay in place until you submit these. Submitting replaces them.'
-                : 'Once submitted, the quotes can’t be edited, only requoted from scratch.';
+                ? 'Your current quotes stay in place until you submit these. Submitting replaces all of them.'
+                : 'Submit Quotes saves ' + what.replace(/^all /, 'the ') + ' together. Once submitted, they can’t be edited, only requoted together.';
             actions.querySelector('[data-sheet-msg]').textContent = '';
         }
         showMarkups();
+        showMiOut();
     }
     // Submit Quotes: checks every box, then saves the sheet right away (a saved product) or holds it for the product's save
     // (a new one), and locks it
@@ -1018,11 +1084,15 @@ function build() {
         };
         msg.textContent = '';
         message.textContent = '';
-        const boxes = [...quoteBoxes(), ...buyBoxes()];
+        const withMi = needsMi();
+        const boxes = [...quoteBoxes(), ...buyBoxes(), ...(withMi ? miBoxes() : [])];
         const blank = boxes.find(b => b.value.trim() === '');
-        if (blank) return fail(blank, 'Please quote a rate for ' + (blank.matches('[data-buy]') ? 'each amount of points' : 'every scenario') + ' (' + blank.getAttribute('aria-label') + ').');
-        const bad = boxes.find(b => !(Number(b.value) > 0 && Number(b.value) <= 100));
+        if (blank) return fail(blank, blank.matches('[data-miq]') ? 'Please quote the annual mortgage insurance premium for every scenario (' + blank.getAttribute('aria-label') + ').'
+            : 'Please quote a rate for ' + (blank.matches('[data-buy]') ? 'each amount of points' : 'every scenario') + ' (' + blank.getAttribute('aria-label') + ').');
+        const bad = boxes.find(b => !b.matches('[data-miq]') && !(Number(b.value) > 0 && Number(b.value) <= 100));
         if (bad) return fail(bad, 'Each quoted rate must be more than 0 and no more than 100 (' + bad.getAttribute('aria-label') + ').');
+        const badMi = boxes.find(b => b.matches('[data-miq]') && !(Number(b.value) >= 0 && Number(b.value) <= MI_MAX_QUOTE * 100));
+        if (badMi) return fail(badMi, 'Each annual premium must be from 0 to ' + MI_MAX_QUOTE * 100 + '% of the loan a year (' + badMi.getAttribute('aria-label') + ').');
         // More points can't make the rate higher
         const buys = buyBoxes();
         const rising = buys.findIndex((el, i) => i > 0 && Number(el.value) > Number(buys[i - 1].value));
@@ -1031,9 +1101,11 @@ function build() {
         const today = fieldToday();
         if (!today) return fail(null, ERRORS.no_today_rate);
         const dec = el => Number((Number(el.value.trim()) / 100).toPrecision(10));
-        const sheet = { quotes: quoteBoxes().map(dec), buys: buys.map(dec), today, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }), pending: !ctx.product };
+        const sheet = { quotes: quoteBoxes().map(dec), buys: buys.map(dec), mi: withMi ? miBoxes().map(dec) : null, today,
+            date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }), pending: !ctx.product };
         if (ctx.product) {
-            const values = { 'RATE QUOTES': JSON.stringify({ QUOTES: sheet.quotes }), 'BUYDOWN QUOTES': JSON.stringify({ QUOTES: sheet.buys }) };
+            const values = { 'RATE QUOTES': JSON.stringify({ QUOTES: sheet.quotes }), 'BUYDOWN QUOTES': JSON.stringify({ QUOTES: sheet.buys }),
+                'MI QUOTES': sheet.mi ? JSON.stringify({ QUOTES: sheet.mi }) : '' };
             const btn = sectionsEl.querySelector('[data-submit-quotes]');
             saving = true;
             btn.disabled = true;
@@ -1052,7 +1124,9 @@ function build() {
             }
             ctx.product.values['RATE QUOTES'] = JSON.stringify({ QUOTES: sheet.quotes, TODAY: today, DATE: sheet.date });
             ctx.product.values['BUYDOWN QUOTES'] = values['BUYDOWN QUOTES'];
+            ctx.product.values['MI QUOTES'] = values['MI QUOTES'];
         }
+        saved = sheet;
         locked = sheet;
         requoting = false;
         sheetMode = 'locked';
@@ -1139,17 +1213,21 @@ function build() {
                 + 'A buyer’s first VA loan uses the first chart; any later one uses the second.</p>'
                 + '<div class="lp-va-charts">' + vaChart('first', 'First-Time VA Use') + vaChart('subsequent', 'Subsequent VA Use') + '</div></div>'
             + '<div class="lp-mi-part" data-mi-for="guide" hidden><label class="lp-check-row"><input type="checkbox" data-mi-none>This product does not have mortgage insurance guidelines</label></div>'
-            + '<div class="lp-mi-part" data-mi-for="quotes" hidden>'
-                + '<p class="lp-fees-help lp-quote-help">Quote the annual mortgage insurance premium (a percent of the loan each year) for each scenario. A loan at '
-                    + pctText(MI_REQUIRED_ABOVE) + ' LTV or less has no mortgage insurance, so the quotes are at ' + MI_LTV.map(pctText).join(', ').replace(/, ([^,]*)$/, ' and $1') + ' LTV.</p>'
-                + '<div class="field lp-quotes">' + MI_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
-                    + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
-                    + MI_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
-                    + MI_DTI.map((d, di) => '<tr><th scope="row">' + pctText(d) + ' DTI</th>' + MI_LTV.map((l, li) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-miq="'
-                        + quoteIndex(ci, di, li) + '" aria-label="' + escapeHtml(miQuoteLabel(ci, di, li)) + '"></div></td>').join('') + '</tr>').join('')
-                    + '</tbody></table></div>').join('') + '</div>'
-                + '<div class="lp-markups" data-mi-out></div></div>'
             + '</div>';
+    }
+    // The quote sheet's mortgage insurance part (shown for a product type with premiums): the 27 annual premiums, then the
+    // premium and upfront premium curves they work out to
+    function miSheetHtml() {
+        return '<div class="lp-mi-sheet" data-mi-sheet hidden>'
+            + '<p class="lp-fees-help lp-quote-help" data-quote-entry>Mortgage insurance: quote the annual premium (a percent of the loan each year) for each scenario. A loan at '
+                + pctText(MI_REQUIRED_ABOVE) + ' LTV or less has no mortgage insurance, so the quotes are at ' + MI_LTV.map(pctText).join(', ').replace(/, ([^,]*)$/, ' and $1') + ' LTV.</p>'
+            + '<div class="field lp-quotes" data-quote-entry>' + MI_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score · Annual Premium</p>'
+                + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
+                + MI_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
+                + MI_DTI.map((d, di) => '<tr><th scope="row">' + pctText(d) + ' DTI</th>' + MI_LTV.map((l, li) => '<td><div class="pct-wrap"><input class="pct" type="text" inputmode="decimal" autocomplete="off" data-miq="'
+                    + quoteIndex(ci, di, li) + '" aria-label="' + escapeHtml(miQuoteLabel(ci, di, li)) + '"></div></td>').join('') + '</tr>').join('')
+                + '</tbody></table></div>').join('') + '</div>'
+            + '<div class="lp-markups" data-mi-out></div></div>';
     }
     const miBoxes = () => [...sectionsEl.querySelectorAll('[data-miq]')].sort((a, b) => a.dataset.miq - b.dataset.miq);
     // The 27 premiums as decimals, or null while any is blank or not a number from 0 up
@@ -1180,6 +1258,15 @@ function build() {
         const parts = miParts();
         box.querySelectorAll('[data-mi-for]').forEach(el => { el.hidden = !parts.includes(el.dataset.miFor); });
         box.closest('fieldset').querySelector('.section-head h3').textContent = parts.includes('fha') ? 'UFMIP' : parts.includes('va') ? 'VA Funding Fee' : 'Mortgage Insurance';
+        // Nothing to show here for a type whose only mortgage insurance is the premiums (Conventional): they're in the quote
+        // sheet. (Its own flag, so the scope that hides it for a Down Payment Assistance product still does.)
+        box.closest('fieldset').toggleAttribute('data-mi-empty', parts.length === 1 && parts[0] === 'quotes');
+        const sheet = sectionsEl.querySelector('[data-mi-sheet]');
+        if (sheet) {
+            sheet.hidden = !parts.includes('quotes');
+            sheet.closest('fieldset').querySelector('.section-head h3').textContent = parts.includes('quotes') ? 'Rate & Mortgage Insurance Quotes' : 'Rate Quotes';
+        }
+        syncSheetLock();
         showMiOut();
     }
     // The loan term as answered (years), or 30 until it's answered
@@ -1545,13 +1632,6 @@ function build() {
         });
         // A saved product with both its quotes and its buydown quotes has submitted its sheet (locked); otherwise it's
         // filled in here, starting from any quotes it has
-        const savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
-        const savedBuys = isNew ? null : buydownQuotes(values['BUYDOWN QUOTES']);
-        locked = savedQuotes && savedBuys ? { quotes: savedQuotes.quotes, buys: savedBuys, today: savedQuotes.today, date: savedQuotes.date, pending: false } : null;
-        requoting = false;
-        sheetMode = locked ? 'locked' : 'open';
-        putSheet(savedQuotes && savedQuotes.quotes, savedBuys);
-        showSheet();
         const feeList = sectionsEl.querySelector('[data-fee-list]');
         if (feeList) feeList.innerHTML = lenderFees(values['OTHER LENDER FEES']).map(feeRow).join('');
         // A Down Payment Assistance product's professions / groups and qualifications (one blank row to start)
@@ -1575,12 +1655,33 @@ function build() {
         // Mortgage insurance: the saved premiums; a Jumbo / Non-Conforming product's checkbox starts checked (a new product,
         // or one saved before it that has no premiums)
         const savedMi = isNew ? null : miQuotes(values['MI QUOTES']);
-        miBoxes().forEach((b, i) => { b.value = savedMi ? shown('rate', savedMi[i]) : ''; b.classList.remove('is-invalid'); });
         const noneBox = sectionsEl.querySelector('[data-mi-none]');
         if (noneBox) {
             const raw = String(values['NO MI GUIDELINES'] || '').trim().toUpperCase();
             noneBox.checked = isNew || raw === 'TRUE' || (raw !== 'FALSE' && !savedMi);
         }
+        // The quote sheet: a saved product with every quote its type needs (its rates, buydown rates and, with mortgage
+        // insurance quotes, its premiums) has submitted its sheet (locked); otherwise it's filled in here, starting from
+        // what it has
+        const savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
+        const savedBuys = isNew ? null : buydownQuotes(values['BUYDOWN QUOTES']);
+        saved = isNew ? null : { quotes: savedQuotes && savedQuotes.quotes, buys: savedBuys, mi: savedMi, today: savedQuotes && savedQuotes.today, date: savedQuotes && savedQuotes.date, pending: false };
+        requoting = false;
+        sheetMode = 'open';
+        syncSheetLock(true);
+        // Max DTI's checkboxes: a minimum credit score (its box filled in), and a separate housing-only max DTI (when any
+        // tier's differs from its max DTI); a new product starts with both unchecked
+        const minOnBox = sectionsEl.querySelector('[data-min-on]');
+        if (minOnBox) {
+            const min = isNew ? null : minCreditScore(values['MIN CREDIT SCORE']);
+            minOnBox.checked = min !== null;
+            const box = sectionsEl.querySelector('[data-min-score]');
+            box.value = min !== null ? String(min) : '';
+            box.classList.remove('is-invalid');
+            syncMinRow();
+        }
+        const housingBox = sectionsEl.querySelector('[data-housing-on]');
+        if (housingBox) housingBox.checked = !isNew && productDtiTiers(c => values[c]).some(t => t.housing !== t.dti);
         // A product's tiers (one saved before the tier list: its old set tiers); a new one starts with one blank row
         const tierList = sectionsEl.querySelector('[data-tier-list]');
         if (tierList) {
@@ -1697,8 +1798,17 @@ function build() {
             // Max DTI tiers: each row filled in (a blank row is skipped); no separate housing-only max: the same as its max DTI
             if (it.tiers) {
                 values[it.tiers] = '';
+                // The minimum credit score: the one typed when it's checked, else none (300, the lowest possible)
+                if (it.min) {
+                    values[it.min] = String(CREDIT_MIN);
+                    if (active && minChecked()) {
+                        const box = sectionsEl.querySelector('[data-min-score]');
+                        values[it.min] = box.value.trim();
+                        need(box, values[it.min]);
+                    }
+                }
                 if (!active) return;
-                const housingOn = gateAnswer('housing') === true;
+                const housingOn = housingChecked();
                 const dec = v => Number((Number(v) / 100).toPrecision(10));
                 const list = [];
                 tierRows().forEach(row => {
@@ -1718,12 +1828,8 @@ function build() {
             if (it.mi) {
                 const parts = miParts();
                 values[it.mi.none] = parts.includes('guide') && sectionsEl.querySelector('[data-mi-none]').checked ? 'TRUE' : 'FALSE';
-                values[it.mi.quotes] = '';
-                if (active && parts.includes('quotes')) {
-                    const boxes = miBoxes();
-                    boxes.forEach(b => need(b, b.value.trim()));
-                    if (boxes.every(b => b.value.trim() !== '')) values[it.mi.quotes] = JSON.stringify({ QUOTES: boxes.map(b => Number((Number(b.value.trim()) / 100).toPrecision(10))) });
-                }
+                // (the premiums are part of the quote sheet: the submitted ones; a saved product's are kept by the API)
+                values[it.mi.quotes] = active && parts.includes('quotes') && locked && locked.mi ? JSON.stringify({ QUOTES: locked.mi }) : '';
                 return;
             }
             if (it.fees) {
@@ -1770,7 +1876,7 @@ function build() {
         });
         // A DPA product: everything regular is left blank
         const blanks = [];
-        const blank = it => { if (it.cond) it.items.forEach(blank); else if (it.groups) blanks.push(it.groups); else if (it.quals) blanks.push(it.quals); else if (it.credits) blanks.push(it.credits); else if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.buydown) blanks.push(it.buydown); else if (it.tiers) blanks.push(it.tiers); else if (it.mi) blanks.push(it.mi.quotes, it.mi.none); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        const blank = it => { if (it.cond) it.items.forEach(blank); else if (it.groups) blanks.push(it.groups); else if (it.quals) blanks.push(it.quals); else if (it.credits) blanks.push(it.credits); else if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.buydown) blanks.push(it.buydown); else if (it.tiers) { blanks.push(it.tiers); if (it.min) blanks.push(it.min); } else if (it.mi) blanks.push(it.mi.quotes, it.mi.none); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
@@ -1785,7 +1891,7 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote], [data-buy], [data-miq], [data-groups], [data-qual-type], [data-qual-k], [data-credit-k], [data-credit-when], [data-credit-type]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
+    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote], [data-buy], [data-miq], [data-groups], [data-qual-type], [data-qual-k], [data-credit-k], [data-credit-when], [data-credit-type], [data-min-score]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
     form.addEventListener('input', clear);
     form.addEventListener('change', clear);
     form.addEventListener('change', syncLabels);
@@ -1830,6 +1936,7 @@ function build() {
         const { values, missing } = read();
         if (missing) {
             if (missing.matches('[data-add-tier]')) { problem(missing, 'Please add at least one credit score and its max DTI.'); return; }
+            if (missing.matches('[data-min-score]')) { problem(missing, 'Please enter the minimum credit score (or uncheck it).'); return; }
             if (missing.matches('[data-tier-k]')) { problem(missing, 'Please fill in each credit score’s row (or remove it).'); return; }
             if (missing.matches('[data-miq]')) { problem(missing, 'Please quote the annual mortgage insurance premium for every scenario (' + missing.getAttribute('aria-label') + ').'); return; }
             if (missing.matches('[data-fee-k]')) { problem(missing, missing.dataset.feeK === 'name' ? 'Please name the added fee (or remove it).' : 'Please enter the added fee’s amount (or remove it).'); return; }
@@ -1863,7 +1970,7 @@ function build() {
         const badMi = miBoxes().find(el => el.offsetParent && el.value.trim() !== '' && !(Number(el.value) >= 0 && Number(el.value) <= MI_MAX_QUOTE * 100));
         if (badMi) { problem(badMi, 'Each annual premium must be from 0 to ' + MI_MAX_QUOTE * 100 + '% of the loan a year (' + badMi.getAttribute('aria-label') + ').'); return; }
         // Credit scores from 300 to 850, each tier's listed once, and each max DTI over 0
-        const badScore = [...sectionsEl.querySelectorAll('[data-kind="score"], [data-tier-k="score"], [data-qual-k="score"], [data-credit-k="score"]')].find(el => el.offsetParent && el.value.trim() !== '' && !scoreOk(el.value));
+        const badScore = [...sectionsEl.querySelectorAll('[data-kind="score"], [data-tier-k="score"], [data-qual-k="score"], [data-credit-k="score"]')].find(el => el.offsetParent && !el.disabled && el.value.trim() !== '' && !scoreOk(el.value));
         if (badScore) { problem(badScore, 'Credit scores go from ' + CREDIT_MIN + ' (the lowest possible) to ' + CREDIT_MAX + ' (the highest).'); return; }
         const tierScores = tierRows().map(r => r.querySelector('[data-tier-k="score"]')).filter(el => el.offsetParent && el.value.trim() !== '');
         const twice = tierScores.find((el, i) => tierScores.findIndex(o => +o.value === +el.value) !== i);
@@ -1875,7 +1982,8 @@ function build() {
         if (submitQuotes && !isDpa() && sheetMode === 'open') {
             submitQuotes.closest('[data-sheet-actions]').scrollIntoView({ block: 'center' });
             submitQuotes.focus({ preventScroll: true });
-            message.textContent = requoting ? 'Please submit the new rate quotes (under Rates), or keep the current ones.' : 'Please submit the rate quotes (Submit Quotes, under Rates) first.';
+            message.textContent = requoting ? 'Please submit the new quotes (under ' + (needsMi() ? 'Rate & Mortgage Insurance Quotes' : 'Rate Quotes') + '), or keep the current ones.'
+                : 'Please submit the quotes first (Submit Quotes, under ' + (needsMi() ? 'Rate & Mortgage Insurance Quotes' : 'Rate Quotes') + ').';
             return;
         }
         saving = true;

@@ -3453,16 +3453,20 @@ async function stampRateQuotes_(clean, old) {
   return null;
 }
 
-// The rate quote sheet: a product's 27 quotes (RATE QUOTES) and 4 buydown quotes (BUYDOWN QUOTES). It's submitted on its
-// own (a save with body.quotesOnly) and then locked: a product's normal save keeps the saved sheet, and only a new sheet
-// (a requote, again with quotesOnly) replaces it.
+// The quote sheet: a product's 27 quotes (RATE QUOTES), 4 buydown quotes (BUYDOWN QUOTES) and, for a product type with
+// mortgage insurance quotes, its 27 annual premiums (MI QUOTES). It's submitted all at once (a save with body.quotesOnly)
+// and then locked: a product's normal save keeps the saved sheet (premiums included), and only a new sheet (a requote,
+// again with quotesOnly) replaces it.
 const quoteSheetLocked_ = values => !!(values && cleanSetting_('quotes', values['RATE QUOTES']) && cleanSetting_('buydown', values['BUYDOWN QUOTES']));
 function keepQuoteSheet_(submitted, old) {
   if (!quoteSheetLocked_(old)) return;
   submitted['RATE QUOTES'] = old['RATE QUOTES'];
   submitted['BUYDOWN QUOTES'] = old['BUYDOWN QUOTES'];
+  // (a product whose type has no premiums has its MI QUOTES blanked by cleanLoanProduct_)
+  submitted['MI QUOTES'] = old['MI QUOTES'];
 }
-// A submitted sheet for a saved product (old: its values): both columns, checked, stamped with today's rate and date
+// A submitted sheet for a saved product (old: its values): the rates and buydown rates (both required) and the premiums
+// (when sent: blank for a type without them), checked; the rates stamped with today's rate and date
 async function quoteSheet_(submitted, old) {
   if (!old) return { error: 'not_found' };
   const clean = {};
@@ -3470,6 +3474,12 @@ async function quoteSheet_(submitted, old) {
     const v = cleanSetting_(kind, submitted && submitted[col]);
     if (!v) return { error: 'invalid_value' };
     clean[col] = v;
+  }
+  // (a sheet sent without the premiums, by a page from before they were part of it, leaves the saved ones alone)
+  if (submitted && 'MI QUOTES' in submitted) {
+    const mi = cleanSetting_('miQuotes', submitted['MI QUOTES']);
+    if (mi === null) return { error: 'invalid_value' };
+    clean['MI QUOTES'] = mi;
   }
   const stampError = await stampRateQuotes_(clean, null);
   return stampError ? { error: stampError } : { clean };
