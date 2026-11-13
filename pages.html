@@ -1441,7 +1441,7 @@
         import { saleFees, BUYER_TYPES, pickableTitleDiscounts, DISCOUNT_APPLIES } from '/title-fees.js';
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
         import { productMarkups, productBuydown } from '/rate-markups.js';
-        import { loanMi } from '/mortgage-insurance.js';
+        import { loanMi, productMiKind, MI_REQUIRED_ABOVE } from '/mortgage-insurance.js';
         import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer } from '/dpa.js';
 
         const params = new URLSearchParams(location.search);
@@ -3644,6 +3644,33 @@
             const f = fieldShell(label, opts);
             f.body.append(segToggle(options, current(column).toUpperCase() === 'TRUE' ? options[0][0] : options[1][0], v => setDraft(column, v), label));
             parent.append(f.wrap);
+            return f.wrap;
+        }
+        // The mortgage insurance settings, one after the other, shown only when the loan product uses them:
+        //   Conventional Mortgage Insurance (MI PAID UPFRONT: Monthly or Upfront): a product priced from the lender's premiums
+        //     (Conventional, or Jumbo / Non-Conforming with mortgage insurance), above 80% LTV
+        //   Upfront Mortgage Insurance (PREPAID MI APPLIED: Financed or Paid At Closing): when there's an upfront charge (FHA's
+        //     UFMIP, VA's funding fee, a conventional single premium, or an older product's prepaid MI for this down payment)
+        // getProduct() → the loan product the settings are for (null: cash)
+        let miFieldWraps = null;
+        function miFields(parent, getProduct, upfrontHelp) {
+            miFieldWraps = { getProduct,
+                conv: toggleField(parent, 'Conventional Mortgage Insurance', 'MI PAID UPFRONT', [['TRUE', 'Upfront'], ['FALSE', 'Monthly']],
+                    { help: 'Paid monthly, or once at closing as a single premium (estimated from the lender’s yearly premiums).' }),
+                upfront: toggleField(parent, 'Upfront Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']], { help: upfrontHelp }),
+            };
+        }
+        function showMiFields() {
+            if (!miFieldWraps) return;
+            const p = miFieldWraps.getProduct();
+            const get = name => col(p, name);
+            const kind = p ? productMiKind(get) : 'none';
+            const ltv = num(current('RETAIL LTV'));
+            const conv = kind === 'quotes' && ltv > MI_REQUIRED_ABOVE + 1e-9;
+            const upfront = kind === 'fha' || kind === 'va' || (conv && current('MI PAID UPFRONT').toUpperCase() === 'TRUE')
+                || (kind === 'legacy' && num(get('PREPAID MORTGAGE INSURANCE RATE ' + downPaymentTier(1 - ltv) + ' DOWN')) > 0);
+            miFieldWraps.conv.style.display = conv ? '' : 'none';
+            miFieldWraps.upfront.style.display = upfront ? '' : 'none';
         }
         function dateField(parent, label, column, opts = {}) {
             const f = fieldShell(label, opts);
@@ -3804,10 +3831,8 @@
             loanAmountField(loan);
             dpaField(loan);
             percentField(loan, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            toggleField(loan, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']],
-                { help: 'The FHA UFMIP, the VA funding fee, or upfront mortgage insurance.' });
-            toggleField(loan, 'Conventional Mortgage Insurance', 'MI PAID UPFRONT', [['TRUE', 'Upfront'], ['FALSE', 'Monthly']],
-                { help: 'Conventional loans (and jumbo or non-conforming ones with mortgage insurance): paid monthly, or once at closing (estimated from the yearly premium).' });
+            miFields(loan, () => (pickedCash ? null : data.loanProducts[pickedLoanIndex] || null),
+                'How the upfront charge is paid: the FHA UFMIP, the VA funding fee, or a conventional single premium. Financed adds it to the loan amount.');
 
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'buyer');
@@ -4230,10 +4255,9 @@
                 { help: 'Not used when Buyer’s Financing is Cash.' });
             percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
             percentField(buyerIn, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            toggleField(buyerIn, 'Prepaid Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']],
-                { help: 'The FHA UFMIP, the VA funding fee (a first-time use here), or upfront mortgage insurance.' });
-            toggleField(buyerIn, 'Conventional Mortgage Insurance', 'MI PAID UPFRONT', [['TRUE', 'Upfront'], ['FALSE', 'Monthly']],
-                { help: 'Conventional loans (and jumbo or non-conforming ones with mortgage insurance): paid monthly, or once at closing (estimated from the yearly premium).' });
+            miFields(buyerIn, () => (current('BUYER FINANCING') === 'Cash' ? null
+                : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === current('BUYER LOAN PRODUCT')) || null),
+                'How the upfront charge is paid: the FHA UFMIP, the VA funding fee (a first-time use here), or a conventional single premium. Financed adds it to the loan amount.');
             wholeField(buyerIn, 'Buyer Credit Score', 'BUYER CREDIT SCORE', { help: 'Blank uses ' + FALLBACK_CREDIT_SCORE + '.' });
             percentField(buyerIn, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE', { help: 'A yearly percent of the price.' });
             moneyField(buyerIn, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');
@@ -4349,6 +4373,7 @@
             showHoaFields();
             showLoanFeeFields();
             showTitleRateFields();
+            showMiFields();
             editableFields.forEach(({ field, value, saved }) => {
                 const text = displayOf(field);
                 value.textContent = text || 'Not set';
