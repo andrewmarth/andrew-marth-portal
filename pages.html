@@ -1117,6 +1117,23 @@
         #math-card .math-table-wrap { border-color: rgba(233, 226, 216, 0.25); }
         #math-card .math-table th { background: #5c3836; color: var(--gold); }
         #math-card .math-table th, #math-card .math-table td { border-bottom-color: rgba(233, 226, 216, 0.12); }
+        /* Buyer Breakdown: whether credits can pay each charge */
+        .cc-tag { display: block; width: fit-content; margin-top: 5px; padding: 2px 10px; border-radius: 999px; font-size: 0.74rem; font-weight: bold; letter-spacing: 0.3px; }
+        #math-card .cc-tag.is-yes { background: rgba(159, 216, 169, 0.16); color: #9fd8a9; }
+        #math-card .cc-tag.is-no { background: rgba(242, 184, 168, 0.16); color: #f2b8a8; }
+        #math-card .math-sub { margin: 18px 0 4px 2px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); opacity: 0.85; }
+        #math-card .math-list li .v.is-credit { color: #9fd8a9; }
+        #math-card .math-list li .v.is-debit { color: #f2b8a8; }
+        /* Buyer Breakdown: each part folds open (its key number on the right) */
+        #math-card details.math-group + details.math-group { margin-top: 10px; }
+        #math-card .math-group > summary { list-style: none; cursor: pointer; padding: 10px 2px 8px; -webkit-tap-highlight-color: transparent; }
+        #math-card .math-group > summary::-webkit-details-marker { display: none; }
+        #math-card .math-group > summary::before { content: ''; flex: none; width: 8px; height: 8px; margin: 0 4px 2px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 0.2s ease; }
+        #math-card .math-group[open] > summary::before { transform: rotate(45deg); }
+        #math-card .math-group > summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+        #math-card .math-group-v { margin-left: auto; font-size: 0.92rem; letter-spacing: 0; text-transform: none; color: var(--cream); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        #math-card .math-group > .math-intro { margin: 10px 0 4px 0; }
+        @media (hover: hover) { #math-card .math-group > summary:hover { color: var(--cream); } }
         :is(#loan-card, #home-card, #listing-card) .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
         :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
         :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed .view-row .vv { color: var(--gold); }
@@ -1391,11 +1408,13 @@
             </div>
         </section>
 
-        <!-- 6. Seller Net, admins only: how the loan payoff, HOA dues prorations and property taxes are worked out -->
+        <!-- 6. Admins only: how the numbers are worked out. Seller Net: the loan payoff, HOA dues prorations and property
+             taxes. Buyer Breakdown: the interest rate, every escrow line, the monthly payment, and the closing costs with
+             which ones credits can pay. -->
         <section class="main-card reveal" id="math-card" hidden>
             <span class="card-eyebrow">Admin Only</span>
             <h2>How The Numbers Work</h2>
-            <p class="math-intro">Step by step, for the escrow breakdown lines that are calculated. Includes any unsaved settings edits.</p>
+            <p class="math-intro" id="math-intro">Step by step, for the escrow breakdown lines that are calculated. Includes any unsaved settings edits.</p>
             <div id="math-list"></div>
         </section>
 
@@ -1457,6 +1476,8 @@
         const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
         // The escrow card shows whole dollars; the math underneath keeps the cents
         const wholeMoney = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+        // Dollars, with cents only when there are some ("$850,000", "$1,764.38")
+        const moneyText = n => (Math.abs(n - Math.round(n)) < 0.005 ? wholeMoney.format(Math.round(n)) : money.format(n));
         let data = null;
         // What the breakdown shows...
         let loanIndex = 0;
@@ -1529,6 +1550,8 @@
         function capCredits(lines, price) {
             const costs = Math.max(0, -lines.filter(l => l.cost).reduce((sum, l) => sum + l.amount, 0));
             const credits = lines.filter(l => l.capped).sort((a, b) => a.capped - b.capped);
+            // (what each credit came to before it was cut, for the admin How The Numbers Work card)
+            credits.forEach(l => { l.offered = l.amount; });
             let extra = round2(credits.reduce((sum, l) => sum + l.amount, 0) - costs);
             credits.forEach(l => {
                 if (extra <= 0 || l.amount <= 0) return;
@@ -1673,9 +1696,13 @@
                 ? markups.start + markups.credit(creditScore) + markups.dti(dtiUsed) + markups.ltv(ltv)
                 : num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)));
             const buydown = productBuydown(col(product, 'RATE QUOTES'), col(product, 'BUYDOWN QUOTES'));
+            const buydownAmount = buydown ? buydown(pointsPurchased) : num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100);
             // (a down payment assistance program can raise the first loan's rate: its average markup)
-            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup + (dpaI ? dpaI.rateMarkup : 0)
-                - (buydown ? buydown(pointsPurchased) : num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100));
+            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup + (dpaI ? dpaI.rateMarkup : 0) - buydownAmount;
+            // Each part of the rate, for the admin How The Numbers Work card
+            const rateParts = { today: num(col(rateRow, 'TODAY INTEREST RATE')), quoted: Boolean(markups), creditTier: creditTier(creditScore),
+                start: markups ? markups.start : 0, credit: markups ? markups.credit(creditScore) : markup, dti: markups ? markups.dti(dtiUsed) : 0,
+                ltv: markups ? markups.ltv(ltv) : 0, dpa: dpaI ? dpaI.rateMarkup : 0, buydown: buydownAmount, curve: Boolean(buydown) };
 
             // Mortgage insurance, by the product's type (/mortgage-insurance.js): FHA's 1.75% UFMIP and HUD's annual MIP; VA's
             // funding fee (by the down payment and the purchasers' VA use); or the lender's annual premiums for the buyer's
@@ -1702,6 +1729,7 @@
             // the seller has paid (or escrow pays from their side) the first half, so that part isn't credited.
             const yearlyTaxes = num(col(page, 'YEARLY TAXES'));
             let taxCredit = 0;
+            let taxHow = 'Needs the closing date (the offer acceptance date + escrow duration)';
             if (closing) {
                 const year = closing.getFullYear();
                 const yearDays = new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
@@ -1709,6 +1737,10 @@
                 const sellerShare = yearlyTaxes * sellerDays / yearDays;
                 const firstHalfPaid = closing >= new Date(year, 9, 1) ? yearlyTaxes / 2 : 0;
                 taxCredit = Math.max(0, sellerShare - firstHalfPaid);
+                taxHow = moneyText(yearlyTaxes) + ' a year × ' + sellerDays + ' ÷ ' + yearDays + ' days = ' + moneyText(sellerShare)
+                    + ', the seller’s share (January 1 to the day before closing)'
+                    + (firstHalfPaid ? ', − ' + moneyText(firstHalfPaid) + ', the first half the seller pays (due October 1)' : '')
+                    + '. Arizona taxes are paid in arrears, so the seller credits the buyer';
             }
 
             const hoPremium = price * num(col(page, 'HOMEOWNERS INSURANCE RATE'));
@@ -1742,55 +1774,97 @@
                 const amount = num(col(page, 'HOA ' + key + ' FEE'));
                 const payer = text(col(page, 'WHO PAYS ' + key + ' FEE'));
                 const buyerPays = payer.toLowerCase() === 'buyer';
-                return { section, cost: true, label: name, amount: buyerPays ? -amount : 0, note: !buyerPays && amount > 0 ? 'Paid by ' + (payer || 'seller').toLowerCase() : '' };
+                return { section, cost: true, label: name, amount: buyerPays ? -amount : 0, note: !buyerPays && amount > 0 ? 'Paid by ' + (payer || 'seller').toLowerCase() : '',
+                    how: !amount ? 'None entered' : buyerPays ? moneyText(amount) + ', entered in Settings; the buyer pays it' : moneyText(amount) + ', paid by the ' + (payer || 'seller').toLowerCase() + ', so $0 here' };
             };
+            // How each line is worked out (in plain words, with the numbers), for the admin How The Numbers Work card
+            const $ = moneyText;
+            const shortDay = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const noClosing = 'Needs the closing date (the offer acceptance date + escrow duration)';
+            const daysHow = closing ? daysLeft + ' days (' + shortDay(closing) + ' through the end of the month, closing day included)' : '';
+            const prorationHow = dues => (!closing ? noClosing : $(dues) + ' a month ÷ ' + daysInMonth + ' days × ' + daysHow
+                + ': the seller has paid this month’s dues, so the buyer pays back their part');
+            const parts = (...list) => list.filter(Boolean).join(' + ') || 'None for this loan product';
+            const dpaRequested = dpa ? dpaAsked(page, dpa, price) : 0;
+            const dpaMaxAmount = dpaI ? dpaMax(dpaI, price) : 0;
+            const dpaHow = !dpaI ? '' : (dpaI.flat
+                ? (dpaI.adjustable ? $(dpaRequested) + ' entered (the program allows up to ' + $(dpaMaxAmount) + ')' : 'The program’s flat ' + $(dpaMaxAmount))
+                : $(price) + ' × ' + percent(price ? dpaRequested / price : 0) + (dpaI.adjustable ? ' entered (the program allows up to ' + percent(dpaI.ltvMax) + ')' : ', the program’s share of the price'))
+                + (dpaI.canExceed ? '. The two loans can go past the price to cover closing costs' + (dpaI.refund ? ', and anything left is refunded to the buyer' : ', but nothing left over is refunded')
+                    : '. The two loans can’t go past the price, so it covers the down payment at most');
+            const upfrontName = mi ? mi.upfrontLabel.replace(/ \(.*\)$/, '') : 'prepaid mortgage insurance';
+            const miHow = !prepaidMI ? (mi ? 'None for this loan (' + (mi.kind === 'none' ? 'no mortgage insurance' : mi.kind === 'quotes' ? (mi.annualNote || 'paid monthly') : 'nothing up front') + ')' : 'None for this down payment')
+                : $(baseLoan) + ' base loan × ' + ratePct(prepaidMI / baseLoan) + (mi ? ' (' + mi.upfrontNote + ')' : ' (the loan product’s prepaid MI rate for ' + downPaymentTier(downPct) + ' down)')
+                    + (miFinanced ? '. Financed into the loan amount, so the loan pays it' : '. Paid at closing');
+            const titleName = (titleCompanyOf(page) || {}).name || 'the title company';
 
             // Listed in display order; each line's section is the heading it shows under
             const lines = [
-                { section: 'Financial', label: 'Purchase Price', amount: -price },
-                { section: 'Financial', capped: 1, label: 'Seller Credit To Buyer', amount: price * sellerPct, warnings: sellerWarnings },
+                { section: 'Financial', label: 'Purchase Price', amount: -price, how: 'The purchase price, paid at closing' + (isCash ? '' : '. The loan, any assistance, the credits and the money already paid cover it') },
+                { section: 'Financial', capped: 1, label: 'Seller Credit To Buyer', amount: price * sellerPct, warnings: sellerWarnings,
+                    how: isCash ? 'None: seller credits only apply to loans' : $(price) + ' × ' + percent(sellerPct) + ' seller credit'
+                        + (enteredSellerPct > maxSellerPct ? ' (' + percent(enteredSellerPct) + ' entered, but this loan allows ' + percent(maxSellerPct) + ')' : '') + '. It can only pay closing costs' },
 
-                { section: 'Prorations', cost: true, label: 'Primary HOA Dues Proration', amount: -(num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft) },
-                { section: 'Prorations', cost: true, label: 'Master HOA Dues Proration', amount: -(num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft) },
-                { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit },
+                { section: 'Prorations', cost: true, label: 'Primary HOA Dues Proration', amount: -(num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft),
+                    how: num(col(page, 'HOA PRIMARY MONTHLY DUES')) ? prorationHow(num(col(page, 'HOA PRIMARY MONTHLY DUES'))) : 'No primary HOA dues' },
+                { section: 'Prorations', cost: true, label: 'Master HOA Dues Proration', amount: -(num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft),
+                    how: num(col(page, 'HOA MASTER MONTHLY DUES')) ? prorationHow(num(col(page, 'HOA MASTER MONTHLY DUES'))) : 'No master HOA dues' },
+                { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit, how: yearlyTaxes ? taxHow : 'No yearly taxes entered' },
 
-                { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings },
+                { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings,
+                    how: $(price) + ' × ' + percent(ltv) + ' loan-to-value = ' + $(baseLoan) + (enteredLtv > maxLtv ? ' (' + percent(enteredLtv) + ' entered, but this loan allows ' + percent(maxLtv) + ')' : '')
+                        + (miFinanced && prepaidMI ? ', + ' + $(prepaidMI) + ' ' + upfrontName + ' financed into the loan' : '') },
                 // Down payment assistance: its proceeds (a second loan or a grant), with any qualification it doesn't meet
                 { section: 'Loan', dpa: true, label: dpaI && dpaI.isGrant ? 'Down Payment Assistance Grant' : 'Down Payment Assistance', amount: secondLoan, hidden: !dpa,
-                    warnings: [...dpaWarnings, ...dpaNotes.map(n => 'May not qualify: ' + n)], note: dpaNote },
+                    warnings: [...dpaWarnings, ...dpaNotes.map(n => 'May not qualify: ' + n)], note: dpaNote, how: dpaHow },
                 // Seller credit can only help pay the prepaid MI when it isn't already financed into the loan
                 // (a type with nothing up front leaves it out)
-                { section: 'Loan', cost: !miFinanced, label: mi ? mi.upfrontLabel : 'Prepaid Mortgage Insurance', amount: -prepaidMI,
-                    note: mi && mi.upfront ? mi.upfrontNote : '', hidden: Boolean(mi) && !mi.upfront },
-                { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))) },
-                { section: 'Loan', cost: true, label: 'Prepaid Interest', amount: -(loan * rate / 360 * daysLeft), note: daysLeft + ' days' },
-                { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan) },
-                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: loan * censusRate },
-                { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths) },
-                { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))) },
+                { section: 'Loan', cost: !miFinanced, financed: miFinanced, label: mi ? mi.upfrontLabel : 'Prepaid Mortgage Insurance', amount: -prepaidMI,
+                    note: mi && mi.upfront ? mi.upfrontNote : '', hidden: Boolean(mi) && !mi.upfront, how: miHow },
+                { section: 'Loan', cost: true, label: 'Origination Fee', amount: -(num(col(product, 'ORIGINATION FEE $')) + price * num(col(product, 'ORIGINATION FEE %'))),
+                    how: parts(num(col(product, 'ORIGINATION FEE $')) ? $(num(col(product, 'ORIGINATION FEE $'))) + ' flat' : '',
+                        num(col(product, 'ORIGINATION FEE %')) ? $(price) + ' × ' + percent(num(col(product, 'ORIGINATION FEE %'))) + ' of the price' : '') },
+                { section: 'Loan', cost: true, label: 'Prepaid Interest', amount: -(loan * rate / 360 * daysLeft), note: daysLeft + ' days',
+                    how: !closing ? noClosing : $(loan) + ' × ' + ratePct(rate) + ' ÷ 360 × ' + daysHow + '. The first payment covers the month after' },
+                { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan),
+                    how: pointsPurchased ? $(loan) + ' × ' + percent(pointsPurchased) + ' in points (each point is 1% of the loan and lowers the rate)' : 'No points bought' },
+                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: loan * censusRate,
+                    how: !designation ? 'The home’s census designation isn’t set' : censusRate
+                        ? $(loan) + ' × ' + percent(censusRate) + ', this loan’s credit for a ' + designation.toLowerCase() + ' census tract. It can only pay closing costs'
+                        : 'This loan gives no credit for a ' + designation.toLowerCase() + ' census tract' },
+                { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths),
+                    how: $(hoPremium) + ' a year (' + $(price) + ' × ' + ratePct(num(col(page, 'HOMEOWNERS INSURANCE RATE'))) + ') ÷ 12 × ' + insuranceMonths + ' months the lender collects for the escrow account' },
+                { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))),
+                    how: $(yearlyTaxes) + ' a year ÷ 12 × ' + num(col(product, 'MONTHS COLLECTED FOR TAXES')) + ' months the lender collects for the escrow account' },
                 // Flat lender fees from the loan product ("APPRASIAL" is spelled that way in its fields)
-                { section: 'Loan', cost: true, label: 'Appraisal Fee', amount: -num(col(product, 'APPRAISAL FEE AT CLOSING')) },
-                { section: 'Loan', cost: true, label: 'Appraisal Management Fee', amount: -num(col(product, 'APPRASIAL MANAGEMENT FEE')) },
-                { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')) },
-                { section: 'Loan', cost: true, label: 'Flood Certification Fee', amount: -num(col(product, 'FLOOD CERT FEE')) },
-                { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')) },
-                { section: 'Loan', cost: true, label: 'Attorney Review Fee', amount: -num(col(product, 'ATTORNEY REVIEW FEE')) },
+                { section: 'Loan', cost: true, label: 'Appraisal Fee', amount: -num(col(product, 'APPRAISAL FEE AT CLOSING')), how: 'The loan product’s appraisal fee at closing' },
+                { section: 'Loan', cost: true, label: 'Appraisal Management Fee', amount: -num(col(product, 'APPRASIAL MANAGEMENT FEE')), how: 'The loan product’s fee' },
+                { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')), how: 'The loan product’s fee' },
+                { section: 'Loan', cost: true, label: 'Flood Certification Fee', amount: -num(col(product, 'FLOOD CERT FEE')), how: 'The loan product’s fee' },
+                { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')), how: 'The loan product’s fee' },
+                { section: 'Loan', cost: true, label: 'Attorney Review Fee', amount: -num(col(product, 'ATTORNEY REVIEW FEE')), how: 'The loan product’s fee' },
                 // Any other fees the lender charges (the loan product's added fees)
-                ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -f.amount })),
-                { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')) },
+                ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -f.amount, how: 'One of the loan product’s added fees' })),
+                { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')),
+                    how: num(col(product, 'ADDITIONAL LENDER CREDIT')) ? 'The loan product’s lender credit. It can only pay closing costs' : 'This loan product has no lender credit' },
 
                 // Escrow and title: the buyer's share from the title company (or, without one, the old rates)
-                ...(buyerTitle ? titleLines(buyerTitle, 'buyer', { cost: true }) : [
-                    { section: 'Title', cost: true, label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
-                    { section: 'Title', cost: true, label: 'ALTA Loan Policy Fee', amount: -(loan * num(col(page, 'ALTA TITLE RATE'))) },
+                ...(buyerTitle ? titleLines(buyerTitle, 'buyer', { cost: true }).map(l => ({ ...l, how: 'From ' + titleName + '’s filed rates (Settings > Title Companies): the buyer’s share' })) : [
+                    { section: 'Title', cost: true, label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))),
+                        how: $(price) + ' × ' + ratePct(num(col(page, 'ESCROW FEE RATE'))) + ' escrow fee rate (no title company is picked)' },
+                    { section: 'Title', cost: true, label: 'ALTA Loan Policy Fee', amount: -(loan * num(col(page, 'ALTA TITLE RATE'))),
+                        how: $(loan) + ' × ' + ratePct(num(col(page, 'ALTA TITLE RATE'))) + ' ALTA title rate (no title company is picked)' },
                 ]),
 
-                { section: 'Miscellaneous', cost: true, label: 'Homeowners Insurance Premium', amount: -hoPremium },
+                { section: 'Miscellaneous', cost: true, label: 'Homeowners Insurance Premium', amount: -hoPremium,
+                    how: $(price) + ' × ' + ratePct(num(col(page, 'HOMEOWNERS INSURANCE RATE'))) + ' homeowners insurance rate: the first year, paid at closing' },
                 hoaFee('Miscellaneous', 'HOA Transfer Fee', 'TRANSFER'),
                 hoaFee('Miscellaneous', 'HOA Capital Improvement Fee', 'CAP'),
                 hoaFee('Miscellaneous', 'HOA Disclosure Fee', 'DISCLOSURE'),
                 hoaFee('Miscellaneous', 'HOA Other Fee', 'OTHER'),
-                { section: 'Miscellaneous', cost: true, label: 'Buyers Agent Commission', amount: -(price * num(col(page, 'BUYERS AGENT COMMISSION %')) + num(col(page, 'BUYERS AGENT COMMISSION $'))) },
+                { section: 'Miscellaneous', cost: true, label: 'Buyers Agent Commission', amount: -(price * num(col(page, 'BUYERS AGENT COMMISSION %')) + num(col(page, 'BUYERS AGENT COMMISSION $'))),
+                    how: parts(num(col(page, 'BUYERS AGENT COMMISSION %')) ? $(price) + ' × ' + percent(num(col(page, 'BUYERS AGENT COMMISSION %'))) : '',
+                        num(col(page, 'BUYERS AGENT COMMISSION $')) ? $(num(col(page, 'BUYERS AGENT COMMISSION $'))) + ' flat' : '').replace('None for this loan product', 'None entered') },
             ].map(line => ({ ...line, amount: round2(line.amount) }));
 
             if (isCash) {
@@ -1808,9 +1882,9 @@
             const giftFunds = round2(num(col(page, 'GIFT FUNDS')));
             const appraisalDeposit = isCash ? 0 : round2(num(col(product, 'APPRAISAL DEPOSIT')));
             const funds = [
-                { section: 'Financial', label: 'Earnest Money Deposit', amount: earnestMoney },
-                { section: 'Financial', label: 'Gift Funds', amount: giftFunds },
-                { section: 'Financial', label: 'Appraisal Deposit', amount: appraisalDeposit, hidden: isCash },
+                { section: 'Financial', label: 'Earnest Money Deposit', amount: earnestMoney, how: 'Paid when the offer is accepted, so it comes off the cash to close' },
+                { section: 'Financial', label: 'Gift Funds', amount: giftFunds, how: giftFunds ? 'Given to the buyer toward closing' : 'None entered' },
+                { section: 'Financial', label: 'Appraisal Deposit', amount: appraisalDeposit, hidden: isCash, how: 'The loan product’s appraisal deposit, paid during escrow, so it comes off the cash to close' },
             ];
 
             // Cash to close balances everything above to zero: positive means the buyer still owes it,
@@ -1829,7 +1903,9 @@
                 dpaLine.warnings = [...dpaLine.warnings, 'Lowered by ' + wholeMoney.format(cut) + ': this program can’t be refunded to the buyer, so it only covers what’s owed'];
                 cashToClose = balance();
             }
-            const cashLine = { section: 'Financial', label: cashToClose < 0 ? 'Refund To Buyer' : 'Cash To Close', amount: cashToClose };
+            const cashLine = { section: 'Financial', label: cashToClose < 0 ? 'Refund To Buyer' : 'Cash To Close', amount: cashToClose,
+                how: 'Every line here added up: the price and closing costs, less the loans, credits, prorations and money already paid'
+                    + (cashToClose < 0 ? '. The credits cover more than what’s owed, so the buyer gets the difference back' : '') };
 
             // Financial lines first (price, seller credit, the funds, then cash to close), then everything else
             const financialEnd = lines.findIndex(l => l.section !== 'Financial');
@@ -1868,6 +1944,9 @@
 
             return { isCash, lines: allLines, cashToClose, cashLabel: cashLine.label, earnestMoney, giftFunds, appraisalDeposit,
                 payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes, usesQuotes: Boolean(markups), dtiKnown, dtiUsed,
+                // For the admin How The Numbers Work card
+                math: { price, ltv, baseLoan, loan, prepaidMI, miFinanced, secondLoan, dpaI, rateParts, pointsPurchased, daysInMonth, daysLeft,
+                    escrowDays: num(col(page, 'ESCROW DURATION')), hoPremium, insuranceMonths, months, mi, maxSellerPct, sellerPct, secondRate, secondMonths },
                 // (the lender's mortgage insurance premiums depend on the DTI too)
                 usesMiQuotes: Boolean(mi && mi.kind === 'quotes' && (mi.annual || mi.upfront)) };
         }
@@ -2303,6 +2382,143 @@
                 + hoa('Master HOA Dues Proration', 'HOA MASTER MONTHLY DUES')
                 + section('Property Taxes Credit', taxRows);
         }
+
+        // Buyer Breakdown, admins only: the interest rate's parts, each escrow line with how it's worked out (in the
+        // breakdown's order), the monthly payment, and the closing costs: which ones credits (seller, lender and census)
+        // can pay, how much of the credits apply, and how much more could. Credits can only pay closing costs (the lines
+        // calculate marks as costs); the down payment, and upfront mortgage insurance financed into the loan, can't be.
+        function renderBuyerMath(result, product) {
+            const m = result.math;
+            const p = result.payment;
+            const cents = moneyText;
+            const step = (k, v, how, extra = '') => '<li><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '') + extra
+                + '</span><span class="v">' + escapeHtml(v) + '</span></li>';
+            const amountClass = n => (toDollars(n) > 0 ? ' is-credit' : toDollars(n) < 0 ? ' is-debit' : '');
+            const lineRow = (k, amount, how, extra = '') => '<li><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '') + extra
+                + '</span><span class="v' + amountClass(amount) + '">' + signedMoney(amount) + '</span></li>';
+            const resultRow = (k, amount, how, plain) => '<li class="is-result"><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '')
+                + '</span><span class="v' + (plain ? '' : amountClass(amount)) + '">' + (plain ? escapeHtml(plain) : signedMoney(amount)) + '</span></li>';
+            const warnHtml = ws => (ws || []).map(w => '<small class="is-warning">' + CAUTION_ICON + '<span>' + escapeHtml(w) + '</span></small>').join('');
+            const tag = (yes, text) => '<span class="cc-tag ' + (yes ? 'is-yes' : 'is-no') + '">' + escapeHtml(text) + '</span>';
+            // Each part folds open (closed to start; the ones opened stay open as the numbers change), its key number on the right
+            const section = (title, rows, intro = '', value = '') => '<details class="money-section math-group" data-group="' + escapeHtml(title) + '"' + (mathOpen.has(title) ? ' open' : '') + '>'
+                + '<summary class="money-section-title"><span>' + escapeHtml(title) + '</span>' + (value ? '<span class="math-group-v">' + escapeHtml(value) + '</span>' : '') + '</summary>'
+                + (intro ? '<p class="math-intro">' + escapeHtml(intro) + '</p>' : '') + '<ul class="money-list math-list">' + rows.join('') + '</ul></details>';
+            const out = [];
+
+            // 1. The closing date (prorations and prepaid interest count from it)
+            out.push(section('Closing Date', [
+                step('Offer Acceptance Date', fmtDate(result.acceptance)),
+                step('Escrow Duration', m.escrowDays + ' days'),
+                step('Projected Closing Date', fmtDate(result.closing), 'Offer acceptance date + escrow duration'),
+                ...(result.closing ? [step('Days Left In The Month', String(m.daysLeft), 'Closing day through the end of the month (of ' + m.daysInMonth + '), for the prorations and prepaid interest')] : []),
+            ], '', result.closing ? fmtDate(result.closing) : 'Not set'));
+
+            // 2. The interest rate
+            if (!result.isCash) {
+                const r = m.rateParts;
+                const scoreHow = result.hasScore ? (result.scoreCount > 1 ? 'The purchasers’ average score' : 'The purchaser’s score')
+                    : 'Not every purchaser has a score on file, so ' + FALLBACK_CREDIT_SCORE + ' is used for anyone missing one';
+                const rows = [step('Today’s Interest Rate', ratePct(r.today), 'Set in Settings')];
+                if (r.quoted) {
+                    rows.push(
+                        step('Starting Markup', signedPct(r.start), 'From the lender’s 27 quoted rates (the markup before credit score, DTI and LTV)'),
+                        step('Credit Score Markup', signedPct(r.credit), result.creditScore + ' credit score. ' + scoreHow),
+                        step('DTI Markup', signedPct(r.dti), percent(result.dtiUsed) + ' debt-to-income' + (result.dtiKnown ? ', with this payment' : ', assumed until every purchaser’s income is in')),
+                        step('LTV Markup', signedPct(r.ltv), percent(m.ltv) + ' loan-to-value'),
+                    );
+                } else {
+                    rows.push(step('Credit Score Adjustment', signedPct(r.credit), 'This loan product has no quoted rates, so its old adjustment for a ' + r.creditTier + ' score is used (' + result.creditScore + '). ' + scoreHow));
+                }
+                if (r.dpa) rows.push(step('Down Payment Assistance Markup', signedPct(r.dpa), 'The program’s average markup on the first loan'));
+                if (m.pointsPurchased || r.buydown) rows.push(step('Points Buydown', signedPct(-r.buydown), percent(m.pointsPurchased) + ' in points' + (r.curve ? ', from the lender’s buydown quotes' : ', at the loan product’s old buydown per point')));
+                rows.push(resultRow('Interest Rate', 0, 'Today’s rate + the markups − the buydown', ratePct(result.rate)));
+                out.push(section('Interest Rate', rows, '', ratePct(result.rate)));
+            }
+
+            // 3. Each escrow line, as the breakdown lists them
+            const shown = result.lines.filter(l => !l.hidden);
+            [...new Set(shown.map(l => l.section))].forEach(name => {
+                const mine = shown.filter(l => l.section === name);
+                out.push(section(name, mine.map(l => {
+                    if (l.label === result.cashLabel) return resultRow(l.label, l.amount, l.how);
+                    return lineRow(l.label, l.amount, l.how, warnHtml(l.warnings));
+                }), '', name === 'Financial' ? result.cashLabel + ' ' + wholeMoney.format(Math.abs(toDollars(result.cashToClose))) : signedMoney(mine.reduce((s, l) => s + l.amount, 0))));
+            });
+
+            // 4. The monthly payment
+            if (!result.isCash) {
+                const r = result.rate / 12, n = m.months;
+                const payRows = [
+                    lineRow('Principal & Interest', -p.principalInterest, n
+                        ? cents(m.loan) + ' at ' + ratePct(result.rate) + ' for ' + p.termYears + ' years: loan × r ÷ (1 − (1 + r)^−' + n + '), where r = ' + ratePct(result.rate) + ' ÷ 12 = ' + (r * 100).toFixed(4) + '% a month'
+                        : 'The loan product has no loan term'),
+                ];
+                if (toDollars(p.monthlyPMI)) payRows.push(lineRow('Mortgage Insurance', -p.monthlyPMI, cents(m.loan) + ' × ' + ratePct(m.mi ? m.mi.annual : (p.monthlyPMI * 12 / (m.loan || 1))) + ' a year ÷ 12' + (p.miNote ? ' (' + p.miNote + ')' : '')));
+                payRows.push(
+                    lineRow('Taxes', -p.monthlyTaxes, cents(result.yearlyTaxes) + ' a year ÷ 12'),
+                    lineRow('Insurance', -p.monthlyInsurance, cents(m.hoPremium) + ' a year ÷ 12'),
+                );
+                if (toDollars(p.secondPayment)) payRows.push(lineRow('Second Mortgage (Down Payment Assistance)', -p.secondPayment,
+                    cents(m.secondLoan) + ' at ' + ratePct(m.secondRate) + ' (the first loan’s rate ' + (m.dpaI.secondMarkup >= 0 ? '+ ' : '− ') + ratePct(Math.abs(m.dpaI.secondMarkup)) + ') for ' + m.dpaI.termYears + ' years, paid the same way'));
+                payRows.push(
+                    resultRow('Total Mortgage Payment', -p.mortgagePayment, 'The lines above added up'),
+                    lineRow('HOA Dues', -(p.primaryDues + p.masterDues), 'Primary ' + cents(p.primaryDues) + ' + master ' + cents(p.masterDues) + ' a month'),
+                    resultRow('Total Monthly Obligation', -p.totalMonthly, 'Mortgage payment + HOA dues'),
+                );
+                out.push(section('Monthly Payment', payRows, '', wholeMoney.format(toDollars(p.totalMonthly)) + ' a month'));
+            }
+
+            // 5. Closing costs and credits
+            const lines = result.lines.filter(l => !l.hidden);
+            const costLines = lines.filter(l => l.cost && toDollars(l.amount) !== 0);
+            const costs = Math.max(0, -costLines.reduce((s, l) => s + l.amount, 0));
+            const credits = lines.filter(l => l.capped);
+            const applied = credits.reduce((s, l) => s + l.amount, 0);
+            const offered = credits.reduce((s, l) => s + (l.offered === undefined ? l.amount : l.offered), 0);
+            const left = Math.max(0, costs - applied);
+            const ccRows = costLines.map(l => lineRow(l.label.replace(/ \(\d+ months\)$/, ''), l.amount, '',
+                l.amount > 0 ? tag(true, 'A credit to the buyer: it lowers the closing costs') : tag(true, 'Credits can pay this')));
+            ccRows.push(resultRow('Total Closing Costs', -costs, 'What credits can pay'));
+            const creditRows = credits.map(l => {
+                const before = l.offered === undefined ? l.amount : l.offered;
+                const cut = round2(before - l.amount);
+                const name = l.label.replace(/ \([^)]*%\)$/, '');
+                return lineRow(name, l.amount, !toDollars(before) ? 'None'
+                    : cut > 0.004 ? cents(before) + ' offered, ' + cents(cut) + ' of it unused: credits can only pay closing costs (the seller credit is cut first, then the lender credit, then the census credit)'
+                    : 'All ' + cents(before) + ' applies');
+            });
+            creditRows.push(
+                resultRow('Credits Applied', applied, offered > applied + 0.004 ? cents(offered) + ' offered in all' : 'Every credit applies in full'),
+                resultRow('Closing Costs Left For The Buyer', -left, 'Total closing costs − credits applied'),
+            );
+            const sellerApplied = (credits.find(l => l.capped === 1) || {}).amount || 0;
+            const sellerRoom = result.isCash ? 0 : Math.max(0, Math.min(left, (isFinite(m.maxSellerPct) ? m.price * m.maxSellerPct : Infinity) - sellerApplied));
+            creditRows.push(step('Room For More Credit', cents(left), left <= 0.004 ? 'None: the credits already cover every closing cost'
+                : result.isCash ? 'Closing costs credits could still pay, but seller and lender credits only apply to loans, so there are none on a cash purchase'
+                : 'Up to this much more credit could still pay closing costs. The seller credit could go up ' + cents(sellerRoom)
+                    + (isFinite(m.maxSellerPct) ? ' more (this loan allows up to ' + percent(m.maxSellerPct) + ' of the price, ' + cents(m.price * m.maxSellerPct) + ')' : ' more')));
+            // What credits can't pay
+            const notRows = [];
+            const down = Math.max(0, m.price - m.baseLoan - m.secondLoan);
+            notRows.push(lineRow('Down Payment', -down, result.isCash ? 'A cash purchase: the buyer pays the whole price'
+                : cents(m.price) + ' price − ' + cents(m.baseLoan) + ' loan' + (m.secondLoan ? ' − ' + cents(m.secondLoan) + ' assistance' : ''),
+                tag(false, 'Credits can’t pay this: it’s the buyer’s own money (or gift funds or assistance)')));
+            lines.filter(l => l.financed && toDollars(l.amount) !== 0).forEach(l => notRows.push(lineRow(l.label, l.amount, '', tag(false, 'Credits can’t pay this: it’s financed into the loan, so the loan pays it'))));
+            out.push(section('Closing Costs', ccRows, 'Every closing cost on the breakdown. Seller, lender and census credits can pay these, and nothing else.', wholeMoney.format(toDollars(costs))));
+            out.push(section('Credits', creditRows, '', wholeMoney.format(toDollars(applied)) + ' applied'));
+            out.push(section('What Credits Can’t Pay', notRows, '', wholeMoney.format(toDollars(down))));
+
+            document.getElementById('math-list').innerHTML = out.join('');
+        }
+        // The How The Numbers Work parts left open (by title), so a redraw keeps them open
+        const mathOpen = new Set();
+        document.getElementById('math-list').addEventListener('toggle', e => {
+            const group = e.target.closest && e.target.closest('details.math-group');
+            if (group) { if (group.open) mathOpen.add(group.dataset.group); else mathOpen.delete(group.dataset.group); }
+        }, true);
+        // A rate change with its sign: "+0.125%", "−0.25%"
+        const signedPct = n => (n < -1e-12 ? '−' : '+') + ratePct(Math.abs(n));
 
         // Cash Breakdown: amounts the buyer puts in, in whole dollars (a refund shows as a minus)
         function renderCashBreakdown(result) {
@@ -2849,6 +3065,7 @@
             renderProperty(page, result);
             renderEscrow(result);
             renderPayment(result, product);
+            if (data.isAdmin) renderBuyerMath(result, product);
         }
 
         // Principal & Interest line: the rate and term, plus a disclaimer (*) when a credit score had to be estimated
@@ -4397,6 +4614,9 @@
             [propertyCard, escrowCard, paymentCard].forEach(c => { c.hidden = false; });
             // Only admins can change the inputs; everyone else sees the numbers for the chosen product
             loanCard.hidden = !data.isAdmin;
+            // ...and only admins see how they're worked out
+            document.getElementById('math-intro').textContent = 'Step by step: the interest rate, every line of the escrow breakdown, the monthly payment, and the closing costs with which ones credits can pay. Includes any unsaved settings edits.';
+            document.getElementById('math-card').hidden = !data.isAdmin;
             initReveal();
         }
 
