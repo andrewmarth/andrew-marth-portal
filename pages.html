@@ -3071,9 +3071,10 @@
             const opts = { vaUse, dpaBuyers: dpaBuyers() };
             let result = calculate(page, product, data.interestRate || {}, String(credit.score), null, opts);
             // Quoted rates (and quoted mortgage insurance): the DTI markup depends on the payment, which depends on the rate,
-            // so work it out again with the buyer's DTI until the payment settles (a few rounds; each changes it less)
+            // so work it out again with the buyer's DTI until the payment settles. Each round changes it less: a few rounds
+            // for a typical buyer, more the higher the DTI (around 160% DTI, each round only halves the change), so up to 30
             if ((result.usesQuotes || result.usesMiQuotes) && !result.isCash) {
-                for (let i = 0; i < 8; i++) {
+                for (let i = 0; i < 30; i++) {
                     const dti = buyerDti(result.payment.totalMonthly);
                     if (dti === null) break;
                     const next = calculate(page, product, data.interestRate || {}, String(credit.score), dti, opts);
