@@ -1443,6 +1443,7 @@
         import { productMarkups, productBuydown } from '/rate-markups.js';
         import { loanMi, productMiKind, MI_REQUIRED_ABOVE } from '/mortgage-insurance.js';
         import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer } from '/dpa.js';
+        import { productLenderCredits, creditCheck, creditAmount, creditTerms, conditionText } from '/lender-credits.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1765,9 +1766,6 @@
 
             const hoPremium = price * num(col(page, 'HOMEOWNERS INSURANCE RATE'));
             const insuranceMonths = num(col(product, 'MONTHS COLLECTED FOR INSURANCE'));
-            const designation = text(col(page, 'CENSUS DESIGNATION')).toUpperCase();
-            // Each designation has its own yes/no and its own credit % (CENSUS CREDIT LOW / CENSUS CREDIT % LOW, ...)
-            const censusRate = designation && isTrue(col(product, 'CENSUS CREDIT ' + designation)) ? num(col(product, 'CENSUS CREDIT % ' + designation)) : 0;
 
             // Seller credit can't be more than the loan product's MAX SELLER CREDIT %
             const enteredSellerPct = num(col(page, 'SELLER CREDIT'));
@@ -1817,6 +1815,23 @@
                 : $(baseLoan) + ' base loan × ' + ratePct(prepaidMI / baseLoan) + (mi ? ' (' + mi.upfrontNote + ')' : ' (the loan product’s prepaid MI rate for ' + downPaymentTier(downPct) + ' down)')
                     + (miFinanced ? '. Financed into the loan amount, so the loan pays it' : '. Paid at closing');
             const titleName = (titleCompanyOf(page) || {}).name || 'the title company';
+            // Lender credits (the loan product's list; see /lender-credits.js): each one whose condition this purchase meets
+            // is a credit line; one that would apply once something's filled in or done (an income, a score, a class...)
+            // shows at $0 with what it would be; one that doesn't apply is left off (the admin How The Numbers Work card says
+            // why). Like the seller credit, they can only pay closing costs (capCredits).
+            const creditCtx = { price, census: text(col(page, 'CENSUS DESIGNATION')), purchasers: opts.dpaBuyers || null, score: hasScore ? creditScore : null };
+            const skippedCredits = [];
+            const creditLines = [];
+            (isCash ? [] : productLenderCredits(name => col(product, name))).forEach(c => {
+                const check = creditCheck(c, creditCtx);
+                const full = creditAmount(c, { loan, price });
+                const who = conditionText(c);
+                if (check.status === 'no') { skippedCredits.push({ name: c.name, terms: creditTerms(c), who, reason: check.note }); return; }
+                const math = c.type === 'Flat Dollar Amount' ? 'A flat ' + $(c.amount) : (c.type === 'Percent Of Loan Amount' ? $(loan) + ' loan' : $(price) + ' price') + ' × ' + ratePct(c.amount) + ' = ' + $(full);
+                creditLines.push({ section: 'Loan', capped: 2, label: c.name, amount: check.status === 'applies' ? full : 0,
+                    note: check.status === 'applies' ? creditTerms(c) + (who ? ' · for ' + who : '') : 'Would be ' + wholeMoney.format(Math.round(full)) + ' · ' + check.note,
+                    how: math + (check.status === 'applies' ? (who ? ', for ' + who + ' (this purchase qualifies)' : ', on every loan') : '. Not yet: ' + check.note) + '. It can only pay closing costs' });
+            });
             // Lender fees: the page's own amount for a fee (LENDER FEE OVERRIDES), else the loan product's
             const feeOverrides = feeOverridesOf(col(page, 'LENDER FEE OVERRIDES'));
             const lenderFee = (key, productAmount) => (key in feeOverrides ? feeOverrides[key] : productAmount);
@@ -1853,10 +1868,6 @@
                     how: !closing ? noClosing : $(loan) + ' × ' + ratePct(rate) + ' ÷ 360 × ' + daysHow + '. The first payment covers the month after' },
                 { section: 'Loan', cost: true, label: 'Points Purchased', amount: -(pointsPurchased * loan),
                     how: pointsPurchased ? $(loan) + ' × ' + percent(pointsPurchased) + ' in points (each point is 1% of the loan and lowers the rate)' : 'No points bought' },
-                { section: 'Loan', capped: 3, label: 'Census Designation Credit', amount: loan * censusRate,
-                    how: !designation ? 'The home’s census designation isn’t set' : censusRate
-                        ? $(loan) + ' × ' + percent(censusRate) + ', this loan’s credit for a ' + designation.toLowerCase() + ' census tract. It can only pay closing costs'
-                        : 'This loan gives no credit for a ' + designation.toLowerCase() + ' census tract' },
                 { section: 'Loan', cost: true, label: 'Homeowners Insurance Impound (' + insuranceMonths + ' months)', amount: -(hoPremium / 12 * insuranceMonths),
                     how: $(hoPremium) + ' a year (' + $(price) + ' × ' + ratePct(num(col(page, 'HOMEOWNERS INSURANCE RATE'))) + ') ÷ 12 × ' + insuranceMonths + ' months the lender collects for the escrow account' },
                 { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))),
@@ -1872,8 +1883,8 @@
                 // Any other fees the lender charges (the loan product's added fees)
                 ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -lenderFee('OTHER: ' + f.name, f.amount),
                     how: feeHow('OTHER: ' + f.name, f.amount, 'One of the loan product’s added fees') })),
-                { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')),
-                    how: num(col(product, 'ADDITIONAL LENDER CREDIT')) ? 'The loan product’s lender credit. It can only pay closing costs' : 'This loan product has no lender credit' },
+                // The loan product's credits that apply (or could)
+                ...creditLines,
 
                 // Escrow and title: the buyer's share from the title company (or, without one, the old rates)
                 ...(buyerTitle ? titleLines(buyerTitle, 'buyer', { cost: true }).map(l => ({ ...l, how: 'From ' + titleName + '’s filed rates (Settings > Title Companies): the buyer’s share' })) : [
@@ -1974,7 +1985,7 @@
                 payment, rate, creditScore, hasScore, acceptance, closing, yearlyTaxes, usesQuotes: Boolean(markups), dtiKnown, dtiUsed,
                 // For the admin How The Numbers Work card
                 math: { price, ltv, baseLoan, loan, prepaidMI, miFinanced, secondLoan, dpaI, rateParts, pointsPurchased, daysInMonth, daysLeft,
-                    escrowDays: num(col(page, 'ESCROW DURATION')), hoPremium, insuranceMonths, months, mi, maxSellerPct, sellerPct, secondRate, secondMonths },
+                    escrowDays: num(col(page, 'ESCROW DURATION')), hoPremium, insuranceMonths, months, mi, maxSellerPct, sellerPct, secondRate, secondMonths, skippedCredits },
                 // (the lender's mortgage insurance premiums depend on the DTI too)
                 usesMiQuotes: Boolean(mi && mi.kind === 'quotes' && (mi.annual || mi.upfront)) };
         }
@@ -2512,10 +2523,13 @@
                 const before = l.offered === undefined ? l.amount : l.offered;
                 const cut = round2(before - l.amount);
                 const name = l.label.replace(/ \([^)]*%\)$/, '');
-                return lineRow(name, l.amount, !toDollars(before) ? 'None'
-                    : cut > 0.004 ? cents(before) + ' offered, ' + cents(cut) + ' of it unused: credits can only pay closing costs (the seller credit is cut first, then the lender credit, then the census credit)'
+                // (a lender credit that would apply once something's filled in shows what it's waiting for)
+                return lineRow(name, l.amount, !toDollars(before) ? (l.capped === 2 && l.note ? l.note : 'None')
+                    : cut > 0.004 ? cents(before) + ' offered, ' + cents(cut) + ' of it unused: credits can only pay closing costs (the seller credit is cut first, then the lender credits in order)'
                     : 'All ' + cents(before) + ' applies');
             });
+            // The loan product's credits this purchase doesn't qualify for
+            (m.skippedCredits || []).forEach(s => creditRows.push(lineRow(s.name, 0, 'Doesn’t apply: ' + s.reason + ' (' + s.terms + (s.who ? ', for ' + s.who : '') + ')')));
             creditRows.push(
                 resultRow('Credits Applied', applied, offered > applied + 0.004 ? cents(offered) + ' offered in all' : 'Every credit applies in full'),
                 resultRow('Closing Costs Left For The Buyer', -left, 'Total closing costs − credits applied'),

@@ -9,6 +9,7 @@ import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel
 import { MI_CREDIT, MI_DTI, MI_LTV, MI_REQUIRED_ABOVE, MI_REFERENCE, MI_MAX_QUOTE, FHA_UFMIP, VA_FUNDING_FEES, VA_DOWN_LABELS,
     miQuotes, miModel, miSettings, upfrontFactor } from '/mortgage-insurance.js';
 import { PROFESSION_GROUPS, CENSUS_DESIGNATIONS, QUALIFICATIONS, qualificationOf, dpaQualifications, groupList } from '/dpa.js';
+import { CREDIT_CONDITIONS, CREDIT_TYPES, creditConditionOf, isPercentCredit, productLenderCredits } from '/lender-credits.js';
 
 const CSS = `
 .loan-dialog .income-section .type-fields { margin-top: 2px; }
@@ -38,6 +39,24 @@ const CSS = `
 .loan-dialog .lp-qual-value > label, .loan-dialog .lp-qual-label { margin: 0 0 0 6px; font-size: 0.86rem; font-weight: bold; }
 .loan-dialog .lp-qual-none { margin: 0 0 0 6px; font-size: 0.86rem; opacity: 0.75; }
 .loan-dialog .lp-add-fee[hidden], .loan-dialog .lp-option[hidden] { display: none; }
+/* Lender credits: each one's description, when it applies (and what that needs), its type and its amount */
+.loan-dialog .lp-credits { display: grid; gap: 10px; }
+.loan-dialog .lp-credit-list { display: grid; gap: 10px; }
+.loan-dialog .lp-credit-list:empty { display: none; }
+.loan-dialog .lp-credit-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; gap: 10px 8px; align-items: end; padding: 10px; border: 2px solid rgba(14, 42, 59, 0.18); border-radius: 20px; background: #faf8f5; }
+.loan-dialog .lp-credit-row > div { display: grid; gap: 6px; min-width: 0; }
+.loan-dialog .lp-credit-name { grid-column: 1 / 3; }
+.loan-dialog .lp-credit-row > [data-remove-credit] { grid-column: 3; grid-row: 1; margin-bottom: 9px; }
+.loan-dialog .lp-credit-when, .loan-dialog .lp-credit-cond { grid-column: 1 / -1; }
+.loan-dialog .lp-credit-cond:empty, .loan-dialog .lp-credit-amount:empty { display: none; }
+.loan-dialog .lp-credit-type { grid-column: 1; }
+.loan-dialog .lp-credit-amount { grid-column: 2 / -1; }
+@media (max-width: 600px) {
+    .loan-dialog .lp-credit-row { grid-template-columns: minmax(0, 1fr) 40px; }
+    .loan-dialog .lp-credit-name { grid-column: 1; }
+    .loan-dialog .lp-credit-row > [data-remove-credit] { grid-column: 2; }
+    .loan-dialog .lp-credit-type, .loan-dialog .lp-credit-amount { grid-column: 1 / -1; }
+}
 /* One question per line (the income editor's sections are two across) */
 .loan-dialog .income-section .type-fields, .loan-dialog .income-section .gate-body, .loan-dialog .income-section .lp-tiles { grid-template-columns: 1fr; }
 .loan-dialog .field-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
@@ -252,6 +271,13 @@ const CHOICES = {
     'Minimum Credit Score': { icon: ICON('<path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/>'), sub: 'Each purchaser needs at least this score' },
     'First Time Homebuyer': { icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="m9.5 15 2 2 3.5-4"/>'), sub: 'No home owned for a number of years' },
     'Homebuyer Education Class': { icon: ICON('<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/>'), sub: 'A purchaser takes a class' },
+    // A lender credit's conditions and types
+    'Always': { icon: ICON('<path d="M20 6 9 17l-5-5"/>'), sub: 'Every buyer gets it' },
+    'Below Certain Income': { icon: ICON('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>'), sub: 'Household income at or below a limit' },
+    'Home Price Below Certain Amount': { icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 14h6"/>'), sub: 'The price at or below a limit' },
+    'Profession/Group Specific': { icon: ICON('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'), sub: 'Only for certain professions or groups' },
+    'Percent Of Loan Amount': { icon: ICON('<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'), sub: 'A share of the loan amount' },
+    'Percent Of Purchase Price': { icon: ICON('<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'), sub: 'A share of the purchase price' },
     'Home Price Maximum': { icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 14h6"/>'), sub: 'The price can’t be over a limit' },
 };
 const MULTI_ICON = ICON('<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>');
@@ -314,8 +340,6 @@ export function lenderFees(raw) {
     }
 }
 
-const DESIGNATIONS = ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'];
-const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
 
 // Items: a column question ({ col, label?, input? }), property tiles ({ tiles }), a column always set to one value
 // ({ col, fixed }), or a yes/no ({ gate, label, items, isOn(values), off(col, values)?, col?, invert? }). A gate with a col
@@ -395,11 +419,12 @@ const LAYOUT = [
         { col: 'ALLOW MOBILE', label: 'Mobile', icon: ICON('<rect x="2" y="7" width="16" height="10" rx="1"/><path d="M18 11h3l1 3v3h-4"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/>') },
         { col: 'ALLOW LAND', label: 'Land', icon: ICON('<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>') },
     ] }] },
+    // The origination fee, then the product's credits (LENDER CREDITS, a list like Lender Fees' added fees: each one's
+    // description, when it applies, its type and amount; see /lender-credits.js). They replace the old lender credit
+    // questions and the Census Designation Credit section (a census credit is a credit for certain census designations).
     { section: 'Origination & Lender Credits', items: [
         { col: 'ORIGINATION FEE %' }, { col: 'ORIGINATION FEE $' },
-        { gate: 'credit', label: 'Is there a lender credit?',
-            items: [{ col: 'LENDER CREDIT % OF PURCHASE PRICE' }, { col: 'LENDER CREDIT % OF LOAN AMOUNT' }, { col: 'LENDER CREDIT FLAT $' }, { col: 'ADDITIONAL LENDER CREDIT' }],
-            isOn: anyAbove0(['LENDER CREDIT % OF PURCHASE PRICE', 'LENDER CREDIT % OF LOAN AMOUNT', 'LENDER CREDIT FLAT $', 'ADDITIONAL LENDER CREDIT']) },
+        { credits: 'LENDER CREDITS' },
     ] },
     // Standard fees (every product has them; 0 counts) and any others the lender charges (OTHER LENDER FEES, a list)
     { section: 'Lender Fees', items: [{ fees: {
@@ -426,12 +451,6 @@ const LAYOUT = [
     ] },
     { section: 'Income Qualifying', items: ['SALARY', 'HOURLY', '1099', 'TIP', 'COMMISSION', 'BONUS'].map(k => ({ col: k + ' QUALIFYING %' })) },
     { section: 'Escrow', items: [{ col: 'MONTHS COLLECTED FOR TAXES', input: 'stepper' }, { col: 'MONTHS COLLECTED FOR INSURANCE', input: 'stepper' }] },
-    { section: 'Census Designation Credit', items: [
-        { gate: 'census', label: 'Is there any credit given for the Census Designation?',
-            items: DESIGNATIONS.map(d => ({ gate: 'census-' + d.toLowerCase(), col: 'CENSUS CREDIT ' + d, label: 'Credit for ' + d.charAt(0) + d.slice(1).toLowerCase() + '?',
-                items: [{ col: 'CENSUS CREDIT % ' + d, label: d.charAt(0) + d.slice(1).toLowerCase() + ' Credit %' }], isOn: v => isTrue(v['CENSUS CREDIT ' + d]) })),
-            isOn: v => DESIGNATIONS.some(d => isTrue(v['CENSUS CREDIT ' + d])) },
-    ] },
 ];
 const ESCROW_DEFAULT = '3';
 
@@ -595,6 +614,7 @@ function build() {
             if (it.mi) { used[it.mi.quotes] = true; used[it.mi.none] = true; return kinds[it.mi.quotes] ? it : null; }
             if (it.groups) { used[it.groups] = true; return kinds[it.groups] ? it : null; }
             if (it.quals) { used[it.quals] = true; return kinds[it.quals] ? it : null; }
+            if (it.credits) { used[it.credits] = true; return kinds[it.credits] ? it : null; }
             if (it.cond) { const items = keep(it.items); return items.length ? { ...it, items } : null; }
             if (it.gate) { if (it.col) { used[it.col] = true; if (!gateOfCol[it.col]) gateOfCol[it.col] = it.gate; } return { ...it, items: keep(it.items) }; }
             used[it.col] = true;
@@ -620,6 +640,11 @@ function build() {
             if (it.groups) {
                 return '<div class="field"><span class="field-label">' + escapeHtml(it.label) + '</span>'
                     + multiHtml('data-groups="' + escapeHtml(it.groups) + '" data-groups-id="' + it.id + '"', PROFESSION_GROUPS, 'Choose professions or groups...') + '</div>';
+            }
+            if (it.credits) {
+                return '<p class="lp-fees-help">Add each credit this loan gives the buyer and when it applies. Buyer Breakdown pages add a credit when its condition is met (credits can only pay closing costs).</p>'
+                    + '<div class="lp-credits"><div class="lp-credit-list" data-credit-list></div>'
+                    + '<button type="button" class="lp-add-fee" data-add-credit>+ Add Credit</button></div>';
             }
             if (it.quals) {
                 return '<p class="lp-fees-help">Add each qualification a buyer must meet (each kind once). Buyer Breakdown pages show a disclaimer when one isn’t met.</p>'
@@ -789,6 +814,8 @@ function build() {
         showConds();
         if (e.target.closest('.lp-multi')) syncMulti(e.target.closest('.lp-multi'));
         if (e.target.matches('[data-qual-type]')) { renderQualValue(e.target.closest('[data-qual-row]')); syncQuals(); }
+        if (e.target.matches('[data-credit-when]')) renderCreditCond(e.target.closest('[data-credit-row]'));
+        if (e.target.matches('[data-credit-type]')) renderCreditAmount(e.target.closest('[data-credit-row]'), null, true);
         if (e.target.closest('[data-gate="minscore"], [data-gate="housing"]')) { syncTiers(); showRateMarkups(); showMiOut(); }
         if (e.target.matches('[data-mi-none]')) showMi();
         // (the upfront premium follows the loan term)
@@ -806,6 +833,13 @@ function build() {
             if (on) picker.querySelector('.lp-picker-list').scrollIntoView({ block: 'nearest' });
             return;
         }
+        if (e.target.closest('[data-add-credit]')) {
+            const row = addCreditRow();
+            row.querySelector('[data-credit-k="name"]').focus();
+            return;
+        }
+        const removeCredit = e.target.closest('[data-remove-credit]');
+        if (removeCredit) { removeCredit.closest('[data-credit-row]').remove(); return; }
         if (e.target.closest('[data-add-qual]')) {
             const row = addQualRow();
             e.target.closest('[data-add-qual]').classList.remove('is-invalid');
@@ -871,6 +905,10 @@ function build() {
         if (e.target.matches('[data-qual-k="money"]')) e.target.value = withCommas(e.target.value.replace(/\D/g, ''));
         if (e.target.matches('[data-qual-k="score"], [data-qual-k="years"]')) e.target.value = e.target.value.replace(/\D/g, '');
         if (e.target.matches('[data-qual-k]')) e.target.classList.remove('is-invalid');
+        if (e.target.matches('[data-credit-k="money"]')) e.target.value = withCommas(e.target.value.replace(/\D/g, ''));
+        if (e.target.matches('[data-credit-k="score"], [data-credit-k="years"]')) e.target.value = e.target.value.replace(/\D/g, '');
+        if (e.target.matches('[data-credit-k="amount"]')) e.target.value = e.target.hasAttribute('data-pct') ? decimalOnly(e.target.value, 4) : withCommas(decimalOnly(e.target.value, 2));
+        if (e.target.matches('[data-credit-k]')) e.target.classList.remove('is-invalid');
         if (e.target.matches('[data-miq]')) {
             e.target.value = decimalOnly(e.target.value, 4);
             e.target.classList.remove('is-invalid');
@@ -1413,6 +1451,67 @@ function build() {
         if (add) add.hidden = rows.length >= QUALIFICATIONS.length;
     }
 
+    // Lender credits: one row per credit (its description, when it applies and what that needs, its type and amount)
+    let creditCount = 0;
+    const creditRows = () => [...sectionsEl.querySelectorAll('[data-credit-list] [data-credit-row]')];
+    const optionsOf = (list, key) => '<option value="">Choose...</option>' + list.map(x => '<option value="' + escapeHtml(x[key] || x) + '">' + escapeHtml(x[key] || x) + '</option>').join('');
+    function addCreditRow(c = {}) {
+        const list = sectionsEl.querySelector('[data-credit-list]');
+        const id = 'lp-credit-' + (++creditCount);
+        list.insertAdjacentHTML('beforeend', '<div class="lp-credit-row field" data-credit-row>'
+            + '<div class="lp-credit-name"><label class="lp-qual-label" for="' + id + '-name">Description</label>'
+                + '<input id="' + id + '-name" type="text" maxlength="100" autocomplete="off" placeholder="Lender Credit" data-credit-k="name" value="' + escapeHtml(c.name || '') + '"></div>'
+            + '<button type="button" class="lp-fee-remove" data-remove-credit aria-label="Remove this credit">' + CLOSE_ICON + '</button>'
+            + '<div class="lp-credit-when"><label class="lp-qual-label" for="' + id + '-when">When it applies</label><select id="' + id + '-when" data-credit-when>' + optionsOf(CREDIT_CONDITIONS, 'when') + '</select></div>'
+            + '<div class="lp-credit-cond" data-credit-cond></div>'
+            + '<div class="lp-credit-type"><label class="lp-qual-label" for="' + id + '-type">Credit Type</label><select id="' + id + '-type" data-credit-type>' + optionsOf(CREDIT_TYPES) + '</select></div>'
+            + '<div class="lp-credit-amount" data-credit-amount></div></div>');
+        const row = list.lastElementChild;
+        row.querySelector('[data-credit-when]').value = c.when || '';
+        row.querySelector('[data-credit-type]').value = c.type || '';
+        row.querySelectorAll('select').forEach(makePicker);
+        renderCreditCond(row, c.value);
+        renderCreditAmount(row, c.amount);
+        return row;
+    }
+    // What the row's condition needs: census designations or professions / groups (dropdowns of checkboxes), a dollar
+    // limit, a credit score or a number of years (nothing for Always or a homebuyer education class)
+    function renderCreditCond(row, value) {
+        const cond = creditConditionOf(row.querySelector('[data-credit-when]').value);
+        const box = row.querySelector('[data-credit-cond]');
+        const id = row.querySelector('[data-credit-when]').id + '-v';
+        const has = value !== undefined && value !== null && value !== '';
+        const label = cond && cond.label ? '<label class="lp-qual-label" for="' + id + '">' + escapeHtml(cond.label) + '</label>' : '';
+        if (!cond || cond.input === 'none') box.innerHTML = cond && cond.when === 'Homebuyer Education Class' ? '<p class="lp-qual-none">Applies once at least one purchaser has taken a homebuyer education class.</p>' : '';
+        else if (cond.input === 'money') box.innerHTML = label + '<div class="money-wrap"><input id="' + id + '" class="money" data-credit-k="money" type="text" inputmode="numeric" autocomplete="off" value="' + (has ? escapeHtml(shown('money', value)) : '') + '"></div>';
+        else if (cond.input === 'score') box.innerHTML = label + '<input id="' + id + '" class="digits" data-credit-k="score" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="' + CREDIT_MIN + '-' + CREDIT_MAX + '" value="' + (has ? escapeHtml(String(value)) : '') + '">';
+        else if (cond.input === 'years') box.innerHTML = label + '<div class="lp-ratio"><input id="' + id + '" class="digits" data-credit-k="years" type="text" inputmode="numeric" maxlength="2" autocomplete="off" value="' + (has ? escapeHtml(String(value)) : '') + '"><span>years</span></div>';
+        else {
+            const census = cond.input === 'census';
+            box.innerHTML = '<span class="lp-qual-label">' + escapeHtml(cond.label) + '</span>'
+                + multiHtml('data-credit-k="' + cond.input + '"', census ? CENSUS_DESIGNATIONS : PROFESSION_GROUPS, census ? 'Choose designations...' : 'Choose professions or groups...');
+            const picked = Array.isArray(value) ? value : [];
+            box.querySelectorAll('.lp-multi input').forEach(i => { i.checked = picked.includes(i.value); });
+            syncMulti(box.querySelector('.lp-multi'));
+        }
+    }
+    // The amount box: a percent (of the loan amount or the price) or dollars. amount: the saved amount; keepTyped: a
+    // different type was picked, so keep what's typed if it's still the same kind of box
+    function renderCreditAmount(row, amount, keepTyped) {
+        const type = row.querySelector('[data-credit-type]').value;
+        const box = row.querySelector('[data-credit-amount]');
+        const prev = box.querySelector('input');
+        const pct = isPercentCredit(type);
+        const typed = keepTyped && prev && prev.hasAttribute('data-pct') === pct ? prev.value : '';
+        if (!type) { box.innerHTML = ''; return; }
+        const id = row.querySelector('[data-credit-type]').id + '-amt';
+        const has = amount !== undefined && amount !== null && amount !== '';
+        const value = keepTyped ? typed : has ? shown(pct ? 'rate' : 'cents', amount) : '';
+        box.innerHTML = '<label class="lp-qual-label" for="' + id + '">Amount</label>' + (pct
+            ? '<div class="pct-wrap"><input id="' + id + '" class="pct" data-credit-k="amount" data-pct type="text" inputmode="decimal" autocomplete="off" value="' + escapeHtml(value) + '"></div>'
+            : '<div class="money-wrap"><input id="' + id + '" class="money" data-credit-k="amount" type="text" inputmode="decimal" autocomplete="off" value="' + escapeHtml(value) + '"></div>');
+    }
+
     // Puts a product's values in the boxes (a new product: blank, escrow months at 3, every yes/no unanswered)
     function fill(values, isNew) {
         // A Down Payment Assistance product saved before its amount could be a flat amount: a percentage of the price
@@ -1461,6 +1560,12 @@ function build() {
             p.querySelectorAll('input').forEach(i => { i.checked = picked.includes(i.value); });
             syncMulti(p);
         });
+        // Lender credits (a product saved before the list: its old lender and census credits, as credits)
+        const creditList = sectionsEl.querySelector('[data-credit-list]');
+        if (creditList) {
+            creditList.innerHTML = '';
+            (isNew ? [] : productLenderCredits(c => values[c])).forEach(c => addCreditRow(c));
+        }
         const qualList = sectionsEl.querySelector('[data-qual-list]');
         if (qualList) {
             qualList.innerHTML = '';
@@ -1521,6 +1626,42 @@ function build() {
                 const picked = active ? multiPicked(picker) : [];
                 if (active && !picked.length) need(picker, '');
                 values[it.groups] = picked.length ? JSON.stringify(picked) : '';
+                return;
+            }
+            // Lender credits: each row filled in ("[]" for none; a row left empty is skipped)
+            if (it.credits) {
+                values[it.credits] = '[]';
+                if (!active) return;
+                const list = [];
+                creditRows().forEach(row => {
+                    const nameEl = row.querySelector('[data-credit-k="name"]'), whenEl = row.querySelector('[data-credit-when]'), typeEl = row.querySelector('[data-credit-type]');
+                    const amountEl = row.querySelector('[data-credit-k="amount"]');
+                    const name = nameEl.value.trim(), cond = creditConditionOf(whenEl.value), type = typeEl.value;
+                    const amount = amountEl ? amountEl.value.trim().replace(/,/g, '') : '';
+                    if (!name && !cond && !type && !amount) return;
+                    need(nameEl, name);
+                    if (!cond) need(whenEl, '');
+                    let value = null, valueOk = true;
+                    if (cond && (cond.input === 'census' || cond.input === 'groups')) {
+                        const picker = row.querySelector('[data-credit-k="' + cond.input + '"]');
+                        value = multiPicked(picker);
+                        if (!value.length) { need(picker, ''); valueOk = false; }
+                    } else if (cond && cond.input !== 'none') {
+                        const box = row.querySelector('[data-credit-k="' + cond.input + '"]');
+                        const raw = box.value.trim().replace(/,/g, '');
+                        need(box, raw);
+                        value = Number(raw);
+                        valueOk = raw !== '';
+                    }
+                    if (!type) need(typeEl, ''); else need(amountEl, amount);
+                    if (!name || !cond || !valueOk || !type || amount === '') return;
+                    const credit = { NAME: name, WHEN: cond.when };
+                    if (cond.input !== 'none') credit.VALUE = value;
+                    credit.TYPE = type;
+                    credit.AMOUNT = isPercentCredit(type) ? Number((Number(amount) / 100).toPrecision(10)) : Number(amount);
+                    list.push(credit);
+                });
+                values[it.credits] = JSON.stringify(list);
                 return;
             }
             // Qualifications: each row's type and what it needs ("[]" for none)
@@ -1629,7 +1770,7 @@ function build() {
         });
         // A DPA product: everything regular is left blank
         const blanks = [];
-        const blank = it => { if (it.cond) it.items.forEach(blank); else if (it.groups) blanks.push(it.groups); else if (it.quals) blanks.push(it.quals); else if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.buydown) blanks.push(it.buydown); else if (it.tiers) blanks.push(it.tiers); else if (it.mi) blanks.push(it.mi.quotes, it.mi.none); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
+        const blank = it => { if (it.cond) it.items.forEach(blank); else if (it.groups) blanks.push(it.groups); else if (it.quals) blanks.push(it.quals); else if (it.credits) blanks.push(it.credits); else if (it.tiles) it.tiles.forEach(t => blanks.push(t.col)); else if (it.quotes) blanks.push(it.quotes); else if (it.buydown) blanks.push(it.buydown); else if (it.tiers) blanks.push(it.tiers); else if (it.mi) blanks.push(it.mi.quotes, it.mi.none); else if (it.fees) { it.fees.standard.forEach(c => blanks.push(c)); if (it.fees.col) blanks.push(it.fees.col); } else if (it.gate) { if (it.col) blanks.push(it.col); it.items.forEach(blank); } else if (it.col) blanks.push(it.col); };
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
@@ -1644,12 +1785,12 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote], [data-buy], [data-miq], [data-groups], [data-qual-type], [data-qual-k]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
+    const clear = e => { const el = e.target.closest('[data-col], [data-gate], [data-term], [data-quote], [data-buy], [data-miq], [data-groups], [data-qual-type], [data-qual-k], [data-credit-k], [data-credit-when], [data-credit-type]'); if (el) el.classList.remove('is-invalid'); message.textContent = ''; };
     form.addEventListener('input', clear);
     form.addEventListener('change', clear);
     form.addEventListener('change', syncLabels);
     // Credit scores (the minimum and each tier's): one that can't be (not 300 to 850) is outlined in red as soon as it's typed
-    const scoreBox = el => el.matches('[data-tier-k="score"], [data-kind="score"], [data-qual-k="score"]');
+    const scoreBox = el => el.matches('[data-tier-k="score"], [data-kind="score"], [data-qual-k="score"], [data-credit-k="score"]');
     form.addEventListener('input', e => { if (scoreBox(e.target) && e.target.value.length === 3 && !scoreOk(e.target.value)) e.target.classList.add('is-invalid'); });
     form.addEventListener('change', e => { if (scoreBox(e.target) && e.target.value !== '' && !scoreOk(e.target.value)) e.target.classList.add('is-invalid'); });
     // Each LABEL_RULES label: its own text while the other answer matches, else the usual one
@@ -1697,6 +1838,13 @@ function build() {
             if (missing.matches('[data-qual-type]')) { problem(missing, 'Please choose each qualification (or remove it).'); return; }
             if (missing.matches('[data-qual-k="census"]')) { problem(missing, 'Please choose at least one census designation.'); return; }
             if (missing.matches('[data-qual-k]')) { problem(missing, 'Please fill in each qualification (or remove it).'); return; }
+            if (missing.matches('[data-credit-k="name"]')) { problem(missing, 'Please describe each credit (or remove it).'); return; }
+            if (missing.matches('[data-credit-when]')) { problem(missing, 'Please choose when each credit applies.'); return; }
+            if (missing.matches('[data-credit-type]')) { problem(missing, 'Please choose each credit’s type.'); return; }
+            if (missing.matches('[data-credit-k="census"]')) { problem(missing, 'Please choose at least one census designation for the credit.'); return; }
+            if (missing.matches('[data-credit-k="groups"]')) { problem(missing, 'Please choose at least one profession or group for the credit.'); return; }
+            if (missing.matches('[data-credit-k="amount"]')) { problem(missing, 'Please enter each credit’s amount.'); return; }
+            if (missing.matches('[data-credit-k]')) { problem(missing, 'Please fill in when each credit applies.'); return; }
             const field = missing.closest('.field');
             const name = field ? field.querySelector('label, .field-label').textContent : 'this question';
             problem(missing, 'Please answer "' + name + '".');
@@ -1708,10 +1856,14 @@ function build() {
         const zero = [...sectionsEl.querySelectorAll('[data-col="FORGIVEN AFTER YEARS"], [data-col="SECOND LOAN TERM"], [data-col="IDA MATCH RATIO"], [data-col="SECOND LOAN FLAT AMOUNT"], [data-col="SECOND LOAN LTV MAX"], [data-qual-k="money"], [data-qual-k="years"]')]
             .find(el => el.offsetParent && isDpa() && el.value.trim() !== '' && !(num(el.value) > 0));
         if (zero) { problem(zero, 'This needs to be more than 0.'); return; }
+        // Lender credits: amounts over 0 (a percent up to 100), and dollar limits and years over 0
+        const badCredit = [...sectionsEl.querySelectorAll('[data-credit-k="amount"], [data-credit-k="money"], [data-credit-k="years"]')]
+            .find(el => el.offsetParent && el.value.trim() !== '' && !(num(el.value) > 0 && (!el.hasAttribute('data-pct') || num(el.value) <= 100)));
+        if (badCredit) { problem(badCredit, badCredit.hasAttribute('data-pct') ? 'A credit’s percent must be more than 0 and no more than 100.' : 'This needs to be more than 0.'); return; }
         const badMi = miBoxes().find(el => el.offsetParent && el.value.trim() !== '' && !(Number(el.value) >= 0 && Number(el.value) <= MI_MAX_QUOTE * 100));
         if (badMi) { problem(badMi, 'Each annual premium must be from 0 to ' + MI_MAX_QUOTE * 100 + '% of the loan a year (' + badMi.getAttribute('aria-label') + ').'); return; }
         // Credit scores from 300 to 850, each tier's listed once, and each max DTI over 0
-        const badScore = [...sectionsEl.querySelectorAll('[data-kind="score"], [data-tier-k="score"], [data-qual-k="score"]')].find(el => el.offsetParent && el.value.trim() !== '' && !scoreOk(el.value));
+        const badScore = [...sectionsEl.querySelectorAll('[data-kind="score"], [data-tier-k="score"], [data-qual-k="score"], [data-credit-k="score"]')].find(el => el.offsetParent && el.value.trim() !== '' && !scoreOk(el.value));
         if (badScore) { problem(badScore, 'Credit scores go from ' + CREDIT_MIN + ' (the lowest possible) to ' + CREDIT_MAX + ' (the highest).'); return; }
         const tierScores = tierRows().map(r => r.querySelector('[data-tier-k="score"]')).filter(el => el.offsetParent && el.value.trim() !== '');
         const twice = tierScores.find((el, i) => tierScores.findIndex(o => +o.value === +el.value) !== i);

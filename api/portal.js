@@ -195,6 +195,42 @@ function cleanSetting_(kind, value) {
     }
     return Object.keys(out).length ? JSON.stringify(out) : '';
   }
+  // A loan product's lender credits: JSON [{ NAME, WHEN, VALUE, TYPE, AMOUNT }] ("[]" for none; up to 20). Each is named;
+  // WHEN is one of CREDIT_CONDITIONS, with the VALUE it needs (census designations or professions / groups: a list, at
+  // least one; an income or price limit: dollars over 0; a credit score: 300-850; years without a home: 1-99; else none);
+  // TYPE is one of CREDIT_TYPES, and AMOUNT is over 0 (a percent: a decimal up to 1; a flat amount: dollars with cents).
+  if (kind === 'credits') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(list) || list.length > 20) return null;
+    const out = [];
+    for (const c of list) {
+      const name = cleanText_(c && c.NAME, 100);
+      const when = String((c && c.WHEN) || '').trim();
+      const input = CREDIT_CONDITIONS[when];
+      const type = String((c && c.TYPE) || '').trim();
+      const amount = Number(c && c.AMOUNT);
+      if (!name || !input || !CREDIT_TYPES.includes(type) || !(amount > 0)) return null;
+      if (type === 'Flat Dollar Amount' ? amount > 100000000 : amount > 1) return null;
+      const credit = { NAME: name, WHEN: when };
+      if (input === 'census' || input === 'groups') {
+        const known = input === 'census' ? DPA_CENSUS : DPA_GROUPS;
+        const v = c.VALUE;
+        if (!Array.isArray(v) || !v.length || v.some(x => !known.includes(x))) return null;
+        credit.VALUE = known.filter(x => v.includes(x));
+      } else if (input !== 'none') {
+        const n = Number(c.VALUE);
+        const ok = input === 'score' ? Number.isInteger(n) && n >= 300 && n <= 850
+          : input === 'years' ? Number.isInteger(n) && n >= 1 && n <= 99 : n > 0 && n <= 100000000;
+        if (!ok) return null;
+        credit.VALUE = input === 'money' ? Math.round(n) : n;
+      }
+      credit.TYPE = type;
+      credit.AMOUNT = type === 'Flat Dollar Amount' ? Math.round(amount * 100) / 100 : Math.round(amount * 1e6) / 1e6;
+      out.push(credit);
+    }
+    return JSON.stringify(out);
+  }
   // A rate that may be negative (a second mortgage's markup from the first loan's rate: -100% to 100%)
   if (kind === 'signedRate') {
     const s = Number(raw.replace(/[%\s]/g, ''));
@@ -253,6 +289,10 @@ const DPA_GROUPS = ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs',
   'Healthcare Professional (Qualified physician)', 'Veteran (With benefits)', 'Veteran (Without benefits)',
   'Legally Disabled', 'Native American'];
 const DPA_CENSUS = ['Low', 'Moderate', 'Middle', 'Upper'];
+// A lender credit's conditions (WHEN) and what each needs as its VALUE, and its types (the same as /lender-credits.js)
+const CREDIT_CONDITIONS = { 'Always': 'none', 'Census Designation': 'census', 'Below Certain Income': 'money', 'Minimum Credit Score': 'score',
+  'First Time Homebuyer': 'years', 'Homebuyer Education Class': 'none', 'Home Price Below Certain Amount': 'money', 'Profession/Group Specific': 'groups' };
+const CREDIT_TYPES = ['Percent Of Loan Amount', 'Percent Of Purchase Price', 'Flat Dollar Amount'];
 const DPA_QUALIFICATION_TYPES = { 'Income Limit': 'money', 'Census Designation': 'census', 'Minimum Credit Score': 'score',
   'First Time Homebuyer': 'years', 'Homebuyer Education Class': 'none', 'Home Price Maximum': 'money' };
 // (GROUP SPECIFIC and ELIGIBLE GROUPS are asked of every product: see cleanLoanProduct_)
@@ -306,9 +346,11 @@ const LOAN_PRODUCT_FIELDS = (function () {
       ['SECOND LOAN FLAT AMOUNT', 'money'], ['COMBINED LOANS CAN EXCEED PRICE', 'bool'], ['EXCESS REFUNDED TO BUYER', 'bool'],
       ['AFFECTS FIRST LOAN RATE', 'bool'], ['FIRST LOAN RATE MARKUP', 'rate'], ['DPA QUALIFICATIONS', 'dpaQuals']]],
     ['Property Types', [['ALLOW SINGLE FAMILY', 'bool'], ['ALLOW TOWNHOME', 'bool'], ['ALLOW CONDO', 'bool'], ['ALLOW MOBILE', 'bool'], ['ALLOW LAND', 'bool']]],
-    ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'],
-      ['LENDER CREDIT % OF PURCHASE PRICE', 'rate'], ['LENDER CREDIT % OF LOAN AMOUNT', 'rate'], ['LENDER CREDIT FLAT $', 'cents'],
-      ['ADDITIONAL LENDER CREDIT', 'cents']]],
+    // LENDER CREDITS: the product's credits (JSON [{ NAME, WHEN, VALUE, TYPE, AMOUNT }]; "[]" for none; see the credits
+    // kind and /lender-credits.js). It replaces LENDER CREDIT % OF PURCHASE PRICE, % OF LOAN AMOUNT and FLAT $, ADDITIONAL
+    // LENDER CREDIT and the census credits (CENSUS CREDIT <designation> and CENSUS CREDIT % <designation>), which are no
+    // longer asked (pages read them as credits for a product saved before).
+    ['Origination & Lender Credits', [['ORIGINATION FEE %', 'rate'], ['ORIGINATION FEE $', 'cents'], ['LENDER CREDITS', 'credits']]],
     // The standard fees, then any others (OTHER LENDER FEES: JSON [{ NAME, AMOUNT }]; "[]" for none)
     ['Lender Fees', [['APPRAISAL FEE AT CLOSING', 'cents'], ['APPRAISAL DEPOSIT', 'cents'], ['APPRASIAL MANAGEMENT FEE', 'cents'],
       ['CREDIT REPORT FEE', 'cents'], ['FLOOD CERT FEE', 'cents'], ['TAX CERT FEE', 'cents'], ['ATTORNEY REVIEW FEE', 'cents'], ['OTHER LENDER FEES', 'fees']]],
@@ -330,8 +372,6 @@ const LOAN_PRODUCT_FIELDS = (function () {
     ['Income Qualifying', [['SALARY QUALIFYING %', 'rate'], ['HOURLY QUALIFYING %', 'rate'], ['1099 QUALIFYING %', 'rate'],
       ['TIP QUALIFYING %', 'rate'], ['COMMISSION QUALIFYING %', 'rate'], ['BONUS QUALIFYING %', 'rate']]],
     ['Escrow', [['MONTHS COLLECTED FOR TAXES', 'int'], ['MONTHS COLLECTED FOR INSURANCE', 'int']]],
-    ['Census Credit', ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'].reduce((list, d) =>
-      list.concat([['CENSUS CREDIT ' + d, 'bool'], ['CENSUS CREDIT % ' + d, 'rate']]), [])],
   ];
   const out = [];
   sections.forEach(s => { s[1].forEach(f => { out.push({ section: s[0], col: f[0], kind: f[1] }); }); });
@@ -3439,7 +3479,10 @@ async function quoteSheet_(submitted, old) {
 // (RATE QUOTES also carries today: today's interest rate, for the form's markup tables; MI QUOTES carries mi: the
 // mortgage insurance settings, for its upfront premium tables)
 function loanProductFields_(headers, today, mi) {
-  const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true, 'INCOME LIMIT': true };
+  const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true, 'INCOME LIMIT': true,
+    // (the old lender credit and census credit columns: LENDER CREDITS replaced them)
+    'LENDER CREDIT % OF PURCHASE PRICE': true, 'LENDER CREDIT % OF LOAN AMOUNT': true, 'LENDER CREDIT FLAT $': true, 'ADDITIONAL LENDER CREDIT': true };
+  ['LOW', 'MODERATE', 'MIDDLE', 'UPPER'].forEach(d => { known['CENSUS CREDIT ' + d] = true; known['CENSUS CREDIT % ' + d] = true; });
   ['0%-5%', '5%-10%', '10%-20%', '20%+'].forEach(d => { known['PREPAID MORTGAGE INSURANCE RATE ' + d + ' DOWN'] = true; });
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+']
