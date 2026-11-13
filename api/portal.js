@@ -42,6 +42,8 @@ const PAGE_SETTING_FIELDS = {
   'SECOND LOAN PRODUCT': 'text', 'SECOND LOAN LTV': 'rate',
   // (a product that's a flat dollar amount the client can adjust: the amount they're using, up to the product's)
   'SECOND LOAN DOLLAR AMOUNT': 'money',
+  // Lender fee amounts typed in for this page instead of the loan product's (see the feeOverrides kind)
+  'LENDER FEE OVERRIDES': 'feeOverrides',
   'WHO PAYS OWNERS POLICY': 'payer', 'OWNERS TITLE DISCOUNT': 'text', 'SELLER ESCROW DISCOUNT': 'text', 'BUYER ESCROW DISCOUNT': 'text',
   'FINCEN REPORT': 'bool', 'EXTRA TITLE FEES': 'list',
   // Seller Net's Buyer Inputs (the buyer's side of the escrow breakdown): the loan product by name and the buyer's credit
@@ -175,6 +177,22 @@ function cleanSetting_(kind, value) {
       out.push({ TYPE: type, VALUE: input === 'money' ? Math.round(n) : n });
     }
     return JSON.stringify(out.sort((a, b) => order.indexOf(a.TYPE) - order.indexOf(b.TYPE)));
+  }
+  // A page's lender fee amounts used instead of its loan product's: JSON { fee: amount } (the fee: a loan product fee
+  // column such as "APPRAISAL DEPOSIT", or "OTHER: " + one of the product's added fees' names; up to 40, each $0 to
+  // $100,000,000 with cents). None left: blank.
+  if (kind === 'feeOverrides') {
+    let o;
+    try { o = JSON.parse(raw); } catch (e) { return null; }
+    if (!o || typeof o !== 'object' || Array.isArray(o) || Object.keys(o).length > 40) return null;
+    const out = {};
+    for (const k of Object.keys(o)) {
+      const key = cleanText_(k, 110);
+      const n = Number(o[k]);
+      if (!key || o[k] === '' || o[k] === null || !isFinite(n) || n < 0 || n > 100000000) return null;
+      out[key] = Math.round(n * 100) / 100;
+    }
+    return Object.keys(out).length ? JSON.stringify(out) : '';
   }
   // A rate that may be negative (a second mortgage's markup from the first loan's rate: -100% to 100%)
   if (kind === 'signedRate') {

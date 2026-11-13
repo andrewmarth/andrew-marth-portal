@@ -1640,6 +1640,26 @@
             return { name: c.name || '', score: score >= 300 && score <= 850 ? score : null, groups: c.groups || [], lastOwned: c.lastOwned || '',
                 education: Boolean(c.education), monthlyIncome: monthly > 0 ? monthly : null };
         });
+        // --- Lender fees ---
+        // A loan product's lender fees, as Buyer Breakdown settings list them: the appraisal deposit, the standard fees and
+        // its added fees ([{ key, label, amount }]; key: the product's column, or "OTHER: " + an added fee's name). A page
+        // can use its own amount for any of them (LENDER FEE OVERRIDES: JSON { key: amount }; a fee not in it uses the
+        // product's).
+        const LENDER_FEE_COLUMNS = [['APPRAISAL DEPOSIT', 'Appraisal Deposit'], ['APPRAISAL FEE AT CLOSING', 'Appraisal Fee'],
+            ['APPRASIAL MANAGEMENT FEE', 'Appraisal Management Fee'], ['CREDIT REPORT FEE', 'Credit Report Fee'], ['FLOOD CERT FEE', 'Flood Certification Fee'],
+            ['TAX CERT FEE', 'Tax Certification Fee'], ['ATTORNEY REVIEW FEE', 'Attorney Review Fee']];
+        const productLenderFees = p => LENDER_FEE_COLUMNS.map(([key, label]) => ({ key, label, amount: num(col(p, key)) }))
+            .concat(lenderFees(col(p, 'OTHER LENDER FEES')).map(f => ({ key: 'OTHER: ' + f.name, label: f.name, amount: f.amount })));
+        function feeOverridesOf(raw) {
+            try {
+                const o = JSON.parse(text(raw) || '{}');
+                if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+                const out = {};
+                Object.keys(o).forEach(k => { if (o[k] !== '' && o[k] !== null && isFinite(Number(o[k]))) out[k] = Number(o[k]); });
+                return out;
+            } catch (e) { return {}; }
+        }
+
         // The title company's loan type for the buyer's loan product: VA, adjustable rate or fixed rate
         const productLoanType = p => (text(col(p, 'PRODUCT TYPE')) === 'VA' ? 'va' : text(col(p, 'RATE TYPE')) === 'Adjustable Rate' ? 'arm' : 'fixed');
 
@@ -1797,6 +1817,11 @@
                 : $(baseLoan) + ' base loan × ' + ratePct(prepaidMI / baseLoan) + (mi ? ' (' + mi.upfrontNote + ')' : ' (the loan product’s prepaid MI rate for ' + downPaymentTier(downPct) + ' down)')
                     + (miFinanced ? '. Financed into the loan amount, so the loan pays it' : '. Paid at closing');
             const titleName = (titleCompanyOf(page) || {}).name || 'the title company';
+            // Lender fees: the page's own amount for a fee (LENDER FEE OVERRIDES), else the loan product's
+            const feeOverrides = feeOverridesOf(col(page, 'LENDER FEE OVERRIDES'));
+            const lenderFee = (key, productAmount) => (key in feeOverrides ? feeOverrides[key] : productAmount);
+            const feeHow = (key, productAmount, usual) => (key in feeOverrides ? 'Entered on this page (the loan product’s is ' + $(productAmount) + ')' : usual);
+            const feeLine = (label, key, usual) => ({ section: 'Loan', cost: true, label, amount: -lenderFee(key, num(col(product, key))), how: feeHow(key, num(col(product, key)), usual) });
 
             // Listed in display order; each line's section is the heading it shows under
             const lines = [
@@ -1837,14 +1862,16 @@
                 { section: 'Loan', cost: true, label: 'Property Taxes Impound', amount: -(yearlyTaxes / 12 * num(col(product, 'MONTHS COLLECTED FOR TAXES'))),
                     how: $(yearlyTaxes) + ' a year ÷ 12 × ' + num(col(product, 'MONTHS COLLECTED FOR TAXES')) + ' months the lender collects for the escrow account' },
                 // Flat lender fees from the loan product ("APPRASIAL" is spelled that way in its fields)
-                { section: 'Loan', cost: true, label: 'Appraisal Fee', amount: -num(col(product, 'APPRAISAL FEE AT CLOSING')), how: 'The loan product’s appraisal fee at closing' },
-                { section: 'Loan', cost: true, label: 'Appraisal Management Fee', amount: -num(col(product, 'APPRASIAL MANAGEMENT FEE')), how: 'The loan product’s fee' },
-                { section: 'Loan', cost: true, label: 'Credit Report Fee', amount: -num(col(product, 'CREDIT REPORT FEE')), how: 'The loan product’s fee' },
-                { section: 'Loan', cost: true, label: 'Flood Certification Fee', amount: -num(col(product, 'FLOOD CERT FEE')), how: 'The loan product’s fee' },
-                { section: 'Loan', cost: true, label: 'Tax Certification Fee', amount: -num(col(product, 'TAX CERT FEE')), how: 'The loan product’s fee' },
-                { section: 'Loan', cost: true, label: 'Attorney Review Fee', amount: -num(col(product, 'ATTORNEY REVIEW FEE')), how: 'The loan product’s fee' },
+                // (each one the loan product's, unless this page has its own amount: LENDER FEE OVERRIDES)
+                feeLine('Appraisal Fee', 'APPRAISAL FEE AT CLOSING', 'The loan product’s appraisal fee at closing'),
+                feeLine('Appraisal Management Fee', 'APPRASIAL MANAGEMENT FEE', 'The loan product’s fee'),
+                feeLine('Credit Report Fee', 'CREDIT REPORT FEE', 'The loan product’s fee'),
+                feeLine('Flood Certification Fee', 'FLOOD CERT FEE', 'The loan product’s fee'),
+                feeLine('Tax Certification Fee', 'TAX CERT FEE', 'The loan product’s fee'),
+                feeLine('Attorney Review Fee', 'ATTORNEY REVIEW FEE', 'The loan product’s fee'),
                 // Any other fees the lender charges (the loan product's added fees)
-                ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -f.amount, how: 'One of the loan product’s added fees' })),
+                ...lenderFees(col(product, 'OTHER LENDER FEES')).map(f => ({ section: 'Loan', cost: true, label: f.name, amount: -lenderFee('OTHER: ' + f.name, f.amount),
+                    how: feeHow('OTHER: ' + f.name, f.amount, 'One of the loan product’s added fees') })),
                 { section: 'Loan', capped: 2, label: 'Additional Lender Credit', amount: num(col(product, 'ADDITIONAL LENDER CREDIT')),
                     how: num(col(product, 'ADDITIONAL LENDER CREDIT')) ? 'The loan product’s lender credit. It can only pay closing costs' : 'This loan product has no lender credit' },
 
@@ -1880,11 +1907,12 @@
             // Money the buyer brings in before closing (or is given), shown as credits in Financial
             const earnestMoney = round2(num(col(page, 'EARNEST MONEY DEPOSIT')));
             const giftFunds = round2(num(col(page, 'GIFT FUNDS')));
-            const appraisalDeposit = isCash ? 0 : round2(num(col(product, 'APPRAISAL DEPOSIT')));
+            const appraisalDeposit = isCash ? 0 : round2(lenderFee('APPRAISAL DEPOSIT', num(col(product, 'APPRAISAL DEPOSIT'))));
             const funds = [
                 { section: 'Financial', label: 'Earnest Money Deposit', amount: earnestMoney, how: 'Paid when the offer is accepted, so it comes off the cash to close' },
                 { section: 'Financial', label: 'Gift Funds', amount: giftFunds, how: giftFunds ? 'Given to the buyer toward closing' : 'None entered' },
-                { section: 'Financial', label: 'Appraisal Deposit', amount: appraisalDeposit, hidden: isCash, how: 'The loan product’s appraisal deposit, paid during escrow, so it comes off the cash to close' },
+                { section: 'Financial', label: 'Appraisal Deposit', amount: appraisalDeposit, hidden: isCash,
+                    how: feeHow('APPRAISAL DEPOSIT', num(col(product, 'APPRAISAL DEPOSIT')), 'The loan product’s appraisal deposit') + ', paid during escrow, so it comes off the cash to close' },
             ];
 
             // Cash to close balances everything above to zero: positive means the buyer still owes it,
@@ -3660,6 +3688,60 @@
                 upfront: toggleField(parent, 'Upfront Mortgage Insurance', 'PREPAID MI APPLIED', [['TRUE', 'Financed'], ['FALSE', 'Paid At Closing']], { help: upfrontHelp }),
             };
         }
+        // Lender Fees: each of the loan product's fees (and its appraisal deposit) with a box for this page's own amount
+        // (blank, showing the product's in grey: the product's). getProduct() → the loan product (null: none, or cash);
+        // isCash() → whether it's a cash purchase. Its list follows the product picked.
+        function lenderFeesField(parent, getProduct, isCash) {
+            const f = fieldShell('Lender Fees', { span: true, help: 'The loan product’s fees, in grey. Type an amount to use a different one on this page; clear it to go back to the product’s.' });
+            f.wrap.dataset.display = 'group';
+            const grid = el('div', 'sub-grid');
+            f.body.append(grid);
+            parent.append(f.wrap);
+            const read = () => feeOverridesOf(current('LENDER FEE OVERRIDES'));
+            const write = o => setDraft('LENDER FEE OVERRIDES', Object.keys(o).length ? JSON.stringify(o) : '');
+            // Digits, commas and at most 2 decimals
+            const centsTyped = v => { const c = String(v).replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'); const m = c.match(/^(\d*)(\.\d{0,2})?/); return (m[1] ? Number(m[1]).toLocaleString('en-US') : (m[2] ? '0' : '')) + (m[2] || ''); };
+            const shownAmount = n => (Math.round(n * 100) % 100 ? Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(n).toLocaleString('en-US'));
+            let builtFor = null;
+            const keyOf = p => (p ? text(col(p, 'LOAN PRODUCT NAME')) + '|' + text(col(p, 'OTHER LENDER FEES')) : '');
+            function build() {
+                const p = getProduct();
+                builtFor = keyOf(p);
+                grid.innerHTML = '';
+                if (!p) { grid.append(el('p', 'field-help', isCash() ? 'A cash purchase has no lender fees.' : 'Pick the loan product to see its fees.')); return; }
+                const o = read();
+                productLenderFees(p).forEach(fee => {
+                    const cell = el('div', 'sub-field');
+                    cell.append(el('span', 'sub-label', escapeHtml(fee.label)));
+                    const box = textBox({ value: fee.key in o ? shownAmount(o[fee.key]) : '', prefix: '$', placeholder: shownAmount(fee.amount), inputmode: 'decimal',
+                        onInput: i => {
+                            i.value = centsTyped(i.value);
+                            const next = read();
+                            const raw = i.value.replace(/,/g, '');
+                            if (raw === '' || raw === '.') delete next[fee.key]; else next[fee.key] = Number(raw);
+                            write(next);
+                        } });
+                    box.input.setAttribute('aria-label', fee.label);
+                    cell.append(box.wrap);
+                    grid.append(cell);
+                });
+            }
+            build();
+            // A different product picked: its own fees
+            const fresh = () => { if (keyOf(getProduct()) !== builtFor) build(); };
+            f.wrap.groupSync = build;
+            f.wrap.syncInputs = fresh;
+            // The summary: what they come to, and how many are this page's own
+            f.wrap.groupDisplay = () => {
+                fresh();
+                const p = getProduct();
+                if (!p) return isCash() ? 'None (cash)' : '';
+                const o = read();
+                const fees = productLenderFees(p);
+                const own = fees.filter(x => x.key in o).length;
+                return wholeMoney.format(Math.round(fees.reduce((s, x) => s + (x.key in o ? o[x.key] : x.amount), 0))) + ' · ' + (own ? own + ' changed' : 'the product’s');
+            };
+        }
         function showMiFields() {
             if (!miFieldWraps) return;
             const p = miFieldWraps.getProduct();
@@ -3833,6 +3915,7 @@
             percentField(loan, 'Points Purchased', 'LENDER POINTS PURCHASED');
             miFields(loan, () => (pickedCash ? null : data.loanProducts[pickedLoanIndex] || null),
                 'How the upfront charge is paid: the FHA UFMIP, the VA funding fee, or a conventional single premium. Financed adds it to the loan amount.');
+            lenderFeesField(loan, () => (pickedCash ? null : data.loanProducts[pickedLoanIndex] || null), () => pickedCash);
 
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'buyer');
@@ -4255,9 +4338,11 @@
                 { help: 'Not used when Buyer’s Financing is Cash.' });
             percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
             percentField(buyerIn, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            miFields(buyerIn, () => (current('BUYER FINANCING') === 'Cash' ? null
-                : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === current('BUYER LOAN PRODUCT')) || null),
+            const buyerProduct = () => (current('BUYER FINANCING') === 'Cash' ? null
+                : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === current('BUYER LOAN PRODUCT')) || null);
+            miFields(buyerIn, buyerProduct,
                 'How the upfront charge is paid: the FHA UFMIP, the VA funding fee (a first-time use here), or a conventional single premium. Financed adds it to the loan amount.');
+            lenderFeesField(buyerIn, buyerProduct, () => current('BUYER FINANCING') === 'Cash');
             wholeField(buyerIn, 'Buyer Credit Score', 'BUYER CREDIT SCORE', { help: 'Blank uses ' + FALLBACK_CREDIT_SCORE + '.' });
             percentField(buyerIn, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE', { help: 'A yearly percent of the price.' });
             moneyField(buyerIn, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');
