@@ -104,6 +104,14 @@ export function yearsWithoutHome(raw, thisYear = new Date().getFullYear()) {
     return Number.isInteger(y) && y > 1900 ? Math.max(0, thisYear - y) : null;
 }
 
+// Any loan product's professions / groups (GROUP SPECIFIC and ELIGIBLE GROUPS; [] when it's for everyone)
+export const productGroups = get => (isTrue(get('GROUP SPECIFIC')) ? groupList(get('ELIGIBLE GROUPS')) : []);
+// A disclaimer when a product is for certain professions / groups and no purchaser is in one ('' when that's fine)
+export function groupsDisclaimer(groups, purchasers) {
+    if (!groups.length || !Array.isArray(purchasers) || purchasers.some(p => (p.groups || []).some(g => groups.includes(g)))) return '';
+    return 'For ' + listText(groups) + ' only, and no purchaser has said they’re in one of those groups';
+}
+
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const nameOf = p => p.name || 'A purchaser';
 const listText = list => (list.length < 3 ? list.join(' or ') : list.slice(0, -1).join(', ') + ' or ' + list[list.length - 1]);
@@ -117,11 +125,8 @@ const listText = list => (list.length < 3 ? list.join(' or ') : list.slice(0, -1
 export function dpaDisclaimers(info, { price, census, purchasers = null, thisYear } = {}) {
     const out = [];
     const people = Array.isArray(purchasers) ? purchasers : null;
-    if (info.groups.length && people) {
-        if (!people.some(p => p.groups.some(g => info.groups.includes(g)))) {
-            out.push('For ' + listText(info.groups) + ' only, and no purchaser has said they’re in one of those groups');
-        }
-    }
+    const groupNote = groupsDisclaimer(info.groups, people);
+    if (groupNote) out.push(groupNote);
     info.quals.forEach(q => {
         if (q.type === 'Home Price Maximum' && price > q.value) out.push('The price is over this program’s ' + money(q.value) + ' maximum');
         if (q.type === 'Census Designation') {

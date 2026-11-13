@@ -236,8 +236,9 @@ const DPA_GROUPS = ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs',
 const DPA_CENSUS = ['Low', 'Moderate', 'Middle', 'Upper'];
 const DPA_QUALIFICATION_TYPES = { 'Income Limit': 'money', 'Census Designation': 'census', 'Minimum Credit Score': 'score',
   'First Time Homebuyer': 'years', 'Homebuyer Education Class': 'none', 'Home Price Maximum': 'money' };
+// (GROUP SPECIFIC and ELIGIBLE GROUPS are asked of every product: see cleanLoanProduct_)
 const DPA_ONLY_FIELDS = ['DPA LOAN TYPE', 'FORGIVEN AFTER YEARS', 'SECOND LOAN TERM', 'SAME RATE AS FIRST LOAN', 'SECOND LOAN RATE MARKUP',
-  'GRANT TYPE', 'IDA MATCH RATIO', 'GROUP SPECIFIC', 'ELIGIBLE GROUPS', 'SECOND LOAN AMOUNT TYPE', 'SECOND LOAN FLAT AMOUNT',
+  'GRANT TYPE', 'IDA MATCH RATIO', 'SECOND LOAN AMOUNT TYPE', 'SECOND LOAN FLAT AMOUNT',
   'COMBINED LOANS CAN EXCEED PRICE', 'EXCESS REFUNDED TO BUYER', 'AFFECTS FIRST LOAN RATE', 'FIRST LOAN RATE MARKUP', 'DPA QUALIFICATIONS'];
 // (these can't be 0 on a DPA product)
 const DPA_OVER_ZERO = ['FORGIVEN AFTER YEARS', 'SECOND LOAN TERM', 'SECOND LOAN LTV MAX', 'SECOND LOAN FLAT AMOUNT'];
@@ -3272,7 +3273,8 @@ async function myPagesData_(id, account) {
 
 // A loan product's answers, checked: { clean } or { error, field }. Every answer is required (the extra text columns
 // aren't), except that a Down Payment Assistance product needs only LOAN_DPA_FIELDS and the questions its answers call for
-// (dpaAsked_; the rest are saved blank), and any other product's DPA_ONLY_FIELDS are blank.
+// (dpaAsked_; the rest are saved blank), and any other product's DPA_ONLY_FIELDS are blank. Any other product is also asked
+// whether it's for certain professions / groups (GROUP SPECIFIC) and, if so, which (ELIGIBLE GROUPS; else blank).
 // Mortgage insurance follows the product type: MI QUOTES only for a Conventional product, or a Jumbo or Non-Conforming one
 // with guidelines (NO MI GUIDELINES FALSE), else blank; NO MI GUIDELINES is asked only of Jumbo and Non-Conforming (else
 // FALSE).
@@ -3287,6 +3289,7 @@ function cleanLoanProduct_(fields, submitted) {
   for (const f of fields) {
     if (!dpa && f.col in miAsked && !miAsked[f.col]) { clean[f.col] = f.col === 'NO MI GUIDELINES' ? false : ''; continue; }
     if (!dpa && DPA_ONLY_FIELDS.includes(f.col)) { clean[f.col] = ''; continue; }
+    if (!dpa && f.col === 'ELIGIBLE GROUPS' && !/^true$/i.test(String(submitted['GROUP SPECIFIC'] || '').trim())) { clean[f.col] = ''; continue; }
     const asked = !dpa || dpaAsked.includes(f.col);
     const value = asked ? cleanSetting_(f.kind, submitted[f.col]) : '';
     if (value === null || (value === '' && asked && f.section !== 'Other')) return { error: 'invalid_value', field: f.col };

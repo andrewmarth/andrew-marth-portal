@@ -1423,7 +1423,7 @@
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
         import { productMarkups, productBuydown } from '/rate-markups.js';
         import { loanMi } from '/mortgage-insurance.js';
-        import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText } from '/dpa.js';
+        import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer } from '/dpa.js';
 
         const params = new URLSearchParams(location.search);
         // Switching versions changes which page this is (and the ?page= in the link)
@@ -1644,6 +1644,9 @@
             const isCash = isTrue(col(page, 'CASH PURCHASE'));
             const loanWarnings = !isCash && enteredLtv > maxLtv
                 ? ['Limited to this loan\'s ' + percent(maxLtv) + ' maximum loan-to-value (' + percent(enteredLtv) + ' was entered)'] : [];
+            // A loan product for certain professions / groups only: a disclaimer when no purchaser is in one of them
+            const loanGroupNote = isCash ? '' : groupsDisclaimer(productGroups(name => col(product, name)), opts.dpaBuyers || null);
+            if (loanGroupNote) loanWarnings.push('May not qualify: ' + loanGroupNote);
             const baseLoan = isCash ? 0 : price * ltv;
             const downPct = price ? (price - baseLoan) / price : 0;
             // Down payment assistance: a second loan (or a grant) toward the down payment. A program whose loans can't add up

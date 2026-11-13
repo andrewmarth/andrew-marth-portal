@@ -328,10 +328,12 @@ const anyAbove0 = cols => v => cols.some(c => num(v[c]) > 0);
 // section but Product and Down Payment Assistance, plus Rate Type and Loan Term). Questions out of scope aren't shown: a
 // regular product's SECOND LOAN ADJUSTABLE BY CLIENT and SECOND LOAN LTV MAX are No / 0 and its other DPA answers
 // (DPA_ONLY) are blank, and a DPA product's other answers are left blank.
+// GROUP SPECIFIC and ELIGIBLE GROUPS are asked of both: a DPA product's under its Loan Type, any other product's at the
+// bottom of Loan Limits (each groups list has its own id; the one in scope is the one saved).
 const DPA = 'Down Payment Assistance';
 const SILENT = ['Deferred Silent Second', 'Forgivable Silent Second'];
 const DPA_ONLY = ['DPA LOAN TYPE', 'FORGIVEN AFTER YEARS', 'SECOND LOAN TERM', 'SAME RATE AS FIRST LOAN', 'SECOND LOAN RATE MARKUP',
-    'GRANT TYPE', 'IDA MATCH RATIO', 'GROUP SPECIFIC', 'ELIGIBLE GROUPS', 'SECOND LOAN AMOUNT TYPE', 'SECOND LOAN FLAT AMOUNT',
+    'GRANT TYPE', 'IDA MATCH RATIO', 'SECOND LOAN AMOUNT TYPE', 'SECOND LOAN FLAT AMOUNT',
     'COMBINED LOANS CAN EXCEED PRICE', 'EXCESS REFUNDED TO BUYER', 'AFFECTS FIRST LOAN RATE', 'FIRST LOAN RATE MARKUP', 'DPA QUALIFICATIONS'];
 const LAYOUT = [
     { section: 'Product', scope: '', items: [
@@ -359,7 +361,7 @@ const LAYOUT = [
             { cond: 'dpa-ida', show: a => a('GRANT TYPE') === 'Individual Development Accounts', items: [{ col: 'IDA MATCH RATIO', label: 'What is the match ratio?' }] },
         ] },
         { cond: 'dpa-groups', scope: 'dpa', show: a => (SILENT.includes(a('DPA LOAN TYPE')) && a('GROUP SPECIFIC') === 'TRUE') || (a('DPA LOAN TYPE') === 'Grant' && a('GRANT TYPE') === 'Profession/Group-Specific'),
-            items: [{ groups: 'ELIGIBLE GROUPS', label: 'Which professions or groups is it for?' }] },
+            items: [{ groups: 'ELIGIBLE GROUPS', id: 'dpa', label: 'Which professions or groups is it for?' }] },
         { col: 'RATE TYPE', scope: 'regular' },
         // (no Lender Name question: a product's lender is set by the API from the lender it's under)
         { col: 'LOAN TERM', label: 'Loan Term (Years)', input: 'term', scope: 'regular' },
@@ -382,6 +384,9 @@ const LAYOUT = [
     { section: 'Loan Limits', items: [
         { col: 'MAX LTV' }, { col: 'MIN LOAN AMOUNT' }, { col: 'MAX LOAN AMOUNT' }, { col: 'MAX SELLER CREDIT %' },
         { col: 'SILENT SECOND', fixed: 'TRUE' },
+        // Only for certain professions / groups (Buyer Breakdown pages show a disclaimer when no purchaser is in one)
+        { gate: 'groupspec-loan', col: 'GROUP SPECIFIC', label: 'Is this Profession/Group specific?', isOn: v => isTrue(v['GROUP SPECIFIC']), off: () => '',
+            items: [{ groups: 'ELIGIBLE GROUPS', id: 'loan', label: 'Which professions or groups is it for?' }] },
     ] },
     { section: 'Property Types', items: [{ tiles: [
         { col: 'ALLOW SINGLE FAMILY', label: 'Single Family', icon: ICON('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>') },
@@ -591,7 +596,7 @@ function build() {
             if (it.groups) { used[it.groups] = true; return kinds[it.groups] ? it : null; }
             if (it.quals) { used[it.quals] = true; return kinds[it.quals] ? it : null; }
             if (it.cond) { const items = keep(it.items); return items.length ? { ...it, items } : null; }
-            if (it.gate) { if (it.col) { used[it.col] = true; gateOfCol[it.col] = it.gate; } return { ...it, items: keep(it.items) }; }
+            if (it.gate) { if (it.col) { used[it.col] = true; if (!gateOfCol[it.col]) gateOfCol[it.col] = it.gate; } return { ...it, items: keep(it.items) }; }
             used[it.col] = true;
             return kinds[it.col] ? it : null;
         }).filter(Boolean);
@@ -614,7 +619,7 @@ function build() {
             }
             if (it.groups) {
                 return '<div class="field"><span class="field-label">' + escapeHtml(it.label) + '</span>'
-                    + multiHtml('data-groups="' + escapeHtml(it.groups) + '"', PROFESSION_GROUPS, 'Choose professions or groups...') + '</div>';
+                    + multiHtml('data-groups="' + escapeHtml(it.groups) + '" data-groups-id="' + it.id + '"', PROFESSION_GROUPS, 'Choose professions or groups...') + '</div>';
             }
             if (it.quals) {
                 return '<p class="lp-fees-help">Add each qualification a buyer must meet (each kind once). Buyer Breakdown pages show a disclaimer when one isn’t met.</p>'
@@ -1512,7 +1517,7 @@ function build() {
             if (it.cond) { walk(it.items, active && it.show(answerOf), active ? (it.off || (() => '')) : off); return; }
             // Professions / groups: at least one
             if (it.groups) {
-                const picker = sectionsEl.querySelector('[data-groups="' + it.groups + '"]');
+                const picker = sectionsEl.querySelector('[data-groups-id="' + it.id + '"]');
                 const picked = active ? multiPicked(picker) : [];
                 if (active && !picked.length) need(picker, '');
                 values[it.groups] = picked.length ? JSON.stringify(picked) : '';
@@ -1628,7 +1633,8 @@ function build() {
         layout.forEach(s => { if (scopeOn(s.scope)) walk(s.items, true, null); else if (s.scope === 'regular') s.items.forEach(blank); else walk(s.items, false, null); });
         // After the answers, so "same as Max DTI" can copy them
         offs.forEach(([col, off]) => { values[col] = offValue(col, off); });
-        blanks.forEach(col => { values[col] = ''; });
+        // (a column also asked in scope keeps that answer: GROUP SPECIFIC and ELIGIBLE GROUPS)
+        blanks.forEach(col => { if (!(col in values)) values[col] = ''; });
         // Any other product: none of the DPA-only answers
         if (!isDpa()) DPA_ONLY.forEach(col => { if (col in kinds) values[col] = ''; });
         return { values, missing };
