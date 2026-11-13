@@ -576,12 +576,15 @@ export function createIncomeEditor({ save, onSaved }) {
         // A score saved as "742.00" shows as 742
         const savedScore = num(getCol(current, 'CREDIT SCORE'));
         creditInput.value = savedScore ? String(Math.round(savedScore)) : '';
-        // Remember the answers as loaded (to spot edits), and start with nothing open
+        // Start with nothing open, then remember the answers as loaded (to spot edits). The sections are laid out first:
+        // answers in a hidden section don't count, and the last person's layout (another client's, on Edit Clients) can
+        // hide one this person has filled in
+        editing = null;
+        confirmBox.hidden = true;
+        render();
         const all = collect();
         snapshot = {};
         sections().forEach(section => { snapshot[section.dataset.level] = answersOf(section, all); });
-        editing = null;
-        confirmBox.hidden = true;
         render();
     }
 
@@ -716,8 +719,14 @@ export function createIncomeEditor({ save, onSaved }) {
         }
     });
 
+    const title = dialog.querySelector('#income-dialog-title');
+    const intro = dialog.querySelector('.dialog-head + .muted');
+    const USUAL = { title: title.textContent, intro: intro.textContent };
     return {
-        open(row) {
+        // opts.title / opts.intro: someone else's income (an admin editing a client's), instead of "Your Income"
+        open(row, opts = {}) {
+            title.textContent = opts.title || USUAL.title;
+            intro.textContent = opts.intro || USUAL.intro;
             current = row || {};
             fill();
             message.textContent = '';

@@ -1540,7 +1540,9 @@
             // Other: a VA loan's funding fee on the Buyer Breakdown follows these (first-time use, unless every veteran buying
             // has used a VA loan before). Not asked when a client is added (noNew: they start as No).
             { group: 'Other', noNew: true },
-            // ...and the details Down Payment Assistance programs ask about (their credit score is kept with their income)
+            // ...their income and debts (the income pop-up, like their own Settings page's), and the details Down Payment
+            // Assistance programs ask about (their credit score is kept with their income)
+            { key: 'income', label: 'Income & Debt', saved: 'the income and debts', cols: [], kind: 'income', noNew: true },
             { key: 'credit', label: 'Credit Score', saved: 'the credit score', cols: ['CREDIT SCORE'], kind: 'score', noNew: true },
             { key: 'veteran', label: 'Are you a Veteran?', saved: 'the veteran answer', cols: ['VETERAN'], kind: 'bool', noNew: true },
             { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => v['VETERAN'], noNew: true },
@@ -1622,6 +1624,11 @@
 
         function lineValue(line, v) {
             if (line.kind === 'bool') return v[line.cols[0]] ? 'Yes' : 'No';
+            if (line.kind === 'income') {
+                const inc = (client && client.income) || {};
+                const monthly = monthlyIncome(inc);
+                return monthly > 0 ? wholeMoney.format(monthly) + ' / mo income · ' + wholeMoney.format(monthlyDebts(inc)) + ' / mo debt' : '';
+            }
             if (DETAIL_KINDS.includes(line.kind)) return detailText(line.kind, v[line.cols[0]]);
             if (line.kind === 'name') return [v['FIRST NAME'], v['LAST NAME']].filter(Boolean).join(' ');
             return v[line.cols[0]] || '';
@@ -1676,6 +1683,8 @@
         }
         clientList.addEventListener('click', e => {
             const edit = e.target.closest('[data-edit]');
+            // Income & Debt opens the income pop-up (the one the client uses for their own)
+            if (edit && !editing && edit.dataset.edit === 'income') { openClientIncome(); return; }
             if (edit && !editing) { editing = edit.dataset.edit; cfSaved.textContent = ''; renderClient(); return; }
             if (e.target.closest('[data-cancel]') && !cfBusy) { editing = null; renderClient(); }
         });
@@ -1727,6 +1736,7 @@
                 const data = await callApi(clientUser, { action: 'adminUpdateClient', clientId: client.id, values });
                 if (!data.ok) throw new Error(data.error);
                 client.values = data.client.values;
+                if ('income' in data.client) client.income = data.client.income;
                 if (line.kind === 'name') {
                     client.name = [client.values['FIRST NAME'], client.values['LAST NAME']].filter(Boolean).join(' ');
                     if (picker && picker.index() !== null) picker.rename(picker.index(), client.name);
@@ -1745,6 +1755,35 @@
                 errorEl.textContent = CLIENT_ERRORS[err.message] || 'We couldn’t save that. Please try again.';
             }
         });
+        // Edit Clients' Income & Debt: the income pop-up for the client shown (saved with adminUpdateIncome)
+        let incomeFor = null;   // { client } while an admin is editing a client's income; null: your own
+        function openClientIncome() {
+            if (!incomeEditor || !client) return;
+            cfSaved.textContent = '';
+            incomeFor = { client };
+            const first = client.values['PREFERRED NAME'] || client.values['FIRST NAME'] || client.name || 'This client';
+            incomeEditor.open(client.income || {}, { title: (client.name || first) + '’s Income',
+                intro: 'Each job or source of ' + first + '’s income, plus their monthly debt payments.' });
+        }
+        async function saveClientIncome(income) {
+            const target = incomeFor.client;
+            const data = await callApi(clientUser, { action: 'adminUpdateIncome', clientId: target.id, income });
+            if (!data.ok) throw new Error(data.error);
+            target.values = data.client.values;
+            target.income = data.client.income;
+            return data.client.income;
+        }
+        function clientIncomeSaved(target) {
+            if (client === target) {
+                renderClient();
+                cfSaved.textContent = 'Saved the income and debts.';
+                const b = clientList.querySelector('[data-edit="income"]');
+                if (b) b.focus();
+            }
+            // (your own client record: your Income & Debt line too)
+            if (lastAccountRow && String(findValue(lastAccountRow, 'account id')).replace(/\D/g, '').slice(-10) === target.id) { showIncome(target.income); showDetails(lastAccountRow, target.income); }
+        }
+
         // Leaving or switching with a line still open asks first
         const isDirty = () => Boolean(editing);
         window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
@@ -3289,6 +3328,7 @@
         incomeBtn.addEventListener('click', () => {
             if (!incomeEditor) return;
             setPageMessage('');
+            incomeFor = null;
             incomeEditor.open(incomeRow);
         });
 
@@ -3480,14 +3520,17 @@
                 return data;
             };
 
+            // One income pop-up: your own income, or (from Edit Clients) the client's being edited
             incomeEditor = createIncomeEditor({
                 save: async income => {
+                    if (incomeFor) return saveClientIncome(income);
                     const data = await callApi(currentUser, { action: 'updateIncome', income });
                     if (!data.ok) throw new Error(data.error);
                     lastAccountRow = data.row || lastAccountRow;
                     return data.income;
                 },
                 onSaved: row => {
+                    if (incomeFor) { const target = incomeFor.client; incomeFor = null; clientIncomeSaved(target); return; }
                     showIncome(row);
                     // (the income pop-up asks for the credit score too)
                     if (lastAccountRow) showDetails(lastAccountRow, row);

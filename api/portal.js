@@ -388,6 +388,8 @@ export async function handle(body, query) {
     // Settings page (admins): every client's details, and saving one client's details
     if (body.action === 'adminClients') return await adminClients_(account);
     if (body.action === 'adminUpdateClient') return await adminUpdateClient_(account, body);
+    // Settings page (admins): save a client's income and debt (the same checks as a client's own)
+    if (body.action === 'adminUpdateIncome') return await adminUpdateIncome_(account, body);
     if (body.action === 'adminCreateClient') return await adminCreateClient_(account, body);
     // E-signatures: admins send documents; clients see and sign their own
     if (body.action === 'adminSendForSignature') return await adminSendForSignature_(account, body);
@@ -2370,7 +2372,9 @@ async function adminClients_(account) {
   const clients = (await rows('accounts'))
     .map(r => {
       const values = clientDetails_(r, incomes[phoneToId_(r['ACCOUNT ID'])]);
-      return { id: phoneToId_(r['ACCOUNT ID']), name: [values['FIRST NAME'], values['LAST NAME']].filter(String).join(' '), values };
+      // (their income document too, for Edit Clients' Income & Debt; null without one)
+      return { id: phoneToId_(r['ACCOUNT ID']), name: [values['FIRST NAME'], values['LAST NAME']].filter(String).join(' '), values,
+        income: incomes[phoneToId_(r['ACCOUNT ID'])] || null };
     })
     .filter(c => c.id)
     .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
@@ -2411,7 +2415,21 @@ async function adminUpdateClient_(account, body) {
     if (err) return { ok: false, error: err };
   }
   if (Object.keys(next).length) await update('accounts', found.docId, next);
-  return { ok: true, client: { id: clientId, values: clientDetails_((await findAccount_(clientId)).row, await findIncome_(clientId)) } };
+  const income = await findIncome_(clientId);
+  return { ok: true, client: { id: clientId, values: clientDetails_((await findAccount_(clientId)).row, income), income } };
+}
+
+// Admins: saves a client's income and debt (body.clientId, body.income: the income form's values, checked like a
+// client's own save, which adds their income document if they don't have one). Returns the client again.
+async function adminUpdateIncome_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const clientId = phoneToId_(body.clientId);
+  const found = clientId && await findAccount_(clientId);
+  if (!found) return { ok: false, error: 'not_found' };
+  const error = await saveIncome_(clientId, body.income || {});
+  if (error) return { ok: false, error };
+  const income = await findIncome_(clientId);
+  return { ok: true, client: { id: clientId, values: clientDetails_(found.row, income), income } };
 }
 
 // Admins: a new ACCOUNT LIST document from the Settings page's New Client form. Every shown answer is required except
