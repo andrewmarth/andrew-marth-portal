@@ -6,7 +6,7 @@ import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from '
 import { db } from './lib/store.js';
 import { lookupPropertyFacts } from './lib/property-facts.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { fetchMndIndex, easternDate, rateCheckStep, MND_MAIN_PRODUCT } from './lib/mnd-rate.js';
+import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL } from './lib/mnd-rate.js';
 
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
 const PAGE_PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3',
@@ -391,6 +391,8 @@ export async function handle(body, query) {
     if (body.action === 'adminUpdateClient') return await adminUpdateClient_(account, body);
     // Settings page (admins): run the daily Mortgage News Daily rate check now (it also runs on its own: see index.js)
     if (body.action === 'adminCheckRate') return isAdmin_(account) ? await checkTodayRate() : { ok: false, error: 'not_admin' };
+    // Settings page (admins): the Today's Interest Rate card (read only)
+    if (body.action === 'adminRateStatus') return isAdmin_(account) ? await rateStatus_() : { ok: false, error: 'not_admin' };
     // Settings page (admins): save a client's income and debt (the same checks as a client's own)
     if (body.action === 'adminUpdateIncome') return await adminUpdateIncome_(account, body);
     if (body.action === 'adminCreateClient') return await adminCreateClient_(account, body);
@@ -3360,6 +3362,8 @@ export async function checkTodayRate(now = new Date()) {
   const fields = {
     'TODAY INTEREST RATE': rate, 'RATE DATE': today, 'PREVIOUS INTEREST RATE': isFinite(previous) && previous > 0 ? previous : '',
     'RATE SOURCE': 'Mortgage News Daily', 'RATE UPDATED AT': now.toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
+    // (the same moment, for showing in any time zone)
+    'RATE UPDATED ISO': now.toISOString(),
   };
   if (setting) await update('settings', 'interestRate', fields); else await add('settings', fields, 'interestRate');
   // (field names without dots: "30 Yr. Fixed" is saved as "30 YR FIXED")
@@ -3367,6 +3371,23 @@ export async function checkTodayRate(now = new Date()) {
   Object.keys(index.rates).forEach(k => { history[k.replace(/\./g, '').toUpperCase()] = index.rates[k]; });
   try { await add('rateHistory', history, today); } catch (err) { await update('rateHistory', today, history); }
   return { ok: true, status: 'saved', date: today, rate, previous: fields['PREVIOUS INTEREST RATE'] || null };
+}
+
+// The Settings page's Today's Interest Rate card: the saved rate (and the one before it), the MND day it's for, when it
+// was saved, where the scheduled checks stand (see rateSchedule in lib/mnd-rate.js) and the last 5 days' rates
+async function rateStatus_(now = new Date()) {
+  const setting = (await rows('settings')).find(r => r._id === 'interestRate') || null;
+  const get = c => (setting ? setting[c] : '');
+  const n = c => { const v = Number(get(c)); return isFinite(v) && v > 0 ? v : null; };
+  const date = isoDate_(get('RATE DATE'));
+  const iso = String(get('RATE UPDATED ISO') || '').trim();
+  const updated = iso ? new Date(iso) : easternTextToDate(get('RATE UPDATED AT'));
+  const s = rateSchedule(now, date);
+  const recent = (await rows('rateHistory')).map(r => ({ date: r._id, rate: Number(r['30 YR FIXED']) }))
+    .filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && r.rate > 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  return { ok: true, rate: n('TODAY INTEREST RATE'), previous: n('PREVIOUS INTEREST RATE'), date, source: get('RATE SOURCE') || '',
+    sourceUrl: MND_INDEX_URL, updatedAt: updated && !isNaN(updated) ? updated.toISOString() : null,
+    state: s.state, today: s.today, nextCheck: s.nextCheck.toISOString(), windowStart: s.windowStart.toISOString(), windowEnd: s.windowEnd.toISOString(), recent };
 }
 
 // Today's interest rate (settings interestRate: TODAY INTEREST RATE, a decimal), or null

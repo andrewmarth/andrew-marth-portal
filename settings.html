@@ -486,6 +486,28 @@
         .gemini-actions .btn { margin: 0; }
         .gemini-msg { font-size: 0.85rem; color: var(--gold); }
         .gemini-msg.is-error { color: #f2b8a8; }
+        /* Today's Interest Rate card */
+        .rate-big { margin-top: 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+        .rate-big .usage-used { font-size: 2.6rem; }
+        .rate-change { font-size: 0.9rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .rate-change.is-up { color: #f2b8a8; }
+        .rate-change.is-down { color: #cfe3b5; }
+        .rate-change.is-flat { opacity: 0.75; }
+        .rate-rows { margin-top: 14px; display: grid; gap: 8px; }
+        .rate-row { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid rgba(233, 226, 216, 0.14); font-size: 0.92rem; }
+        .rate-row .k { opacity: 0.75; }
+        .rate-row .v { font-weight: bold; text-align: right; }
+        .rate-row .v small { display: block; font-weight: normal; opacity: 0.7; }
+        .rate-status { margin-top: 12px; font-size: 0.9rem; line-height: 1.5; }
+        .rate-recent { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .rate-day { padding: 6px 10px; border-radius: 12px; background: rgba(233, 226, 216, 0.08); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+        .rate-day b { display: block; font-size: 0.95rem; }
+        .rate-card-actions a { font-size: 0.85rem; color: var(--gold); }
+        @media (max-width: 520px) {
+            /* Phones: each value under its label */
+            .rate-row { flex-direction: column; gap: 2px; }
+            .rate-row .v { text-align: left; }
+        }
 
         /* --- Title Companies (admins) --- */
         .tc-item .mp-desc { -webkit-line-clamp: unset; display: block; }
@@ -995,6 +1017,20 @@
         </section>
 
         <!-- Admins only: what the portal's services have used -->
+        <!-- Admins only: today's interest rate (Mortgage News Daily's, pulled each weekday afternoon) -->
+        <section class="main-card glow-card reveal" id="rate-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Today's Interest Rate</h2>
+            <div class="usage-item">
+                <div class="usage-top">
+                    <span class="usage-name">30 Year Fixed · Mortgage News Daily</span>
+                    <span class="usage-pill is-idle" id="rate-pill">Loading</span>
+                </div>
+                <div id="rate-body"><div class="usage-notes"><span>Loading...</span></div></div>
+            </div>
+            <p class="usage-foot" id="rate-foot">Every Buyer Breakdown prices its loans from this rate.</p>
+        </section>
+
         <section class="main-card glow-card reveal" id="usage-card" hidden>
             <span class="card-eyebrow">Admin</span>
             <h2>Usage</h2>
@@ -1389,7 +1425,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); await loadClients(user); }
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadRate(user); loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); await loadClients(user); }
                     // Income & Debt (and the details loan programs ask about) are only for buyers
                     const isBuyer = String(findValue(data.row, 'buyer')).trim().toUpperCase() === 'TRUE';
                     document.getElementById('income-row').hidden = !isBuyer;
@@ -1933,6 +1969,89 @@
                 '<div class="usage-notes">' + notes.map(n => '<span>' + esc(n) + '</span>').join('') + '</div>';
             return li;
         }
+        // --- Today's Interest Rate (admins) ---
+        // The rate every Buyer Breakdown uses (Mortgage News Daily's 30 year fixed, pulled by the API each weekday
+        // afternoon), the day it's for, when it was saved and where today's checks stand. Times show in Arizona time, with
+        // Eastern (MND's, and the schedule's) beside them. Check Now runs the check right away.
+        const AZ_ZONE = 'America/Phoenix', ET_ZONE = 'America/New_York';
+        const azTime = iso => new Date(iso).toLocaleTimeString('en-US', { timeZone: AZ_ZONE, hour: 'numeric', minute: '2-digit' });
+        const etTime = iso => new Date(iso).toLocaleTimeString('en-US', { timeZone: ET_ZONE, hour: 'numeric', minute: '2-digit' });
+        const azDay = iso => new Date(iso).toLocaleDateString('en-US', { timeZone: AZ_ZONE, weekday: 'short', month: 'short', day: 'numeric' });
+        const azDayTime = iso => azDay(iso) + ' at ' + azTime(iso);
+        const ratePct = n => (n * 100).toFixed(2) + '%';
+        const rateDay = ymd => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); return m ? new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+        const RATE_PILLS = { current: ['Up to date', ''], checking: ['Checking', 'is-idle'], before: ['Waiting', 'is-idle'], weekend: ['Weekend', 'is-idle'], missed: ['Not posted today', 'is-out'] };
+        async function loadRate(user) {
+            document.getElementById('rate-card').hidden = false;
+            const pill = document.getElementById('rate-pill');
+            const body = document.getElementById('rate-body');
+            let s;
+            try {
+                s = await callApi(user, { action: 'adminRateStatus' });
+                if (!s.ok) throw new Error(s.error);
+            } catch (err) {
+                console.error(err);
+                pill.className = 'usage-pill is-out';
+                pill.textContent = 'Error';
+                body.innerHTML = '<div class="usage-notes"><span>We couldn’t load today’s rate. Please refresh to try again.</span></div>';
+                return;
+            }
+            const [pillText, pillCls] = s.rate ? RATE_PILLS[s.state] || ['', 'is-idle'] : ['No rate yet', 'is-out'];
+            pill.className = 'usage-pill' + (pillCls ? ' ' + pillCls : '');
+            pill.textContent = pillText;
+            const next = 'the next check is ' + azDayTime(s.nextCheck) + ' (' + etTime(s.nextCheck) + ' ET)';
+            const status = {
+                current: 'Today’s rate is in, so ' + next + '.',
+                before: 'Mortgage News Daily posts each weekday afternoon. Today’s checks start at ' + azTime(s.windowStart) + ' (' + etTime(s.windowStart) + ' ET).',
+                checking: 'Today’s rate isn’t posted yet. Checking every 15 minutes until ' + azTime(s.windowEnd) + ' (' + etTime(s.windowEnd) + ' ET).',
+                missed: 'Nothing was posted today (usually a market holiday), so ' + next + '.',
+                weekend: 'Rates aren’t posted on weekends, so ' + next + '.',
+            }[s.state] || '';
+            const change = s.rate && s.previous ? s.rate - s.previous : null;
+            const changeHtml = change === null ? '' : '<span class="rate-change ' + (Math.abs(change) < 5e-6 ? 'is-flat">No change from ' : change > 0 ? 'is-up">▲ ' + ratePct(change) + ' from ' : 'is-down">▼ ' + ratePct(-change) + ' from ') + ratePct(s.previous) + '</span>';
+            const row = (k, v, sub) => '<div class="rate-row"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(v) + (sub ? '<small>' + escapeHtml(sub) + '</small>' : '') + '</span></div>';
+            body.innerHTML = (s.rate ? '<div class="rate-big"><span class="usage-used">' + ratePct(s.rate) + '</span>' + changeHtml + '</div>' : '')
+                + '<div class="rate-rows">'
+                + (s.date ? row('Mortgage News Daily’s rate for', rateDay(s.date)) : '')
+                + (s.updatedAt ? row('Last updated', azDayTime(s.updatedAt) + ' Arizona time', etTime(s.updatedAt) + ' Eastern time') : row('Last updated', 'Not yet'))
+                + row('Next check', azDayTime(s.nextCheck) + ' Arizona time', etTime(s.nextCheck) + ' Eastern time')
+                + '</div>'
+                + '<p class="rate-status">' + escapeHtml(status) + '</p>'
+                + (s.recent && s.recent.length > 1 ? '<div class="rate-recent">' + s.recent.map(r => '<span class="rate-day"><b>' + ratePct(r.rate) + '</b>'
+                    + escapeHtml(new Date(r.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + '</span>').join('') + '</div>' : '')
+                + '<div class="gemini-actions rate-card-actions"><button type="button" class="btn" id="rate-check"><span class="btn-spinner" aria-hidden="true"></span>Check Now</button>'
+                + '<span class="gemini-msg" id="rate-msg" role="status"></span>'
+                + '<a href="' + escapeHtml(s.sourceUrl) + '" target="_blank" rel="noopener">Mortgage News Daily’s rate index</a></div>';
+            document.getElementById('rate-foot').textContent = 'Every Buyer Breakdown prices its loans from this rate. The portal checks weekdays every 15 minutes from '
+                + etTime(s.windowStart) + ' to ' + etTime(s.windowEnd) + ' Eastern time (' + azTime(s.windowStart) + ' to ' + azTime(s.windowEnd)
+                + ' in Arizona right now; Arizona’s times shift an hour when Eastern time changes for daylight saving) until that day’s rate is posted.';
+            document.getElementById('rate-check').addEventListener('click', async () => {
+                const btn = document.getElementById('rate-check');
+                const msg = document.getElementById('rate-msg');
+                btn.disabled = true;
+                btn.classList.add('is-loading');
+                msg.className = 'gemini-msg';
+                msg.textContent = '';
+                try {
+                    const r = await callApi(user, { action: 'adminCheckRate' });
+                    if (!r.ok) throw new Error(r.error);
+                    const text = r.status === 'saved' ? 'Saved today’s rate: ' + ratePct(r.rate) + '.'
+                        : r.status === 'done' ? 'Already up to date for today.'
+                        : r.status === 'waiting' ? (s.state === 'weekend' ? 'No rate on weekends' : 'Today’s rate isn’t posted yet') + (r.newest ? ' (the newest is ' + rateDay(r.newest) + ')' : '') + '.'
+                        : 'Mortgage News Daily’s page couldn’t be read. The scheduled checks will try again.';
+                    if (r.status === 'saved') { await loadRate(user); document.getElementById('rate-msg').textContent = text; return; }
+                    msg.textContent = text;
+                    if (r.status === 'unreadable') msg.className = 'gemini-msg is-error';
+                } catch (err) {
+                    console.error(err);
+                    msg.className = 'gemini-msg is-error';
+                    msg.textContent = 'We couldn’t run the check. Please try again.';
+                }
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            });
+        }
+
         async function loadUsage(user) {
             document.getElementById('usage-card').hidden = false;
             const list = document.getElementById('property-api-usage');

@@ -54,6 +54,53 @@ export async function fetchMndIndex() {
 // A date (default now) as YYYY-MM-DD in Eastern time, where MND's days begin and end
 export const easternDate = (now = new Date()) => now.toLocaleDateString('en-CA', { timeZone: MND_TIME_ZONE });
 
+// A moment's Eastern date, hour, minute and weekday ('Mon'...)
+const ET_PARTS = new Intl.DateTimeFormat('en-US', { timeZone: MND_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' });
+export function easternParts(d) {
+  const p = {};
+  ET_PARTS.formatToParts(d).forEach(x => { p[x.type] = x.value; });
+  return { date: p.year + '-' + p.month + '-' + p.day, hour: Number(p.hour), minute: Number(p.minute), weekday: p.weekday };
+}
+// "11/13/2026, 4:19:20 PM ET" (how RATE UPDATED AT is written) → that moment, or null
+export function easternTextToDate(s) {
+  const m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i);
+  if (!m) return null;
+  const hour = (Number(m[4]) % 12) + (/pm/i.test(m[7]) ? 12 : 0);
+  // Eastern is 5 hours behind UTC in winter and 4 in summer: the one that reads back as this hour
+  for (const offset of [5, 4]) {
+    const d = new Date(Date.UTC(+m[3], +m[1] - 1, +m[2], hour + offset, +m[5], +(m[6] || 0)));
+    if (easternParts(d).hour === hour) return d;
+  }
+  return null;
+}
+
+// The scheduled checks (Cloud Scheduler job portal-rate-check): weekdays every 15 minutes, 2:00 through 6:45 PM Eastern
+export const CHECK_FIRST = 14 * 60, CHECK_LAST = 18 * 60 + 45;   // minutes after midnight, Eastern
+const isWeekday = w => w !== 'Sat' && w !== 'Sun';
+/**
+ * Where the checks stand at now, with savedDate the MND day already saved (YYYY-MM-DD):
+ *   state: 'current' (today's is saved), 'before' (a weekday before 2:00 PM ET), 'checking' (in the window, not saved yet),
+ *          'missed' (a weekday after the window with nothing posted: a market holiday), 'weekend'
+ *   nextCheck: the next check that could save a rate (today's are skipped once it's saved); windowStart / windowEnd:
+ *   that day's first and last checks (Dates)
+ */
+export function rateSchedule(now, savedDate) {
+  const p = easternParts(now);
+  const mins = p.hour * 60 + p.minute;
+  const saved = savedDate === p.date;
+  const state = !isWeekday(p.weekday) ? 'weekend' : saved ? 'current' : mins < CHECK_FIRST ? 'before' : mins <= CHECK_LAST ? 'checking' : 'missed';
+  // (Eastern minutes line up with UTC's: its offsets are whole hours)
+  let t = new Date(Math.floor(now.getTime() / 900000) * 900000 + 900000), next = null;
+  for (let i = 0; i < 8 * 96 && !next; i++, t = new Date(t.getTime() + 900000)) {
+    const q = easternParts(t), m = q.hour * 60 + q.minute;
+    if (isWeekday(q.weekday) && m >= CHECK_FIRST && m <= CHECK_LAST && !(saved && q.date === p.date)) next = t;
+  }
+  const n = easternParts(next);
+  const windowStart = new Date(next.getTime() - (n.hour * 60 + n.minute - CHECK_FIRST) * 60000);
+  return { state, today: p.date, nextCheck: next, windowStart, windowEnd: new Date(windowStart.getTime() + (CHECK_LAST - CHECK_FIRST) * 60000) };
+}
+
 /**
  * What the daily check should do. stored: the date already saved (YYYY-MM-DD, or ''); index: the newest MND day (or
  * null: couldn't read it); today: today's date in Eastern time.
