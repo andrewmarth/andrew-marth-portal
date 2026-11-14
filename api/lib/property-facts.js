@@ -23,7 +23,7 @@ const PROVIDERS = [
 ];
 const FACTS = ['beds', 'baths', 'sqft', 'taxes'];
 
-class OutOfRequestsError extends Error {}
+export class OutOfRequestsError extends Error {}
 
 /**
  * { facts: { beds, baths, sqft, taxes, propertyType, yearBuilt } (blank '' for anything not found), sources: [API names] }.
@@ -172,6 +172,13 @@ async function realtorStyleLookup(a, host, status, search, detail) {
 
 // --- RapidAPI requests, counted on the API's wholesaleStatus document ---
 async function rapidApiGet_(host, status, path, params) {
+  return rapidApiRequest(db.collection('wholesaleStatus').doc(status), host, path, params);
+}
+
+// A GET to a RapidAPI API, counted on its status document (ref): wholesaleStatus/<name> for a property API, or
+// apiStatus/ZILLOW for Zillow (lib/zillow.js). Throws OutOfRequestsError when RapidAPI turns it away for its quota.
+export async function rapidApiRequest(ref, host, path, params) {
+  const status = ref.id;
   const url = `https://${host}${path}?${new URLSearchParams(params)}`;
   const res = await fetch(url, { headers: { 'x-rapidapi-key': process.env.RAPIDAPI_KEY, 'x-rapidapi-host': host }, signal: AbortSignal.timeout(20000) });
   const body = await res.text();
@@ -179,15 +186,14 @@ async function rapidApiGet_(host, status, path, params) {
   const spent = res.status !== 429 && res.status !== 403;
   const remaining = res.headers.get('x-ratelimit-requests-remaining');
   const quota = res.status === 429 && /quota|exceeded|month/i.test(body);
-  await recordRequest_(status, spent, quota ? '0' : remaining, res.headers.get('x-ratelimit-requests-limit'), res.headers.get('x-ratelimit-requests-reset'))
+  await recordRequest_(ref, spent, quota ? '0' : remaining, res.headers.get('x-ratelimit-requests-limit'), res.headers.get('x-ratelimit-requests-reset'))
     .catch(e => console.log(`Could not count a ${status} request: ${e.message}`));
   if (res.ok) return JSON.parse(body);
   if (res.status === 403 || quota) throw new OutOfRequestsError(`HTTP ${res.status}`);
   throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
 }
 
-async function recordRequest_(status, spent, remaining, limit, reset) {
-  const ref = db.collection('wholesaleStatus').doc(status);
+async function recordRequest_(ref, spent, remaining, limit, reset) {
   const now = new Date();
   const stamp = phoenixStamp_(now);
   const month = stamp.slice(0, 7);
@@ -239,6 +245,9 @@ function nextCycle_(end, now) {
   }
   return out;
 }
+
+// (for lib/zillow.js and the admin Usage card)
+export { skip_ as rapidApiSkip, phoenixStamp_ as phoenixStamp };
 
 // "2026-11-08 12:21:51", Phoenix time (how the portal and the extractor store times)
 function phoenixStamp_(date) {

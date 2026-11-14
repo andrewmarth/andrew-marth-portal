@@ -4,7 +4,7 @@
 import { rows, row as getRow, columns, update, add, remove, withLock, forgetRows } from './lib/store.js';
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
-import { lookupPropertyFacts } from './lib/property-facts.js';
+import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL } from './lib/mnd-rate.js';
 
@@ -1619,7 +1619,8 @@ async function wholesaleProperties_(account) {
 }
 
 // The admin Usage card. propertyApis: each wholesaleStatus document (one per property API the wholesale deal
-// extractor uses, written by it at the end of every run), in the order the extractor tries them. Values are as
+// extractor uses, written by it at the end of every run), in the order the extractor tries them. zillow: the Zillow
+// API's apiStatus/ZILLOW (counted with every request, lib/zillow.js), or null before its first request. Values are as
 // stored; times are text "YYYY-MM-DD HH:MM:SS", Phoenix time.
 const PROPERTY_API_ORDER = ['REDFIN.COM DATA', 'REALTOR SEARCH', 'REDFIN BASE', 'REALTOR API DATA', 'US REALTOR'];
 async function adminUsage_(account) {
@@ -1628,15 +1629,20 @@ async function adminUsage_(account) {
   const place = id => { const i = PROPERTY_API_ORDER.indexOf(id); return i < 0 ? PROPERTY_API_ORDER.length : i; };
   const num = v => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
   const str = v => (v === undefined || v === null ? '' : String(v));
-  const propertyApis = snap.docs.map(d => {
-    const f = d.data();
-    return {
-      name: d.id, usage: num(f['USAGE']), cap: num(f['CAP']), source: str(f['USAGE SOURCE']), usageAsOf: str(f['USAGE AS OF']),
-      requestsThisMonth: num(f['REQUESTS THIS MONTH']), countMonth: str(f['COUNT MONTH']), countedSince: str(f['COUNTED SINCE']),
-      lastRequest: str(f['LAST REQUEST']), pausedUntil: str(f['PAUSED UNTIL']), checkedAt: str(f['CHECKED AT']),
-      resetsAt: str(f['RESETS AT']),
-    };
-  }).sort((a, b) => place(a.name) - place(b.name) || a.name.localeCompare(b.name));
+  const usageOf = (name, f) => ({
+    name, usage: num(f['USAGE']), cap: num(f['CAP']), source: str(f['USAGE SOURCE']), usageAsOf: str(f['USAGE AS OF']),
+    requestsThisMonth: num(f['REQUESTS THIS MONTH']), countMonth: str(f['COUNT MONTH']), countedSince: str(f['COUNTED SINCE']),
+    lastRequest: str(f['LAST REQUEST']), pausedUntil: str(f['PAUSED UNTIL']), checkedAt: str(f['CHECKED AT']),
+    resetsAt: str(f['RESETS AT']),
+  });
+  const propertyApis = snap.docs.map(d => usageOf(d.id, d.data())).sort((a, b) => place(a.name) - place(b.name) || a.name.localeCompare(b.name));
+  // Zillow's numbers are RapidAPI's as of its last request. Once the period they're for has reset, none of the new one
+  // is used yet (startedOver: when it reset), and its own reset comes with the next request.
+  const z = (await db.collection('apiStatus').doc('ZILLOW').get()).data();
+  const zillow = z ? usageOf('ZILLOW', z) : null;
+  if (zillow && zillow.source === 'RapidAPI' && zillow.resetsAt && zillow.resetsAt <= phoenixStamp(new Date())) {
+    Object.assign(zillow, { usage: 0, startedOver: zillow.resetsAt, resetsAt: '' });
+  }
   // The extractor's Gemini usage and out-of-credits pause (apiStatus/GEMINI, written at the end of every run)
   const g = (await db.collection('apiStatus').doc('GEMINI').get()).data() || null;
   const gemini = g && {
@@ -1646,7 +1652,7 @@ async function adminUsage_(account) {
     lastRequest: str(g['LAST REQUEST']), lastError: str(g['LAST ERROR']), lastErrorAt: str(g['LAST ERROR AT']),
     model: str(g['MODEL']), checkedAt: str(g['CHECKED AT']), retryRequestedAt: str(g['RETRY REQUESTED AT']),
   };
-  return { ok: true, propertyApis, gemini };
+  return { ok: true, propertyApis, zillow, gemini };
 }
 
 // Settings > Gemini API > Try Again Now (after adding credits): ends the out-of-credits pause, so the extractor's

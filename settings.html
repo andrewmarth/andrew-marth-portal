@@ -1042,6 +1042,13 @@
                 <ul class="usage-list" id="property-api-usage"><li class="client-empty">Loading...</li></ul>
                 <p class="usage-foot">Beds, baths, sqft and taxes for the wholesale deals, tried in this order. The wholesale deal extractor updates these at the end of every run (every 5 minutes).</p>
             </div>
+            <div class="usage-section">
+                <div class="usage-head">
+                    <h3 class="cf-group-title">Zillow</h3>
+                </div>
+                <ul class="usage-list" id="zillow-usage"><li class="client-empty">Loading...</li></ul>
+                <p class="usage-foot">Zillow page views and favorites, from the <a href="https://rapidapi.com/rapidapi-org1-rapidapi-org-default/api/zillow191" target="_blank" rel="noopener">Zillow API on RapidAPI</a>. Updated with every request.</p>
+            </div>
         </section>
 
         <!-- Admins only: the wholesale deal extractor's Gemini usage, and its out-of-credits failsafe -->
@@ -1942,16 +1949,18 @@
         const usageName = id => String(id).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()).replace(/\bApi\b/g, 'API').replace(/^Us\b/, 'US');
         const count = n => Number(n || 0).toLocaleString('en-US');
         const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-        function usageItem(api) {
+        // who: what counts an API's requests when it doesn't report them (the extractor, for the property APIs)
+        function usageItem(api, who = 'the extractor', label) {
             const used = api.usage ?? api.requestsThisMonth ?? 0;
             const cap = api.cap;
             const share = cap ? Math.min(1, used / cap) : 0;
             const out = Boolean(api.pausedUntil) || (cap && used >= cap);
             const status = out ? ['is-out', 'Out of requests'] : (used || api.lastRequest) ? ['', 'Active'] : ['is-idle', 'No requests yet'];
             const notes = [];
-            if (api.source === 'RapidAPI') notes.push('As reported by RapidAPI' + (api.usageAsOf ? ' on ' + usageTime(api.usageAsOf) : '') + ' (its billing period)');
-            else if (api.source === 'Counted' && api.resetsAt) notes.push('Counted by the portal and the extractor this billing period (it doesn’t report usage)');
-            else if (api.source === 'Counted') notes.push('Counted by the extractor this month' + (api.countedSince && !/-01 00:00:00$/.test(api.countedSince) ? ', starting ' + usageTime(api.countedSince) : '') + ' (it doesn’t report usage)');
+            if (api.startedOver) notes.push('Started over ' + usageTime(api.startedOver) + ', with no requests since');
+            else if (api.source === 'RapidAPI') notes.push('As reported by RapidAPI' + (api.usageAsOf ? ' on ' + usageTime(api.usageAsOf) : '') + ' (its billing period)');
+            else if (api.source === 'Counted' && api.resetsAt) notes.push('Counted by ' + (who === 'the extractor' ? 'the portal and the extractor' : who) + ' this billing period (it doesn’t report usage)');
+            else if (api.source === 'Counted') notes.push('Counted by ' + who + ' this month' + (api.countedSince && !/-01 00:00:00$/.test(api.countedSince) ? ', starting ' + usageTime(api.countedSince) : '') + ' (it doesn’t report usage)');
             if (api.resetsAt) notes.push('Resets ' + usageTime(api.resetsAt));
             else if (api.source === 'Counted') notes.push('Starts over on the 1st of each month');
             else notes.push('Reset date not known yet (comes with its next request)');
@@ -1960,7 +1969,7 @@
             const li = document.createElement('li');
             li.className = 'usage-item';
             li.innerHTML =
-                '<div class="usage-top"><span class="usage-name">' + esc(usageName(api.name)) + '</span>' +
+                '<div class="usage-top"><span class="usage-name">' + esc(label || usageName(api.name)) + '</span>' +
                 '<span class="usage-pill ' + status[0] + '">' + status[1] + '</span></div>' +
                 '<div class="usage-numbers"><span class="usage-used">' + count(used) + '</span>' +
                 '<span class="usage-of">' + (cap ? 'of ' + count(cap) + ' used' : 'used (no limit on file)') + '</span>' +
@@ -2064,11 +2073,25 @@
                 apis.forEach(api => list.append(usageItem(api)));
                 const checked = apis.map(a => a.checkedAt).filter(Boolean).sort().pop();
                 document.getElementById('usage-checked').textContent = checked ? 'Updated ' + usageTime(checked) : '';
+                showZillowUsage(data.zillow || null);
                 showGemini(user, data.gemini || null);
             } catch (err) {
                 console.error(err);
                 list.innerHTML = '<li class="client-empty">We couldn’t load the usage. Please refresh to try again.</li>';
+                document.getElementById('zillow-usage').innerHTML = '<li class="client-empty">We couldn’t load the usage. Please refresh to try again.</li>';
             }
+        }
+
+        // Zillow (RapidAPI): counted by the portal with every request; before the first one, its plan's limit isn't known yet
+        function showZillowUsage(z) {
+            const list = document.getElementById('zillow-usage');
+            list.innerHTML = '';
+            if (z) { list.append(usageItem(z, 'the portal', 'Zillow API · RapidAPI')); return; }
+            const li = document.createElement('li');
+            li.className = 'usage-item';
+            li.innerHTML = '<div class="usage-top"><span class="usage-name">Zillow API · RapidAPI</span><span class="usage-pill is-idle">No requests yet</span></div>'
+                + '<div class="usage-notes"><span>Requests used, the plan’s limit and when it resets show here after the first request (RapidAPI sends them with each answer).</span></div>';
+            list.append(li);
         }
 
         // --- Gemini API (admins) ---
