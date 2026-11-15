@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Roadhouse | Andrew Marth Client Portal</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#4e513e">
+    <!-- Installable app: manifest, icons, iPhone home-screen settings and the service worker -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="My Homes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+    <script src="/app-gate.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Brand Palette (same as andrewmarth.com) --- */
+        :root {
+            --cream: #e9e2d8;
+            --brown: #4f2d2c;
+            --olive: #4e513e;
+            --tan: #99724b;
+            --rust: #9a5d40;
+            --gold: #c09050;
+            --navy: #0E2A3B;
+            --white: #ffffff;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { position: relative; background-color: var(--cream); }
+        html::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image: url('https://andrewmarth.com/images/tiling_background_alt.png');
+            background-size: 420px;
+            mix-blend-mode: multiply;
+            opacity: 0.07;
+        }
+        body {
+            position: relative;
+            z-index: 1;
+            font-family: 'Familjen Grotesk', sans-serif;
+            line-height: 1.6;
+            color: var(--brown);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hidden until we know who is signed in and the data has loaded (only the loading screen shows) */
+        body.is-checking > *:not(.page-loader) { visibility: hidden; }
+        /* No scrolling (or pull-to-refresh bounce) while the loading screen is up */
+        html:has(body.is-checking), body.is-checking { overflow: hidden; overscroll-behavior: none; }
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: var(--cream);
+            color: var(--brown);
+            touch-action: none;
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        body:not(.is-checking) .page-loader { opacity: 0; visibility: hidden; pointer-events: none; }
+        /* Morphing icon (loader.js): sits on the background and pops with a twist each time it changes */
+        .loader-badge { width: 120px; height: 120px; margin-bottom: 14px; color: var(--brown); display: flex; align-items: center; justify-content: center; }
+        .loader-icon { width: 92px; height: 92px; overflow: visible; }
+        .loader-badge.is-morphing .loader-icon { animation: iconMorph 0.65s cubic-bezier(0.34, 1.4, 0.64, 1); }
+        @keyframes iconMorph {
+            0% { transform: rotate(0deg) scale(1); }
+            40% { transform: rotate(-12deg) scale(0.84); }
+            75% { transform: rotate(4deg) scale(1.08); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .page-loader-text { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 700; opacity: 0.85; transition: opacity 0.22s ease, transform 0.22s ease; }
+        .page-loader-text.is-leaving { opacity: 0; transform: translateY(-8px); }
+        .page-loader-text.is-entering { animation: phraseIn 0.35s cubic-bezier(0.2, 0.8, 0.3, 1); }
+        @keyframes phraseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 0.85; transform: none; } }
+        /* Loading bar: a gold segment that sweeps across the track, over and over */
+        .loader-bar { position: relative; width: 180px; height: 6px; margin-top: 16px; border-radius: 999px; background: rgba(78, 81, 62, 0.15); overflow: hidden; }
+        .loader-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--gold), var(--rust));
+            animation: loaderBar 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes loaderBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+        @media (prefers-reduced-motion: reduce) {
+            .loader-bar::before { animation-duration: 3s; }
+            .loader-badge.is-morphing .loader-icon, .page-loader-text.is-entering { animation: none; }
+        }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; }
+        a:focus-visible, button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+        /* --- Header --- */
+        header {
+            position: relative;
+            overflow: hidden;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 110px 20px;
+        }
+        .hero-video-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        .hero-color-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background:
+                radial-gradient(ellipse at center, rgba(78, 81, 62, 0.55) 0%, rgba(78, 81, 62, 0.85) 75%),
+                linear-gradient(180deg, rgba(14, 42, 59, 0.3) 0%, rgba(78, 81, 62, 0.35) 55%, rgba(79, 45, 44, 0.75) 100%);
+        }
+        .top-bar { position: relative; z-index: 2; max-width: 900px; margin: 0 auto 44px auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .top-bar img { height: 34px; width: auto; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)); }
+        .top-actions { display: flex; align-items: center; gap: 10px; }
+        .sign-out {
+            display: inline-flex;
+            justify-content: center;
+            text-decoration: none;
+            white-space: nowrap;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            padding: 8px 18px;
+            border: 2px solid rgba(233, 226, 216, 0.7);
+            border-radius: 999px;
+            background: rgba(14, 42, 59, 0.25);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        .sign-out svg { width: 16px; height: 16px; }
+        @media (hover: hover) { .sign-out:hover { background: var(--rust); border-color: var(--rust); } }
+        .hero-content { position: relative; z-index: 2; }
+        .hero-eyebrow { display: inline-flex; align-items: center; gap: 12px; font-size: 0.8rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+        .hero-eyebrow::before, .hero-eyebrow::after { content: ''; width: 24px; height: 2px; background: currentColor; }
+        header h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1.05; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+        .hero-sub { margin-top: 10px; font-size: 1.05rem; opacity: 0.9; }
+
+        /* --- Main card --- */
+        main {
+            position: relative;
+            z-index: 3;
+            flex: 1;
+            width: 100%;
+            max-width: 760px;
+            margin: -70px auto 0 auto;
+            padding: 0 20px 60px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .main-card {
+            background: var(--white);
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            padding: 30px 30px 26px 30px;
+            width: calc(100% - 6px);
+        }
+        .card-eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 0.75rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--rust); margin-bottom: 6px; }
+        .card-eyebrow::before { content: ''; width: 18px; height: 2px; background: currentColor; }
+        .main-card h2 { font-size: 1.7rem; line-height: 1.15; margin-bottom: 4px; }
+        .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .now-line { margin-bottom: 18px; font-size: 0.92rem; opacity: 0.75; }
+        .now-line:empty { display: none; }
+        .head-edit {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 40px;
+            padding: 0 16px 0 14px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        .head-edit[hidden] { display: none; }
+        .head-edit svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .head-edit:hover { background: var(--rust); transform: translateY(-2px); } }
+        .shows-message { text-align: center; padding: 10px 0; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 48px;
+            padding: 12px 26px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background-color: var(--tan);
+            color: var(--cream);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.25s ease, transform 0.25s ease;
+        }
+        .btn svg { width: 18px; height: 18px; }
+        @media (hover: hover) { .btn:hover { background-color: var(--rust); transform: translateY(-3px); } }
+        .btn:disabled { opacity: 0.65; cursor: wait; transform: none; }
+        .btn-secondary { background: var(--white); color: var(--brown); }
+        @media (hover: hover) { .btn-secondary:hover { background: #f2ede6; } }
+        .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
+        .btn.is-loading .btn-spinner { display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* No show times yet */
+        .shows-empty { padding: 28px 20px 26px; border-radius: 18px; background: #f7f4f0; border: 1px dashed rgba(78, 81, 62, 0.3); text-align: center; }
+        .shows-empty-icon { display: inline-flex; align-items: center; justify-content: center; width: 58px; height: 58px; margin-bottom: 10px; border-radius: 50%; background: var(--olive); color: var(--cream); }
+        .shows-empty-icon svg { width: 27px; height: 27px; }
+        .shows-empty-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 700; }
+        .shows-empty-text { max-width: 380px; margin: 4px auto 18px; opacity: 0.8; }
+
+        /* --- Each step in its own box: gray (not yet), green (now), yellow (late), red (very late), gray again once done --- */
+        .steps { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .step {
+            --bg: #f1eee9; --line: rgba(78, 81, 62, 0.3); --ink: var(--brown); --strong: #66685a;
+            display: flex;
+            gap: 14px;
+            padding: 16px 18px 16px 16px;
+            border: 2px solid var(--line);
+            border-left-width: 8px;
+            border-radius: 18px;
+            background: var(--bg);
+            color: var(--ink);
+            transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+        }
+        .step.is-green { --bg: #e3f2e6; --line: #2f7d4a; --ink: #1d4d2c; --strong: #2f7d4a; }
+        .step.is-yellow { --bg: #fdf1cc; --line: #c4950f; --ink: #5c4306; --strong: #8a6508; }
+        .step.is-red { --bg: #fbe2de; --line: #b3392f; --ink: #6e1f18; --strong: #b3392f; }
+        .step.is-done { --ink: rgba(79, 45, 44, 0.85); }
+        .step-icon { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--white); color: var(--strong); }
+        .step-icon svg { width: 21px; height: 21px; }
+        .step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .step-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+        .step-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.2rem; font-weight: 800; line-height: 1.2; }
+        .step-time { flex: 0 0 auto; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 800; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .step-where { margin-top: 3px; font-weight: bold; overflow-wrap: anywhere; }
+        .step-show { font-size: 0.85rem; opacity: 0.75; }
+        .step-wait { margin-top: 8px; font-weight: bold; }
+        .step-warn { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 12px; border-radius: 999px; background: var(--strong); color: var(--white); font-size: 0.85rem; font-weight: bold; }
+        .step-warn svg { width: 15px; height: 15px; }
+        .step-btn {
+            align-self: flex-start;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 46px;
+            margin-top: 12px;
+            padding: 10px 20px;
+            border: 2px solid var(--navy);
+            border-radius: 999px;
+            background: var(--strong);
+            color: var(--white);
+            font-family: inherit;
+            font-size: 0.98rem;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, filter 0.2s ease;
+        }
+        .step-btn svg { flex: 0 0 auto; width: 18px; height: 18px; }
+        @media (hover: hover) { .step-btn:hover { transform: translateY(-2px); filter: brightness(1.08); } }
+        .step-done { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: var(--olive); }
+        .step-done svg { width: 16px; height: 16px; }
+        .steps-clear { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 16px; background: #f7f4f0; font-weight: bold; color: var(--olive); }
+        .steps-clear svg { width: 18px; height: 18px; }
+        .completed { margin-top: 28px; }
+        .completed-title { padding: 0 2px 8px; margin-bottom: 12px; border-bottom: 2px solid var(--navy); font-size: 0.82rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--olive); }
+
+        /* --- Show Times menu (the shared pop-up look from income-editor.js) --- */
+        .rh-dialog .rh-entries { display: flex; flex-direction: column; gap: 14px; padding-top: 16px; }
+        .rh-entry { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 16px; border: 1px solid rgba(78, 81, 62, 0.18); border-radius: 18px; background: #fbf9f6; }
+        .rh-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+        .rh-dialog .ie-remove[hidden] { display: none; }
+        .rh-dialog .rh-label { display: block; font-size: 0.9rem; font-weight: bold; margin: 0 0 8px 6px; }
+        .rh-dialog .field input.rh-aud { max-width: 150px; }
+        .rh-dialog .rh-error { margin: 6px 0 0 8px; font-size: 0.82rem; font-weight: bold; color: var(--rust); }
+        .rh-dialog .rh-error:empty { display: none; }
+        .rh-time { display: flex; align-items: center; gap: 8px; }
+        .rh-dialog .field .rh-time select { flex: 1 1 0; min-width: 0; min-height: 50px; padding: 10px 34px 10px 16px; background-position: right 12px center; }
+        .rh-colon { flex: 0 0 auto; font-weight: bold; font-size: 1.2rem; }
+        .rh-ampm { flex: 0 0 auto; display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: #f2ede6; }
+        .rh-ampm button { min-width: 46px; min-height: 42px; padding: 0 10px; border: none; border-radius: 999px; background: none; color: var(--brown); font-family: inherit; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+        .rh-ampm button[aria-pressed="true"] { background: var(--olive); color: var(--cream); }
+        .rh-hint { margin: -4px 0 8px 6px; font-size: 0.85rem; opacity: 0.75; }
+        .rh-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; border-radius: 16px; }
+        .rh-rows.is-invalid { outline: 2px solid var(--rust); outline-offset: 4px; }
+        .rh-rows-empty { grid-column: 1 / -1; padding: 12px 14px; border-radius: 14px; border: 1px dashed rgba(78, 81, 62, 0.35); font-size: 0.9rem; opacity: 0.8; }
+        .rh-row { position: relative; }
+        .rh-row input { position: absolute; opacity: 0; pointer-events: none; }
+        .rh-row span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            min-height: 52px;
+            border: 2px solid rgba(14, 42, 59, 0.35);
+            border-radius: 14px;
+            background: var(--white);
+            color: var(--brown);
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        .rh-row span svg { display: none; width: 15px; height: 15px; }
+        .rh-row input:checked + span { background: var(--olive); border-color: var(--olive); color: var(--cream); }
+        .rh-row input:checked + span svg { display: block; }
+        .rh-row input:focus-visible + span { outline: 3px solid var(--gold); outline-offset: 2px; }
+        @media (hover: hover) { .rh-row span:hover { transform: translateY(-2px); } }
+        .rh-dialog .ie-add-entry { width: 100%; margin-top: 14px; }
+
+        /* "Has everyone been greeted?" (centered card on desktop, slides up from the bottom on phones) */
+        .confirm-dialog {
+            margin: auto;
+            width: calc(100% - 40px);
+            max-width: 440px;
+            padding: 28px 28px 24px 28px;
+            border: 2px solid var(--navy);
+            border-radius: 24px;
+            box-shadow: 6px 6px 0px var(--navy);
+            background: var(--white);
+            color: var(--brown);
+        }
+        .confirm-dialog::backdrop { background: rgba(14, 42, 59, 0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+        .confirm-dialog[open] { animation: dialogIn 0.4s var(--ease); }
+        .confirm-dialog[open]::backdrop { animation: fadeIn 0.3s ease; }
+        @keyframes dialogIn { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .confirm-dialog h2 { font-size: 1.6rem; line-height: 1.15; margin-bottom: 8px; }
+        .confirm-dialog p { opacity: 0.75; font-size: 0.95rem; margin-bottom: 22px; }
+        .confirm-dialog .confirm-message { margin: -10px 0 14px; opacity: 1; font-weight: bold; color: var(--rust); }
+        .confirm-dialog .confirm-message:empty { display: none; }
+        .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+        /* --- Scroll Reveal --- */
+        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.is-visible { opacity: 1; transform: none; }
+
+        footer {
+            position: relative;
+            z-index: 2;
+            background-color: var(--olive);
+            color: var(--cream);
+            text-align: center;
+            padding: 28px 20px calc(env(safe-area-inset-bottom, 0px) + 28px) 20px;
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--cream); }
+        .footer-disclosure { max-width: 760px; margin: 12px auto 0 auto; font-size: 0.72rem; opacity: 0.7; line-height: 1.5; }
+
+        @media (max-width: 600px) {
+            header { padding-bottom: 100px; }
+            .top-bar { margin-bottom: 34px; }
+            .top-bar img { height: 28px; }
+            .top-actions { gap: 8px; }
+            .sign-out { padding: 8px 13px; gap: 6px; font-size: 0.85rem; }
+            .main-card { padding: 24px 20px 20px 20px; }
+            .main-card h2 { font-size: 1.45rem; }
+            .step { gap: 12px; padding: 14px 14px 14px 12px; }
+            .step-icon { width: 36px; height: 36px; }
+            .step-icon svg { width: 18px; height: 18px; }
+            .step-name { font-size: 1.1rem; }
+            .step-time { font-size: 1.1rem; }
+            .step-btn { align-self: stretch; }
+            .rh-entry { padding: 14px 12px; }
+            .confirm-dialog {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0 0;
+                padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px) 20px;
+                border-radius: 24px 24px 0 0;
+                border-bottom: none;
+                box-shadow: none;
+            }
+            .confirm-dialog[open] { animation: sheetIn 0.42s var(--ease); }
+            @keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+            .confirm-actions { flex-direction: column-reverse; }
+            .confirm-actions .btn { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .reveal { opacity: 1; transform: none; transition: none; }
+            .confirm-dialog[open], .confirm-dialog[open]::backdrop { animation: none; }
+            .step { transition: none; }
+        }
+    </style>
+</head>
+<body class="is-checking">
+    <div class="page-loader" role="status">
+        <span class="loader-badge" aria-hidden="true"><svg class="loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg></span>
+        <span class="sr-only">Loading</span>
+        <span class="page-loader-text" aria-hidden="true">Nailing the boards...</span>
+        <span class="loader-bar" aria-hidden="true"></span>
+    </div>
+    <script src="/loader.js"></script>
+
+    <header>
+        <video class="hero-video-bg" poster="https://andrewmarth.com/images/banner_poster.webp" autoplay loop muted playsinline aria-hidden="true">
+            <source src="https://andrewmarth.com/images/banner_web.mp4" type="video/mp4">
+        </video>
+        <div class="hero-color-overlay"></div>
+        <div class="top-bar">
+            <a href="https://andrewmarth.com" aria-label="Andrew Marth Real Estate">
+                <img src="https://andrewmarth.com/images/andrew_marth_logo_alt.webp" alt="Andrew Marth Real Estate Agent" width="1600" height="376">
+            </a>
+            <div class="top-actions">
+                <a href="/" class="sign-out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                    Back
+                </a>
+                <button type="button" class="sign-out" id="sign-out">
+                    Sign Out
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="hero-content">
+            <span class="hero-eyebrow">Client Portal</span>
+            <h1>Roadhouse</h1>
+            <p class="hero-sub">Your theaters and what’s next.</p>
+        </div>
+    </header>
+
+    <main>
+        <!-- Today's showings: each one's Theater Open, Drop and Pick Up, in time order; done steps under Completed -->
+        <section class="main-card reveal" id="shows-card">
+            <div class="card-head">
+                <div>
+                    <span class="card-eyebrow">Today</span>
+                    <h2>Show Times</h2>
+                </div>
+                <button type="button" class="head-edit" id="edit-shows" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    Edit
+                </button>
+            </div>
+            <p class="now-line" id="now-line"></p>
+            <div id="shows"></div>
+        </section>
+    </main>
+
+    <!-- Before a step moves to Completed -->
+    <dialog class="confirm-dialog" id="step-confirm" aria-labelledby="step-confirm-title" aria-describedby="step-confirm-text">
+        <h2 id="step-confirm-title">Has everyone been greeted?</h2>
+        <p id="step-confirm-text"></p>
+        <p class="confirm-message" role="alert"></p>
+        <div class="confirm-actions">
+            <button type="button" class="btn btn-secondary" id="step-cancel">Cancel</button>
+            <button type="button" class="btn" id="step-ok"><span class="btn-spinner" aria-hidden="true"></span>Confirm</button>
+        </div>
+    </dialog>
+
+    <footer>
+        <p><strong>Cell:</strong> <a href="tel:4806521330">480.652.1330</a> &nbsp;|&nbsp; <strong>AZ License:</strong> SA711359000</p>
+        <p class="footer-disclosure">
+            Andrew Marth is an agent affiliated with Compass, a licensed real estate broker and abides by Equal Housing Opportunity laws. All material presented herein is intended for informational purposes only.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
+        import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
+
+        // --- Time: everything is Arizona time (MST all year, UTC-7). A day runs from 6 AM to 6 AM, so the show times
+        // are erased at 6 AM (the API deletes an earlier day's list; an open page clears itself). ---
+        const AZ_OFFSET = 7 * 3600e3;
+        const DAY_START_HOUR = 6;
+        const MIN = 60000;
+        const showDay = (ms = Date.now()) => new Date(ms - AZ_OFFSET - DAY_START_HOUR * 3600e3).toISOString().slice(0, 10);
+        // A time of day ("HH:MM", 24-hour) on a show day, as a moment: times before 6 AM are after midnight
+        function moment(day, hhmm) {
+            const [h, m] = String(hhmm).split(':').map(Number);
+            return Date.parse(day + 'T00:00:00Z') + AZ_OFFSET + (h * 60 + m) * MIN + (h < DAY_START_HOUR ? 864e5 : 0);
+        }
+        const clock = ms => new Date(ms).toLocaleTimeString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: '2-digit' });
+        const minutes = ms => { const n = Math.max(1, Math.ceil(ms / MIN)); return n + (n === 1 ? ' minute' : ' minutes'); };
+        const pad = n => String(n).padStart(2, '0');
+
+        // The rows in each auditorium (there is no row I in 10)
+        const ROWS = { 1: 'ABCDEF', 2: 'ABCDEFG', 3: 'ABCDEF', 4: 'ABCDE', 5: 'ABCDEF', 6: 'ABCDE', 7: 'ABCD', 8: 'ABCDEF', 9: 'ABCDEF', 10: 'ABCDEFGHJ', 11: 'ABCDE', 12: 'AB', 13: 'AB', 14: 'AB' };
+        const MAX_SHOWS = 20;
+
+        const icon = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+        const CHECK = icon('<path d="M20 6 9 17l-5-5"/>');
+        const MOON = icon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
+        const PLUS = icon('<path d="M12 5v14"/><path d="M5 12h14"/>');
+        const CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        const FILM = icon('<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>');
+        const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        // The three steps of each showing. at: the time shown; turns: when the box turns green, yellow and red.
+        // Before it turns green the box is gray and says how long until its time.
+        const STEPS = [
+            { key: 'open', name: 'Theater Open', icon: icon('<path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.56v16.16a1 1 0 0 1-1.24.97L5 20V5.56a2 2 0 0 1 1.52-1.94l4-1A2 2 0 0 1 13 4.56Z"/>'),
+                at: s => s.startMs - 30 * MIN, turns: s => [s.startMs - 30 * MIN, s.startMs + 15 * MIN, s.startMs + 30 * MIN],
+                waiting: ms => 'Theater opens in ' + minutes(ms), button: 'Everyone has been greeted', warn: 'Theater has gone dark',
+                confirm: 'Has everyone been greeted?' },
+            { key: 'drop', name: 'Drop', icon: icon('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>'),
+                at: s => s.endMs - 30 * MIN, turns: s => [s.endMs - 40 * MIN, s.endMs - 30 * MIN, s.endMs - 20 * MIN],
+                waiting: ms => 'Drop in ' + minutes(ms), button: 'Theater has been dropped', confirm: 'Has the theater been dropped?' },
+            { key: 'pickup', name: 'Pick Up', icon: icon('<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>'),
+                at: s => s.endMs + 5 * MIN, turns: s => [s.endMs + 5 * MIN, s.endMs + 10 * MIN, s.endMs + 20 * MIN],
+                waiting: ms => 'Pickup checks in ' + minutes(ms), button: 'Checks have been picked up', confirm: 'Have the checks been picked up?' },
+        ];
+        const STATE_TEXT = { gray: 'Coming up', green: 'Now', yellow: 'Running late', red: 'Late', done: 'Completed' };
+        const whereOf = s => 'Auditorium ' + s.auditorium + ' · ' + (s.rows.length === 1 ? 'Row ' : 'Rows ') + s.rows.join(', ');
+
+        const showsEl = document.getElementById('shows');
+        const nowEl = document.getElementById('now-line');
+        const editBtn = document.getElementById('edit-shows');
+        const signOutBtn = document.getElementById('sign-out');
+        // Today's list: { day, shows: [{ id, auditorium, start, end, rows, done: { open, drop, pickup }, startMs, endMs }] }
+        let state = null;
+        let currentUser = null;
+
+        async function api(payload) {
+            const idToken = await currentUser.getIdToken();
+            return fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ idToken, ...payload }),
+            }).then(r => r.json());
+        }
+        const ERRORS = {
+            invalid_shows: 'Please add at least one showing (20 at most).',
+            invalid_auditorium: 'Please enter an auditorium from 1 to 14 for each showing.',
+            invalid_time: 'Please pick the start and end time for each showing.',
+            end_before_start: 'The end time has to be after the start time.',
+            invalid_rows: 'Please pick at least one row for each showing.',
+            shows_cleared: 'Today’s show times were cleared at 6 AM. Refresh the page.',
+            not_found: 'This showing was changed. Refresh the page.',
+            not_allowed: 'This page isn’t available for your account.',
+        };
+        const errorText = json => ERRORS[json && json.error] || 'Something went wrong. Please try again.';
+
+        function apply(json) {
+            state = { day: json.day, shows: (json.shows || []).map(s => ({ ...s, startMs: moment(json.day, s.start), endMs: moment(json.day, s.end) })) };
+        }
+
+        // --- The card ---
+        function stepHtml({ s, step, at, done }, now) {
+            const [green, yellow, red] = step.turns(s);
+            const color = done ? 'done' : now < green ? 'gray' : now < yellow ? 'green' : now < red ? 'yellow' : 'red';
+            let more = '';
+            if (done) more = '<p class="step-done">' + CHECK + 'Done at ' + clock(Date.parse(done)) + '</p>';
+            else if (color === 'gray') more = '<p class="step-wait">' + step.waiting(at - now) + '</p>';
+            else {
+                if (step.warn && (color === 'yellow' || color === 'red')) more += '<p class="step-warn">' + MOON + step.warn + '</p>';
+                more += '<button type="button" class="step-btn" data-show="' + escapeHtml(s.id) + '" data-step="' + step.key + '">' + CHECK + step.button + '</button>';
+            }
+            return '<li class="step is-' + color + '"><span class="step-icon">' + step.icon + '</span><div class="step-body">'
+                + '<div class="step-top"><span class="step-name">' + step.name + '<span class="sr-only">, ' + STATE_TEXT[color] + '</span></span>'
+                + '<span class="step-time">' + clock(at) + '</span></div>'
+                + '<span class="step-where">' + escapeHtml(whereOf(s)) + '</span>'
+                + '<span class="step-show">Movie ' + clock(s.startMs) + ' – ' + clock(s.endMs) + '</span>'
+                + more + '</div></li>';
+        }
+        let lastHtml = '';
+        function render() {
+            if (!state) return;
+            const now = Date.now();
+            nowEl.textContent = 'It’s ' + clock(now) + '. Show times clear at 6 AM.';
+            editBtn.hidden = !state.shows.length;
+            let html;
+            if (!state.shows.length) {
+                html = '<div class="shows-empty"><span class="shows-empty-icon">' + FILM + '</span>'
+                    + '<p class="shows-empty-title">No show times yet</p>'
+                    + '<p class="shows-empty-text">Add the theaters you’re working and their show times. Each step shows up here, and turns green when it’s time.</p>'
+                    + '<button type="button" class="btn" data-add>' + PLUS + 'Add Show Times</button></div>';
+            } else {
+                const items = [];
+                state.shows.forEach(s => STEPS.forEach((step, n) => items.push({ s, step, n, at: step.at(s), done: s.done[step.key] })));
+                const order = (a, b) => (a.at - b.at) || (a.s.auditorium - b.s.auditorium) || (a.n - b.n);
+                const active = items.filter(i => !i.done).sort(order);
+                const done = items.filter(i => i.done).sort(order);
+                html = (active.length ? '<ul class="steps">' + active.map(i => stepHtml(i, now)).join('') + '</ul>'
+                        : '<p class="steps-clear">' + CHECK + 'All done for today’s showings.</p>')
+                    + (done.length ? '<div class="completed"><h3 class="completed-title">Completed</h3><ul class="steps">' + done.map(i => stepHtml(i, now)).join('') + '</ul></div>' : '');
+            }
+            // Only redrawn when something on it changed (it's checked every few seconds)
+            if (html !== lastHtml) { showsEl.innerHTML = html; lastHtml = html; }
+        }
+        function showMessage(text) {
+            state = null;
+            editBtn.hidden = true;
+            nowEl.textContent = '';
+            showsEl.innerHTML = '<p class="shows-message">' + escapeHtml(text) + '</p>';
+            lastHtml = '';
+        }
+        showsEl.addEventListener('click', e => {
+            if (e.target.closest('[data-add]')) openMenu();
+            const b = e.target.closest('.step-btn');
+            if (b) openConfirm(b.dataset.show, b.dataset.step);
+        });
+        editBtn.addEventListener('click', () => openMenu());
+
+        // --- "Everyone has been greeted" / "Theater has been dropped" / "Checks have been picked up": confirm first ---
+        const confirmBox = document.getElementById('step-confirm');
+        const confirmOk = document.getElementById('step-ok');
+        const confirmMessage = confirmBox.querySelector('.confirm-message');
+        let pending = null;
+        function openConfirm(showId, key) {
+            const s = state && state.shows.find(x => x.id === showId);
+            const step = STEPS.find(x => x.key === key);
+            if (!s || !step) return;
+            pending = { showId, key };
+            document.getElementById('step-confirm-title').textContent = step.confirm;
+            document.getElementById('step-confirm-text').textContent = whereOf(s) + '. ' + step.name + ' moves to Completed.';
+            confirmMessage.textContent = '';
+            confirmOk.disabled = false;
+            confirmOk.classList.remove('is-loading');
+            confirmBox.showModal();
+        }
+        document.getElementById('step-cancel').addEventListener('click', () => confirmBox.close());
+        confirmOk.addEventListener('click', async () => {
+            if (!pending) return;
+            confirmOk.disabled = true;
+            confirmOk.classList.add('is-loading');
+            confirmMessage.textContent = '';
+            try {
+                const json = await api({ action: 'completeRoadhouseStep', showId: pending.showId, step: pending.key });
+                if (!json.ok) throw json;
+                apply(json);
+                confirmBox.close();
+                render();
+            } catch (err) {
+                console.error(err);
+                confirmMessage.textContent = errorText(err);
+            } finally {
+                confirmOk.disabled = false;
+                confirmOk.classList.remove('is-loading');
+            }
+        });
+        confirmBox.addEventListener('close', () => { pending = null; });
+
+        // --- The Show Times menu: each showing's auditorium, start and end time, and rows; at least one, 20 at most ---
+        let menu = null;
+        function openMenu() {
+            if (!state) return;
+            if (!menu) menu = buildMenu();
+            menu.open();
+        }
+        function buildMenu() {
+            ensureDialogStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog rh-dialog';
+            dialog.setAttribute('aria-labelledby', 'rh-menu-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="rh-menu-title">Show Times</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE + '</button></div>'
+                + '<p class="muted">Each theater you’re working today. They’re cleared at 6 AM.</p>'
+                + '<div class="dialog-scroll"><div class="rh-entries" data-entries></div>'
+                + '<button type="button" class="ie-add-entry" data-add-entry>' + PLUS + 'Add Another Showing</button></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
+                + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Show Times</button></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const $ = sel => dialog.querySelector(sel);
+            const list = $('[data-entries]');
+            const message = $('.form-message');
+            const saveBtn = $('[data-save]');
+            const addBtn = $('[data-add-entry]');
+            let entries = [];
+
+            const blankTime = () => ({ h: '', m: '', ap: 'PM' });
+            const blankEntry = () => ({ id: '', aud: '', start: blankTime(), end: blankTime(), rows: [] });
+            const audOf = v => (/^\d{1,2}$/.test(String(v)) && ROWS[Number(v)] ? Number(v) : 0);
+            // "HH:MM" (24-hour) from the picker, or null until hour, minute and AM/PM are all picked
+            const timeOf = t => (t.h && t.m !== '' && t.ap ? pad((Number(t.h) % 12) + (t.ap === 'PM' ? 12 : 0)) + ':' + t.m : null);
+            const pickerOf = hhmm => { const [h, m] = hhmm.split(':').map(Number); return { h: String((h % 12) || 12), m: pad(m), ap: h >= 12 ? 'PM' : 'AM' }; };
+
+            const timeHtml = (k, which, t) => {
+                const id = 'rh-' + which + '-' + k;
+                return '<div class="field"><span class="rh-label" id="' + id + '">' + (which === 'start' ? 'Start Time' : 'End Time') + '</span>'
+                    + '<div class="rh-time" data-time="' + which + '" role="group" aria-labelledby="' + id + '">'
+                    + '<select class="rh-h" aria-label="Hour"><option value="">Hour</option>'
+                    + Array.from({ length: 12 }, (_, i) => String(i + 1)).map(h => '<option' + (h === t.h ? ' selected' : '') + '>' + h + '</option>').join('') + '</select>'
+                    + '<span class="rh-colon" aria-hidden="true">:</span>'
+                    + '<select class="rh-m" aria-label="Minute"><option value="">Min</option>'
+                    + Array.from({ length: 60 }, (_, i) => pad(i)).map(m => '<option' + (m === t.m ? ' selected' : '') + '>' + m + '</option>').join('') + '</select>'
+                    + '<span class="rh-ampm">' + ['AM', 'PM'].map(ap => '<button type="button" data-ap="' + ap + '" aria-pressed="' + (t.ap === ap) + '">' + ap + '</button>').join('') + '</span>'
+                    + '</div></div>';
+            };
+            const rowsHtml = e => {
+                const n = audOf(e.aud);
+                if (!n) return '<p class="rh-rows-empty">Enter the auditorium to see its rows.</p>';
+                return ROWS[n].split('').map(r => '<label class="rh-row"><input type="checkbox" value="' + r + '"' + (e.rows.includes(r) ? ' checked' : '') + '>'
+                    + '<span>' + CHECK + r + '</span></label>').join('');
+            };
+            function draw() {
+                list.innerHTML = entries.map((e, k) => '<fieldset class="rh-entry" data-k="' + k + '">'
+                    + '<legend class="sr-only">Showing ' + (k + 1) + '</legend>'
+                    + '<div class="rh-entry-head"><span>Showing ' + (k + 1) + '</span>'
+                    + '<button type="button" class="ie-remove" data-remove' + (entries.length === 1 ? ' hidden' : '') + '>' + CLOSE + 'Remove</button></div>'
+                    + '<div class="field"><label for="rh-aud-' + k + '">Auditorium</label>'
+                    + '<input id="rh-aud-' + k + '" class="rh-aud" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="1–14" value="' + escapeHtml(e.aud) + '">'
+                    + '<p class="rh-error" role="alert"></p></div>'
+                    + timeHtml(k, 'start', e.start) + timeHtml(k, 'end', e.end)
+                    + '<div><span class="rh-label" id="rh-rows-' + k + '">Rows</span><p class="rh-hint">Select all that apply.</p>'
+                    + '<div class="rh-rows" role="group" aria-labelledby="rh-rows-' + k + '">' + rowsHtml(e) + '</div></div>'
+                    + '</fieldset>').join('');
+                addBtn.hidden = entries.length >= MAX_SHOWS;
+            }
+            const entryOf = el => { const box = el.closest('[data-k]'); return box ? { box, e: entries[Number(box.dataset.k)] } : {}; };
+            const clearInvalid = box => box.querySelectorAll('.is-invalid').forEach(x => x.classList.remove('is-invalid'));
+
+            list.addEventListener('input', ev => {
+                const { box, e } = entryOf(ev.target);
+                if (!e) return;
+                clearInvalid(box);
+                message.textContent = '';
+                if (ev.target.matches('.rh-aud')) {
+                    // Digits only; the rows follow the auditorium (rows it doesn't have are let go)
+                    ev.target.value = ev.target.value.replace(/\D/g, '').slice(0, 2);
+                    e.aud = ev.target.value;
+                    const n = audOf(e.aud);
+                    if (n) e.rows = e.rows.filter(r => ROWS[n].includes(r));
+                    box.querySelector('.rh-error').textContent = e.aud && !n ? 'Auditoriums are 1 to 14.' : '';
+                    box.querySelector('.rh-rows').innerHTML = rowsHtml(e);
+                }
+            });
+            list.addEventListener('change', ev => {
+                const { box, e } = entryOf(ev.target);
+                if (!e) return;
+                clearInvalid(box);
+                message.textContent = '';
+                const t = ev.target.closest('[data-time]');
+                if (t && ev.target.matches('.rh-h')) e[t.dataset.time].h = ev.target.value;
+                if (t && ev.target.matches('.rh-m')) e[t.dataset.time].m = ev.target.value;
+                if (ev.target.matches('.rh-row input')) {
+                    const all = ROWS[audOf(e.aud)] || '';
+                    e.rows = [...box.querySelectorAll('.rh-row input:checked')].map(x => x.value).sort((a, b) => all.indexOf(a) - all.indexOf(b));
+                }
+            });
+            list.addEventListener('click', ev => {
+                const { box, e } = entryOf(ev.target);
+                if (!e) return;
+                const ap = ev.target.closest('[data-ap]');
+                if (ap) {
+                    const t = ap.closest('[data-time]');
+                    e[t.dataset.time].ap = ap.dataset.ap;
+                    t.querySelectorAll('[data-ap]').forEach(b => b.setAttribute('aria-pressed', String(b === ap)));
+                    clearInvalid(box);
+                    message.textContent = '';
+                }
+                if (ev.target.closest('[data-remove]') && entries.length > 1) {
+                    entries.splice(Number(box.dataset.k), 1);
+                    message.textContent = '';
+                    draw();
+                }
+            });
+            addBtn.addEventListener('click', () => {
+                if (entries.length >= MAX_SHOWS) return;
+                entries.push(blankEntry());
+                message.textContent = '';
+                draw();
+                const box = list.querySelector('[data-k="' + (entries.length - 1) + '"]');
+                box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                box.querySelector('.rh-aud').focus({ preventScroll: true });
+            });
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => dialog.close()));
+
+            // The first thing missing: [the element to point at, what to say]
+            function problem() {
+                const day = showDay();
+                for (let k = 0; k < entries.length; k++) {
+                    const e = entries[k];
+                    const box = list.querySelector('[data-k="' + k + '"]');
+                    const which = entries.length > 1 ? ' for showing ' + (k + 1) : '';
+                    if (!audOf(e.aud)) return [box.querySelector('.rh-aud'), 'Please enter an auditorium from 1 to 14' + which + '.'];
+                    for (const t of ['start', 'end']) {
+                        if (!timeOf(e[t])) {
+                            const p = box.querySelector('[data-time="' + t + '"]');
+                            return [p.querySelector(e[t].h ? '.rh-m' : '.rh-h'), 'Please pick the ' + t + ' time' + which + '.'];
+                        }
+                    }
+                    if (moment(day, timeOf(e.end)) <= moment(day, timeOf(e.start))) return [box.querySelector('[data-time="end"] .rh-h'), 'The end time has to be after the start time' + which + '.'];
+                    if (!e.rows.length) return [box.querySelector('.rh-rows'), 'Please pick at least one row' + which + '.'];
+                }
+                return null;
+            }
+            $('form').addEventListener('submit', async ev => {
+                ev.preventDefault();
+                message.textContent = '';
+                list.querySelectorAll('.is-invalid').forEach(x => x.classList.remove('is-invalid'));
+                const p = problem();
+                if (p) {
+                    message.textContent = p[1];
+                    p[0].classList.add('is-invalid');
+                    p[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    (p[0].matches('.rh-rows') ? p[0].querySelector('input') : p[0]).focus({ preventScroll: true });
+                    return;
+                }
+                saveBtn.disabled = true;
+                saveBtn.classList.add('is-loading');
+                try {
+                    const json = await api({ action: 'saveRoadhouseShows', shows: entries.map(e => ({ id: e.id, auditorium: audOf(e.aud), start: timeOf(e.start), end: timeOf(e.end), rows: e.rows })) });
+                    if (!json.ok) throw json;
+                    apply(json);
+                    dialog.close();
+                    render();
+                } catch (err) {
+                    console.error(err);
+                    message.textContent = errorText(err);
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('is-loading');
+                }
+            });
+
+            return {
+                open() {
+                    const editing = state.shows.length > 0;
+                    entries = editing
+                        ? state.shows.map(s => ({ id: s.id, aud: String(s.auditorium), start: pickerOf(s.start), end: pickerOf(s.end), rows: [...s.rows] }))
+                        : [blankEntry()];
+                    $('#rh-menu-title').textContent = editing ? 'Edit Show Times' : 'Add Show Times';
+                    message.textContent = '';
+                    draw();
+                    dialog.showModal();
+                    lockPageScroll(dialog);
+                    $('.dialog-scroll').scrollTop = 0;
+                    if (!editing) list.querySelector('.rh-aud').focus();
+                },
+            };
+        }
+
+        // --- Keeping it current: the boxes are checked every few seconds; at 6 AM the list clears. Coming back to the app
+        // reloads today's list (it may have changed on another device). ---
+        async function refresh() {
+            try {
+                const json = await api({ action: 'roadhouseShows' });
+                if (json.ok) { apply(json); render(); }
+            } catch (err) { console.error(err); }
+        }
+        function tick() {
+            if (!state) return;
+            if (showDay() !== state.day) {
+                state = { day: showDay(), shows: [] };
+                document.querySelectorAll('.rh-dialog[open], .confirm-dialog[open]').forEach(d => d.close());
+                refresh();
+            }
+            render();
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && state) { tick(); refresh(); }
+        });
+
+        async function load(user) {
+            currentUser = user;
+            if (!PORTAL_API_URL) { showMessage('Show times aren’t available yet.'); return; }
+            try {
+                const json = await api({ action: 'roadhouseShows' });
+                if (json.ok) {
+                    apply(json);
+                    render();
+                    setInterval(tick, 5000);
+                } else if (json.error === 'not_allowed' || json.error === 'not_found') showMessage('This page isn’t available for your account.');
+                else throw new Error(json.error || 'Request failed');
+            } catch (err) {
+                console.error(err);
+                showMessage('We couldn’t load your show times. Please refresh to try again.');
+            }
+        }
+
+        function initReveal() {
+            const items = document.querySelectorAll('.reveal');
+            if (!('IntersectionObserver' in window)) { items.forEach(el => el.classList.add('is-visible')); return; }
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+                });
+            }, { threshold: 0, rootMargin: '0px 0px -40px 0px' });
+            items.forEach(el => observer.observe(el));
+        }
+
+        if (!isConfigured) {
+            location.replace('/login');
+        } else {
+            const { initializeApp } = await import(`${FIREBASE_SDK}/firebase-app.js`);
+            const { getAuth, onAuthStateChanged, signOut } = await import(`${FIREBASE_SDK}/firebase-auth.js`);
+            const auth = getAuth(initializeApp(firebaseConfig));
+
+            onAuthStateChanged(auth, user => {
+                // Not signed in: send them to the login page (and back here afterwards)
+                if (!user) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+                // Stay on the loading screen until the list is in, with a time limit
+                const timeLimit = new Promise(resolve => setTimeout(resolve, 30000));
+                Promise.race([load(user), timeLimit]).then(() => {
+                    document.body.classList.remove('is-checking');
+                    initReveal();
+                });
+            });
+
+            signOutBtn.addEventListener('click', async () => {
+                signOutBtn.disabled = true;
+                await signOut(auth);
+            });
+        }
+    </script>
+</body>
+</html>
