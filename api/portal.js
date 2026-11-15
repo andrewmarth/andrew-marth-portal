@@ -5,7 +5,7 @@ import { rows, row as getRow, columns, update, add, remove, withLock, forgetRows
 import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
-import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep } from './lib/roadhouse-shows.js';
+import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL } from './lib/mnd-rate.js';
 
@@ -465,10 +465,11 @@ export async function handle(body, query) {
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
     // roadhouse.html: today's show times and their steps (CUM accounts only; erased at 6 AM Arizona time)
-    if (['roadhouseShows', 'saveRoadhouseShows', 'completeRoadhouseStep'].includes(body.action) && !hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+    if (['roadhouseShows', 'saveRoadhouseShows', 'completeRoadhouseStep', 'undoRoadhouseStep'].includes(body.action) && !hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
     if (body.action === 'roadhouseShows') return await roadhouseShows(id);
     if (body.action === 'saveRoadhouseShows') return await saveRoadhouseShows(id, body);
     if (body.action === 'completeRoadhouseStep') return await completeRoadhouseStep(id, body);
+    if (body.action === 'undoRoadhouseStep') return await undoRoadhouseStep(id, body);
     // flip-portal.html: wholesale properties with map positions (admins and FLIPPER BUYER accounts)
     if (body.action === 'wholesaleProperties') return await wholesaleProperties_(account);
     if (body.action === 'wholesalePhotos') return await wholesalePhotos_(account, body);

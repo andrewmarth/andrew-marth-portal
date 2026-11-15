@@ -299,8 +299,28 @@
         }
         .step-btn svg { flex: 0 0 auto; width: 18px; height: 18px; }
         @media (hover: hover) { .step-btn:hover { transform: translateY(-2px); filter: brightness(1.08); } }
-        .step-done { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.9rem; font-weight: bold; color: var(--olive); }
+        .step-done-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
+        .step-done { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; font-weight: bold; color: var(--olive); }
         .step-done svg { width: 16px; height: 16px; }
+        /* Undo: moves a completed step back to the list */
+        .step-undo {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 40px;
+            padding: 6px 16px 6px 13px;
+            border: 2px solid rgba(14, 42, 59, 0.35);
+            border-radius: 999px;
+            background: var(--white);
+            color: var(--brown);
+            font-family: inherit;
+            font-size: 0.88rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .step-undo svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .step-undo:hover { border-color: var(--navy); background: #f2ede6; } }
         .steps-clear { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 16px; background: #f7f4f0; font-weight: bold; color: var(--olive); }
         .steps-clear svg { width: 18px; height: 18px; }
         .completed { margin-top: 28px; }
@@ -486,7 +506,7 @@
         <p class="confirm-message" role="alert"></p>
         <div class="confirm-actions">
             <button type="button" class="btn btn-secondary" id="step-cancel">Cancel</button>
-            <button type="button" class="btn" id="step-ok"><span class="btn-spinner" aria-hidden="true"></span>Confirm</button>
+            <button type="button" class="btn" id="step-ok"><span class="btn-spinner" aria-hidden="true"></span><span id="step-ok-text">Confirm</span></button>
         </div>
     </dialog>
 
@@ -524,6 +544,7 @@
         const CHECK = icon('<path d="M20 6 9 17l-5-5"/>');
         const MOON = icon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
         const PLUS = icon('<path d="M12 5v14"/><path d="M5 12h14"/>');
+        const UNDO = icon('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>');
         const CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const FILM = icon('<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -582,7 +603,10 @@
             const [green, yellow, red] = step.turns(s);
             const color = done ? 'done' : now < green ? 'gray' : now < yellow ? 'green' : now < red ? 'yellow' : 'red';
             let more = '';
-            if (done) more = '<p class="step-done">' + CHECK + 'Done at ' + clock(Date.parse(done)) + '</p>';
+            if (done) {
+                more = '<div class="step-done-row"><p class="step-done">' + CHECK + 'Done at ' + clock(Date.parse(done)) + '</p>'
+                    + '<button type="button" class="step-undo" data-show="' + escapeHtml(s.id) + '" data-step="' + step.key + '" aria-label="Undo ' + escapeHtml(step.name + ', ' + whereOf(s)) + '">' + UNDO + 'Undo</button></div>';
+            }
             else if (color === 'gray') more = '<p class="step-wait">' + step.waiting(at - now) + '</p>';
             else {
                 if (step.warn && (color === 'yellow' || color === 'red')) more += '<p class="step-warn">' + MOON + step.warn + '</p>';
@@ -630,22 +654,27 @@
         showsEl.addEventListener('click', e => {
             if (e.target.closest('[data-add]')) openMenu();
             const b = e.target.closest('.step-btn');
-            if (b) openConfirm(b.dataset.show, b.dataset.step);
+            if (b) openConfirm(b.dataset.show, b.dataset.step, false);
+            const u = e.target.closest('.step-undo');
+            if (u) openConfirm(u.dataset.show, u.dataset.step, true);
         });
         editBtn.addEventListener('click', () => openMenu());
 
-        // --- "Everyone has been greeted" / "Theater has been dropped" / "Checks have been picked up": confirm first ---
+        // --- "Everyone has been greeted" / "Theater has been dropped" / "Checks have been picked up", and Undo on a
+        // completed step (back to the list, colored by the time again): confirm first ---
         const confirmBox = document.getElementById('step-confirm');
         const confirmOk = document.getElementById('step-ok');
         const confirmMessage = confirmBox.querySelector('.confirm-message');
         let pending = null;
-        function openConfirm(showId, key) {
+        function openConfirm(showId, key, undo) {
             const s = state && state.shows.find(x => x.id === showId);
             const step = STEPS.find(x => x.key === key);
             if (!s || !step) return;
-            pending = { showId, key };
-            document.getElementById('step-confirm-title').textContent = step.confirm;
-            document.getElementById('step-confirm-text').textContent = whereOf(s) + '. ' + step.name + ' moves to Completed.';
+            pending = { showId, key, undo };
+            document.getElementById('step-confirm-title').textContent = undo ? 'Undo ' + step.name + '?' : step.confirm;
+            document.getElementById('step-confirm-text').textContent = whereOf(s) + '. '
+                + (undo ? step.name + ' moves back to the list and is no longer marked done.' : step.name + ' moves to Completed.');
+            document.getElementById('step-ok-text').textContent = undo ? 'Undo' : 'Confirm';
             confirmMessage.textContent = '';
             confirmOk.disabled = false;
             confirmOk.classList.remove('is-loading');
@@ -658,7 +687,7 @@
             confirmOk.classList.add('is-loading');
             confirmMessage.textContent = '';
             try {
-                const json = await api({ action: 'completeRoadhouseStep', showId: pending.showId, step: pending.key });
+                const json = await api({ action: pending.undo ? 'undoRoadhouseStep' : 'completeRoadhouseStep', showId: pending.showId, step: pending.key });
                 if (!json.ok) throw json;
                 apply(json);
                 confirmBox.close();
@@ -671,7 +700,8 @@
                 confirmOk.classList.remove('is-loading');
             }
         });
-        confirmBox.addEventListener('close', () => { pending = null; });
+        // (the close event comes a moment later, so it's skipped when the box has already been opened again)
+        confirmBox.addEventListener('close', () => { if (!confirmBox.open) pending = null; });
 
         // --- The Show Times menu: each showing's auditorium, start and end time, and rows; at least one, 20 at most ---
         let menu = null;

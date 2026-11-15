@@ -83,8 +83,11 @@ export async function saveRoadhouseShows(id, body, now = Date.now()) {
   });
 }
 
-// Marks one showing's step done. body: { showId, step: 'open' | 'drop' | 'pickup' }
-export async function completeRoadhouseStep(id, body, now = Date.now()) {
+// Marks one showing's step done (completeRoadhouseStep; done again keeps the first time) or not done
+// (undoRoadhouseStep). body: { showId, step: 'open' | 'drop' | 'pickup' }
+export const completeRoadhouseStep = (id, body, now = Date.now()) => setStep_(id, body, now, true);
+export const undoRoadhouseStep = (id, body, now = Date.now()) => setStep_(id, body, now, false);
+async function setStep_(id, body, now, done) {
   const field = STEP_FIELDS[body.step];
   if (!field) return { ok: false, error: 'invalid_step' };
   const day = showDay(now);
@@ -95,8 +98,10 @@ export async function completeRoadhouseStep(id, body, now = Date.now()) {
     const shows = d.SHOWS || [];
     const s = shows.find(x => x.ID === String(body.showId || ''));
     if (!s) return { ok: false, error: 'not_found' };
-    if (!s[field]) {
-      s[field] = new Date(now).toISOString();
+    const was = s[field] || '';
+    const next = done ? was || new Date(now).toISOString() : '';
+    if (next !== was) {
+      s[field] = next;
       tx.update(ref_(id), { SHOWS: shows, 'UPDATED AT': new Date(now).toISOString() });
     }
     return { ok: true, day, shows: shows.map(view_) };
