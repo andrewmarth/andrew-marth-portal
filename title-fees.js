@@ -124,44 +124,96 @@ export function feeApplies(f, hasLoan, property) {
     return f.when === 'Every Sale' || (f.when === 'With a Loan' && hasLoan) || (f.when === 'Manufactured Home' && property === 'manufactured');
 }
 
-const discountOf = (list, name) => (name ? ((list || []).find(d => d.name === name) || {}).percent || 0 : 0);
-
-// What qualifies someone (or the property) for a discount. A page's BUYER TYPE is one of BUYER_TYPES; a discount's category
-// is one of DISCOUNT_CATEGORIES.
-export const BUYER_TYPES = ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'];
-export const DISCOUNT_CATEGORIES = BUYER_TYPES.slice(1).concat(['Prior Policy', 'Other']);
-// Who an owner's policy discount is for, and what it takes off:
-//   buyer       the buyer qualifies; the whole policy costs less, whoever pays (WFG 10.2: an investor buying)
-//   buyerPays   the buyer qualifies; only the buyer's share of the policy costs less
+// --- Discounts (escrow and owner's policy) ---
+// Who qualifies for a discount (its qualifies: any of them): a profession or group a client can tick (/dpa.js
+// PROFESSION_GROUPS), or one of these:
+//   Investor              someone who has owned investorProperties properties in the last investorYears years (by their
+//                         Real Estate Owned)
+//   Church / Non-Profit, Corporate Relocation   set on the page (PAGE_QUALIFIERS)
+//   Prior Policy, Other   never on their own: picked on the page (a reissue / short-term rate comes from the property)
+export const DISCOUNT_SPECIAL = ['Investor', 'Church / Non-Profit', 'Corporate Relocation'];
+export const PAGE_QUALIFIERS = ['Church / Non-Profit', 'Corporate Relocation'];
+export const PICKED_QUALIFIERS = ['Prior Policy', 'Other'];
+// A discount saved before had one category (a page's old Buyer Type): the groups it covers
+const LEGACY_CATEGORY = {
+    'Senior': ['Senior (60+)'], 'Real Estate Agent': ['Real Estate Agent'],
+    'Military / First Responder': ['Firefighter', 'Law Enforcement', 'EMTs', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'],
+    'Public Servant': ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs'],
+};
+export const qualifiersOf = d => (Array.isArray(d.qualifies) && d.qualifies.length ? d.qualifies
+    : d.category ? LEGACY_CATEGORY[d.category] || [d.category] : ['Other']);
+// Who a discount is for, and what it takes off (the same for escrow and owner's policy discounts):
+//   buyer       the buyer qualifies; the whole fee or policy costs less, whoever pays (WFG 10.2: an investor buying)
+//   buyerPays   the buyer qualifies; only the buyer's share costs less
 //   sellerPays  the seller qualifies; only the seller's share costs less
-//   eitherPays  either party can qualify; only what that party pays costs less (First American B.6, Fidelity 803)
-//   property    the property qualifies (a reissue / short-term rate on the seller's prior policy); the whole policy
+//   eitherPays  either party can qualify; only what that party pays costs less (First American B.6, Fidelity 803, the
+//               escrow discounts of WFG 6.2-6.4)
+//   property    picked on the page (a reissue / short-term rate on the seller's prior policy); the whole fee or policy
 export const DISCOUNT_APPLIES = [
-    ['buyer', 'Buyer: whole policy'],
-    ['buyerPays', 'Buyer: their share only'],
-    ['sellerPays', 'Seller: their share only'],
-    ['eitherPays', 'Either party: their share only'],
-    ['property', 'Prior policy: whole policy'],
+    ['buyer', 'Buyer qualifies: the whole fee'],
+    ['buyerPays', 'Buyer qualifies: their share only'],
+    ['sellerPays', 'Seller qualifies: their share only'],
+    ['eitherPays', 'Either qualifies: their share only'],
+    ['property', 'Picked on the page: the whole fee'],
 ];
-// The biggest escrow discount a buyer of this type gets (by category), or ''
-export const buyerEscrowDiscount = (c, buyerType) => ((c.discounts || []).filter(d => d.category && d.category === buyerType)
-    .sort((a, b) => (b.percent || 0) - (a.percent || 0))[0] || {}).name || '';
-// Owner's policy discounts the page picks by hand: ones the seller or the property qualifies for
-export const pickableTitleDiscounts = c => (c.titleDiscounts || []).filter(d => ['sellerPays', 'eitherPays', 'property'].includes(d.applies || 'property'));
+// How many properties someone owned at any time in the last `years` years. owned: [{ purchased, sold }] (YYYY-MM-DD;
+// sold blank while they still own it). today: a Date.
+export function propertiesOwnedWithin(owned, years, today = new Date()) {
+    const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const start = new Date(today.getFullYear() - years, today.getMonth(), today.getDate());
+    const from = iso(start), to = iso(today);
+    return (owned || []).filter(p => p && p.purchased && p.purchased <= to && (!p.sold || p.sold >= from)).length;
+}
+// Whether a party qualifies for a discount. party: { tags: [groups and page qualifiers they have], owned: [each person's
+// [{ purchased, sold }] (null: not answered)], today } (any one person meeting the investor rule counts). A tag of
+// 'Investor' counts as an investor on its own (a Seller Net's expected buyer).
+export function partyQualifies(d, party) {
+    if (!party) return false;
+    const tags = party.tags || [];
+    return qualifiersOf(d).some(q => {
+        if (PICKED_QUALIFIERS.includes(q)) return false;
+        if (q !== 'Investor') return tags.includes(q);
+        if (tags.includes('Investor')) return true;
+        const n = d.investorProperties, y = d.investorYears;
+        return n > 0 && y > 0 && (party.owned || []).some(list => propertiesOwnedWithin(list, y, party.today || new Date()) >= n);
+    });
+}
+// Each side's escrow discount (the biggest one that applies to it): { seller, buyer } (each a discount, or null).
+// o: { buyer, seller (parties), picked (a discount's name picked on the page) }
+export function escrowDiscounts(c, o = {}) {
+    let seller = null, buyer = null;
+    (c.discounts || []).forEach(d => {
+        const p = d.percent || 0;
+        if (!(p > 0)) return;
+        const applies = d.applies || 'eitherPays';
+        const pickedHere = Boolean(o.picked) && d.name === o.picked;
+        const bq = partyQualifies(d, o.buyer), sq = partyQualifies(d, o.seller) || pickedHere;
+        const forSeller = (applies === 'buyer' && bq) || ((applies === 'sellerPays' || applies === 'eitherPays') && sq) || (applies === 'property' && pickedHere);
+        const forBuyer = ((applies === 'buyer' || applies === 'buyerPays' || applies === 'eitherPays') && bq) || (applies === 'property' && pickedHere);
+        if (forSeller && (!seller || p > seller.percent)) seller = d;
+        if (forBuyer && (!buyer || p > buyer.percent)) buyer = d;
+    });
+    return { seller, buyer };
+}
+// Owner's policy discounts the page picks by hand: ones only a pick can apply (a prior policy, or "Other"), plus, on a
+// Buyer Breakdown (sellerToo), ones the seller qualifies for (the seller isn't a client there)
+export const pickableTitleDiscounts = (c, sellerToo) => (c.titleDiscounts || []).filter(d => (d.applies || 'property') === 'property'
+    || (qualifiersOf(d).some(q => PICKED_QUALIFIERS.includes(q)) && d.applies !== 'buyer' && d.applies !== 'buyerPays')
+    || (sellerToo && (d.applies === 'sellerPays' || d.applies === 'eitherPays')));
 // The owner's policy after the one discount that saves the most: { seller, buyer, note }. sellerPart / buyerPart: each
-// side's share before it. The buyer qualifies by BUYER TYPE (buyerType); the seller or the property by the hand pick.
-export function ownerPolicyDiscount(c, sellerPart, buyerPart, buyerType, picked) {
+// side's share before it. o: { buyer, seller, picked }, as for escrowDiscounts.
+export function ownerPolicyDiscount(c, sellerPart, buyerPart, o = {}) {
     let best = { save: 0, seller: sellerPart, buyer: buyerPart, note: '' };
     (c.titleDiscounts || []).forEach(d => {
         const p = d.percent || 0;
         const applies = d.applies || 'property';
-        const buyerQualifies = Boolean(buyerType) && d.category === buyerType;
-        const pickedHere = picked && d.name === picked;
+        const pickedHere = Boolean(o.picked) && d.name === o.picked;
+        const bq = partyQualifies(d, o.buyer), sq = partyQualifies(d, o.seller) || pickedHere;
         let s = 0, b = 0;
-        if (applies === 'buyer' && buyerQualifies) { s = sellerPart * p; b = buyerPart * p; }
-        else if (applies === 'buyerPays' && buyerQualifies) b = buyerPart * p;
-        else if (applies === 'sellerPays' && pickedHere) s = sellerPart * p;
-        else if (applies === 'eitherPays') { if (buyerQualifies) b = buyerPart * p; if (pickedHere) s = sellerPart * p; }
+        if (applies === 'buyer' && bq) { s = sellerPart * p; b = buyerPart * p; }
+        else if (applies === 'buyerPays' && bq) b = buyerPart * p;
+        else if (applies === 'sellerPays' && sq) s = sellerPart * p;
+        else if (applies === 'eitherPays') { if (bq) b = buyerPart * p; if (sq) s = sellerPart * p; }
         else if (applies === 'property' && pickedHere) { s = sellerPart * p; b = buyerPart * p; }
         if (s + b > best.save + 0.004) best = { save: s + b, seller: sellerPart - s, buyer: buyerPart - b, note: Math.round(p * 100) + '% off: ' + d.name };
     });
@@ -178,9 +230,8 @@ export function ownerPolicyDiscount(c, sellerPart, buyerPart, buyerType, picked)
 //   fincen: the buyer is an entity or trust paying cash, so a FinCEN report is filed
 //   extraFees: names of the company's "Sometimes" fees that apply to this sale
 //   ownerPayer: 'Seller' or 'Buyer' pays the owner's policy (default: the company's custom)
-//   sellerDiscount / buyerDiscount: an escrow discount's name (off that person's share of the table rate)
-//   buyerType: one of BUYER_TYPES (the buyer's escrow discount and owner's policy discounts follow from it)
-//   titleDiscount: an owner's policy discount picked by hand (the seller or the property qualifies)
+//   buyer / seller: who each side is, for the escrow and owner's policy discounts (see partyQualifies)
+//   titleDiscount: a discount picked by hand on the page (a prior policy, or one the seller qualifies for)
 // On a VA loan (when the company says so) the seller pays the buyer's share of the escrow fee: VA doesn't let a veteran pay
 // escrow or closing fees (38 CFR 36.4313). Recording fees and title insurance are allowed, so the buyer still pays those.
 export function saleFees(c, price, loanAmount, o = {}) {
@@ -217,9 +268,13 @@ export function saleFees(c, price, loanAmount, o = {}) {
         note = 'Rate table ' + money(base) + (addOn ? ' + ' + money(addOn) + (hasLoan ? ' with a loan' : ' cash sale') : '') + (extraLoans ? ' + ' + money(extraLoans) + ' second loan' : '');
     }
     if (base === null) return null;
-    // A discount comes off that person's share of the table rate, not the add-on
-    // The seller's escrow discount is picked by hand; the buyer's comes from the buyer type (or an old hand pick)
-    const sd = discountOf(c.discounts, o.sellerDiscount), bd = discountOf(c.discounts, o.buyerDiscount || buyerEscrowDiscount(c, o.buyerType));
+    // A discount comes off the table rate (that person's share of it, or both shares for a whole-fee discount), not the
+    // add-on; each side gets the biggest one it qualifies for
+    const parties = { buyer: o.buyer, seller: o.seller, picked: o.titleDiscount };
+    const ed = escrowDiscounts(c, parties);
+    const sd = ed.seller ? ed.seller.percent : 0, bd = ed.buyer ? ed.buyer.percent : 0;
+    if (ed.seller) note += '; ' + Math.round(sd * 100) + '% off the seller’s share: ' + ed.seller.name;
+    if (ed.buyer) note += '; ' + Math.round(bd * 100) + '% off the buyer’s share: ' + ed.buyer.name;
     let sellerEscrow = Math.ceil(base * share * (1 - sd)) + (total - base) * share;
     let buyerEscrow = Math.ceil(base * (1 - share) * (1 - bd)) + (total - base) * (1 - share);
     if (va) { sellerEscrow += buyerEscrow; buyerEscrow = 0; note += '; VA: the seller pays the buyer’s share'; }
@@ -235,7 +290,7 @@ export function saleFees(c, price, loanAmount, o = {}) {
 
     if (q.owner !== null) {
         const sellerShare = o.ownerPayer === 'Buyer' ? 0 : o.ownerPayer === 'Seller' ? 1 : (c.sellerOwnerShare ?? 1);
-        const d = ownerPolicyDiscount(c, q.owner * sellerShare, q.owner * (1 - sellerShare), o.buyerType, o.titleDiscount);
+        const d = ownerPolicyDiscount(c, q.owner * sellerShare, q.owner * (1 - sellerShare), parties);
         const seller = d.save ? Math.ceil(d.seller) : d.seller, buyer = d.save ? Math.ceil(d.buyer) : d.buyer;
         add('Owner’s Title Policy', seller + buyer, seller, 'owner', d.note);
     }

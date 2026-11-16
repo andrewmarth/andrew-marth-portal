@@ -443,9 +443,6 @@
         .dd-check.is-none { grid-column: 1 / -1; margin-top: 4px; border-style: dashed; }
         .dd-check:has(input:checked) { background: rgba(233, 226, 216, 0.14); border-color: var(--gold); }
         .dd-check:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
-        .dd-owned { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
-        .dd-owned .cf-input { max-width: 190px; }
-        .dd-year[hidden] { display: none; }
         /* LLCs / Trusts pop-up: each saved one locked (its name and title, with Edit and Remove); one at a time opens as a
            small form; Add under them; with none, an "I do not have one" box */
         .edit-dialog.llc-dialog { max-width: 560px; max-height: calc(100dvh - 40px); overflow-y: auto; }
@@ -486,12 +483,27 @@
             .llc-entry.is-editing { grid-template-columns: minmax(0, 1fr); }
             .llc-edit-actions .btn { flex: 1; }
         }
+        /* Real Estate Owned: a property's form (the address with Google's suggestions, then the rest two to a row) */
+        .edit-dialog.reo-dialog { max-width: 600px; }
+        .reo-form.llc-entry.is-editing { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+        .reo-field { display: block; min-width: 0; }
+        .reo-field[hidden] { display: none; }
+        .reo-field.reo-wide { grid-column: 1 / -1; }
+        .reo-field > span, .reo-label { display: block; margin: 0 0 6px 6px; font-size: 0.85rem; font-weight: bold; }
+        .reo-form .cf-input { max-width: none; }
+        .reo-form select.cf-input { -webkit-appearance: none; appearance: none; padding-right: 40px; background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center / 14px; }
+        .reo-form input[type="date"].cf-input:disabled { opacity: 0.45; }
+        .reo-current { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 6px; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+        .reo-current input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--olive); }
+        .reo-form .addr-manual { gap: 10px 12px; }
+        .reo-form .addr-toggle { margin-left: 6px; }
+        .reo-meta { font-size: 0.85rem; opacity: 0.75; overflow-wrap: anywhere; }
+        @media (max-width: 600px) { .reo-form.llc-entry.is-editing { grid-template-columns: minmax(0, 1fr); } }
         /* Your profile: a line with nothing on file gets a warning icon before its name */
         .missing-icon { display: inline-flex; vertical-align: -3px; margin-right: 8px; color: #b7791f; }
         .missing-icon svg { width: 17px; height: 17px; }
         .detail-dialog { max-height: calc(100dvh - 40px); overflow-y: auto; }
         .detail-dialog .dd-editor { margin: 4px 0 2px; }
-        .detail-dialog .dd-owned { justify-content: flex-start; }
         .detail-dialog .cf-input { max-width: 220px; }
         .detail-dialog .yn { background: #f2ede6; }
         .detail-dialog .yn label { color: var(--brown); }
@@ -599,12 +611,24 @@
         .tc-row { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
         .tc-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
         .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
-        /* Discounts: the name on its own line, then the percent and the choices */
-        .tc-row.is-discount { grid-template-columns: 110px minmax(0, 1fr) 40px; row-gap: 6px; }
-        .tc-row.is-tdiscount { grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr) 40px; row-gap: 6px; }
-        .tc-row.is-discount .tc-disc-name, .tc-row.is-tdiscount .tc-disc-name { grid-column: 1 / -1; }
-        .tc-row.is-discount.is-head, .tc-row.is-tdiscount.is-head { display: none; }
-        .tc-row.is-discount + .tc-row, .tc-row.is-tdiscount + .tc-row { margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(79, 45, 44, 0.12); }
+        /* Discounts: the name on its own line, then the percent, who qualifies and what it comes off; an investor's rule under */
+        .tc-row.is-discount { grid-template-columns: 96px minmax(0, 1fr) 40px; row-gap: 6px; align-items: start; }
+        .tc-row.is-discount .tc-disc-name, .tc-row.is-discount .tc-investor { grid-column: 1 / -1; }
+        .tc-row.is-discount select[data-k="applies"] { grid-column: 1 / 3; }
+        .tc-row.is-discount.is-head { display: none; }
+        .tc-row.is-discount + .tc-row { margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(79, 45, 44, 0.12); }
+        /* Who qualifies: a box that opens a list to tick */
+        .tc-who { min-width: 0; }
+        .tc-who summary { display: block; min-height: 42px; padding: 9px 30px 9px 12px; border: 2px solid var(--navy); border-radius: 12px; background: #f7f4f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e513e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; font-size: 0.92rem; line-height: 1.35; cursor: pointer; list-style: none; overflow-wrap: anywhere; }
+        .tc-who summary::-webkit-details-marker { display: none; }
+        .tc-who[open] summary { background-color: var(--white); border-color: var(--tan); }
+        .tc-who-list { display: grid; gap: 2px; margin-top: 6px; padding: 8px; max-height: 260px; overflow-y: auto; border: 2px solid var(--navy); border-radius: 12px; background: var(--white); }
+        .tc-who-list label { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 0.9rem; line-height: 1.3; cursor: pointer; }
+        .tc-row .tc-who-list input { flex: none; width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; border: none; accent-color: var(--olive); }
+        @media (hover: hover) { .tc-who-list label:hover { background: #f4efe8; } }
+        .tc-investor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: 12px; background: #f2ede6; font-size: 0.9rem; }
+        .tc-investor[hidden] { display: none; }
+        .tc-row .tc-investor input { width: 64px; min-height: 36px; text-align: center; }
         .tc-row.is-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr 40px; }
         /* Notes: a fixed size that fits the longest notes on file (Fidelity's) */
         .tc-dialog #tc-notes { height: 420px; }
@@ -671,9 +695,6 @@
             .tc-row.is-tier .tc-tier-part { grid-column: 1; }
             .tc-row.is-tier .tc-remove { grid-column: 2; grid-row: 1; }
             .tc-tier-part > span { width: 70px; flex: 0 0 auto; }
-            /* Phones: the "what it comes off" choice gets its own line too */
-            .tc-row.is-tdiscount { grid-template-columns: 110px minmax(0, 1fr) 40px; }
-            .tc-row.is-tdiscount [data-k="applies"] { grid-column: 1 / -1; }
             .tc-row.is-endorse.is-head { display: none; }
             .tc-row.is-endorse input[data-k="name"] { grid-column: 1 / -1; }
             .edit-dialog.tc-dialog { max-height: calc(100dvh - 24px); }
@@ -1423,7 +1444,31 @@
         </div>
     </dialog>
 
-    <!-- Remove this LLC / trust? (over the LLCs / Trusts pop-up) -->
+    <!-- Real Estate Owned: each property saved is locked, with Edit and Remove (Remove asks first); Add opens an empty one;
+         with none, an "I have never owned real estate" box. Each change is saved right away. Your own, or Edit Clients'. -->
+    <dialog class="edit-dialog llc-dialog reo-dialog property-dialog" id="reo-dialog" aria-labelledby="reo-dialog-title">
+        <div class="dialog-inner">
+            <div class="dialog-head">
+                <h2 id="reo-dialog-title">Real Estate Owned</h2>
+                <button type="button" class="close-btn" data-close-reo aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted" id="reo-help"></p>
+            <div class="llc-entries" id="reo-entries"></div>
+            <button type="button" class="llc-add" id="reo-add">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                <span>Add a Property</span>
+            </button>
+            <label class="llc-none" id="reo-none-wrap"><input type="checkbox" id="reo-none"><span id="reo-none-text">I have never owned real estate</span></label>
+            <p class="form-message" id="reo-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn" data-close-reo>Done</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Remove this LLC / trust / property? (over the LLCs / Trusts / Real Estate Owned pop-up) -->
     <dialog class="edit-dialog llc-confirm" id="llc-confirm" aria-labelledby="llc-confirm-title" aria-describedby="llc-confirm-text">
         <div class="dialog-inner">
             <h2 id="llc-confirm-title">Remove this?</h2>
@@ -1471,7 +1516,8 @@
         import { openLoanProductForm } from '/loan-products.js';
         import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, BUYER_TYPES, DISCOUNT_CATEGORIES, DISCOUNT_APPLIES } from '/title-fees.js';
+        import { loadPlaces, ensurePickerStyles } from '/new-property.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -1864,13 +1910,13 @@
         llcDialog.querySelectorAll('[data-close-llc]').forEach(b => b.addEventListener('click', closeHoldings));
         llcDialog.addEventListener('click', e => { if (e.target === llcDialog) closeHoldings(); });
         llcDialog.addEventListener('cancel', e => { if (hold && hold.busy) e.preventDefault(); });
-        // Remove asks first
-        let removing = null;
-        function openRemoveHolding(i) {
-            removing = i;
-            const cfg = HOLDINGS[hold.kind];
-            document.getElementById('llc-confirm-title').textContent = 'Remove ' + hold.list[i].name + '?';
-            document.getElementById('llc-confirm-text').textContent = 'It will be taken off ' + hold.whose + ' ' + (hold.kind === 'llcs' ? 'LLCs' : 'trusts') + '.';
+        // Remove asks first (the same box for LLCs, trusts and real estate owned). run() does the removing and resolves to
+        // true, or to what went wrong.
+        let confirmRun = null;
+        function confirmRemove(title, text, run) {
+            confirmRun = run;
+            document.getElementById('llc-confirm-title').textContent = title;
+            document.getElementById('llc-confirm-text').textContent = text;
             document.getElementById('llc-confirm-message').textContent = '';
             llcConfirm.showModal();
             llcKeep.focus();
@@ -1878,21 +1924,28 @@
         llcKeep.addEventListener('click', () => { if (!llcRemove.disabled) llcConfirm.close(); });
         llcConfirm.addEventListener('cancel', e => { if (llcRemove.disabled) e.preventDefault(); });
         llcRemove.addEventListener('click', async () => {
-            if (!hold || removing === null || hold.busy) return;
-            const list = hold.list.filter((_, i) => i !== removing);
+            if (!confirmRun) return;
             llcRemove.disabled = llcKeep.disabled = true;
             llcRemove.classList.add('is-loading');
-            const ok = await saveHoldings(holdingList(list), null);
+            const result = await confirmRun();
             llcRemove.disabled = llcKeep.disabled = false;
             llcRemove.classList.remove('is-loading');
-            if (ok) {
+            if (result === true) {
+                confirmRun = null;
                 llcConfirm.close();
-                removing = null;
-                (llcEntries.querySelector('[data-edit]') || llcAdd).focus();
             } else {
-                document.getElementById('llc-confirm-message').textContent = llcMsg.textContent;
+                document.getElementById('llc-confirm-message').textContent = result;
             }
         });
+        function openRemoveHolding(i) {
+            confirmRemove('Remove ' + hold.list[i].name + '?', 'It will be taken off ' + hold.whose + ' ' + (hold.kind === 'llcs' ? 'LLCs' : 'trusts') + '.', async () => {
+                if (!hold || hold.busy) return 'Please wait a moment and try again.';
+                const ok = await saveHoldings(holdingList(hold.list.filter((_, n) => n !== i)), null);
+                if (!ok) return llcMsg.textContent;
+                setTimeout(() => (llcEntries.querySelector('[data-edit]') || llcAdd).focus(), 0);
+                return true;
+            });
+        }
 
         // Your own LLCs and Trusts lines (buyers, flipper buyers, flipper sellers and landlords), saved with updateMyDetails
         const myHoldings = { llcs: '', trusts: '' };
@@ -1927,6 +1980,339 @@
             });
         });
 
+        // --- Real Estate Owned: every property a buyer, seller, flipper buyer, flipper seller or landlord has owned (REAL
+        // ESTATE OWNED: JSON [{ STREET, CITY, STATE, ZIP, OWNERSHIP ('Personal', 'LLC' or 'Trust'), OWNER (the LLC's or
+        // trust's name), PURCHASED, SOLD (YYYY-MM-DD; blank while they own it), USE, INVESTMENT }]; [] when they've never
+        // owned any; blank when not answered). It works like the LLCs menu: each saved one locked with Edit and Remove,
+        // Add opens an empty one, and "I have never owned real estate" while there are none. Their own line and Edit
+        // Clients' share it. It replaced Owned a Home Before (whose "Never" counts as never owned until it's saved).
+        // When they last owned a home (first-time homebuyer programs) and whether they're an investor (title discounts)
+        // come from it. ---
+        const REO_ROLES = ['BUYER', 'SELLER', 'FLIPPER BUYER', 'FLIPPER SELLER', 'LANDLORD'];
+        const REO_USES = ['Primary Residence', 'Secondary Residence', 'Investment'];
+        const REO_INVESTMENTS = ['Fix & Flip', 'Fix & Rent', 'Turn-Key Rental'];
+        const MAX_REO = 50;
+        function reoOf(raw) {
+            const s = String(raw || '').trim();
+            let list = [];
+            try { const parsed = JSON.parse(s || '[]'); if (Array.isArray(parsed)) list = parsed.filter(p => p && p.STREET); } catch (e) { list = []; }
+            return { list, none: s === '[]' };
+        }
+        // What a line shows: the address (one property), "3 properties", "I have never owned real estate", or '' (not answered)
+        function reoText(raw) {
+            const r = reoOf(raw);
+            return r.list.length === 1 ? r.list[0].STREET : r.list.length ? r.list.length + ' properties' : r.none ? 'I have never owned real estate' : '';
+        }
+        // Your own account row's value
+        function reoRaw(row) {
+            const raw = String(findValue(row, 'real estate owned')).trim();
+            return raw || (/^never$/i.test(String(findValue(row, 'last owned home')).trim()) ? '[]' : '');
+        }
+        const pad2 = n => String(n).padStart(2, '0');
+        const todayIso = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+        const fmtDay = iso => { const [y, m, d] = String(iso || '').split('-').map(Number); return y ? new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+        const REO_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+        const REO_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+        const reoDialog = document.getElementById('reo-dialog');
+        const reoEntries = document.getElementById('reo-entries');
+        const reoAdd = document.getElementById('reo-add');
+        const reoNone = document.getElementById('reo-none');
+        const reoNoneWrap = document.getElementById('reo-none-wrap');
+        const reoMsg = document.getElementById('reo-message');
+        // While the pop-up is open: { list, none, editing (an index; list.length for a new one; null), busy, mine, whose,
+        // owners: { llcs, trusts } (names, for the Ownership choices), save(value) → resolves to the value saved }
+        let reo = null;
+        let reoAddress = null;   // the open form's address ({ value(), search })
+        const ownershipText = p => (p.OWNERSHIP === 'Personal' ? (reo && reo.mine ? 'In my personal name' : 'In their personal name') : p.OWNER + ' (' + p.OWNERSHIP + ')');
+        const reoUseText = p => (p.USE === 'Investment' && p.INVESTMENT ? 'Investment: ' + p.INVESTMENT : p.USE);
+        const cityLine = p => [p.CITY, ((p.STATE || '') + ' ' + (p.ZIP || '')).trim()].filter(Boolean).join(', ');
+        function reoFormHtml(p) {
+            // Ownership: their personal name, then their LLCs and trusts (and whatever this property had, if it's gone since)
+            const owners = [['Personal', reo.mine ? 'In my personal name' : 'In their personal name']]
+                .concat(reo.owners.llcs.map(n => ['LLC::' + n, n + ' (LLC)']), reo.owners.trusts.map(n => ['Trust::' + n, n + ' (Trust)']));
+            const current = p.OWNERSHIP && p.OWNERSHIP !== 'Personal' ? p.OWNERSHIP + '::' + p.OWNER : 'Personal';
+            if (!owners.some(o => o[0] === current)) owners.push([current, p.OWNER + ' (' + p.OWNERSHIP + ')']);
+            const opt = (v, label, picked) => '<option value="' + escapeHtml(v) + '"' + (v === picked ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+            const own = p.STREET && !p.SOLD;
+            return '<form class="llc-entry reo-form is-editing" novalidate>'
+                + '<div class="reo-field reo-wide"><span class="reo-label" id="reo-addr-label">Address</span>'
+                + '<div data-address-search><input class="cf-input" data-k="search" type="text" placeholder="Start typing the address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-labelledby="reo-addr-label" value="' + escapeHtml(p.STREET || '') + '">'
+                + '<div class="addr-suggestions" role="listbox"></div>'
+                + '<p class="addr-selected"' + (p.STREET ? '' : ' hidden') + '>' + REO_CHECK + '<span>' + escapeHtml(cityLine(p)) + '</span></p></div>'
+                + '<div class="addr-manual" hidden>'
+                + ['street', 'city', 'state', 'zip'].map(k => '<label class="reo-field' + (k === 'street' ? ' reo-wide' : '') + '"><span>' + { street: 'Street Address', city: 'City', state: 'State', zip: 'Zip' }[k] + '</span>'
+                    + '<input class="cf-input" data-k="' + k + '" type="text" autocomplete="off"' + (k === 'zip' ? ' inputmode="numeric" maxlength="10"' : k === 'state' ? ' maxlength="20"' : '') + '></label>').join('')
+                + '</div><button type="button" class="addr-toggle" data-addr-toggle>Can’t find it? Enter the address manually</button></div>'
+                + '<label class="reo-field reo-wide"><span>Ownership</span><select class="cf-input" data-k="ownership">' + owners.map(([v, l]) => opt(v, l, current)).join('') + '</select></label>'
+                + '<label class="reo-field"><span>Date Purchased</span><input class="cf-input" type="date" data-k="purchased" max="' + todayIso() + '" value="' + escapeHtml(p.PURCHASED || '') + '"></label>'
+                + '<div class="reo-field"><span>Date Sold</span><input class="cf-input" type="date" data-k="sold" max="' + todayIso() + '" aria-label="Date sold" value="' + escapeHtml(p.SOLD || '') + '"' + (own ? ' disabled' : '') + '>'
+                + '<label class="reo-current"><input type="checkbox" data-k="current"' + (own ? ' checked' : '') + '><span>Currently Own</span></label></div>'
+                + '<label class="reo-field"><span>Ownership Type</span><select class="cf-input" data-k="use">' + opt('', 'Choose...', p.USE || '') + REO_USES.map(u => opt(u, u, p.USE)).join('') + '</select></label>'
+                + '<label class="reo-field" data-investment' + (p.USE === 'Investment' ? '' : ' hidden') + '><span>Investment Type</span><select class="cf-input" data-k="investment">'
+                + opt('', 'Choose...', p.INVESTMENT || '') + REO_INVESTMENTS.map(t => opt(t, t, p.INVESTMENT)).join('') + '</select></label>'
+                + '<div class="llc-edit-actions"><button type="button" class="btn btn-secondary" data-cancel>Cancel</button>'
+                + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save</button></div></form>';
+        }
+        // The open form's address: Google's suggestions (a choice fills in the street, city, state and zip), or the four
+        // typed in by hand (also when Google can't load)
+        function attachAddress(form, p) {
+            const search = form.querySelector('[data-k="search"]');
+            const suggestions = form.querySelector('.addr-suggestions');
+            const selected = form.querySelector('.addr-selected');
+            const manual = form.querySelector('.addr-manual');
+            const searchWrap = form.querySelector('[data-address-search]');
+            const toggle = form.querySelector('[data-addr-toggle]');
+            const parts = Object.fromEntries(['street', 'city', 'state', 'zip'].map(k => [k, form.querySelector('[data-k="' + k + '"]')]));
+            let picked = p.STREET ? { street: p.STREET, city: p.CITY, state: p.STATE, zip: p.ZIP } : null;
+            let places = null, session = null, results = [], highlighted = -1, timer = null, requestId = 0;
+            const showManual = on => {
+                manual.hidden = !on;
+                searchWrap.hidden = on;
+                toggle.textContent = on ? 'Search for the address instead' : 'Can’t find it? Enter the address manually';
+                if (on && picked) Object.keys(parts).forEach(k => { parts[k].value = picked[k] || ''; });
+            };
+            toggle.addEventListener('click', () => showManual(manual.hidden));
+            const close = () => { suggestions.classList.remove('is-open'); search.setAttribute('aria-expanded', 'false'); highlighted = -1; };
+            const draw = () => {
+                if (!results.length) { close(); return; }
+                suggestions.innerHTML = results.map((s, i) => {
+                    const pr = s.placePrediction;
+                    return '<div class="addr-option' + (i === highlighted ? ' is-active' : '') + '" role="option" data-i="' + i + '">' + REO_PIN
+                        + '<span class="addr-option-text"><span class="addr-main">' + escapeHtml(pr.mainText ? pr.mainText.text : pr.text.text) + '</span>'
+                        + '<span class="addr-secondary">' + escapeHtml(pr.secondaryText ? pr.secondaryText.text : '') + '</span></span></div>';
+                }).join('') + '<div class="addr-credit">Google Maps</div>';
+                suggestions.querySelectorAll('.addr-option').forEach(o => {
+                    o.addEventListener('pointerdown', e => e.preventDefault());
+                    o.addEventListener('click', () => choose(Number(o.dataset.i)));
+                });
+                suggestions.classList.add('is-open');
+                search.setAttribute('aria-expanded', 'true');
+            };
+            const fetchSuggestions = async text => {
+                const id = ++requestId;
+                try {
+                    places = places || await loadPlaces();
+                    session = session || new places.AutocompleteSessionToken();
+                    const { suggestions: found } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+                        input: text, sessionToken: session, includedRegionCodes: ['us'],
+                        includedPrimaryTypes: ['street_address', 'premise', 'subpremise'],
+                        locationBias: { center: { lat: 33.4484, lng: -112.074 }, radius: 50000 },
+                    });
+                    if (id !== requestId) return;
+                    results = (found || []).filter(s => s.placePrediction).slice(0, 4);
+                    highlighted = -1;
+                    draw();
+                } catch (err) {
+                    console.error('Google address suggestions unavailable:', err);
+                    close();
+                    showManual(true);
+                    parts.street.value = parts.street.value || search.value.trim();
+                }
+            };
+            const choose = async i => {
+                const s = results[i];
+                if (!s) return;
+                close();
+                const pr = s.placePrediction;
+                search.value = pr.mainText ? pr.mainText.text : pr.text.text;
+                try {
+                    const place = pr.toPlace();
+                    await place.fetchFields({ fields: ['addressComponents'] });
+                    const get = (type, short) => { const c = (place.addressComponents || []).find(x => x.types.includes(type)); return c ? (short ? c.shortText : c.longText) : ''; };
+                    const line1 = [get('street_number'), get('route', true)].filter(Boolean).join(' ');
+                    const unit = get('subpremise');
+                    picked = { street: line1 ? (unit ? line1 + ' #' + unit : line1) : search.value,
+                        city: get('locality') || get('postal_town') || get('sublocality') || get('administrative_area_level_3'),
+                        state: get('administrative_area_level_1', true), zip: get('postal_code') };
+                    search.value = picked.street;
+                    selected.querySelector('span').textContent = cityLine({ CITY: picked.city, STATE: picked.state, ZIP: picked.zip });
+                    selected.hidden = false;
+                    search.classList.remove('is-invalid');
+                } catch (err) {
+                    console.error('Could not load address details:', err);
+                    picked = null;
+                }
+                session = null;
+            };
+            search.addEventListener('input', () => {
+                clearTimeout(timer);
+                if (picked) { picked = null; selected.hidden = true; }
+                const text = search.value.trim();
+                if (text.length < 3) { results = []; close(); return; }
+                timer = setTimeout(() => fetchSuggestions(text), 220);
+            });
+            search.addEventListener('keydown', e => {
+                if (!suggestions.classList.contains('is-open')) return;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); highlighted = (highlighted + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length; draw(); }
+                else if (e.key === 'Enter') { e.preventDefault(); choose(highlighted >= 0 ? highlighted : 0); }
+                else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+            });
+            search.addEventListener('blur', () => setTimeout(close, 150));
+            return {
+                search, parts,
+                manual: () => !manual.hidden,
+                value: () => (manual.hidden ? picked : Object.fromEntries(Object.entries(parts).map(([k, el]) => [k, el.value.trim()]))),
+            };
+        }
+        function drawReo() {
+            const locked = reo.editing !== null || reo.busy ? ' disabled' : '';
+            const rows = reo.list.map((p, i) => (i === reo.editing ? reoFormHtml(p)
+                : '<div class="llc-entry" data-i="' + i + '"><span class="llc-text"><span class="llc-name">' + escapeHtml(p.STREET) + '</span>'
+                    + '<span class="llc-title">' + escapeHtml(cityLine(p)) + '</span>'
+                    + '<span class="reo-meta">' + escapeHtml(reoUseText(p) + ' · ' + ownershipText(p)) + '</span>'
+                    + '<span class="reo-meta">' + escapeHtml(fmtDay(p.PURCHASED) + ' – ' + (p.SOLD ? fmtDay(p.SOLD) : 'Currently own')) + '</span></span>'
+                    + '<button type="button" class="llc-btn" data-edit aria-label="Edit ' + escapeHtml(p.STREET) + '" title="Edit"' + locked + '>' + PENCIL_ICON + '</button>'
+                    + '<button type="button" class="llc-btn is-danger" data-remove aria-label="Remove ' + escapeHtml(p.STREET) + '" title="Remove"' + locked + '>' + TRASH_ICON + '</button></div>'));
+            if (reo.editing === reo.list.length) rows.push(reoFormHtml({}));
+            reoEntries.innerHTML = rows.join('');
+            reoAdd.hidden = reo.editing !== null || reo.list.length >= MAX_REO;
+            reoAdd.disabled = reo.busy;
+            reoNoneWrap.hidden = reo.list.length > 0 || reo.editing !== null;
+            reoNone.checked = reo.none;
+            reoNone.disabled = reo.busy;
+            const form = reoEntries.querySelector('.reo-form');
+            reoAddress = form ? attachAddress(form, reo.editing < reo.list.length ? reo.list[reo.editing] : {}) : null;
+        }
+        // Opens the pop-up. value: what's saved; save(value) saves a new value ('NONE' or the list) and resolves to the value
+        // saved (or throws). owners: { llcs, trusts } names.
+        function openReo({ title, intro, value, mine, whose, owners, save }) {
+            const r = reoOf(value);
+            reo = { list: r.list, none: r.none, editing: null, busy: false, mine, whose, owners, save };
+            ensurePickerStyles();
+            document.getElementById('reo-dialog-title').textContent = title;
+            document.getElementById('reo-help').textContent = intro;
+            document.getElementById('reo-none-text').textContent = mine ? 'I have never owned real estate' : 'They have never owned real estate';
+            reoMsg.textContent = '';
+            drawReo();
+            reoDialog.showModal();
+            (reoEntries.querySelector('[data-edit]') || reoAdd).focus();
+        }
+        async function saveReo(value, form) {
+            reo.busy = true;
+            reoMsg.textContent = '';
+            if (form) { form.querySelectorAll('input, button, select').forEach(el => { el.disabled = true; }); form.querySelector('[data-save]').classList.add('is-loading'); }
+            else drawReo();
+            try {
+                const r = reoOf(await reo.save(value));
+                Object.assign(reo, { list: r.list, none: r.none, editing: null, busy: false });
+                drawReo();
+                return true;
+            } catch (err) {
+                console.error(err);
+                reo.busy = false;
+                if (form) {
+                    form.querySelectorAll('input, button, select').forEach(el => { el.disabled = false; });
+                    const current = form.querySelector('[data-k="current"]');
+                    form.querySelector('[data-k="sold"]').disabled = current.checked;
+                    form.querySelector('[data-save]').classList.remove('is-loading');
+                } else drawReo();
+                reoMsg.textContent = /^invalid_/.test(err.message) ? 'One of the properties isn’t filled in right. Please check it.' : 'We couldn’t save that. Please try again.';
+                return false;
+            }
+        }
+        const focusReoForm = () => {
+            const input = reoEntries.querySelector('.reo-form [data-k="search"]');
+            if (!input) return;
+            input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            input.focus({ preventScroll: true });
+        };
+        reoEntries.addEventListener('click', e => {
+            if (!reo || reo.busy) return;
+            const entry = e.target.closest('.llc-entry');
+            if (e.target.closest('[data-edit]')) {
+                reo.editing = Number(entry.dataset.i);
+                reoMsg.textContent = '';
+                drawReo();
+                focusReoForm();
+            } else if (e.target.closest('[data-remove]')) {
+                const i = Number(entry.dataset.i);
+                confirmRemove('Remove ' + reo.list[i].STREET + '?', 'It will be taken off ' + reo.whose + ' real estate owned.', async () => {
+                    if (!reo || reo.busy) return 'Please wait a moment and try again.';
+                    const ok = await saveReo(reo.list.filter((_, n) => n !== i), null);
+                    if (!ok) return reoMsg.textContent;
+                    setTimeout(() => (reoEntries.querySelector('[data-edit]') || reoAdd).focus(), 0);
+                    return true;
+                });
+            } else if (e.target.closest('[data-cancel]')) {
+                const was = reo.editing;
+                reo.editing = null;
+                reoMsg.textContent = '';
+                drawReo();
+                const back = reoEntries.querySelector('[data-i="' + was + '"] [data-edit]');
+                (back || reoAdd).focus();
+            }
+        });
+        reoEntries.addEventListener('change', e => {
+            const form = e.target.closest('.reo-form');
+            if (!form) return;
+            if (e.target.matches('[data-k="current"]')) {
+                const sold = form.querySelector('[data-k="sold"]');
+                sold.disabled = e.target.checked;
+                if (e.target.checked) sold.value = '';
+            }
+            if (e.target.matches('[data-k="use"]')) form.querySelector('[data-investment]').hidden = e.target.value !== 'Investment';
+        });
+        reoEntries.addEventListener('input', e => { e.target.classList.remove('is-invalid'); reoMsg.textContent = ''; });
+        reoEntries.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!reo || reo.busy || reo.editing === null) return;
+            const form = e.target;
+            const k = name => form.querySelector('[data-k="' + name + '"]');
+            const fail = (el, text) => { if (el) { el.classList.add('is-invalid'); el.focus(); } reoMsg.textContent = text; };
+            const a = reoAddress.value();
+            if (!a) return fail(reoAddress.search, 'Please choose the address from the suggestions, or enter it manually.');
+            const gap = ['street', 'city', 'state', 'zip'].find(p => !a[p]);
+            if (gap) return fail(reoAddress.manual() ? reoAddress.parts[gap] : reoAddress.search, 'Please fill in the full address (street, city, state and zip).');
+            const today = todayIso();
+            const purchased = k('purchased').value, current = k('current').checked, sold = current ? '' : k('sold').value;
+            if (!purchased) return fail(k('purchased'), 'Please enter the date it was purchased.');
+            if (purchased > today) return fail(k('purchased'), 'The purchase date can’t be in the future.');
+            if (!current && !sold) return fail(k('sold'), 'Please enter the date it was sold, or tick Currently Own.');
+            if (sold && sold > today) return fail(k('sold'), 'The sale date can’t be in the future.');
+            if (sold && sold < purchased) return fail(k('sold'), 'The sale date can’t be before the purchase date.');
+            const use = k('use').value;
+            if (!use) return fail(k('use'), 'Please choose the ownership type.');
+            const investment = use === 'Investment' ? k('investment').value : '';
+            if (use === 'Investment' && !investment) return fail(k('investment'), 'Please choose the investment type.');
+            const [ownership, ...owner] = k('ownership').value.split('::');
+            const entry = { STREET: a.street, CITY: a.city, STATE: a.state, ZIP: a.zip, OWNERSHIP: ownership, OWNER: owner.join('::'),
+                PURCHASED: purchased, SOLD: sold, USE: use, INVESTMENT: investment };
+            const list = reo.list.slice();
+            list[reo.editing] = entry;
+            await saveReo(list, form);
+            if (!reo.busy && reo.editing === null) reoAdd.focus();
+        });
+        reoAdd.addEventListener('click', () => {
+            if (!reo || reo.busy) return;
+            reo.editing = reo.list.length;
+            reoMsg.textContent = '';
+            drawReo();
+            focusReoForm();
+        });
+        // "I have never owned real estate": ticked saves it; unticked goes back to not answered
+        reoNone.addEventListener('change', () => { if (reo && !reo.busy) saveReo(reoNone.checked ? 'NONE' : [], null); });
+        const closeReo = () => { if (reo && !reo.busy) reoDialog.close(); };
+        reoDialog.querySelectorAll('[data-close-reo]').forEach(b => b.addEventListener('click', closeReo));
+        reoDialog.addEventListener('click', e => { if (e.target === reoDialog) closeReo(); });
+        reoDialog.addEventListener('cancel', e => { if (reo && reo.busy) e.preventDefault(); });
+        // Your own Real Estate Owned line (saved with updateMyDetails)
+        function openMyReo() {
+            if (!saveDetails || !lastAccountRow) return;
+            setPageMessage('');
+            openReo({
+                title: 'Your Real Estate Owned', intro: 'Every property you’ve owned: your homes and investments. It helps with first-time homebuyer programs and title company discounts.',
+                value: reoRaw(lastAccountRow), mine: true, whose: 'your',
+                owners: { llcs: holdingsOf(myHoldings.llcs).list.map(l => l.name), trusts: holdingsOf(myHoldings.trusts).list.map(l => l.name) },
+                save: async value => {
+                    const data = await saveDetails({ 'REAL ESTATE OWNED': value });
+                    showProfile(data.row);
+                    showDetails(data.row, data.income);
+                    setPageMessage('Saved! Your real estate owned has been updated.', 'success');
+                    return reoRaw(data.row);
+                },
+            });
+        }
+
         // Each line: its label, the ACCOUNT LIST column(s) it edits, the kind of control, and when it shows
         const CLIENT_LINES = [
             { group: 'Details' },
@@ -1955,7 +2341,8 @@
             { key: 'groups', label: 'Professions & Groups', saved: 'the professions and groups', cols: ['PROFESSION GROUPS'], kind: 'groups', noNew: true },
             // (a veteran with benefits, ticked in Professions & Groups, can use a VA loan)
             { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => groupList(v['PROFESSION GROUPS']).includes(VA_GROUP), noNew: true },
-            { key: 'owned', label: 'Have you owned a home before?', saved: 'the home ownership answer', cols: ['LAST OWNED HOME'], kind: 'owned', noNew: true },
+            // (buyers, sellers, flipper buyers, flipper sellers and landlords: the Real Estate Owned pop-up)
+            { key: 'reo', label: 'Real Estate Owned', saved: 'the real estate owned', cols: ['REAL ESTATE OWNED'], kind: 'reo', when: v => REO_ROLES.some(r => v[r]), noNew: true },
             { key: 'education', label: 'Have you taken a homebuyer education class?', saved: 'the homebuyer education answer', cols: ['HOMEBUYER EDUCATION'], kind: 'bool', noNew: true },
             // ...and, for buyers, flipper buyers, flipper sellers and landlords, their LLCs and trusts (the LLCs / Trusts pop-up)
             { key: 'llcs', label: 'LLCs', saved: 'the LLCs', cols: ['LLCS'], kind: 'llcs', when: v => LLC_ROLES.some(r => v[r]), noNew: true },
@@ -1964,8 +2351,8 @@
 
         // A client's details for loan programs: how each kind shows, its editor and reading it back (Edit Clients' lines
         // and the client's own pop-up share these). score: a credit score (300-850); groups: professions / groups to tick
-        // (saved as a JSON list); owned: whether they've owned a home ('Never', or the year they last did).
-        const DETAIL_KINDS = ['score', 'groups', 'owned'];
+        // (saved as a JSON list). (Real estate owned has its own pop-up.)
+        const DETAIL_KINDS = ['score', 'groups'];
         // Veterans: Veteran (With benefits) in Professions & Groups is a veteran who can use a VA loan. The old separate
         // Veteran answer (VETERAN) counts as it until the groups are saved again (Edit Clients' values come with it folded in).
         const VA_GROUP = 'Veteran (With benefits)';
@@ -1979,11 +2366,9 @@
             if (String(veteranRaw || '').trim().toUpperCase() === 'TRUE' && !list.some(g => VETERAN_GROUPS.includes(g))) list.push(VA_GROUP);
             return JSON.stringify(list.length ? PROFESSION_GROUPS.filter(g => list.includes(g)) : saidNoGroups(groupsRaw) ? [NO_GROUPS] : []);
         }
-        const THIS_YEAR = new Date().getFullYear();
         function detailText(kind, raw) {
             const v = String(raw === undefined || raw === null ? '' : raw).trim();
             if (kind === 'groups') { const list = groupList(v); return list.length ? list.join(', ') : saidNoGroups(v) ? NO_GROUPS : 'None'; }
-            if (kind === 'owned') return !v ? '' : v === 'Never' ? 'No, never' : 'Yes, last in ' + v;
             return v;
         }
         const ynHtml = (name, label, on) => '<div class="yn" role="radiogroup" aria-label="' + escapeHtml(label) + '">'
@@ -1998,12 +2383,6 @@
                 return '<div class="dd-checks" role="group" aria-label="' + escapeHtml(label) + '">' + GROUP_CHOICES.map(g => '<label class="dd-check' + (g === NO_GROUPS ? ' is-none' : '') + '"><input type="checkbox" value="' + escapeHtml(g) + '"'
                     + (picked.includes(g) ? ' checked' : '') + '><span>' + escapeHtml(g) + '</span></label>').join('') + '</div>';
             }
-            if (kind === 'owned') {
-                const owned = v !== '' && v !== 'Never';
-                return '<div class="dd-owned">' + ynHtml(name, label, v === '' ? null : owned)
-                    + '<input class="cf-input dd-year" data-detail="year" type="text" inputmode="numeric" maxlength="4" placeholder="Year you last owned one" autocomplete="off" aria-label="The year you last owned a home"'
-                    + (owned ? '' : ' hidden') + ' value="' + (owned ? escapeHtml(v) : '') + '"></div>';
-            }
             if (kind === 'bool') return ynHtml(name, label, v === 'true' || v === 'TRUE');
             return '';
         }
@@ -2016,18 +2395,8 @@
                 return { value: v };
             }
             if (kind === 'groups') return { value: JSON.stringify([...root.querySelectorAll('.dd-check input:checked')].map(i => i.value)) };
-            if (kind === 'owned') {
-                const pick = root.querySelector('input[name="' + name + '"]:checked');
-                if (!pick) return { error: 'Please answer yes or no.', input: root.querySelector('input[name="' + name + '"]') };
-                if (pick.value === 'no') return { value: 'Never' };
-                const input = root.querySelector('[data-detail="year"]');
-                const y = Number(input.value.trim());
-                if (!(Number.isInteger(y) && y >= 1900 && y <= THIS_YEAR)) return { error: 'Please enter the year you last owned a home (' + THIS_YEAR + ' if you own one now).', input };
-                return { value: String(y) };
-            }
             return { value: null };
         }
-        // Owned a home: the year box shows for a yes; credit scores and years are digits only
         document.addEventListener('change', e => {
             // Professions & Groups: None Of These and the groups don't go together
             const checks = e.target.closest('.dd-checks');
@@ -2035,14 +2404,9 @@
                 const none = e.target.value === NO_GROUPS;
                 checks.querySelectorAll('input:checked').forEach(box => { if (box !== e.target && (none || box.value === NO_GROUPS)) box.checked = false; });
             }
-            const owned = e.target.closest('.dd-owned');
-            if (owned && e.target.type === 'radio') {
-                const year = owned.querySelector('[data-detail="year"]');
-                year.hidden = e.target.value !== 'yes';
-                if (!year.hidden) year.focus();
-            }
         });
-        document.addEventListener('input', e => { if (e.target.matches('[data-detail="score"], [data-detail="year"]')) e.target.value = e.target.value.replace(/\D/g, ''); });
+        // Credit scores are digits only
+        document.addEventListener('input', e => { if (e.target.matches('[data-detail="score"]')) e.target.value = e.target.value.replace(/\D/g, ''); });
         const sameDetail = (kind, a, b) => (kind === 'groups' ? JSON.stringify(groupList(a, GROUP_CHOICES)) === JSON.stringify(groupList(b, GROUP_CHOICES)) : String(a === undefined || a === null ? '' : a) === String(b === undefined || b === null ? '' : b));
         const CF_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
         const clientList = document.getElementById('client-list');
@@ -2062,6 +2426,7 @@
             }
             if (DETAIL_KINDS.includes(line.kind)) return detailText(line.kind, v[line.cols[0]]);
             if (line.kind === 'llcs' || line.kind === 'trusts') return holdingsText(line.kind, v[line.cols[0]]);
+            if (line.kind === 'reo') return reoText(v['REAL ESTATE OWNED']);
             if (line.kind === 'name') return [v['FIRST NAME'], v['LAST NAME']].filter(Boolean).join(' ');
             return v[line.cols[0]] || '';
         }
@@ -2159,6 +2524,7 @@
             // Income & Debt opens the income pop-up (the one the client uses for their own); LLCs and Trusts, their pop-up
             if (edit && edit.dataset.edit === 'income') { openClientIncome(); return; }
             if (edit && HOLDINGS[edit.dataset.edit]) { openClientHoldings(edit.dataset.edit); return; }
+            if (edit && edit.dataset.edit === 'reo') { openClientReo(); return; }
             if (edit) { const key = edit.dataset.edit; swapLine(key, () => { editing = key; cfSaved.textContent = ''; renderClient(); }); return; }
             if (e.target.closest('[data-cancel]') && !cfBusy) { const key = editing; swapLine(key, () => { editing = null; renderClient(); }); }
         });
@@ -2275,6 +2641,35 @@
                         showProfile({ ...lastAccountRow, [cfg.col]: target.values[cfg.col], ...(kind === 'llcs' ? { 'FLIPPER LLC': '', 'FLIPPER TITLE': '' } : {}) });
                     }
                     return target.values[cfg.col];
+                },
+            });
+        }
+        // Edit Clients' Real Estate Owned: its pop-up for the client shown (each change saved with adminUpdateClient)
+        function openClientReo() {
+            if (!client) return;
+            const target = client;
+            const first = target.values['PREFERRED NAME'] || target.values['FIRST NAME'] || target.name || 'This client';
+            cfSaved.textContent = '';
+            openReo({
+                title: (target.name || first) + '’s Real Estate Owned', intro: 'Every property ' + first + ' has owned: their homes and investments.',
+                value: target.values['REAL ESTATE OWNED'], mine: false, whose: (target.name || first) + '’s',
+                owners: { llcs: holdingsOf(target.values['LLCS']).list.map(l => l.name), trusts: holdingsOf(target.values['TRUSTS']).list.map(l => l.name) },
+                save: async value => {
+                    const data = await callApi(clientUser, { action: 'adminUpdateClient', clientId: target.id, values: { 'REAL ESTATE OWNED': value } });
+                    if (!data.ok) throw new Error(data.error);
+                    target.values = data.client.values;
+                    if ('income' in data.client) target.income = data.client.income;
+                    if (client === target) {
+                        renderClient();
+                        cfSaved.textContent = 'Saved the real estate owned.';
+                    }
+                    // (your own client record: your line too)
+                    if (lastAccountRow && String(findValue(lastAccountRow, 'account id')).replace(/\D/g, '').slice(-10) === target.id) {
+                        const mine = { ...lastAccountRow, 'REAL ESTATE OWNED': target.values['REAL ESTATE OWNED'], 'LAST OWNED HOME': '' };
+                        showProfile(mine);
+                        showDetails(mine, target.income);
+                    }
+                    return target.values['REAL ESTATE OWNED'];
                 },
             });
         }
@@ -2874,15 +3269,15 @@
                 [900000, 1800], [950000, 1860], [1000000, 1910]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 20, escrowOverPer: 20000, cashSaleAddOn: 300, loanSaleAddOn: 500, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
-            // Escrow manual 6.2-6.4 (off that person's share)
+            // Escrow manual 6.2-6.4 (off that person's share). WFG's investor "owns 3 or more properties": 3 in the last year.
             discounts: [
-                { name: 'Senior (60 or older)', percent: 0.2, category: 'Senior' },
-                { name: 'Realtor or broker', percent: 0.3, category: 'Real Estate Agent' },
-                { name: 'Active military or veteran', percent: 0.3, category: 'Military / First Responder' },
-                { name: 'Public servant (teacher, police, firefighter, EMT)', percent: 0.3, category: 'Public Servant' },
-                { name: 'Investor (owns 3+ properties)', percent: 0.3, category: 'Investor' },
-                { name: 'Church or non-profit', percent: 0.3, category: 'Church / Non-Profit' },
-                { name: 'Corporate relocation', percent: 0.3, category: 'Corporate Relocation' },
+                { name: 'Senior (60 or older)', percent: 0.2, qualifies: ['Senior (60+)'], applies: 'eitherPays' },
+                { name: 'Realtor or broker', percent: 0.3, qualifies: ['Real Estate Agent'], applies: 'eitherPays' },
+                { name: 'Active military or veteran', percent: 0.3, qualifies: ['Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'], applies: 'eitherPays' },
+                { name: 'Public servant (teacher, police, firefighter, EMT)', percent: 0.3, qualifies: ['Teacher', 'Law Enforcement', 'Firefighter', 'EMTs'], applies: 'eitherPays' },
+                { name: 'Investor (owns 3+ properties)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays', investorProperties: 3, investorYears: 1 },
+                { name: 'Church or non-profit', percent: 0.3, qualifies: ['Church / Non-Profit'], applies: 'eitherPays' },
+                { name: 'Corporate relocation', percent: 0.3, qualifies: ['Corporate Relocation'], applies: 'eitherPays' },
             ],
             otherFees: [
                 { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Sometimes' },
@@ -2923,8 +3318,8 @@
             vaSellerPays: true,
             titleDiscounts: [
                 // 4.4: the property's prior policy; 10.2: an owner's policy insuring an investor who is buying
-                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2, category: 'Prior Policy', applies: 'property' },
-                { name: 'Buyer is an investor', percent: 0.3, category: 'Investor', applies: 'buyer' },
+                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Buyer is an investor', percent: 0.3, qualifies: ['Investor'], applies: 'buyer', investorProperties: 3, investorYears: 1 },
             ],
         };
 
@@ -2935,7 +3330,8 @@
             escrowTable: [[100000, 1012], [120000, 1048], [140000, 1084], [160000, 1116], [180000, 1152], [200000, 1186], [220000, 1216], [240000, 1244], [260000, 1274], [280000, 1304], [300000, 1332], [320000, 1362], [340000, 1392], [360000, 1422], [380000, 1450], [400000, 1480], [420000, 1508], [440000, 1536], [460000, 1568], [480000, 1596], [500000, 1624], [520000, 1650], [540000, 1678], [560000, 1702], [580000, 1728], [600000, 1754], [620000, 1778], [640000, 1804], [660000, 1830], [680000, 1856], [700000, 1882], [720000, 1906], [740000, 1932], [760000, 1958], [780000, 1984], [800000, 2010], [820000, 2034], [840000, 2060], [860000, 2084], [880000, 2110], [900000, 2138], [920000, 2164], [940000, 2188], [960000, 2214], [980000, 2238], [1000000, 2264]].map(([upTo, fee]) => ({ upTo, fee })),
             escrowOverFee: 22, escrowOverPer: 20000, cashSaleAddOn: 0, loanSaleAddOn: 250, sellerEscrowShare: 0.5,
             recordingFee: 0, sellerRecordingShare: 0.5,
-            discounts: [{ name: 'Investor (certifies they invest in real estate)', percent: 0.3, category: 'Investor' }],
+            // (First American doesn't say how many properties make an investor: fill in the rule before saving)
+            discounts: [{ name: 'Investor (certifies they invest in real estate)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' }],
             otherFees: [
                 { name: 'Reconveyance Tracking (lien release not ready at closing)', amount: 100, sellerShare: 1, when: 'Sometimes' },
                 { name: 'Mobile Home Affixture / Title Transfer', amount: 150, sellerShare: 0.5, when: 'Manufactured Home' },
@@ -2974,8 +3370,8 @@
             ],
             titleDiscounts: [
                 // E.2: the property's prior policy; B.6: only on what the investor pays for
-                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35, category: 'Prior Policy', applies: 'property' },
-                { name: 'Investor (on the policies the investor pays for)', percent: 0.3, category: 'Investor', applies: 'eitherPays' },
+                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Investor (on the policies the investor pays for)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' },
             ],
             // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
             refiTable: [[250000, 500], [500000, 650], [750000, 800], [1000000, 950]].map(([upTo, fee]) => ({ upTo, fee })),
@@ -2989,11 +3385,12 @@
             escrowOverFee: 21, escrowOverPer: 20000, escrowOverTiers: [{ above: 5000000, fee: 14.7, per: 20000 }], cashSaleAddOn: 200, loanSaleAddOn: 400, sellerEscrowShare: 0.5,
             recordingFee: 125, sellerRecordingShare: 0.5,
             discounts: [
-                // E301 (investors, builders and agents), E304, E305 (off that person's share)
-                { name: 'Investor (their share only)', percent: 0.3, category: 'Investor' },
-                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, category: 'Real Estate Agent' },
-                { name: 'First responder or military (active or retired)', percent: 0.3, category: 'Military / First Responder' },
-                { name: 'Corporate relocation (employee’s share)', percent: 0.3, category: 'Corporate Relocation' },
+                // E301 (investors, builders and agents), E304, E305 (off that person's share). Fidelity doesn't say how many
+                // properties make an investor: fill in the rule before saving.
+                { name: 'Investor (their share only)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' },
+                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, qualifies: ['Real Estate Agent'], applies: 'eitherPays' },
+                { name: 'First responder or military (active or retired)', percent: 0.3, qualifies: ['Firefighter', 'Law Enforcement', 'EMTs', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'], applies: 'eitherPays' },
+                { name: 'Corporate relocation (employee’s share)', percent: 0.3, qualifies: ['Corporate Relocation'], applies: 'eitherPays' },
             ],
             otherFees: [
                 { name: 'Manufactured Home Title Transfer (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
@@ -3034,12 +3431,12 @@
             // Chapter VIII
             titleDiscounts: [
                 // 807: the property's prior policy; 803-806: a party to the sale, on what they pay
-                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2, category: 'Prior Policy', applies: 'property' },
-                { name: 'Investor or builder (a party to the sale)', percent: 0.3, category: 'Investor', applies: 'eitherPays' },
-                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, category: 'Real Estate Agent', applies: 'eitherPays' },
-                { name: 'First responder or military (active or retired)', percent: 0.3, category: 'Military / First Responder', applies: 'eitherPays' },
-                { name: 'Church, non-profit or charity', percent: 0.3, category: 'Church / Non-Profit', applies: 'eitherPays' },
-                { name: 'Corporate relocation (employee’s customary costs)', percent: 0.3, category: 'Corporate Relocation', applies: 'eitherPays' },
+                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Investor or builder (a party to the sale)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' },
+                { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, qualifies: ['Real Estate Agent'], applies: 'eitherPays' },
+                { name: 'First responder or military (active or retired)', percent: 0.3, qualifies: ['Firefighter', 'Law Enforcement', 'EMTs', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'], applies: 'eitherPays' },
+                { name: 'Church, non-profit or charity', percent: 0.3, qualifies: ['Church / Non-Profit'], applies: 'eitherPays' },
+                { name: 'Corporate relocation (employee’s customary costs)', percent: 0.3, qualifies: ['Corporate Relocation'], applies: 'eitherPays' },
             ],
             // Section 216B, Zone 1 (ALTA 8.1, 9 and 22 included)
             refiTable: [[100000, 500], [200000, 630], [300000, 800], [400000, 855], [500000, 980], [600000, 1105], [700000, 1230], [800000, 1360], [900000, 1485], [1000000, 1590]].map(([upTo, fee]) => ({ upTo, fee })),
@@ -3168,17 +3565,29 @@
         const tableRow = (r = {}) => '<div class="tc-row" data-row>' + tcBox('money', 'data-k="upTo" aria-label="Sale price up to" placeholder="100,000"', r.upTo)
             + tcBox('money', 'data-k="fee" aria-label="Fee" placeholder="650"', r.fee) + '<button type="button" class="tc-remove" data-remove aria-label="Remove row">' + REMOVE_ICON + '</button></div>';
         const options = (list, value, fallback) => list.map(o => { const [v, label] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + ((value || fallback) === v ? ' selected' : '') + '>' + esc(label) + '</option>'; }).join('');
-        // An escrow discount: who qualifies (a buyer of that type gets it automatically; a seller's is picked on the page)
-        const discountRow = (d = {}) => '<div class="tc-row is-discount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="Senior (60 or older)" value="' + esc(d.name || '') + '">'
-            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent)
-            + '<select data-k="category" aria-label="Who qualifies">' + options(BUYER_TYPES.slice(1).concat(['Other']), d.category, 'Other') + '</select>'
-            + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
-        // An owner's policy discount: who qualifies, and whose share it comes off
-        const titleDiscountRow = (d = {}) => '<div class="tc-row is-tdiscount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="Reissue (prior policy under 5 years old)" value="' + esc(d.name || '') + '">'
-            + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent)
-            + '<select data-k="category" aria-label="Who qualifies">' + options(DISCOUNT_CATEGORIES, d.category, 'Other') + '</select>'
-            + '<select data-k="applies" aria-label="What it comes off">' + options(DISCOUNT_APPLIES, d.applies, 'property') + '</select>'
-            + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button></div>';
+        // An escrow or owner's policy discount: its name and percent, who qualifies (any of the ticked: the professions &
+        // groups clients tick, Investor, Church / Non-Profit, Corporate Relocation; Prior Policy and Other are picked on the
+        // page), whose share it comes off, and for an investor, how many properties in how many years make one
+        const QUALIFIER_CHOICES = PROFESSION_GROUPS.concat(DISCOUNT_SPECIAL, PICKED_QUALIFIERS);
+        // (the Try It box's "Buyer: ..." / "Seller: ..." choices)
+        const TRY_QUALIFIERS = PROFESSION_GROUPS.concat(DISCOUNT_SPECIAL);
+        const whoText = list => (list.length ? list.join(', ') : 'Who qualifies...');
+        const qualifierPicker = picked => '<details class="tc-who" data-k="qualifies"><summary aria-label="Who qualifies">' + esc(whoText(picked)) + '</summary>'
+            + '<div class="tc-who-list">' + QUALIFIER_CHOICES.map(q => '<label><input type="checkbox" value="' + esc(q) + '"' + (picked.includes(q) ? ' checked' : '') + '><span>' + esc(q) + '</span></label>').join('') + '</div></details>';
+        const investorRule = (d, picked) => '<div class="tc-investor" data-investor' + (picked.includes('Investor') ? '' : ' hidden') + '><span>An investor has owned</span>'
+            + '<input type="text" inputmode="numeric" data-k="investorProperties" aria-label="How many properties" placeholder="3" value="' + esc(d.investorProperties ?? '') + '">'
+            + '<span>properties in the last</span><input type="text" inputmode="numeric" data-k="investorYears" aria-label="How many years" placeholder="5" value="' + esc(d.investorYears ?? '') + '"><span>years</span></div>';
+        const discountRowOf = (placeholder, fallback) => (d = {}) => {
+            const picked = d.name ? qualifiersOf(d) : [];
+            return '<div class="tc-row is-discount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="' + placeholder + '" value="' + esc(d.name || '') + '">'
+                + tcBox('pct', 'data-k="percent" aria-label="Percent off" placeholder="20"', d.percent)
+                + qualifierPicker(picked)
+                + '<select data-k="applies" aria-label="What it comes off">' + options(DISCOUNT_APPLIES, d.applies, fallback) + '</select>'
+                + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button>'
+                + investorRule(d, picked) + '</div>';
+        };
+        const discountRow = discountRowOf('Senior (60 or older)', 'eitherPays');
+        const titleDiscountRow = discountRowOf('Reissue (prior policy under 5 years old)', 'property');
         const feeRow = (f = {}) => '<div class="tc-row is-fee" data-row><input type="text" class="tc-fee-name" data-k="name" aria-label="Fee name" placeholder="FIRPTA Filing Service Fee" value="' + esc(f.name || '') + '">'
             + tcBox('money', 'data-k="amount" aria-label="Amount" placeholder="125"', f.amount)
             + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
@@ -3247,7 +3656,7 @@
                     + tcField('Seller’s share of recording', tcBox('pct', 'id="tc-recording-share" placeholder="50"', c.sellerRecordingShare)) + '</div>'
                     + '<label class="tc-check"><input type="checkbox" id="tc-va"' + (c.vaSellerPays ? ' checked' : '') + '><span>On a <b>VA loan</b>, the seller pays the buyer’s share of the escrow fee. VA doesn’t let a veteran pay escrow or closing fees (38 CFR 36.4313), so in Arizona the seller usually covers them (WFG 6.6 lets the company agree to a VA rate instead). Recording fees and title insurance are allowed, so the buyer still pays those.</span></label>')
 
-                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6). Only one discount applies at a time, to that person’s share of the <b>table rate</b> (the sale add-on is still charged in full). <b>Who qualifies</b> matches a page’s Buyer Type, so a buyer’s discount applies on its own; a seller’s is picked on the page.',
+                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6), off the <b>table rate</b> (the sale add-on is still charged in full). Each side gets the one biggest discount it qualifies for. <b>Who qualifies</b> works on its own on the pages: a client’s Professions &amp; Groups, an <b>Investor</b> by their Real Estate Owned (owned that many properties in that many years), and <b>Church / Non-Profit</b> or <b>Corporate Relocation</b> as set on the page. <b>Prior Policy</b> and <b>Other</b> are picked on the page. <b>What it comes off</b>: the qualifying side’s share, or the whole fee.',
                     '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span></span></div>'
                     + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
 
@@ -3280,8 +3689,8 @@
                     + '<div class="tc-table" data-table="endorsements"><div class="tc-row is-endorse is-head"><span>Endorsement</span><span>Price</span><span>When</span><span></span></div>'
                     + splitEndorsements(c.loanEndorsementList).extras.map(endorsementRow).join('') + '</div><button type="button" class="tc-add-row" data-add="endorsements">+ Add Endorsement</button>')
 
-                + section('Title Discounts', 'Percent off the owner’s policy. <b>What it comes off</b> matters because the seller usually pays the owner’s policy: WFG’s investor rate (10.2) prices the whole policy lower when the <b>buyer</b> is an investor, so the seller saves; First American (B.6) and Fidelity (803–806) only take it off <b>what the qualifying party pays</b>, so an investor buyer saves nothing when the seller pays. A <b>reissue / short-term rate</b> comes from the seller’s prior policy (the property). Only the one discount that saves the most applies.',
-                    '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-tdiscount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span>What it comes off</span><span></span></div>'
+                + section('Title Discounts', 'Percent off the owner’s policy. <b>What it comes off</b> matters because the seller usually pays the owner’s policy: WFG’s investor rate (10.2) prices the whole policy lower when the <b>buyer</b> is an investor, so the seller saves; First American (B.6) and Fidelity (803–806) only take it off <b>what the qualifying party pays</b>, so an investor buyer saves nothing when the seller pays. A <b>reissue / short-term rate</b> comes from the seller’s prior policy (the property): pick it on the page. Who qualifies works the same as the escrow discounts. Only the one discount that saves the most applies.',
+                    '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span>What it comes off</span><span></span></div>'
                     + (c.titleDiscounts || []).map(titleDiscountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
 
                 + section('Second Loans & FinCEN', 'A <b>second loan</b> (a piggyback or down payment assistance loan) can add an escrow fee per extra loan, and its lender’s policy is priced on the <b>combined</b> loan amount plus a fee per extra policy (WFG title 6.2: none; First American F.5: $100; Fidelity 218: $100). A <b>FinCEN report</b> is filed when an LLC or trust buys with cash (WFG escrow 5.5: $150, plus $75 per extra buying entity); the buyer pays it. Enter 0 if the company hasn’t filed one.',
@@ -3324,7 +3733,8 @@
                 + [['sfr', 'Single family, no HOA'], ['hoa', 'Home in an HOA (PUD)'], ['condo', 'Condo'], ['manufactured', 'Manufactured home']].map(([v, t]) => '<option value="' + v + '"' + (v === 'hoa' ? ' selected' : '') + '>' + t + '</option>').join('')
                 + '</select><select id="tc-try-loantype" aria-label="Loan type">'
                 + [['fixed', 'Fixed-rate loan'], ['arm', 'Adjustable-rate loan'], ['va', 'VA loan']].map(([v, t]) => '<option value="' + v + '">' + t + '</option>').join('')
-                + '</select><select id="tc-try-buyertype" aria-label="Buyer type">' + BUYER_TYPES.map(v => '<option value="' + v + '">' + (v === 'Individual' ? 'Individual buyer' : 'Buyer: ' + v) + '</option>').join('')
+                + '</select><select id="tc-try-buyertype" aria-label="What the buyer qualifies as"><option value="">Buyer: no discount</option>' + TRY_QUALIFIERS.map(v => '<option value="' + esc(v) + '">Buyer: ' + esc(v) + '</option>').join('')
+                + '</select><select id="tc-try-sellertype" aria-label="What the seller qualifies as"><option value="">Seller: no discount</option>' + TRY_QUALIFIERS.map(v => '<option value="' + esc(v) + '">Seller: ' + esc(v) + '</option>').join('')
                 + '</select><select id="tc-try-saletype" aria-label="Sale type">'
                 + ['Standard', 'Short Sale', 'REO'].map(v => '<option value="' + v + '">' + (v === 'Standard' ? 'Standard sale' : v) + '</option>').join('')
                 + '</select></div>'
@@ -3341,7 +3751,9 @@
                 const o = {};
                 row.querySelectorAll('[data-k]').forEach(i => {
                     const k = i.dataset.k;
-                    o[k] = ['name', 'when', 'category', 'applies'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                    if (k === 'qualifies') { o[k] = [...i.querySelectorAll('input:checked')].map(x => x.value); return; }
+                    if (k === 'investorProperties' || k === 'investorYears') { const t = i.value.replace(/\D/g, ''); o[k] = t === '' ? null : Number(t); return; }
+                    o[k] = ['name', 'when', 'applies'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
                 });
                 return o;
             });
@@ -3385,19 +3797,15 @@
             const property = document.getElementById('tc-try-property').value;
             const loanType = document.getElementById('tc-try-loantype').value;
             const saleType = document.getElementById('tc-try-saletype').value;
-            const buyerType = document.getElementById('tc-try-buyertype').value;
+            // What each side qualifies as (Investor counts on its own here)
+            const partyOf = id => { const v = document.getElementById(id).value; return { tags: v ? [v] : [] }; };
             const secondLoan = parseMoney(document.getElementById('tc-try-second').value) || 0;
-            const s = saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, buyerType });
+            const s = saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, buyer: partyOf('tc-try-buyertype'), seller: partyOf('tc-try-sellertype') });
             if (!s) { out.innerHTML = '<li class="is-sub">Fill in the escrow fee table and a sale price to see the fees.</li>'; return; }
             const hasLoan = s.hasLoan;
             const row = (k, v, sub) => '<li' + (sub ? ' class="is-sub"' : '') + '><span>' + esc(k) + '</span><b>' + esc(v) + '</b></li>';
             const who = i => !i.seller ? dollars(i.total) + ' (buyer)' : !i.buyer ? dollars(i.total) + ' (seller)' : dollars(i.total) + ' (seller ' + dollars(i.seller) + ', buyer ' + dollars(i.buyer) + ')';
-            // The biggest escrow discount, for the seller (it comes off their share of the table rate, not the add-on)
-            const best = (c.discounts || []).reduce((a, d) => ((d.percent || 0) > (a ? a.percent : 0) ? d : a), null);
-            const discounted = best && !s.va ? saleFees(c, price, loanAmount, { property, loanType, saleType, secondLoan, buyerType, sellerDiscount: best.name }) : null;
-            out.innerHTML = s.items.map(i => row(i.name, who(i))
-                + (i.note ? row(i.note, '', true) : '')
-                + (i.kind === 'escrow' && discounted ? row('Seller’s share with the biggest discount (' + pctText(best.percent) + '% off the table rate)', dollars(discounted.items[0].seller), true) : '')).join('')
+            out.innerHTML = s.items.map(i => row(i.name, who(i)) + (i.note ? row(i.note, '', true) : '')).join('')
                 + (s.owner === null ? row('Owner’s title policy', 'No basic rate table yet') : '')
                 + (hasLoan && s.loanPolicy === null ? row('Lender’s title policy', 'No basic rate table yet') : '')
                 + '<li class="tc-try-total"><span>Seller pays</span><b>' + dollars(s.seller) + '</b></li>'
@@ -3457,6 +3865,13 @@
             markMissing();
         });
         tcBody.addEventListener('change', e => {
+            // A discount's who-qualifies box shows what's ticked; Investor asks for its rule
+            const who = e.target.closest('.tc-who');
+            if (who) {
+                const picked = [...who.querySelectorAll('input:checked')].map(x => x.value);
+                who.querySelector('summary').textContent = whoText(picked);
+                who.closest('[data-row]').querySelector('[data-investor]').hidden = !picked.includes('Investor');
+            }
             // "No separate rate" hides that sale type's table, share and above-the-table charge
             if (e.target.matches('[data-over-mode]')) e.target.closest('.tc-over').dataset.mode = e.target.value;
             const noRate = e.target.closest('[data-norate]');
@@ -3501,6 +3916,7 @@
             invalid_simultaneousPercent: 'The simultaneous issue percent must be 0 to 100%.',
             invalid_sellerOwnerShare: 'The seller’s share of the owner’s policy must be 0 to 100%.',
             invalid_discount: 'Each discount needs a name and a percent from 0 to 100.',
+            invalid_investor_rule: 'Each investor discount needs how many properties (1 to 1,000) in how many years (1 to 100) make someone an investor.',
             invalid_other_fee: 'Each other fee needs a name, an amount and the seller’s share (0 to 100%).',
             invalid_sellerEscrowShare: 'The seller’s share of the escrow fee must be 0 to 100%.',
             invalid_sellerRecordingShare: 'The seller’s share of recording must be 0 to 100%.',
@@ -3948,8 +4364,8 @@
             { key: 'va-used', label: 'Used a VA Loan', title: 'Have you used a VA loan before?', col: 'VA LOAN USED', kind: 'bool', what: 'whether you’ve used a VA loan',
                 when: v => groupList(v['PROFESSION GROUPS']).includes(VA_GROUP),
                 help: 'A VA loan’s funding fee is lower the first time you use one.' },
-            { key: 'owned', label: 'Owned a Home Before', title: 'Have you owned a home before?', col: 'LAST OWNED HOME', kind: 'owned', what: 'whether you’ve owned a home',
-                help: 'First-time homebuyer programs usually count you as first-time if you haven’t owned a home in the last few years.' },
+            // (buyers, sellers, flipper buyers, flipper sellers and landlords: the Real Estate Owned pop-up)
+            { key: 'reo', label: 'Real Estate Owned', title: 'Real Estate Owned', col: 'REAL ESTATE OWNED', kind: 'reo', what: 'your real estate owned', roles: REO_ROLES },
             { key: 'education', label: 'Homebuyer Education', title: 'Have you taken a homebuyer education class?', col: 'HOMEBUYER EDUCATION', kind: 'bool', what: 'whether you’ve taken a homebuyer education class',
                 help: 'Some down payment assistance programs ask for one before closing.' },
         ];
@@ -3965,7 +4381,7 @@
                 li.dataset.myDetail = d.key;
                 li.innerHTML = '<span class="setting-label">' + escapeHtml(d.label) + '</span><span class="setting-value">Loading...</span>'
                     + '<button type="button" class="edit-btn" aria-label="Edit ' + escapeHtml(d.what) + '" title="Edit" disabled>' + PENCIL_ICON + '</button>';
-                li.querySelector('button').addEventListener('click', () => openDetail(d));
+                li.querySelector('button').addEventListener('click', () => (d.kind === 'reo' ? openMyReo() : openDetail(d)));
                 after.after(li);
                 after = li;
                 detailRows[d.key] = li;
@@ -3976,12 +4392,13 @@
             const yes = name => get(name).toUpperCase() === 'TRUE';
             const score = income ? String(income['CREDIT SCORE'] === undefined || income['CREDIT SCORE'] === null ? '' : income['CREDIT SCORE']).trim() : '';
             myValues = { 'CREDIT SCORE': score, 'VA LOAN USED': yes('VA LOAN USED'),
-                'PROFESSION GROUPS': groupsWithVeteran(get('PROFESSION GROUPS'), get('VETERAN')), 'LAST OWNED HOME': get('LAST OWNED HOME'), 'HOMEBUYER EDUCATION': yes('HOMEBUYER EDUCATION') };
+                'PROFESSION GROUPS': groupsWithVeteran(get('PROFESSION GROUPS'), get('VETERAN')), 'REAL ESTATE OWNED': reoRaw(row), 'HOMEBUYER EDUCATION': yes('HOMEBUYER EDUCATION') };
             MY_DETAILS.forEach(d => {
                 const li = detailRows[d.key];
-                li.hidden = li.dataset.buyer !== 'yes' || Boolean(d.when && !d.when(myValues));
+                // (most are for buyers; Real Estate Owned is for its own roles)
+                li.hidden = (d.roles ? !d.roles.some(r => yes(r)) : li.dataset.buyer !== 'yes') || Boolean(d.when && !d.when(myValues));
                 const raw = myValues[d.col];
-                const text = d.kind === 'bool' ? (raw ? 'Yes' : 'No') : detailText(d.kind, raw);
+                const text = d.kind === 'bool' ? (raw ? 'Yes' : 'No') : d.kind === 'reo' ? reoText(raw) : detailText(d.kind, raw);
                 const valueEl = li.querySelector('.setting-value');
                 valueEl.textContent = text || 'Not added yet';
                 valueEl.classList.toggle('is-empty', !text || text === 'None');

@@ -53,8 +53,10 @@ const PAGE_SETTING_FIELDS = {
   'BUYER LOAN PRODUCT': 'text', 'BUYER CREDIT SCORE': 'int',
   // What the client sees: the seller's side only (the buyer's side is an admin-only card), or both sides (blank)
   'CLIENT VIEW': ['Seller Only', 'Both Sides'],
-  // Who the buyer is (their escrow and owner's policy discounts follow from it)
-  'BUYER TYPE': ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'],
+  // Title company discounts: what the page's client (the buyer on a Buyer Breakdown, the seller on a Seller Net) also
+  // qualifies as (Church / Non-Profit, Corporate Relocation; their professions, groups and real estate owned count on
+  // their own), and on a Seller Net, what the expected buyer qualifies as (any of the company's buyer discounts' groups)
+  'CLIENT QUALIFIES AS': 'list', 'BUYER QUALIFIES AS': 'list',
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
@@ -287,8 +289,8 @@ const DPA_GRANT_TYPES = ['Arizona Department of Housing', 'Individual Developmen
 const DPA_AMOUNT_TYPES = ['Percentage', 'Flat Dollar Amount'];
 const DPA_GROUPS = ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs',
   'Healthcare Worker (Anyone employed by a healthcare provider)', 'Healthcare Worker (Any clinical role)',
-  'Healthcare Professional (Qualified physician)', 'Veteran (With benefits)', 'Veteran (Without benefits)',
-  'Legally Disabled', 'Native American'];
+  'Healthcare Professional (Qualified physician)', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)',
+  'Legally Disabled', 'Native American', 'Real Estate Agent', 'Senior (60+)'];
 const DPA_CENSUS = ['Low', 'Moderate', 'Middle', 'Upper'];
 // A lender credit's conditions (WHEN) and what each needs as its VALUE, and its types (the same as /lender-credits.js)
 const CREDIT_CONDITIONS = { 'Always': 'none', 'Census Designation': 'census', 'Below Certain Income': 'money', 'Minimum Credit Score': 'score',
@@ -1748,11 +1750,51 @@ const TITLE_REQUIRED_COLUMNS = ['RATE MANUAL DATE', 'ESCROW RATE TABLE', 'ESCROW
   'SHORT SALE OVER PER', 'SHORT SALE SELLER SHARE', 'REO ESCROW TABLE', 'REO OVER FEE', 'REO OVER PER', 'REO SELLER SHARE',
   'REFINANCE ESCROW FEE', 'REFINANCE RECORDING FEE', 'REFINANCE TITLE TABLE', 'REFINANCE TITLE OVER FEE', 'REFINANCE TITLE OVER PER',
   'REFINANCE POLICY PERCENT', 'REFINANCE ENDORSEMENTS'];
-// Who qualifies for a discount (a page's BUYER TYPE is one of the first seven), and whose share an owner's policy discount
-// comes off (the same lists as /title-fees.js)
-const BUYER_TYPES = ['Individual', 'Investor', 'Senior', 'Military / First Responder', 'Real Estate Agent', 'Public Servant', 'Church / Non-Profit', 'Corporate Relocation'];
-const TITLE_DISCOUNT_CATEGORIES = BUYER_TYPES.slice(1).concat(['Prior Policy', 'Other']);
+// Who qualifies for a title company's escrow or title discount (QUALIFIES, any of; the same lists as /title-fees.js): a
+// profession or group a client can tick (DPA_GROUPS), Investor (someone who has owned INVESTOR PROPERTIES properties in
+// the last INVESTOR YEARS years, by their real estate owned), Church / Non-Profit or Corporate Relocation (set on the
+// page), Prior Policy (the property's prior policy, picked on the page) or Other (picked on the page). APPLIES: whose
+// share it comes off.
+const DISCOUNT_QUALIFIERS = DPA_GROUPS.concat(['Investor', 'Church / Non-Profit', 'Corporate Relocation', 'Prior Policy', 'Other']);
+// A discount saved before had one CATEGORY (a page's old Buyer Type): the groups it covers
+const LEGACY_DISCOUNT_CATEGORY = {
+  'Senior': ['Senior (60+)'], 'Real Estate Agent': ['Real Estate Agent'],
+  'Military / First Responder': ['Firefighter', 'Law Enforcement', 'EMTs', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'],
+  'Public Servant': ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs'],
+};
 const TITLE_DISCOUNT_APPLIES = ['buyer', 'buyerPays', 'sellerPays', 'eitherPays', 'property'];
+const titleNum_ = v => (typeof v === 'number' ? v : v === undefined || v === null || v === '' ? null : Number(v));
+// A saved discount for the pages (applies: what one saved before applied to; escrow discounts came off each person's share)
+function titleDiscountOut_(d, applies) {
+  const listed = Array.isArray(d['QUALIFIES']) ? d['QUALIFIES'].filter(q => DISCOUNT_QUALIFIERS.includes(q)) : [];
+  const category = String(d['CATEGORY'] || '');
+  const qualifies = listed.length ? listed : LEGACY_DISCOUNT_CATEGORY[category] || (DISCOUNT_QUALIFIERS.includes(category) ? [category] : ['Other']);
+  return { name: String(d['NAME'] || ''), percent: titleNum_(d['PERCENT']), qualifies,
+    applies: TITLE_DISCOUNT_APPLIES.includes(d['APPLIES']) ? d['APPLIES'] : applies,
+    investorProperties: titleNum_(d['INVESTOR PROPERTIES']), investorYears: titleNum_(d['INVESTOR YEARS']) };
+}
+// The card's discounts, checked: the list to save, or an error code. An investor discount needs its rule (1-1000
+// properties in the last 1-100 years).
+function cleanTitleDiscounts_(list, applies, error) {
+  const out = [];
+  for (const d of (Array.isArray(list) ? list : []).slice(0, 30)) {
+    const name = cleanText_(d && d.name, 100);
+    const pct = titleShare_(d && d.percent);
+    if (!name && pct === null) continue;
+    if (!name || pct === null || Number.isNaN(pct)) return error;
+    const qualifies = DISCOUNT_QUALIFIERS.filter(q => Array.isArray(d.qualifies) && d.qualifies.includes(q));
+    const row = { 'NAME': name, 'PERCENT': pct, 'QUALIFIES': qualifies.length ? qualifies : ['Other'],
+      'APPLIES': TITLE_DISCOUNT_APPLIES.includes(d.applies) ? d.applies : applies };
+    if (row['QUALIFIES'].includes('Investor')) {
+      const n = Number(d.investorProperties), y = Number(d.investorYears);
+      if (!(Number.isInteger(n) && n >= 1 && n <= 1000 && Number.isInteger(y) && y >= 1 && y <= 100)) return 'invalid_investor_rule';
+      row['INVESTOR PROPERTIES'] = n;
+      row['INVESTOR YEARS'] = y;
+    }
+    out.push(row);
+  }
+  return out;
+}
 const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'];
 const TITLE_ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 
@@ -1776,9 +1818,8 @@ function titleCompanyOut_(doc) {
     sellerEscrowShare: num(f['SELLER SHARE OF ESCROW FEE']),
     recordingFee: num(f['RECORDING SERVICE FEE']),
     sellerRecordingShare: num(f['SELLER SHARE OF RECORDING FEE']),
-    // A discount's CATEGORY says who qualifies (a page's BUYER TYPE, or Prior Policy / Other); a title discount's APPLIES
-    // says whose share it comes off (see /title-fees.js)
-    discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']), category: String(d['CATEGORY'] || '') })) : [],
+    // Who qualifies for each discount and whose share it comes off (see titleDiscountOut_ and /title-fees.js)
+    discounts: Array.isArray(f['DISCOUNTS']) ? f['DISCOUNTS'].map(d => titleDiscountOut_(d, 'eitherPays')) : [],
     titleManualDate: String(f['TITLE MANUAL DATE'] || ''),
     ownerPolicyPercent: num(f['OWNERS POLICY PERCENT']),
     sellerOwnerShare: num(f['SELLER SHARE OF OWNERS POLICY']),
@@ -1809,8 +1850,7 @@ function titleCompanyOut_(doc) {
     refiOverPer: num(f['REFINANCE TITLE OVER PER']),
     refiPolicyPercent: num(f['REFINANCE POLICY PERCENT']),
     refiEndorsements: num(f['REFINANCE ENDORSEMENTS']),
-    titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => ({ name: String(d['NAME'] || ''), percent: num(d['PERCENT']),
-      category: String(d['CATEGORY'] || ''), applies: String(d['APPLIES'] || 'property') })) : [],
+    titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => titleDiscountOut_(d, 'property')) : [],
     otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
     titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
@@ -1899,24 +1939,11 @@ async function saveTitleCompany_(account, body) {
   fields['TITLE MANUAL DATE'] = titleManualDate || FieldValue.delete();
   const notes = String(c.notes || '').replace(/\r\n?/g, '\n').trim().replace(/^[=+\-@]+/, '').slice(0, 2000);
   fields['NOTES'] = notes || FieldValue.delete();
-  const discounts = [];
-  for (const d of (Array.isArray(c.discounts) ? c.discounts : []).slice(0, 30)) {
-    const dn = cleanText_(d && d.name, 100);
-    const pct = titleShare_(d && d.percent);
-    if (!dn && pct === null) continue;
-    if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_discount' };
-    discounts.push({ 'NAME': dn, 'PERCENT': pct, 'CATEGORY': TITLE_DISCOUNT_CATEGORIES.includes(d.category) ? d.category : 'Other' });
-  }
+  const discounts = cleanTitleDiscounts_(c.discounts, 'eitherPays', 'invalid_discount');
+  if (typeof discounts === 'string') return { ok: false, error: discounts };
   fields['DISCOUNTS'] = discounts;
-  const titleDiscounts = [];
-  for (const d of (Array.isArray(c.titleDiscounts) ? c.titleDiscounts : []).slice(0, 30)) {
-    const dn = cleanText_(d && d.name, 100);
-    const pct = titleShare_(d && d.percent);
-    if (!dn && pct === null) continue;
-    if (!dn || pct === null || Number.isNaN(pct)) return { ok: false, error: 'invalid_title_discount' };
-    titleDiscounts.push({ 'NAME': dn, 'PERCENT': pct, 'CATEGORY': TITLE_DISCOUNT_CATEGORIES.includes(d.category) ? d.category : 'Other',
-      'APPLIES': TITLE_DISCOUNT_APPLIES.includes(d.applies) ? d.applies : 'property' });
-  }
+  const titleDiscounts = cleanTitleDiscounts_(c.titleDiscounts, 'property', 'invalid_title_discount');
+  if (typeof titleDiscounts === 'string') return { ok: false, error: titleDiscounts };
   fields['TITLE DISCOUNTS'] = titleDiscounts;
   const otherFees = [];
   for (const d of (Array.isArray(c.otherFees) ? c.otherFees : []).slice(0, 50)) {
@@ -2338,16 +2365,20 @@ const CLIENT_FIELDS = [
   // (a VA loan's funding fee follows them; see /mortgage-insurance.js). Not asked when a client is added (they start as No).
   { col: 'VA LOAN USED', type: 'bool', optional: true },
   // The details a Down Payment Assistance program can ask about (see /dpa.js): the professions / groups they're in
-  // (JSON [names from DPA_GROUPS]), when they last owned a home ('Never', or the year; blank: not said) and whether
-  // they've taken a homebuyer education class. Their credit score is kept with their income (CLIENT_CREDIT).
-  { col: 'PROFESSION GROUPS', type: 'groups', optional: true }, { col: 'LAST OWNED HOME', type: 'owned', optional: true },
+  // (JSON [names from DPA_GROUPS]) and whether they've taken a homebuyer education class. Their credit score is kept
+  // with their income (CLIENT_CREDIT).
+  { col: 'PROFESSION GROUPS', type: 'groups', optional: true },
   { col: 'HOMEBUYER EDUCATION', type: 'bool', optional: true },
+  // The real estate they've owned (see cleanReo_; [] when they've never owned any; blank when not answered yet). When
+  // they last owned a home for first-time homebuyer programs and whether they're an investor for title discounts come
+  // from it. It replaced LAST OWNED HOME ('Never', or a year), still used until it's answered (saving it clears it).
+  { col: 'REAL ESTATE OWNED', type: 'reo', optional: true },
 ];
 // A client's credit score: their income document's CREDIT SCORE (Edit Clients shows and saves it with the rest)
 const CLIENT_CREDIT = 'CREDIT SCORE';
 // The details a client can answer for themselves on the Settings page (updateMyDetails), besides their credit score
-// (their LLCs and trusts only with one of LLC_ROLES)
-const MY_DETAIL_FIELDS = ['VA LOAN USED', 'PROFESSION GROUPS', 'LAST OWNED HOME', 'HOMEBUYER EDUCATION', 'LLCS', 'TRUSTS'];
+// (their LLCs and trusts only with one of LLC_ROLES; their real estate owned only with one of REO_ROLES)
+const MY_DETAIL_FIELDS = ['VA LOAN USED', 'PROFESSION GROUPS', 'REAL ESTATE OWNED', 'HOMEBUYER EDUCATION', 'LLCS', 'TRUSTS'];
 // Professions & groups: answered with none of them
 const NO_GROUPS = 'None Of These';
 // Veterans: a client's PROFESSION GROUPS say whether they're a veteran with benefits (who can use a VA loan) or without.
@@ -2373,13 +2404,75 @@ const MAX_LLCS = 20;
 // Saving the LLCs list replaces the old single LLC
 const OLD_LLC_CLEARED = { 'FLIPPER LLC': '', 'FLIPPER TITLE': '' };
 
-// One client detail of a groups, owned, llcs or trusts kind, checked: the value to save, or null when it isn't allowed.
+// --- Real estate owned ---
+// Each property a client has owned: STREET, CITY, STATE, ZIP; OWNERSHIP ('Personal', 'LLC' or 'Trust', with OWNER: the
+// LLC's or trust's name); PURCHASED and SOLD (YYYY-MM-DD; SOLD blank while they still own it); USE ('Primary Residence',
+// 'Secondary Residence' or 'Investment'); INVESTMENT (an investment's kind, else blank). Buyers, sellers, flipper buyers,
+// flipper sellers and landlords answer it.
+const REO_ROLES = ['BUYER', 'SELLER', 'FLIPPER BUYER', 'FLIPPER SELLER', 'LANDLORD'];
+const REO_USES = ['Primary Residence', 'Secondary Residence', 'Investment'];
+const REO_INVESTMENTS = ['Fix & Flip', 'Fix & Rent', 'Turn-Key Rental'];
+const REO_OWNERSHIP = ['Personal', 'LLC', 'Trust'];
+const MAX_REO = 50;
+const phoenixToday_ = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' });
+const isoDay_ = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v + 'T00:00:00Z')) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
+// 'NONE' (they've never owned any: saved as []) or a list of properties (each checked; dates not in the future, sold on
+// or after purchase), saved as JSON; an empty list is blank (not answered). null when something isn't allowed.
+function cleanReo_(raw) {
+  if (raw === 'NONE') return '[]';
+  let list = raw;
+  if (!Array.isArray(list)) {
+    const s = String(raw === null || raw === undefined ? '' : raw).trim();
+    try { list = s ? JSON.parse(s) : []; } catch (e) { return null; }
+  }
+  if (!Array.isArray(list) || list.length > MAX_REO) return null;
+  const today = phoenixToday_();
+  const out = [];
+  for (const p of list) {
+    if (!p || typeof p !== 'object') return null;
+    const street = cleanText_(p.STREET, 120), city = cleanText_(p.CITY, 80), state = cleanText_(p.STATE, 20), zip = cleanText_(p.ZIP, 10);
+    if (!street || !city || !state || !zip) return null;
+    const ownership = REO_OWNERSHIP.includes(p.OWNERSHIP) ? p.OWNERSHIP : null;
+    const owner = ownership === 'Personal' ? '' : cleanText_(p.OWNER, 100);
+    if (!ownership || (ownership !== 'Personal' && !owner)) return null;
+    const purchased = String(p.PURCHASED || '').trim(), sold = String(p.SOLD || '').trim();
+    if (!isoDay_(purchased) || purchased > today) return null;
+    if (sold && (!isoDay_(sold) || sold > today || sold < purchased)) return null;
+    const use = REO_USES.includes(p.USE) ? p.USE : null;
+    if (!use) return null;
+    const investment = use === 'Investment' ? (REO_INVESTMENTS.includes(p.INVESTMENT) ? p.INVESTMENT : null) : '';
+    if (investment === null) return null;
+    out.push({ STREET: street, CITY: city, STATE: state, ZIP: zip, OWNERSHIP: ownership, OWNER: owner, PURCHASED: purchased, SOLD: sold, USE: use, INVESTMENT: investment });
+  }
+  return out.length ? JSON.stringify(out) : '';
+}
+// A client's real estate owned: the list ([] when they've never owned any), or null when they haven't answered (the old
+// LAST OWNED HOME 'Never' counts as never)
+function clientReo_(reoRaw, lastOwnedRaw) {
+  const s = String(reoRaw || '').trim();
+  if (s) { try { const list = JSON.parse(s); if (Array.isArray(list)) return list; } catch (e) { /* not answered */ } }
+  return /^never$/i.test(String(lastOwnedRaw || '').trim()) ? [] : null;
+}
+// When they last owned a home, for first-time homebuyer programs: 'Never', or the year they last owned a primary
+// residence (this year while they still own one). Only a primary residence counts (an investment or second home doesn't
+// make someone not a first-time homebuyer). Unanswered: the old LAST OWNED HOME.
+function clientLastOwned_(reoRaw, lastOwnedRaw) {
+  const list = clientReo_(reoRaw, lastOwnedRaw);
+  if (!list) return String(lastOwnedRaw === undefined || lastOwnedRaw === null ? '' : lastOwnedRaw).trim();
+  const homes = list.filter(p => p && p.USE === 'Primary Residence');
+  if (!homes.length) return 'Never';
+  if (homes.some(p => !p.SOLD)) return phoenixToday_().slice(0, 4);
+  return String(Math.max(...homes.map(p => Number(String(p.SOLD).slice(0, 4)) || 0)));
+}
+
+// One client detail of a groups, llcs, trusts or reo kind, checked: the value to save, or null when it isn't allowed.
 //   groups: a list (or its JSON) of DPA_GROUPS names (none is fine), saved as JSON in DPA_GROUPS' order; NO_GROUPS
 //     alone says none of them apply (it's dropped when any is ticked)
-//   owned: 'Never', a year from 1900 to this year, or blank
 //   llcs / trusts: 'NONE' (they have none: saved as []), or a list (or its JSON) of { NAME, TITLE }, each with both
 //     (up to MAX_LLCS), saved as JSON; an empty list is blank (not answered)
+//   reo: see cleanReo_
 function cleanClientDetail_(type, raw) {
+  if (type === 'reo') return cleanReo_(raw);
   if (type === 'llcs' || type === 'trusts') {
     if (raw === 'NONE') return '[]';
     let list = raw;
@@ -2407,14 +2500,6 @@ function cleanClientDetail_(type, raw) {
     if (!Array.isArray(list) || list.some(g => !DPA_GROUPS.includes(g) && g !== NO_GROUPS)) return null;
     const picked = DPA_GROUPS.filter(g => list.includes(g));
     return JSON.stringify(picked.length || !list.includes(NO_GROUPS) ? picked : [NO_GROUPS]);
-  }
-  if (type === 'owned') {
-    const v = String(raw === null || raw === undefined ? '' : raw).trim();
-    if (!v) return '';
-    if (/^never$/i.test(v)) return 'Never';
-    const year = Number(v);
-    const now = Number(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).slice(0, 4));
-    return Number.isInteger(year) && year >= 1900 && year <= now ? String(year) : null;
   }
   return null;
 }
@@ -2445,7 +2530,10 @@ async function updateMyDetails_(id, found, given) {
   }
   groupsSaved_(next);
   if (('LLCS' in next || 'TRUSTS' in next) && !LLC_ROLES.some(role => hasRole_(found.row, role))) return { ok: false, error: 'not_allowed' };
+  if ('REAL ESTATE OWNED' in next && !REO_ROLES.some(role => hasRole_(found.row, role))) return { ok: false, error: 'not_allowed' };
   if ('LLCS' in next) Object.assign(next, OLD_LLC_CLEARED);
+  // (the real estate owned replaces the old when-did-you-last-own-a-home answer)
+  if ('REAL ESTATE OWNED' in next) next['LAST OWNED HOME'] = '';
   if (CLIENT_CREDIT in given) {
     const err = await saveCreditScore_(id, given[CLIENT_CREDIT]);
     if (err) return { ok: false, error: err };
@@ -2466,6 +2554,8 @@ function clientValues_(r) {
   if (!values['LLCS'] && get('FLIPPER LLC')) values['LLCS'] = JSON.stringify([{ NAME: get('FLIPPER LLC'), TITLE: get('FLIPPER TITLE') }]);
   // Before the groups were saved again: the old Veteran answer, as Veteran (With benefits)
   if (get('VETERAN').toUpperCase() === 'TRUE') values['PROFESSION GROUPS'] = JSON.stringify(clientGroups_(values['PROFESSION GROUPS'], 'TRUE'));
+  // Before the real estate owned was answered: the old "never owned a home" answer, as never owned any
+  if (!values['REAL ESTATE OWNED'] && clientReo_('', get('LAST OWNED HOME'))) values['REAL ESTATE OWNED'] = '[]';
   return values;
 }
 // ...plus their credit score, from their income document (blank without one)
@@ -2513,15 +2603,17 @@ async function adminUpdateClient_(account, body) {
       const email = String(raw || '').trim().toLowerCase().slice(0, 120);
       if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
       next[f.col] = email;
-    } else if (f.type === 'groups' || f.type === 'owned') {
+    } else if (f.type === 'groups') {
       const v = cleanClientDetail_(f.type, raw);
       if (v === null) return { ok: false, error: 'invalid_value' };
       next[f.col] = v;
-    } else if (f.type === 'llcs' || f.type === 'trusts') {
+    } else if (f.type === 'llcs' || f.type === 'trusts' || f.type === 'reo') {
       const v = cleanClientDetail_(f.type, raw);
       if (v === null) return { ok: false, error: 'invalid_' + f.type };
       next[f.col] = v;
       if (f.type === 'llcs') Object.assign(next, OLD_LLC_CLEARED);
+      // (the real estate owned replaces the old when-did-you-last-own-a-home answer)
+      if (f.type === 'reo') next['LAST OWNED HOME'] = '';
     } else {
       const text = cleanText_(raw, 100);
       if (f.required && !text) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
@@ -2572,7 +2664,7 @@ async function adminCreateClient_(account, body) {
       const email = String(raw || '').trim().toLowerCase().slice(0, 120);
       if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
       values[f.col] = email;
-    } else if (f.type === 'groups' || f.type === 'owned' || f.type === 'llcs' || f.type === 'trusts') {
+    } else if (f.type === 'groups' || f.type === 'llcs' || f.type === 'trusts' || f.type === 'reo') {
       // (not asked when a client is added)
       values[f.col] = f.type === 'groups' ? '[]' : '';
     } else {
@@ -3321,6 +3413,11 @@ async function pageData_(id, account, pageId) {
     accounts: isAdmin ? await accountChoices_() : null,
   };
   if (result.pageType.toLowerCase() === 'buyer breakdown') await addBuyerBreakdownData_(result, page);
+  // Seller Net: each seller's Professions & Groups and when they owned property (dates only), for a title company's
+  // escrow and owner's policy discounts. Kept apart from "clients" so the buyer's side never counts the sellers.
+  if (result.pageType.toLowerCase() === 'seller net') {
+    result.sellers = (await pageClients_(page)).filter(p => p.type !== 'Collaborator').map(({ id, groups, owned }) => ({ id, groups, owned }));
+  }
   // Buyer Breakdown and Seller Net: every title company's filed rates (they're public filings)
   if (['buyer breakdown', 'seller net'].includes(result.pageType.toLowerCase())) {
     try {
@@ -3855,16 +3952,20 @@ async function inspectorRow_(collection, nameColumn, name) {
 // (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate, whether they're a
 // veteran with benefits and have used a VA loan before (for a VA loan's funding fee), and the details a Down Payment
 // Assistance program can ask about (groups: their PROFESSION GROUPS names, with the old Veteran answer folded in;
-// lastOwned: LAST OWNED HOME; education: HOMEBUYER EDUCATION)
+// lastOwned: from their real estate owned, see clientLastOwned_; education: HOMEBUYER EDUCATION). owned: when they owned
+// each property ([{ purchased, sold }], for a title company's investor discount; null when not answered). Only dates are
+// sent: not the addresses.
 async function pageClients_(page) {
   const names = {}, va = {};
   (await rows('accounts')).forEach(r => {
     const rid = phoneToId_(r['ACCOUNT ID']);
     names[rid] = fullName_(r);
     const groups = clientGroups_(r['PROFESSION GROUPS'], r['VETERAN']);
+    const reo = clientReo_(r['REAL ESTATE OWNED'], r['LAST OWNED HOME']);
     va[rid] = { veteran: groups.includes(VA_GROUP), vaUsed: hasRole_(r, 'VA LOAN USED'),
       groups,
-      lastOwned: String(r['LAST OWNED HOME'] === undefined || r['LAST OWNED HOME'] === null ? '' : r['LAST OWNED HOME']).trim(),
+      lastOwned: clientLastOwned_(r['REAL ESTATE OWNED'], r['LAST OWNED HOME']),
+      owned: reo ? reo.map(p => ({ purchased: String((p && p.PURCHASED) || ''), sold: String((p && p.SOLD) || '') })) : null,
       education: hasRole_(r, 'HOMEBUYER EDUCATION') };
   });
   const incomes = {};
@@ -3880,7 +3981,8 @@ async function pageClients_(page) {
     .filter(p => { if (!p.id || seen[p.id]) return false; seen[p.id] = true; return true; })
     .map(p => ({ id: p.id, type: p.type, name: names[p.id] || '', income: incomes[p.id] || null,
       veteran: va[p.id] ? va[p.id].veteran : false, vaUsed: va[p.id] ? va[p.id].vaUsed : false,
-      groups: va[p.id] ? va[p.id].groups : [], lastOwned: va[p.id] ? va[p.id].lastOwned : '', education: va[p.id] ? va[p.id].education : false }));
+      groups: va[p.id] ? va[p.id].groups : [], lastOwned: va[p.id] ? va[p.id].lastOwned : '', owned: va[p.id] ? va[p.id].owned : null,
+      education: va[p.id] ? va[p.id].education : false }));
 }
 
 // Interval columns must be one of INTERVALS, job titles/descriptions are short text,

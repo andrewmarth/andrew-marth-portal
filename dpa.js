@@ -15,11 +15,12 @@ export const GRANT_TYPES = ['Arizona Department of Housing', 'Individual Develop
 export const DPA_AMOUNT_TYPES = ['Percentage', 'Flat Dollar Amount'];
 export const PERCENTAGE = 'Percentage', FLAT = 'Flat Dollar Amount';
 
-// Professions and groups a program can be for (ELIGIBLE GROUPS), and a client can belong to (PROFESSION GROUPS)
+// Professions and groups a program can be for (ELIGIBLE GROUPS), and a client can belong to (PROFESSION GROUPS). A title
+// company's discount can be for them too (see /title-fees.js).
 export const PROFESSION_GROUPS = ['Teacher', 'Firefighter', 'Law Enforcement', 'EMTs',
     'Healthcare Worker (Anyone employed by a healthcare provider)', 'Healthcare Worker (Any clinical role)',
-    'Healthcare Professional (Qualified physician)', 'Veteran (With benefits)', 'Veteran (Without benefits)',
-    'Legally Disabled', 'Native American'];
+    'Healthcare Professional (Qualified physician)', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)',
+    'Legally Disabled', 'Native American', 'Real Estate Agent', 'Senior (60+)'];
 
 // Census designations (a page's CENSUS DESIGNATION)
 export const CENSUS_DESIGNATIONS = ['Low', 'Moderate', 'Middle', 'Upper'];
