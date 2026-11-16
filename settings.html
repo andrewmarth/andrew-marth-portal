@@ -409,7 +409,9 @@
         .cf-edit { flex: 0 0 auto; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 2px solid rgba(233, 226, 216, 0.75); border-radius: 50%; background: transparent; color: var(--cream); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease; }
         .cf-edit svg { width: 16px; height: 16px; }
         .cf-edit:disabled { opacity: 0.3; cursor: default; }
-        @media (hover: hover) { .cf-edit:not(:disabled):hover { background: var(--cream); color: var(--brown); } }
+        /* Edit Clients: while a line is open the other pencils are dimmed (pressing one points to the open line's Save) */
+        .cf-edit[aria-disabled="true"] { opacity: 0.3; cursor: not-allowed; }
+        @media (hover: hover) { .cf-edit:not(:disabled):not([aria-disabled="true"]):hover { background: var(--cream); color: var(--brown); } }
         /* The line being edited */
         .cf-row.is-editing { flex-wrap: wrap; align-items: center; }
         .cf-row.is-editing .cf-label { color: var(--gold); }
@@ -1709,14 +1711,53 @@
                 const cls = line.kind === 'bool' ? (v[line.cols[0]] ? ' is-yes' : ' is-no') : (value && value !== 'None' ? '' : ' is-empty');
                 return '<div class="cf-row" data-line="' + line.key + '"' + hidden + '><span class="cf-label">' + escapeHtml(line.label) + '</span>'
                     + '<span class="cf-value' + cls + '">' + escapeHtml(value || 'Not added') + '</span>'
-                    + '<button type="button" class="cf-edit" data-edit="' + line.key + '" aria-label="Edit ' + escapeHtml(line.label) + '" title="Edit"' + (editing || cfBusy ? ' disabled' : '') + '>' + CF_PENCIL + '</button></div>';
+                    + '<button type="button" class="cf-edit" data-edit="' + line.key + '" aria-label="Edit ' + escapeHtml(line.label) + '" title="' + (editing ? 'Close the open line first' : 'Edit') + '"'
+                    + (cfBusy ? ' disabled' : editing ? ' aria-disabled="true"' : '') + '>' + CF_PENCIL + '</button></div>';
             }).join('');
             clientList.hidden = false;
             const open = clientList.querySelector('.is-editing');
             if (open) {
                 const first = open.querySelector('input:checked, input');
-                if (first) first.focus();
+                if (first) first.focus({ preventScroll: true });
             }
+        }
+        // Opening and closing a line animates it (the same as the settings on the buyer and seller pages): the line grows
+        // or shrinks from its old height and what's now showing fades in. Skipped when the device asks for less motion.
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        function swapLine(key, change) {
+            const old = key && clientList.querySelector('[data-line="' + key + '"]');
+            const from = old && old.getClientRects().length ? old.getBoundingClientRect().height : null;
+            change();
+            const row = key && clientList.querySelector('[data-line="' + key + '"]');
+            if (from === null || !row || reduceMotion.matches || !row.animate || !row.getClientRects().length) return;
+            const to = row.getBoundingClientRect().height;
+            row.style.overflow = 'hidden';
+            const anim = row.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+            anim.onfinish = () => {
+                row.style.overflow = '';
+                if (row.classList.contains('is-editing')) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            };
+            anim.oncancel = () => { row.style.overflow = ''; };
+            [...row.children].forEach(c => {
+                if (!c.getClientRects().length) return;
+                c.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }],
+                    { duration: 260, delay: 70, easing: 'ease-out', fill: 'backwards' });
+            });
+        }
+        // One line open at a time: pressing another pencil brings the open line into view and pulses its Save button
+        function nudgeOpenLine() {
+            const open = clientList.querySelector('.cf-row.is-editing');
+            if (!open) return;
+            const save = open.querySelector('[data-save]');
+            open.scrollIntoView({ block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+            if (!save) return;
+            save.focus({ preventScroll: true });
+            if (reduceMotion.matches || !save.animate) return;
+            save.animate([
+                { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(192, 144, 80, 0.75)' },
+                { transform: 'scale(1.08)', boxShadow: '0 0 0 8px rgba(192, 144, 80, 0.25)' },
+                { transform: 'scale(1)', boxShadow: '0 0 0 12px rgba(192, 144, 80, 0)' },
+            ], { duration: 650, easing: 'ease-out' });
         }
         function showClient(c) {
             client = c;
@@ -1726,13 +1767,21 @@
         }
         clientList.addEventListener('click', e => {
             const edit = e.target.closest('[data-edit]');
+            // Another line is open: point to it instead
+            if (edit && editing) { nudgeOpenLine(); return; }
             // Income & Debt opens the income pop-up (the one the client uses for their own)
-            if (edit && !editing && edit.dataset.edit === 'income') { openClientIncome(); return; }
-            if (edit && !editing) { editing = edit.dataset.edit; cfSaved.textContent = ''; renderClient(); return; }
-            if (e.target.closest('[data-cancel]') && !cfBusy) { editing = null; renderClient(); }
+            if (edit && edit.dataset.edit === 'income') { openClientIncome(); return; }
+            if (edit) { const key = edit.dataset.edit; swapLine(key, () => { editing = key; cfSaved.textContent = ''; renderClient(); }); return; }
+            if (e.target.closest('[data-cancel]') && !cfBusy) { const key = editing; swapLine(key, () => { editing = null; renderClient(); }); }
         });
         clientList.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && editing && !cfBusy) { e.preventDefault(); const key = editing; editing = null; renderClient(); const b = clientList.querySelector('[data-edit="' + key + '"]'); if (b) b.focus(); }
+            if (e.key === 'Escape' && editing && !cfBusy) {
+                e.preventDefault();
+                const key = editing;
+                swapLine(key, () => { editing = null; renderClient(); });
+                const b = clientList.querySelector('[data-edit="' + key + '"]');
+                if (b) b.focus({ preventScroll: true });
+            }
         });
         clientList.addEventListener('input', e => {
             e.target.classList.remove('is-invalid');
@@ -1770,7 +1819,7 @@
                 if (line.kind === 'email' && values['EMAIL'] && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(values['EMAIL'])) return fail(form.querySelector('.cf-input'), CLIENT_ERRORS.invalid_email);
             }
             // Nothing changed: just close the line
-            if (line.cols.every(col => sameDetail(line.kind, values[col], client.values[col]))) { editing = null; renderClient(); return; }
+            if (line.cols.every(col => sameDetail(line.kind, values[col], client.values[col]))) { swapLine(line.key, () => { editing = null; renderClient(); }); return; }
             const save = form.querySelector('[data-save]');
             cfBusy = true;
             form.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
@@ -1785,11 +1834,10 @@
                     if (picker && picker.index() !== null) picker.rename(picker.index(), client.name);
                 }
                 cfBusy = false;
-                editing = null;
-                renderClient();
+                swapLine(line.key, () => { editing = null; renderClient(); });
                 cfSaved.textContent = 'Saved ' + (line.saved || line.label) + '.';
                 const b = clientList.querySelector('[data-edit="' + line.key + '"]');
-                if (b) b.focus();
+                if (b) b.focus({ preventScroll: true });
             } catch (err) {
                 console.error(err);
                 cfBusy = false;
