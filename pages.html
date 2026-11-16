@@ -1358,6 +1358,12 @@
                 <div class="settings-grid" id="loan-fields"></div>
             </div>
 
+            <!-- The HOA's fees (with who pays each) and dues. Seller Net: also whether there's an HOA -->
+            <div class="settings-section" id="hoa-section">
+                <h3 class="money-section-title">HOA</h3>
+                <div class="settings-grid" id="hoa-fields"></div>
+            </div>
+
             <div class="settings-section">
                 <h3 class="money-section-title">Miscellaneous</h3>
                 <div class="settings-grid" id="misc-fields"></div>
@@ -1775,9 +1781,10 @@
                 + (dpaI.rateMarkup ? '; adds ' + ratePct(dpaI.rateMarkup) + ' to the first loan’s rate' : '');
             // ...and the program's qualifications this purchase doesn't meet
             const dpaNotes = dpaI ? dpaDisclaimers(dpaI, { price, census: text(col(page, 'CENSUS DESIGNATION')), purchasers: opts.dpaBuyers || null }) : [];
-            // HOA fees only count when the buyer pays them
+            // HOA fees only count when the buyer pays them (and not at all when there's no HOA; they're hidden in the settings)
+            const noHoaHere = text(col(page, 'HAS HOA')) === 'No';
             const hoaFee = (section, name, key) => {
-                const amount = num(col(page, 'HOA ' + key + ' FEE'));
+                const amount = noHoaHere ? 0 : num(col(page, 'HOA ' + key + ' FEE'));
                 const payer = text(col(page, 'WHO PAYS ' + key + ' FEE'));
                 const buyerPays = payer.toLowerCase() === 'buyer';
                 return { section, cost: true, label: name, amount: buyerPays ? -amount : 0, note: !buyerPays && amount > 0 ? 'Paid by ' + (payer || 'seller').toLowerCase() : '',
@@ -2175,9 +2182,12 @@
             const clientAskHtml = '<li class="net-ask"><p>Have your mortgage statement handy? Add your loan details for an exact payoff.</p>'
                 + '<button type="button" class="btn" data-client-input>Add Your Loan Details</button></li>';
             // One heading + list per section, in the order the lines are listed
-            // Seller Net leaves out lines that come to $0 (the Sale Price always shows)
-            // (a $0 line with a warning still shows, so the warning can be read)
-            const shownLines = result.lines.filter(l => !l.hidden && !(result.sellerNet && toDollars(l.amount) === 0 && l.label !== 'Sale Price' && !(l.warnings || []).length));
+            // Lines that come to $0 are left out. Always shown: a Seller Net's Sale Price; a Buyer Breakdown's Purchase Price,
+            // Loan Amount and Cash To Close (or Refund To Buyer). A $0 line with a warning still shows, so the warning can be
+            // read, and so does a lender credit that would apply once something's filled in or done (its note says what).
+            const alwaysShown = l => (result.sellerNet ? l.label === 'Sale Price' : ['Purchase Price', 'Loan Amount', result.cashLabel].includes(l.label));
+            const shownLines = result.lines.filter(l => !l.hidden && (toDollars(l.amount) !== 0 || alwaysShown(l) || (l.warnings || []).length
+                || (!result.sellerNet && l.capped === 2 && l.note)));
             const sectionsOf = lines => [...new Set(lines.map(l => l.section))].map(name =>
                 '<section class="money-section"><h3 class="money-section-title">' + escapeHtml(name) + '</h3>'
                 + '<ul class="money-list">' + lines.filter(l => l.section === name).map(lineHtml).join('') + '</ul></section>').join('');
@@ -3860,6 +3870,17 @@
                 'How the upfront charge is paid: the FHA UFMIP, the VA funding fee, or a conventional single premium. Financed adds it to the loan amount.');
             lenderFeesField(loan, () => (pickedCash ? null : data.loanProducts[pickedLoanIndex] || null), () => pickedCash);
 
+            const hoa = document.getElementById('hoa-fields');
+            const hoaStart = hoaQuestion(hoa);
+            feeWithPayer(hoa, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
+            feeWithPayer(hoa, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
+            // The seller always pays the disclosure fee
+            moneyField(hoa, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
+            feeWithPayer(hoa, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
+            moneyField(hoa, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
+            moneyField(hoa, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
+            hoaFields = [...hoa.children].slice(hoaStart);
+
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'buyer');
             const titleStart = misc.children.length;
@@ -3868,13 +3889,6 @@
             percentField(misc, 'ALTA Loan Policy Fee', 'ALTA TITLE RATE');
             titleRateFields = [...misc.children].slice(titleStart);
             percentField(misc, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE');
-            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE');
-            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE');
-            // The seller always pays the disclosure fee
-            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
-            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE');
-            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
-            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
             percentAndDollars(misc, 'Buyer Paid Commission', 'BUYERS AGENT COMMISSION %', 'BUYERS AGENT COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
             percentAndDollars(misc, 'Seller Paid Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'A percent of the price, a flat amount, or both. Both are optional.');
 
@@ -4096,15 +4110,51 @@
         let loanFeeFields = [];
         const showLoanFeeFields = () => loanFeeFields.forEach(w => { w.style.display = hasNoLoan(current) ? 'none' : ''; });
         // No HOA (or no master association): its dues are $0, and that's final. put(column, value) writes a value.
-        const noDues = (column, put = SETTINGS_IO.put) => { put(column, '0'); put(column + ' STATUS', 'Final'); };
-        function noHoa(put = SETTINGS_IO.put) {
-            noDues('HOA PRIMARY MONTHLY DUES', put);
-            noDues('HOA MASTER MONTHLY DUES', put);
+        // What No wrote over is held (until the page reloads), so switching back to Yes (say, after a misclick) puts it back.
+        const heldHoa = {};
+        const noDues = (column, put = SETTINGS_IO.put, get = SETTINGS_IO.get) => {
+            const v = get(column);
+            if (v !== '' && num(v) !== 0) heldHoa[column] = { value: v, status: get(column + ' STATUS') };
+            put(column, '0'); put(column + ' STATUS', 'Final');
+        };
+        const restoreDues = (column, put = SETTINGS_IO.put, get = SETTINGS_IO.get) => {
+            const h = heldHoa[column];
+            delete heldHoa[column];
+            if (h && num(get(column)) === 0) { put(column, h.value); put(column + ' STATUS', h.status); }
+        };
+        function noHoa(put = SETTINGS_IO.put, get = SETTINGS_IO.get) {
+            noDues('HOA PRIMARY MONTHLY DUES', put, get);
+            noDues('HOA MASTER MONTHLY DUES', put, get);
+            if (get('HAS MASTER ASSOCIATION') && get('HAS MASTER ASSOCIATION') !== 'No') heldHoa.master = get('HAS MASTER ASSOCIATION');
             put('HAS MASTER ASSOCIATION', 'No');
         }
-        // Seller Net: the HOA fee settings, hidden when there's no HOA (blank shows them, for pages from before)
+        // Back to Yes: the dues (and master association answer) No replaced
+        function yesHoa(put = SETTINGS_IO.put, get = SETTINGS_IO.get) {
+            restoreDues('HOA PRIMARY MONTHLY DUES', put, get);
+            if (heldHoa.master && get('HAS MASTER ASSOCIATION') === 'No') {
+                put('HAS MASTER ASSOCIATION', heldHoa.master);
+                restoreDues('HOA MASTER MONTHLY DUES', put, get);
+            }
+            delete heldHoa.master;
+        }
+        // The HOA fee and dues settings, hidden when there's no HOA (blank shows them, for pages from before)
         let hoaFields = [];
         const showHoaFields = () => hoaFields.forEach(w => { w.style.display = current('HAS HOA') === 'No' ? 'none' : ''; });
+        // The settings card's HOA yes / no, first in the HOA section: No hides the rest and sets the dues to $0 (final);
+        // Yes again brings back the dues No replaced. Returns where the rest of the section starts.
+        function hoaQuestion(parent) {
+            const f = fieldShell('HOA');
+            const seg = segToggle([['Yes', 'Yes'], ['No', 'No']], current('HAS HOA'), v => {
+                if (v === current('HAS HOA')) return;
+                draft['HAS HOA'] = v;
+                if (v === 'No') noHoa(); else yesHoa();
+                settingsEdited();
+            }, 'HOA');
+            f.body.append(seg);
+            f.wrap.syncInputs = () => setSeg(seg, current('HAS HOA'));
+            parent.append(f.wrap);
+            return parent.children.length;
+        }
 
         // The questions the seller answers about their loan and HOA ("Client Input"), read with get(column) and
         // written with put(column, value). Used by the settings card and by the client's own pop-up.
@@ -4132,11 +4182,11 @@
                 { label: 'Other Holdback', column: 'OTHER HOLDBACK', kind: 'money', short: 'Other Holdback', show: hardMoney },
                 // HOA: dues the client gives are final; no HOA (or no master association) means $0, also final
                 { label: 'HOA', column: 'HAS HOA', kind: 'seg', options: ['Yes', 'No'], short: 'HOA:', then: v => {
-                    if (v === 'Yes') put('HOA PRIMARY MONTHLY DUES STATUS', 'Final'); else noHoa(put);
+                    if (v === 'Yes') { yesHoa(put, get); put('HOA PRIMARY MONTHLY DUES STATUS', 'Final'); } else noHoa(put, get);
                 } },
                 { label: 'HOA Primary Dues', column: 'HOA PRIMARY MONTHLY DUES', kind: 'money', short: 'Primary Dues', show: hoa, then: () => put('HOA PRIMARY MONTHLY DUES STATUS', 'Final') },
                 { label: 'Is there a master association?', column: 'HAS MASTER ASSOCIATION', kind: 'seg', options: ['Yes', 'No'], short: 'Master Association:', show: hoa, then: v => {
-                    if (v === 'Yes') put('HOA MASTER MONTHLY DUES STATUS', 'Final'); else noDues('HOA MASTER MONTHLY DUES', put);
+                    if (v === 'Yes') { restoreDues('HOA MASTER MONTHLY DUES', put, get); put('HOA MASTER MONTHLY DUES STATUS', 'Final'); } else noDues('HOA MASTER MONTHLY DUES', put, get);
                 } },
                 { label: 'HOA Master Dues', column: 'HOA MASTER MONTHLY DUES', kind: 'money', short: 'Master Dues', show: () => hoa() && get('HAS MASTER ASSOCIATION') === 'Yes', then: () => put('HOA MASTER MONTHLY DUES STATUS', 'Final') },
             ];
@@ -4242,30 +4292,23 @@
             percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance and a flat amount. Enter 0 for none.', 'OTHER LOAN PAYOFF FEES STATUS');
             loanFeeFields = [...payoffs.children].slice(payoffStart);
 
+            // HOA yes / no (also in Client Input)
+            const hoa = document.getElementById('hoa-fields');
+            const hoaStart = hoaQuestion(hoa);
+            feeWithPayer(hoa, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', { status: 'HOA TRANSFER FEE STATUS', required: true });
+            feeWithPayer(hoa, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', { status: 'HOA CAP FEE STATUS', required: true });
+            moneyField(hoa, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.', status: 'HOA DISCLOSURE FEE STATUS' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
+            feeWithPayer(hoa, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE', { required: true });
+            moneyField(hoa, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
+            moneyField(hoa, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month', status: 'HOA MASTER MONTHLY DUES STATUS' });
+            hoaFields = [...hoa.children].slice(hoaStart);
+
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'seller');
             const titleStart = misc.children.length;
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
             percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
             titleRateFields = [...misc.children].slice(titleStart);
-            // HOA yes / no (also in Client Input): No hides the HOA fees below and sets the dues to $0 (final)
-            const hoaField = fieldShell('HOA');
-            const hoaSeg = segToggle([['Yes', 'Yes'], ['No', 'No']], current('HAS HOA'), v => {
-                draft['HAS HOA'] = v;
-                if (v === 'No') noHoa();
-                settingsEdited();
-            }, 'HOA');
-            hoaField.body.append(hoaSeg);
-            hoaField.wrap.syncInputs = () => setSeg(hoaSeg, current('HAS HOA'));
-            misc.append(hoaField.wrap);
-            const hoaStart = misc.children.length;
-            feeWithPayer(misc, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', { status: 'HOA TRANSFER FEE STATUS', required: true });
-            feeWithPayer(misc, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', { status: 'HOA CAP FEE STATUS', required: true });
-            moneyField(misc, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.', status: 'HOA DISCLOSURE FEE STATUS' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
-            feeWithPayer(misc, 'HOA Other Fee', 'HOA OTHER FEE', 'WHO PAYS OTHER FEE', { required: true });
-            moneyField(misc, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
-            moneyField(misc, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month', status: 'HOA MASTER MONTHLY DUES STATUS' });
-            hoaFields = [...misc.children].slice(hoaStart);
             percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.');
             percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price and a flat amount. Enter 0 for none.');
 
