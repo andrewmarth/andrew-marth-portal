@@ -975,6 +975,9 @@
         }
         .edit-btn svg { width: 17px; height: 17px; }
         @media (hover: hover) { .edit-btn:hover { background: var(--olive); color: var(--cream); transform: translateY(-2px); } }
+        /* While one setting is open the other pencils are dimmed (pressing one points to the open setting's Done) */
+        .field.editable.is-locked > .view-row .edit-btn { opacity: 0.35; cursor: not-allowed; }
+        @media (hover: hover) { .field.editable.is-locked > .view-row .edit-btn:hover { background: var(--white); color: var(--olive); transform: none; } }
 
         /* Settings sections and inputs */
         .settings-section { margin-top: 26px; }
@@ -4373,7 +4376,9 @@
         }
 
         // --- View / edit rows ---
-        // Each setting shows its current value with a pencil; the pencil opens the input, Done closes it again.
+        // Each setting shows its current value with a pencil; the pencil opens the input, Done closes it again. Only one
+        // is open at a time: while one is open the other pencils are dimmed, and pressing one brings the open setting
+        // into view and points to its Done button. Opening and closing animates the row to its new size.
         const PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
         const editableFields = [];
         function makeEditable(card) {
@@ -4400,19 +4405,25 @@
                 const error = field.querySelector('.field-error');
                 if (error) field.insertBefore(done, error); else field.append(done);
                 edit.addEventListener('click', () => {
-                    // One setting open at a time
-                    editableFields.forEach(f => { if (f.field !== field) f.field.classList.remove('is-editing'); });
+                    // One setting open at a time: another one open is pointed to instead
+                    const open = openEditable();
+                    if (open && open !== field) { nudgeOpen(open); return; }
+                    if (open === field) return;
                     // A group re-reads its values (another group may have changed one they share)
                     if (field.groupSync) field.groupSync();
                     refreshDisplays();
-                    field.classList.add('is-editing');
+                    animateRow(field, () => field.classList.add('is-editing'));
+                    lockRows();
                     const first = field.querySelector('.set-input, .picker-btn, .seg button');
-                    if (first) first.focus();
+                    if (first) first.focus({ preventScroll: true });
                 });
                 doneBtn.addEventListener('click', () => {
-                    field.classList.remove('is-editing');
-                    refreshDisplays();
-                    edit.focus();
+                    animateRow(field, () => {
+                        field.classList.remove('is-editing');
+                        refreshDisplays();
+                    });
+                    lockRows();
+                    edit.focus({ preventScroll: true });
                 });
                 const tag = el('span', 'edited-tag', 'Edited');
                 row.insertBefore(tag, value);
@@ -4421,6 +4432,72 @@
             });
             refreshDisplays();
             markSaved();
+        }
+
+        // The setting that's open (at most one), or null
+        function openEditable() {
+            const f = editableFields.find(x => x.field.classList.contains('is-editing'));
+            return f ? f.field : null;
+        }
+        // Dims every other pencil while a setting is open. An open setting that's been hidden (its section or card was
+        // hidden) is closed, so it can't keep the others locked.
+        function lockRows() {
+            editableFields.forEach(({ field }) => {
+                if (field.classList.contains('is-editing') && !field.getClientRects().length) field.classList.remove('is-editing');
+            });
+            const open = openEditable();
+            editableFields.forEach(({ field }) => {
+                const locked = Boolean(open) && field !== open;
+                field.classList.toggle('is-locked', locked);
+                const pencil = field.querySelector(':scope > .view-row .edit-btn');
+                if (!pencil) return;
+                pencil.setAttribute('aria-disabled', String(locked));
+                pencil.title = locked ? 'Close the open setting first' : 'Edit';
+            });
+        }
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        // Pressing another pencil while a setting is open: the open one comes into view and its Done button pulses
+        function nudgeOpen(field) {
+            const done = field.querySelector(':scope > .edit-done .done-btn');
+            field.scrollIntoView({ block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+            if (!done) return;
+            done.focus({ preventScroll: true });
+            if (reduceMotion.matches || !done.animate) return;
+            done.animate([
+                { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(192, 144, 80, 0.75)' },
+                { transform: 'scale(1.08)', boxShadow: '0 0 0 8px rgba(192, 144, 80, 0.25)' },
+                { transform: 'scale(1)', boxShadow: '0 0 0 12px rgba(192, 144, 80, 0)' },
+            ], { duration: 650, easing: 'ease-out' });
+        }
+        // Opens or closes a row (change() swaps it) with an animation: the row grows or shrinks from its old size, spacing
+        // and background to its new ones, and what's now showing fades in. Skipped when the device asks for less motion.
+        const ROW_BOX = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+            'backgroundColor', 'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'];
+        function rowBox(field) {
+            const cs = getComputedStyle(field);
+            const box = { height: field.getBoundingClientRect().height + 'px' };
+            ROW_BOX.forEach(p => { box[p] = cs[p]; });
+            return box;
+        }
+        function animateRow(field, change) {
+            if (reduceMotion.matches || !field.animate) { change(); return; }
+            field.getAnimations().forEach(a => { if (a.id === 'row') a.cancel(); });
+            const from = rowBox(field);
+            change();
+            const to = rowBox(field);
+            field.style.overflow = 'hidden';
+            const anim = field.animate([from, to], { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+            anim.id = 'row';
+            anim.onfinish = () => {
+                field.style.overflow = '';
+                if (field.classList.contains('is-editing')) field.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            };
+            anim.oncancel = () => { field.style.overflow = ''; };
+            [...field.children].forEach(c => {
+                if (!c.getClientRects().length) return;
+                c.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }],
+                    { duration: 260, delay: 70, easing: 'ease-out', fill: 'backwards' });
+            });
         }
 
         // Whatever the rows show right now becomes the "saved" version (on load and after Save Settings)
@@ -4482,6 +4559,7 @@
                 field.classList.toggle('is-changed', saved !== null && text !== saved);
             });
             markMissingRows();
+            lockRows();
         }
         // Talks to the Portal API as the signed-in person
         async function api(payload) {
