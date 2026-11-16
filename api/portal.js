@@ -2256,7 +2256,7 @@ async function wholesaleImage_(photoId, width) {
 // A new ACCOUNT LIST document for the signed-in phone number. Role columns are TRUE/FALSE from the answers; ADMIN and CUM
 // are always FALSE. Thinking of selling adds a "Seller Net" page for their home (price left blank).
 const SIGNUP_GOALS = ['buy', 'sell', 'invest', 'other'];
-const SIGNUP_ROLES = { mortgage: 'LENDER', hardmoney: 'HARD MONEY LENDER', wholesaler: 'WHOLESALER', other: '' };
+const SIGNUP_ROLES = { mortgage: 'LENDER', wholesaler: 'WHOLESALER', other: '' };
 async function signup_(id, found, body) {
   if (found) return { ok: false, error: 'exists' };
   const firstName = cleanText_(body.firstName, 50);
@@ -2290,7 +2290,6 @@ async function signup_(id, found, body) {
     'FLIPPER SELLER': false,
     'LANDLORD': false,
     'LENDER': roles.indexOf('mortgage') >= 0,
-    'HARD MONEY LENDER': roles.indexOf('hardmoney') >= 0,
     'WHOLESALER': roles.indexOf('wholesaler') >= 0,
     'ADMIN': false,
     'CUM': false,
@@ -2329,7 +2328,7 @@ const CLIENT_FIELDS = [
   { col: 'BUYER', type: 'bool' }, { col: 'SELLER', type: 'bool' }, { col: 'LANDLORD', type: 'bool' },
   { col: 'FLIPPER BUYER', type: 'bool' }, { col: 'FLIPPER SELLER', type: 'bool' },
   { col: 'LENDER', type: 'bool' }, { col: 'LENDER BANK', type: 'text' }, { col: 'WHOLESALER', type: 'bool' },
-  { col: 'HARD MONEY LENDER', type: 'bool' }, { col: 'PREFLIPPER', type: 'bool' },
+  { col: 'PREFLIPPER', type: 'bool' },
   // The LLCs and trusts a buyer, flipper buyer, flipper seller or landlord buys or holds property through (JSON
   // [{ NAME, TITLE }], their title in each; [] when they have none; blank when not answered yet). LLCS replaced FLIPPER
   // LLC / FLIPPER TITLE, which still show as one LLC until the list is first saved (saving clears them). Not asked when
