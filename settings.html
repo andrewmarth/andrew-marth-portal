@@ -439,11 +439,56 @@
         .dd-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; width: 100%; }
         .dd-check { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1.5px solid rgba(233, 226, 216, 0.35); border-radius: 14px; font-size: 0.92rem; font-weight: bold; line-height: 1.3; cursor: pointer; }
         .dd-check input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--gold); cursor: pointer; }
+        /* None Of These: on its own line after the groups */
+        .dd-check.is-none { grid-column: 1 / -1; margin-top: 4px; border-style: dashed; }
         .dd-check:has(input:checked) { background: rgba(233, 226, 216, 0.14); border-color: var(--gold); }
         .dd-check:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
         .dd-owned { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
         .dd-owned .cf-input { max-width: 190px; }
         .dd-year[hidden] { display: none; }
+        /* LLCs / Trusts pop-up: each saved one locked (its name and title, with Edit and Remove); one at a time opens as a
+           small form; Add under them; with none, an "I do not have one" box */
+        .edit-dialog.llc-dialog { max-width: 560px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+        .llc-entries { display: flex; flex-direction: column; gap: 10px; }
+        .llc-entries:empty { display: none; }
+        .llc-entry { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-radius: 16px; background: #fbf9f6; border: 1px solid rgba(78, 81, 62, 0.18); }
+        .llc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+        .llc-name { font-weight: bold; overflow-wrap: anywhere; }
+        .llc-title { font-size: 0.88rem; opacity: 0.75; overflow-wrap: anywhere; }
+        .llc-btn { flex: 0 0 auto; width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 2px solid var(--navy); border-radius: 50%; background: var(--white); color: var(--olive); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+        .llc-btn svg { width: 16px; height: 16px; }
+        .llc-btn.is-danger { border-color: #b3392f; color: #b3392f; }
+        .llc-btn:disabled { opacity: 0.35; cursor: default; }
+        @media (hover: hover) {
+            .llc-btn:not(:disabled):hover { background: var(--olive); color: var(--cream); }
+            .llc-btn.is-danger:not(:disabled):hover { background: #b3392f; color: var(--white); }
+        }
+        .llc-entry.is-editing { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px 12px; padding: 14px; }
+        .llc-field { display: block; min-width: 0; }
+        .llc-field > span { display: block; margin: 0 0 6px 6px; font-size: 0.85rem; font-weight: bold; }
+        .llc-field .cf-input { max-width: none; }
+        .llc-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+        .llc-edit-actions .btn { min-height: 40px; padding: 8px 20px; font-size: 0.95rem; }
+        .llc-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 12px; border: 2px dashed rgba(78, 81, 62, 0.4); border-radius: 14px; background: none; font-family: inherit; font-size: 0.95rem; font-weight: bold; color: var(--rust); cursor: pointer; }
+        .llc-entries:empty + .llc-add { margin-top: 0; }
+        .llc-add svg { width: 17px; height: 17px; }
+        .llc-add[hidden] { display: none; }
+        .llc-add:disabled { opacity: 0.5; cursor: default; }
+        @media (hover: hover) { .llc-add:not(:disabled):hover { border-color: var(--navy); } }
+        .llc-none { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 14px; border: 1.5px solid rgba(78, 81, 62, 0.25); border-radius: 14px; font-weight: bold; cursor: pointer; }
+        .llc-none input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--olive); cursor: pointer; }
+        .llc-none:has(input:checked) { background: #eef0e6; border-color: var(--olive); }
+        .llc-none[hidden] { display: none; }
+        .edit-dialog.llc-confirm { max-width: 420px; }
+        .btn.llc-danger { background: #b3392f; }
+        @media (hover: hover) { .btn.llc-danger:hover { background: #8f2c24; } }
+        @media (max-width: 600px) {
+            .llc-entry.is-editing { grid-template-columns: minmax(0, 1fr); }
+            .llc-edit-actions .btn { flex: 1; }
+        }
+        /* Your profile: a line with nothing on file gets a warning icon before its name */
+        .missing-icon { display: inline-flex; vertical-align: -3px; margin-right: 8px; color: #b7791f; }
+        .missing-icon svg { width: 17px; height: 17px; }
         .detail-dialog { max-height: calc(100dvh - 40px); overflow-y: auto; }
         .detail-dialog .dd-editor { margin: 4px 0 2px; }
         .detail-dialog .dd-owned { justify-content: flex-start; }
@@ -795,6 +840,10 @@
         }
         /* (the line under the last row is on the list, so it stays put when a row is hidden) */
         .setting-list { border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        /* Your profile's sections (Profile, Buyer Settings) */
+        .setting-section-title { margin: 26px 0 8px 4px; font-size: 0.78rem; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--rust); }
+        h2 + .setting-section-title { margin-top: 14px; }
+        .setting-section[hidden] { display: none; }
         .setting-value .sv-line { display: block; white-space: nowrap; }
         .setting-value .sv-line + .sv-line { opacity: 0.75; font-size: 0.92em; }
         .setting-row[hidden] { display: none; }
@@ -835,8 +884,6 @@
         .edit-btn.is-start .start-text { display: block; line-height: 1; position: relative; top: -1.5px; }
         @media (hover: hover) { .edit-btn.is-start:not(:disabled):hover { background: var(--rust); color: var(--cream); } }
         /* Income & Debt with nothing on file: a yellow note (shown on phones too) */
-        .missing-note { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #fdf3d6; border: 1px solid #e8c766; color: #7a5a0c; font-size: 0.86rem; font-weight: bold; font-style: normal; white-space: nowrap; }
-        .missing-note svg { width: 15px; height: 15px; flex-shrink: 0; }
         .page-message { min-height: 1.4em; margin: 14px 4px 0 4px; font-size: 0.95rem; font-weight: bold; }
         .page-message:empty { min-height: 0; margin: 0; }
         .page-message.is-error { color: var(--rust); }
@@ -982,6 +1029,7 @@
         <section class="main-card reveal">
             <span class="card-eyebrow">Your Profile</span>
             <h2>Edit Your Information</h2>
+            <h3 class="setting-section-title">Profile</h3>
             <ul class="setting-list">
                 <li class="setting-row">
                     <span class="setting-label">Legal Name</span>
@@ -998,13 +1046,30 @@
                     <span class="setting-value" id="email-value">Loading...</span>
                     <button type="button" class="edit-btn" id="edit-email" aria-label="Edit your email" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
                 </li>
-                <!-- Only for buyers (BUYER = TRUE in ACCOUNT LIST) -->
-                <li class="setting-row" id="income-row" hidden>
-                    <span class="setting-label">Income &amp; Debt</span>
-                    <span class="setting-value" id="income-value">Loading...</span>
-                    <button type="button" class="edit-btn" id="edit-income" aria-label="Edit your income and debt" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
-                </li>
             </ul>
+            <!-- Buyer Settings: Income & Debt and the details loan programs ask about (buyers: BUYER = TRUE in ACCOUNT LIST),
+                 then LLCs (buyers, flipper buyers, flipper sellers and landlords). Hidden when none of its lines are. -->
+            <div class="setting-section" id="buyer-section" hidden>
+                <h3 class="setting-section-title">Buyer Settings</h3>
+                <ul class="setting-list" id="buyer-list">
+                    <li class="setting-row" id="income-row" hidden>
+                        <span class="setting-label">Income &amp; Debt</span>
+                        <span class="setting-value" id="income-value">Loading...</span>
+                        <button type="button" class="edit-btn" id="edit-income" aria-label="Edit your income and debt" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                    </li>
+                    <!-- (the loan program details go here, after Income & Debt) -->
+                    <li class="setting-row" id="llcs-row" hidden>
+                        <span class="setting-label">LLCs</span>
+                        <span class="setting-value" id="llcs-value">Loading...</span>
+                        <button type="button" class="edit-btn" id="edit-llcs" aria-label="Edit your LLCs" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                    </li>
+                    <li class="setting-row" id="trusts-row" hidden>
+                        <span class="setting-label">Trusts</span>
+                        <span class="setting-value" id="trusts-value">Loading...</span>
+                        <button type="button" class="edit-btn" id="edit-trusts" aria-label="Edit your trusts" title="Edit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg></button>
+                    </li>
+                </ul>
+            </div>
             <p class="page-message" id="page-message" role="status"></p>
         </section>
 
@@ -1320,7 +1385,58 @@
         </form>
     </dialog>
 
-    <!-- A buyer's details for loan programs (credit score, veteran, professions / groups, home ownership, education) -->
+    <!-- LLCs / Trusts: each one saved is locked, with Edit and Remove (Remove asks first); Add opens an empty one; with
+         none, an "I do not have an LLC" (or trust) box. Each change is saved right away. Your own, or Edit Clients'. -->
+    <dialog class="edit-dialog llc-dialog" id="llc-dialog" aria-labelledby="llc-dialog-title">
+        <div class="dialog-inner">
+            <div class="dialog-head">
+                <h2 id="llc-dialog-title">LLCs</h2>
+                <button type="button" class="close-btn" data-close-llc aria-label="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="muted" id="llc-help"></p>
+            <div class="llc-entries" id="llc-entries"></div>
+            <button type="button" class="llc-add" id="llc-add">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                <span id="llc-add-text">Add an LLC</span>
+            </button>
+            <label class="llc-none" id="llc-none-wrap"><input type="checkbox" id="llc-none"><span id="llc-none-text">I do not have an LLC</span></label>
+            <datalist id="llc-titles">
+                <option value="Managing Member"></option>
+                <option value="Member"></option>
+                <option value="Manager"></option>
+                <option value="Owner"></option>
+                <option value="President"></option>
+            </datalist>
+            <datalist id="trust-titles">
+                <option value="Trustee"></option>
+                <option value="Co-Trustee"></option>
+                <option value="Successor Trustee"></option>
+                <option value="Grantor"></option>
+                <option value="Beneficiary"></option>
+            </datalist>
+            <p class="form-message" id="llc-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn" data-close-llc>Done</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Remove this LLC / trust? (over the LLCs / Trusts pop-up) -->
+    <dialog class="edit-dialog llc-confirm" id="llc-confirm" aria-labelledby="llc-confirm-title" aria-describedby="llc-confirm-text">
+        <div class="dialog-inner">
+            <h2 id="llc-confirm-title">Remove this?</h2>
+            <p class="muted" id="llc-confirm-text"></p>
+            <p class="form-message" id="llc-confirm-message" role="alert"></p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="llc-keep">Cancel</button>
+                <button type="button" class="btn llc-danger" id="llc-remove"><span class="btn-spinner" aria-hidden="true"></span>Remove</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- A buyer's details for loan programs (credit score, professions / groups, VA loan used, home ownership, education) -->
     <dialog class="edit-dialog detail-dialog" id="detail-dialog" aria-labelledby="detail-dialog-title">
         <form class="dialog-inner" id="detail-form" novalidate>
             <div class="dialog-head">
@@ -1397,6 +1513,20 @@
             btn.setAttribute('aria-label', (hasData ? 'Edit ' : 'Add ') + what);
             btn.title = hasData ? 'Edit' : 'Add';
             btn.disabled = false;
+            markLineMissing(btn.closest('.setting-row'), !hasData);
+        }
+        // A line with nothing on file gets a warning icon before its name
+        function markLineMissing(row, missing) {
+            const label = row && row.querySelector('.setting-label');
+            if (!label) return;
+            let icon = label.querySelector('.missing-icon');
+            if (missing && !icon) {
+                icon = document.createElement('span');
+                icon.className = 'missing-icon';
+                icon.innerHTML = WARN_ICON + '<span class="sr-only">Missing: </span>';
+                label.prepend(icon);
+            }
+            if (!missing && icon) icon.remove();
         }
 
         let lastAccountRow = null;
@@ -1413,6 +1543,7 @@
             emailValue.textContent = profile.email || 'Not added yet';
             emailValue.classList.toggle('is-empty', !profile.email);
             setLineButton(emailBtn, Boolean(profile.email), 'your email');
+            showMyHoldings(row);
         }
 
         // Talks to the Portal API (it only ever touches this person's own details)
@@ -1563,6 +1694,239 @@
         const CHECK_ICON = '<svg class="cp-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
         const formatPhone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        // --- LLCs and Trusts: the LLCs and trusts a buyer, flipper buyer, flipper seller or landlord buys or holds property
+        // through, each with the title they hold in it (LLCS / TRUSTS: JSON [{ NAME, TITLE }]; [] when they have none;
+        // blank when not answered yet). Their own lines and Edit Clients' share one pop-up. Before LLCS is first saved,
+        // the old Flipper LLC / Flipper Title show as one LLC. ---
+        const LLC_ROLES = ['BUYER', 'FLIPPER BUYER', 'FLIPPER SELLER', 'LANDLORD'];
+        const MAX_LLCS = 20;
+        const HOLDINGS = {
+            llcs: { col: 'LLCS', label: 'LLCs', add: 'Add an LLC', name: 'LLC Name', namePh: 'Sunrise Holdings LLC', titlePh: 'Managing Member', titles: 'llc-titles',
+                none: 'I do not have an LLC', what: 'LLC', mine: 'Each LLC you buy or hold property through, and your title in it.',
+                theirs: first => 'Each LLC ' + first + ' buys or holds property through, and their title in it.' },
+            trusts: { col: 'TRUSTS', label: 'Trusts', add: 'Add a Trust', name: 'Trust Name', namePh: 'The Smith Family Trust', titlePh: 'Trustee', titles: 'trust-titles',
+                none: 'I do not have a trust', what: 'trust', mine: 'Each trust you buy or hold property through, and your title in it.',
+                theirs: first => 'Each trust ' + first + ' buys or holds property through, and their title in it.' },
+        };
+        // A saved value: { list: [{ name, title }], none: they said they have none }
+        function holdingsOf(raw) {
+            const s = String(raw || '').trim();
+            let list = [];
+            try {
+                const parsed = JSON.parse(s || '[]');
+                if (Array.isArray(parsed)) list = parsed.map(l => ({ name: String((l && l.NAME) || '').trim(), title: String((l && l.TITLE) || '').trim() })).filter(l => l.name);
+            } catch (e) { list = []; }
+            return { list, none: s === '[]' };
+        }
+        // What a line shows: the names (with titles), "I do not have an LLC", or '' (not answered)
+        function holdingsText(kind, raw) {
+            const h = holdingsOf(raw);
+            return h.list.length ? h.list.map(l => l.name + (l.title ? ' (' + l.title + ')' : '')).join(', ') : h.none ? HOLDINGS[kind].none : '';
+        }
+        // Your own account row's value (before LLCS was first saved: the old Flipper LLC; Edit Clients' values come with it
+        // folded in by the API)
+        function holdingsRaw(row, kind) {
+            const raw = String(findValue(row, HOLDINGS[kind].col.toLowerCase())).trim();
+            const old = kind === 'llcs' ? String(findValue(row, 'flipper llc')).trim() : '';
+            return raw || !old ? raw : JSON.stringify([{ NAME: old, TITLE: String(findValue(row, 'flipper title')).trim() }]);
+        }
+        const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+        const llcDialog = document.getElementById('llc-dialog');
+        const llcEntries = document.getElementById('llc-entries');
+        const llcAdd = document.getElementById('llc-add');
+        const llcNone = document.getElementById('llc-none');
+        const llcNoneWrap = document.getElementById('llc-none-wrap');
+        const llcMsg = document.getElementById('llc-message');
+        const llcConfirm = document.getElementById('llc-confirm');
+        const llcRemove = document.getElementById('llc-remove');
+        const llcKeep = document.getElementById('llc-keep');
+        // While the pop-up is open: { kind, list, none, editing (an index; list.length for a new one; null), busy, whose,
+        // save(value) → resolves to the value saved }. Each add, edit, remove and the "I do not have one" box saves right away.
+        let hold = null;
+        const holdingForm = (cfg, l) => '<form class="llc-entry is-editing" novalidate>'
+            + '<label class="llc-field"><span>' + cfg.name + '</span><input class="cf-input" data-k="name" type="text" maxlength="100" autocomplete="off" placeholder="' + cfg.namePh + '" value="' + escapeHtml(l.name) + '"></label>'
+            + '<label class="llc-field"><span>Title</span><input class="cf-input" data-k="title" type="text" maxlength="100" autocomplete="off" list="' + cfg.titles + '" placeholder="' + cfg.titlePh + '" value="' + escapeHtml(l.title) + '"></label>'
+            + '<div class="llc-edit-actions"><button type="button" class="btn btn-secondary" data-cancel>Cancel</button>'
+            + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save</button></div></form>';
+        function drawHoldings() {
+            const cfg = HOLDINGS[hold.kind];
+            // While one is open (or saving), the others stay locked
+            const locked = hold.editing !== null || hold.busy ? ' disabled' : '';
+            const rows = hold.list.map((l, i) => (i === hold.editing ? holdingForm(cfg, l)
+                : '<div class="llc-entry" data-i="' + i + '"><span class="llc-text"><span class="llc-name">' + escapeHtml(l.name) + '</span><span class="llc-title">' + escapeHtml(l.title) + '</span></span>'
+                    + '<button type="button" class="llc-btn" data-edit aria-label="Edit ' + escapeHtml(l.name) + '" title="Edit"' + locked + '>' + PENCIL_ICON + '</button>'
+                    + '<button type="button" class="llc-btn is-danger" data-remove aria-label="Remove ' + escapeHtml(l.name) + '" title="Remove"' + locked + '>' + TRASH_ICON + '</button></div>'));
+            if (hold.editing === hold.list.length) rows.push(holdingForm(cfg, { name: '', title: '' }));
+            llcEntries.innerHTML = rows.join('');
+            document.getElementById('llc-add-text').textContent = cfg.add;
+            llcAdd.hidden = hold.editing !== null || hold.list.length >= MAX_LLCS;
+            llcAdd.disabled = hold.busy;
+            // "I do not have one": only while there are none
+            document.getElementById('llc-none-text').textContent = cfg.none;
+            llcNoneWrap.hidden = hold.list.length > 0 || hold.editing !== null;
+            llcNone.checked = hold.none;
+            llcNone.disabled = hold.busy;
+        }
+        const focusHoldingForm = () => {
+            const input = llcEntries.querySelector('.is-editing [data-k="name"]');
+            if (!input) return;
+            input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            input.focus({ preventScroll: true });
+        };
+        // Opens the pop-up for one list. value: what's saved; save(value) saves a new value ('NONE' or [{ NAME, TITLE }])
+        // and resolves to the value saved (or throws).
+        function openHoldings({ kind, title, intro, value, whose, save }) {
+            const h = holdingsOf(value);
+            hold = { kind, list: h.list, none: h.none, editing: null, busy: false, whose, save };
+            document.getElementById('llc-dialog-title').textContent = title;
+            document.getElementById('llc-help').textContent = intro;
+            llcMsg.textContent = '';
+            drawHoldings();
+            llcDialog.showModal();
+            (llcEntries.querySelector('[data-edit]') || llcAdd).focus();
+        }
+        const holdingList = list => list.map(l => ({ NAME: l.name, TITLE: l.title }));
+        async function saveHoldings(value, form) {
+            hold.busy = true;
+            llcMsg.textContent = '';
+            if (form) {
+                form.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+                form.querySelector('[data-save]').classList.add('is-loading');
+            } else {
+                drawHoldings();
+            }
+            try {
+                const h = holdingsOf(await hold.save(value));
+                Object.assign(hold, { list: h.list, none: h.none, editing: null, busy: false });
+                drawHoldings();
+                return true;
+            } catch (err) {
+                console.error(err);
+                hold.busy = false;
+                if (form) {
+                    form.querySelectorAll('input, button').forEach(el => { el.disabled = false; });
+                    form.querySelector('[data-save]').classList.remove('is-loading');
+                } else {
+                    drawHoldings();
+                }
+                llcMsg.textContent = /^invalid_/.test(err.message) ? 'Each one needs a name and a title.' : 'We couldn’t save that. Please try again.';
+                return false;
+            }
+        }
+        llcEntries.addEventListener('click', e => {
+            if (!hold || hold.busy) return;
+            const entry = e.target.closest('.llc-entry');
+            if (e.target.closest('[data-edit]')) {
+                hold.editing = Number(entry.dataset.i);
+                llcMsg.textContent = '';
+                drawHoldings();
+                focusHoldingForm();
+            } else if (e.target.closest('[data-remove]')) {
+                openRemoveHolding(Number(entry.dataset.i));
+            } else if (e.target.closest('[data-cancel]')) {
+                const was = hold.editing;
+                hold.editing = null;
+                llcMsg.textContent = '';
+                drawHoldings();
+                const back = llcEntries.querySelector('[data-i="' + was + '"] [data-edit]');
+                (back || llcAdd).focus();
+            }
+        });
+        llcEntries.addEventListener('input', e => { e.target.classList.remove('is-invalid'); llcMsg.textContent = ''; });
+        llcEntries.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!hold || hold.busy || hold.editing === null) return;
+            const form = e.target;
+            const name = form.querySelector('[data-k="name"]');
+            const title = form.querySelector('[data-k="title"]');
+            const missing = !name.value.trim() ? name : !title.value.trim() ? title : null;
+            if (missing) {
+                missing.classList.add('is-invalid');
+                missing.focus();
+                llcMsg.textContent = missing === name ? 'Please enter the ' + HOLDINGS[hold.kind].what + '’s name.' : 'Please enter the title held in it.';
+                return;
+            }
+            const list = hold.list.slice();
+            list[hold.editing] = { name: name.value.trim(), title: title.value.trim() };
+            await saveHoldings(holdingList(list), form);
+            if (!hold.busy && hold.editing === null) llcAdd.focus();
+        });
+        llcAdd.addEventListener('click', () => {
+            if (!hold || hold.busy) return;
+            hold.editing = hold.list.length;
+            llcMsg.textContent = '';
+            drawHoldings();
+            focusHoldingForm();
+        });
+        // "I do not have an LLC": ticked saves that they have none; unticked goes back to not answered
+        llcNone.addEventListener('change', () => { if (hold && !hold.busy) saveHoldings(llcNone.checked ? 'NONE' : [], null); });
+        const closeHoldings = () => { if (hold && !hold.busy) llcDialog.close(); };
+        llcDialog.querySelectorAll('[data-close-llc]').forEach(b => b.addEventListener('click', closeHoldings));
+        llcDialog.addEventListener('click', e => { if (e.target === llcDialog) closeHoldings(); });
+        llcDialog.addEventListener('cancel', e => { if (hold && hold.busy) e.preventDefault(); });
+        // Remove asks first
+        let removing = null;
+        function openRemoveHolding(i) {
+            removing = i;
+            const cfg = HOLDINGS[hold.kind];
+            document.getElementById('llc-confirm-title').textContent = 'Remove ' + hold.list[i].name + '?';
+            document.getElementById('llc-confirm-text').textContent = 'It will be taken off ' + hold.whose + ' ' + (hold.kind === 'llcs' ? 'LLCs' : 'trusts') + '.';
+            document.getElementById('llc-confirm-message').textContent = '';
+            llcConfirm.showModal();
+            llcKeep.focus();
+        }
+        llcKeep.addEventListener('click', () => { if (!llcRemove.disabled) llcConfirm.close(); });
+        llcConfirm.addEventListener('cancel', e => { if (llcRemove.disabled) e.preventDefault(); });
+        llcRemove.addEventListener('click', async () => {
+            if (!hold || removing === null || hold.busy) return;
+            const list = hold.list.filter((_, i) => i !== removing);
+            llcRemove.disabled = llcKeep.disabled = true;
+            llcRemove.classList.add('is-loading');
+            const ok = await saveHoldings(holdingList(list), null);
+            llcRemove.disabled = llcKeep.disabled = false;
+            llcRemove.classList.remove('is-loading');
+            if (ok) {
+                llcConfirm.close();
+                removing = null;
+                (llcEntries.querySelector('[data-edit]') || llcAdd).focus();
+            } else {
+                document.getElementById('llc-confirm-message').textContent = llcMsg.textContent;
+            }
+        });
+
+        // Your own LLCs and Trusts lines (buyers, flipper buyers, flipper sellers and landlords), saved with updateMyDetails
+        const myHoldings = { llcs: '', trusts: '' };
+        function showMyHoldings(row) {
+            const can = LLC_ROLES.some(r => String(findValue(row, r.toLowerCase())).trim().toUpperCase() === 'TRUE');
+            Object.keys(HOLDINGS).forEach(kind => {
+                myHoldings[kind] = holdingsRaw(row, kind);
+                const text = holdingsText(kind, myHoldings[kind]);
+                document.getElementById(kind + '-row').hidden = !can;
+                const valueEl = document.getElementById(kind + '-value');
+                valueEl.textContent = text || 'Not added yet';
+                valueEl.classList.toggle('is-empty', !text);
+                setLineButton(document.getElementById('edit-' + kind), Boolean(text), 'your ' + HOLDINGS[kind].label);
+            });
+            showBuyerSection();
+        }
+        Object.keys(HOLDINGS).forEach(kind => {
+            document.getElementById('edit-' + kind).addEventListener('click', () => {
+                if (!saveDetails) return;
+                const cfg = HOLDINGS[kind];
+                setPageMessage('');
+                openHoldings({
+                    kind, title: 'Your ' + cfg.label, intro: cfg.mine, value: myHoldings[kind], whose: 'your',
+                    save: async value => {
+                        const data = await saveDetails({ [cfg.col]: value });
+                        showProfile(data.row);
+                        showDetails(data.row, data.income);
+                        setPageMessage('Saved! Your ' + cfg.label + ' have been updated.', 'success');
+                        return myHoldings[kind];
+                    },
+                });
+            });
+        });
+
         // Each line: its label, the ACCOUNT LIST column(s) it edits, the kind of control, and when it shows
         const CLIENT_LINES = [
             { group: 'Details' },
@@ -1578,20 +1942,23 @@
             { key: 'lender', label: 'Lender', cols: ['LENDER'], kind: 'bool' },
             { key: 'lender-bank', label: 'Lender Bank', cols: ['LENDER BANK'], kind: 'text', when: v => v['LENDER'] },
             { key: 'wholesaler', label: 'Wholesaler', cols: ['WHOLESALER'], kind: 'bool' },
-            { key: 'flipper-llc', label: 'Flipper LLC', cols: ['FLIPPER LLC'], kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
-            { key: 'flipper-title', label: 'Flipper Title', cols: ['FLIPPER TITLE'], kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
             { key: 'hard-money', label: 'Hard Money Lender', cols: ['HARD MONEY LENDER'], kind: 'bool' },
             { key: 'preflipper', label: 'Preflipper', cols: ['PREFLIPPER'], kind: 'bool' },
-            // Other: a VA loan's funding fee on the Buyer Breakdown follows these (first-time use, unless every veteran buying
-            // has used a VA loan before). Not asked when a client is added (noNew: they start as No).
+            // Buyers, flipper buyers, flipper sellers and landlords: their LLCs and trusts (the LLCs / Trusts pop-up; added
+            // after the client is)
+            { key: 'llcs', label: 'LLCs', saved: 'the LLCs', cols: ['LLCS'], kind: 'llcs', when: v => LLC_ROLES.some(r => v[r]), noNew: true },
+            { key: 'trusts', label: 'Trusts', saved: 'the trusts', cols: ['TRUSTS'], kind: 'trusts', when: v => LLC_ROLES.some(r => v[r]), noNew: true },
+            // Other: a VA loan's funding fee on the Buyer Breakdown follows Professions & Groups and the VA loan answer
+            // (first-time use, unless every veteran with benefits buying has used a VA loan before). Not asked when a
+            // client is added (noNew: they start as No).
             { group: 'Other', noNew: true },
             // ...their income and debts (the income pop-up, like their own Settings page's), and the details Down Payment
             // Assistance programs ask about (their credit score is kept with their income)
             { key: 'income', label: 'Income & Debt', saved: 'the income and debts', cols: [], kind: 'income', noNew: true },
             { key: 'credit', label: 'Credit Score', saved: 'the credit score', cols: ['CREDIT SCORE'], kind: 'score', noNew: true },
-            { key: 'veteran', label: 'Are you a Veteran?', saved: 'the veteran answer', cols: ['VETERAN'], kind: 'bool', noNew: true },
-            { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => v['VETERAN'], noNew: true },
             { key: 'groups', label: 'Professions & Groups', saved: 'the professions and groups', cols: ['PROFESSION GROUPS'], kind: 'groups', noNew: true },
+            // (a veteran with benefits, ticked in Professions & Groups, can use a VA loan)
+            { key: 'va-used', label: 'Have you used a VA loan before?', saved: 'the VA loan answer', cols: ['VA LOAN USED'], kind: 'bool', when: v => groupList(v['PROFESSION GROUPS']).includes(VA_GROUP), noNew: true },
             { key: 'owned', label: 'Have you owned a home before?', saved: 'the home ownership answer', cols: ['LAST OWNED HOME'], kind: 'owned', noNew: true },
             { key: 'education', label: 'Have you taken a homebuyer education class?', saved: 'the homebuyer education answer', cols: ['HOMEBUYER EDUCATION'], kind: 'bool', noNew: true },
         ];
@@ -1600,10 +1967,23 @@
         // and the client's own pop-up share these). score: a credit score (300-850); groups: professions / groups to tick
         // (saved as a JSON list); owned: whether they've owned a home ('Never', or the year they last did).
         const DETAIL_KINDS = ['score', 'groups', 'owned'];
+        // Veterans: Veteran (With benefits) in Professions & Groups is a veteran who can use a VA loan. The old separate
+        // Veteran answer (VETERAN) counts as it until the groups are saved again (Edit Clients' values come with it folded in).
+        const VA_GROUP = 'Veteran (With benefits)';
+        const VETERAN_GROUPS = ['Veteran (With benefits)', 'Veteran (Without benefits)'];
+        // Professions & Groups answered with none of them (it counts as filled in; it isn't a group a program can be for)
+        const NO_GROUPS = 'None Of These';
+        const GROUP_CHOICES = PROFESSION_GROUPS.concat(NO_GROUPS);
+        const saidNoGroups = raw => groupList(raw, [NO_GROUPS]).length > 0;
+        function groupsWithVeteran(groupsRaw, veteranRaw) {
+            const list = [...groupList(groupsRaw)];
+            if (String(veteranRaw || '').trim().toUpperCase() === 'TRUE' && !list.some(g => VETERAN_GROUPS.includes(g))) list.push(VA_GROUP);
+            return JSON.stringify(list.length ? PROFESSION_GROUPS.filter(g => list.includes(g)) : saidNoGroups(groupsRaw) ? [NO_GROUPS] : []);
+        }
         const THIS_YEAR = new Date().getFullYear();
         function detailText(kind, raw) {
             const v = String(raw === undefined || raw === null ? '' : raw).trim();
-            if (kind === 'groups') { const list = groupList(v); return list.length ? list.join(', ') : 'None'; }
+            if (kind === 'groups') { const list = groupList(v); return list.length ? list.join(', ') : saidNoGroups(v) ? NO_GROUPS : 'None'; }
             if (kind === 'owned') return !v ? '' : v === 'Never' ? 'No, never' : 'Yes, last in ' + v;
             return v;
         }
@@ -1614,8 +1994,9 @@
             const v = String(raw === undefined || raw === null ? '' : raw).trim();
             if (kind === 'score') return '<input class="cf-input" data-detail="score" type="text" inputmode="numeric" maxlength="3" placeholder="300-850" autocomplete="off" aria-label="' + escapeHtml(label) + '" value="' + escapeHtml(v) + '">';
             if (kind === 'groups') {
-                const picked = groupList(v);
-                return '<div class="dd-checks" role="group" aria-label="' + escapeHtml(label) + '">' + PROFESSION_GROUPS.map(g => '<label class="dd-check"><input type="checkbox" value="' + escapeHtml(g) + '"'
+                // (None Of These, last, clears the others; ticking any of them clears it)
+                const picked = groupList(v, GROUP_CHOICES);
+                return '<div class="dd-checks" role="group" aria-label="' + escapeHtml(label) + '">' + GROUP_CHOICES.map(g => '<label class="dd-check' + (g === NO_GROUPS ? ' is-none' : '') + '"><input type="checkbox" value="' + escapeHtml(g) + '"'
                     + (picked.includes(g) ? ' checked' : '') + '><span>' + escapeHtml(g) + '</span></label>').join('') + '</div>';
             }
             if (kind === 'owned') {
@@ -1649,6 +2030,12 @@
         }
         // Owned a home: the year box shows for a yes; credit scores and years are digits only
         document.addEventListener('change', e => {
+            // Professions & Groups: None Of These and the groups don't go together
+            const checks = e.target.closest('.dd-checks');
+            if (checks && e.target.checked) {
+                const none = e.target.value === NO_GROUPS;
+                checks.querySelectorAll('input:checked').forEach(box => { if (box !== e.target && (none || box.value === NO_GROUPS)) box.checked = false; });
+            }
             const owned = e.target.closest('.dd-owned');
             if (owned && e.target.type === 'radio') {
                 const year = owned.querySelector('[data-detail="year"]');
@@ -1657,7 +2044,7 @@
             }
         });
         document.addEventListener('input', e => { if (e.target.matches('[data-detail="score"], [data-detail="year"]')) e.target.value = e.target.value.replace(/\D/g, ''); });
-        const sameDetail = (kind, a, b) => (kind === 'groups' ? JSON.stringify(groupList(a)) === JSON.stringify(groupList(b)) : String(a === undefined || a === null ? '' : a) === String(b === undefined || b === null ? '' : b));
+        const sameDetail = (kind, a, b) => (kind === 'groups' ? JSON.stringify(groupList(a, GROUP_CHOICES)) === JSON.stringify(groupList(b, GROUP_CHOICES)) : String(a === undefined || a === null ? '' : a) === String(b === undefined || b === null ? '' : b));
         const CF_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
         const clientList = document.getElementById('client-list');
         const cfSaved = document.getElementById('cf-saved');
@@ -1675,6 +2062,7 @@
                 return monthly > 0 ? wholeMoney.format(monthly) + ' / mo income · ' + wholeMoney.format(monthlyDebts(inc)) + ' / mo debt' : '';
             }
             if (DETAIL_KINDS.includes(line.kind)) return detailText(line.kind, v[line.cols[0]]);
+            if (line.kind === 'llcs' || line.kind === 'trusts') return holdingsText(line.kind, v[line.cols[0]]);
             if (line.kind === 'name') return [v['FIRST NAME'], v['LAST NAME']].filter(Boolean).join(' ');
             return v[line.cols[0]] || '';
         }
@@ -1769,8 +2157,9 @@
             const edit = e.target.closest('[data-edit]');
             // Another line is open: point to it instead
             if (edit && editing) { nudgeOpenLine(); return; }
-            // Income & Debt opens the income pop-up (the one the client uses for their own)
+            // Income & Debt opens the income pop-up (the one the client uses for their own); LLCs and Trusts, their pop-up
             if (edit && edit.dataset.edit === 'income') { openClientIncome(); return; }
+            if (edit && HOLDINGS[edit.dataset.edit]) { openClientHoldings(edit.dataset.edit); return; }
             if (edit) { const key = edit.dataset.edit; swapLine(key, () => { editing = key; cfSaved.textContent = ''; renderClient(); }); return; }
             if (e.target.closest('[data-cancel]') && !cfBusy) { const key = editing; swapLine(key, () => { editing = null; renderClient(); }); }
         });
@@ -1863,6 +2252,32 @@
             target.values = data.client.values;
             target.income = data.client.income;
             return data.client.income;
+        }
+        // Edit Clients' LLCs and Trusts: their pop-up for the client shown (each change saved with adminUpdateClient)
+        function openClientHoldings(kind) {
+            if (!client) return;
+            const target = client;
+            const cfg = HOLDINGS[kind];
+            const first = target.values['PREFERRED NAME'] || target.values['FIRST NAME'] || target.name || 'This client';
+            cfSaved.textContent = '';
+            openHoldings({
+                kind, title: (target.name || first) + '’s ' + cfg.label, intro: cfg.theirs(first), value: target.values[cfg.col], whose: (target.name || first) + '’s',
+                save: async value => {
+                    const data = await callApi(clientUser, { action: 'adminUpdateClient', clientId: target.id, values: { [cfg.col]: value } });
+                    if (!data.ok) throw new Error(data.error);
+                    target.values = data.client.values;
+                    if ('income' in data.client) target.income = data.client.income;
+                    if (client === target) {
+                        renderClient();
+                        cfSaved.textContent = 'Saved ' + (kind === 'llcs' ? 'the LLCs' : 'the trusts') + '.';
+                    }
+                    // (your own client record: your line too)
+                    if (lastAccountRow && String(findValue(lastAccountRow, 'account id')).replace(/\D/g, '').slice(-10) === target.id) {
+                        showProfile({ ...lastAccountRow, [cfg.col]: target.values[cfg.col], ...(kind === 'llcs' ? { 'FLIPPER LLC': '', 'FLIPPER TITLE': '' } : {}) });
+                    }
+                    return target.values[cfg.col];
+                },
+            });
         }
         function clientIncomeSaved(target) {
             if (client === target) {
@@ -3420,7 +3835,7 @@
                 form.querySelectorAll('.nc-tile input').forEach(box => { v[box.dataset.col] = box.checked; });
                 return v;
             };
-            // Lender Bank / Flipper LLC / Flipper Title follow the answers above them
+            // Lender Bank follows the Lender answer (LLCs are added afterwards, from Edit Clients)
             const refresh = () => {
                 const v = answers();
                 NEW_LINES.forEach(line => {
@@ -3511,8 +3926,10 @@
                 inc.textContent = wholeMoney.format(monthly) + ' / mo income';
                 debt.textContent = wholeMoney.format(monthlyDebts(incomeRow)) + ' / mo debt';
             } else {
-                incomeValue.innerHTML = '<span class="missing-note">' + WARN_ICON + 'Missing</span>';
+                // (the warning icon by its name says it's missing)
+                incomeValue.textContent = 'Not added yet';
             }
+            incomeValue.classList.toggle('is-empty', !(monthly > 0));
             setLineButton(incomeBtn, monthly > 0, 'your income');
         }
         incomeBtn.addEventListener('click', () => {
@@ -3522,17 +3939,17 @@
             incomeEditor.open(incomeRow);
         });
 
-        // --- A buyer's details for loan programs (rows under Income & Debt; each opens the detail pop-up) ---
+        // --- A buyer's details for loan programs (Buyer Settings rows under Income & Debt; each opens the detail pop-up) ---
         // Their credit score is kept with their income; the rest are on their account (the same as Edit Clients' Other).
+        // A veteran with benefits (ticked in Professions & Groups) can use a VA loan, so they're also asked whether they have.
         const MY_DETAILS = [
             { key: 'credit', label: 'Credit Score', title: 'Credit Score', col: 'CREDIT SCORE', kind: 'score', what: 'your credit score',
                 help: 'Your best estimate is fine. It helps estimate your interest rate and which loan programs you qualify for.' },
-            { key: 'veteran', label: 'Veteran', title: 'Are you a Veteran?', col: 'VETERAN', kind: 'bool', what: 'whether you’re a veteran',
-                help: 'Veterans can use VA loans, and some programs are only for veterans.' },
-            { key: 'va-used', label: 'Used a VA Loan', title: 'Have you used a VA loan before?', col: 'VA LOAN USED', kind: 'bool', what: 'whether you’ve used a VA loan', when: v => v['VETERAN'],
-                help: 'A VA loan’s funding fee is lower the first time you use one.' },
             { key: 'groups', label: 'Professions & Groups', title: 'Professions & Groups', col: 'PROFESSION GROUPS', kind: 'groups', what: 'your professions and groups',
-                help: 'Some down payment assistance programs are only for certain professions or groups. Choose any that describe you.' },
+                help: 'Some down payment assistance programs are only for certain professions or groups, and veterans with benefits can use VA loans. Choose any that describe you.' },
+            { key: 'va-used', label: 'Used a VA Loan', title: 'Have you used a VA loan before?', col: 'VA LOAN USED', kind: 'bool', what: 'whether you’ve used a VA loan',
+                when: v => groupList(v['PROFESSION GROUPS']).includes(VA_GROUP),
+                help: 'A VA loan’s funding fee is lower the first time you use one.' },
             { key: 'owned', label: 'Owned a Home Before', title: 'Have you owned a home before?', col: 'LAST OWNED HOME', kind: 'owned', what: 'whether you’ve owned a home',
                 help: 'First-time homebuyer programs usually count you as first-time if you haven’t owned a home in the last few years.' },
             { key: 'education', label: 'Homebuyer Education', title: 'Have you taken a homebuyer education class?', col: 'HOMEBUYER EDUCATION', kind: 'bool', what: 'whether you’ve taken a homebuyer education class',
@@ -3560,8 +3977,8 @@
             const get = name => String(findValue(row, name.toLowerCase())).trim();
             const yes = name => get(name).toUpperCase() === 'TRUE';
             const score = income ? String(income['CREDIT SCORE'] === undefined || income['CREDIT SCORE'] === null ? '' : income['CREDIT SCORE']).trim() : '';
-            myValues = { 'CREDIT SCORE': score, 'VETERAN': yes('VETERAN'), 'VA LOAN USED': yes('VA LOAN USED'),
-                'PROFESSION GROUPS': get('PROFESSION GROUPS'), 'LAST OWNED HOME': get('LAST OWNED HOME'), 'HOMEBUYER EDUCATION': yes('HOMEBUYER EDUCATION') };
+            myValues = { 'CREDIT SCORE': score, 'VA LOAN USED': yes('VA LOAN USED'),
+                'PROFESSION GROUPS': groupsWithVeteran(get('PROFESSION GROUPS'), get('VETERAN')), 'LAST OWNED HOME': get('LAST OWNED HOME'), 'HOMEBUYER EDUCATION': yes('HOMEBUYER EDUCATION') };
             MY_DETAILS.forEach(d => {
                 const li = detailRows[d.key];
                 li.hidden = li.dataset.buyer !== 'yes' || Boolean(d.when && !d.when(myValues));
@@ -3572,6 +3989,11 @@
                 valueEl.classList.toggle('is-empty', !text || text === 'None');
                 setLineButton(li.querySelector('button'), d.kind === 'bool' || Boolean(text && text !== 'None'), d.what);
             });
+            showBuyerSection();
+        }
+        // Buyer Settings shows when any of its lines do
+        function showBuyerSection() {
+            document.getElementById('buyer-section').hidden = ![...document.getElementById('buyer-list').children].some(li => !li.hidden);
         }
         const detailDialog = document.getElementById('detail-dialog');
         const detailForm = document.getElementById('detail-form');

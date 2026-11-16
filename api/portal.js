@@ -504,8 +504,8 @@ export async function handle(body, query) {
     if (body.action === 'updatePageAccess') return await updatePageAccess_(id, account, body);
     if (body.action === 'saveClientInput') return await saveClientInput_(id, account, body);
 
-    // Settings page: a buyer's own details (veteran, VA loan used, professions / groups, last owned a home, homebuyer
-    // education) and credit score
+    // Settings page: a client's own details (professions / groups, VA loan used, last owned a home, homebuyer education,
+    // LLCs) and credit score
     if (body.action === 'updateMyDetails') return await updateMyDetails_(id, found, body.values);
 
     // Settings page: save this client's income and debt (adds their row if they don't have one yet)
@@ -2329,11 +2329,15 @@ const CLIENT_FIELDS = [
   { col: 'BUYER', type: 'bool' }, { col: 'SELLER', type: 'bool' }, { col: 'LANDLORD', type: 'bool' },
   { col: 'FLIPPER BUYER', type: 'bool' }, { col: 'FLIPPER SELLER', type: 'bool' },
   { col: 'LENDER', type: 'bool' }, { col: 'LENDER BANK', type: 'text' }, { col: 'WHOLESALER', type: 'bool' },
-  { col: 'FLIPPER LLC', type: 'text' }, { col: 'FLIPPER TITLE', type: 'text' },
   { col: 'HARD MONEY LENDER', type: 'bool' }, { col: 'PREFLIPPER', type: 'bool' },
-  // Other: whether they're a veteran and have used a VA loan before (a VA loan's funding fee follows them; see
-  // /mortgage-insurance.js). Not asked when a client is added (they start as No).
-  { col: 'VETERAN', type: 'bool', optional: true }, { col: 'VA LOAN USED', type: 'bool', optional: true },
+  // The LLCs and trusts a buyer, flipper buyer, flipper seller or landlord buys or holds property through (JSON
+  // [{ NAME, TITLE }], their title in each; [] when they have none; blank when not answered yet). LLCS replaced FLIPPER
+  // LLC / FLIPPER TITLE, which still show as one LLC until the list is first saved (saving clears them). Not asked when
+  // a client is added.
+  { col: 'LLCS', type: 'llcs', optional: true }, { col: 'TRUSTS', type: 'trusts', optional: true },
+  // Other: whether a veteran with benefits (Veteran (With benefits) in their PROFESSION GROUPS) has used a VA loan before
+  // (a VA loan's funding fee follows them; see /mortgage-insurance.js). Not asked when a client is added (they start as No).
+  { col: 'VA LOAN USED', type: 'bool', optional: true },
   // The details a Down Payment Assistance program can ask about (see /dpa.js): the professions / groups they're in
   // (JSON [names from DPA_GROUPS]), when they last owned a home ('Never', or the year; blank: not said) and whether
   // they've taken a homebuyer education class. Their credit score is kept with their income (CLIENT_CREDIT).
@@ -2343,20 +2347,67 @@ const CLIENT_FIELDS = [
 // A client's credit score: their income document's CREDIT SCORE (Edit Clients shows and saves it with the rest)
 const CLIENT_CREDIT = 'CREDIT SCORE';
 // The details a client can answer for themselves on the Settings page (updateMyDetails), besides their credit score
-const MY_DETAIL_FIELDS = ['VETERAN', 'VA LOAN USED', 'PROFESSION GROUPS', 'LAST OWNED HOME', 'HOMEBUYER EDUCATION'];
+// (their LLCs and trusts only with one of LLC_ROLES)
+const MY_DETAIL_FIELDS = ['VA LOAN USED', 'PROFESSION GROUPS', 'LAST OWNED HOME', 'HOMEBUYER EDUCATION', 'LLCS', 'TRUSTS'];
+// Professions & groups: answered with none of them
+const NO_GROUPS = 'None Of These';
+// Veterans: a client's PROFESSION GROUPS say whether they're a veteran with benefits (who can use a VA loan) or without.
+// The old separate yes/no (VETERAN) counts as Veteran (With benefits) until their groups are saved again, which clears it.
+const VA_GROUP = 'Veteran (With benefits)';
+const VETERAN_GROUPS = ['Veteran (With benefits)', 'Veteran (Without benefits)'];
+function clientGroups_(groupsRaw, veteranRaw) {
+  let list = [];
+  try { list = JSON.parse(String(groupsRaw || '').trim() || '[]'); } catch (e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  if (String(veteranRaw || '').trim().toUpperCase() === 'TRUE' && !list.some(g => VETERAN_GROUPS.includes(g))) list = list.concat(VA_GROUP);
+  return DPA_GROUPS.filter(g => list.includes(g));
+}
+// Saving a client's groups: the old Veteran answer is cleared, and someone who isn't a veteran with benefits hasn't used
+// a VA loan
+function groupsSaved_(next) {
+  if (!('PROFESSION GROUPS' in next)) return;
+  next['VETERAN'] = '';
+  if (!clientGroups_(next['PROFESSION GROUPS'], '').includes(VA_GROUP)) next['VA LOAN USED'] = false;
+}
+const LLC_ROLES = ['BUYER', 'FLIPPER BUYER', 'FLIPPER SELLER', 'LANDLORD'];
+const MAX_LLCS = 20;
+// Saving the LLCs list replaces the old single LLC
+const OLD_LLC_CLEARED = { 'FLIPPER LLC': '', 'FLIPPER TITLE': '' };
 
-// One client detail of a groups or owned kind, checked: the value to save, or null when it isn't allowed.
-//   groups: a list (or its JSON) of DPA_GROUPS names (none is fine), saved as JSON in DPA_GROUPS' order
+// One client detail of a groups, owned, llcs or trusts kind, checked: the value to save, or null when it isn't allowed.
+//   groups: a list (or its JSON) of DPA_GROUPS names (none is fine), saved as JSON in DPA_GROUPS' order; NO_GROUPS
+//     alone says none of them apply (it's dropped when any is ticked)
 //   owned: 'Never', a year from 1900 to this year, or blank
+//   llcs / trusts: 'NONE' (they have none: saved as []), or a list (or its JSON) of { NAME, TITLE }, each with both
+//     (up to MAX_LLCS), saved as JSON; an empty list is blank (not answered)
 function cleanClientDetail_(type, raw) {
+  if (type === 'llcs' || type === 'trusts') {
+    if (raw === 'NONE') return '[]';
+    let list = raw;
+    if (!Array.isArray(list)) {
+      const s = String(raw === null || raw === undefined ? '' : raw).trim();
+      try { list = s ? JSON.parse(s) : []; } catch (e) { return null; }
+    }
+    if (!Array.isArray(list) || list.length > MAX_LLCS) return null;
+    const out = [];
+    for (const l of list) {
+      if (!l || typeof l !== 'object') return null;
+      const name = cleanText_(l.NAME, 100);
+      const title = cleanText_(l.TITLE, 100);
+      if (!name || !title) return null;
+      out.push({ NAME: name, TITLE: title });
+    }
+    return out.length ? JSON.stringify(out) : '';
+  }
   if (type === 'groups') {
     let list = raw;
     if (!Array.isArray(list)) {
       const s = String(raw === null || raw === undefined ? '' : raw).trim();
       try { list = s ? JSON.parse(s) : []; } catch (e) { return null; }
     }
-    if (!Array.isArray(list) || list.some(g => !DPA_GROUPS.includes(g))) return null;
-    return JSON.stringify(DPA_GROUPS.filter(g => list.includes(g)));
+    if (!Array.isArray(list) || list.some(g => !DPA_GROUPS.includes(g) && g !== NO_GROUPS)) return null;
+    const picked = DPA_GROUPS.filter(g => list.includes(g));
+    return JSON.stringify(picked.length || !list.includes(NO_GROUPS) ? picked : [NO_GROUPS]);
   }
   if (type === 'owned') {
     const v = String(raw === null || raw === undefined ? '' : raw).trim();
@@ -2378,8 +2429,8 @@ async function saveCreditScore_(id, raw) {
   else if (v !== '') await add('income', { 'ACCOUNT ID': id, [CLIENT_CREDIT]: +v }, id);
   return '';
 }
-// Settings page: a client's own answers to MY_DETAIL_FIELDS and their credit score (only what's given is saved; someone
-// who isn't a veteran hasn't used a VA loan). Returns their account and income again.
+// Settings page: a client's own answers to MY_DETAIL_FIELDS and their credit score (only what's given is saved; see
+// groupsSaved_). Returns their account and income again.
 async function updateMyDetails_(id, found, given) {
   given = given || {};
   const next = {};
@@ -2393,7 +2444,9 @@ async function updateMyDetails_(id, found, given) {
       next[col] = v;
     }
   }
-  if (next['VETERAN'] === false) next['VA LOAN USED'] = false;
+  groupsSaved_(next);
+  if (('LLCS' in next || 'TRUSTS' in next) && !LLC_ROLES.some(role => hasRole_(found.row, role))) return { ok: false, error: 'not_allowed' };
+  if ('LLCS' in next) Object.assign(next, OLD_LLC_CLEARED);
   if (CLIENT_CREDIT in given) {
     const err = await saveCreditScore_(id, given[CLIENT_CREDIT]);
     if (err) return { ok: false, error: err };
@@ -2410,6 +2463,10 @@ function clientValues_(r) {
   };
   const values = {};
   CLIENT_FIELDS.forEach(f => { values[f.col] = f.type === 'bool' ? get(f.col).toUpperCase() === 'TRUE' : get(f.col); });
+  // Before the LLCs list was first saved: the old Flipper LLC / Flipper Title, as one LLC
+  if (!values['LLCS'] && get('FLIPPER LLC')) values['LLCS'] = JSON.stringify([{ NAME: get('FLIPPER LLC'), TITLE: get('FLIPPER TITLE') }]);
+  // Before the groups were saved again: the old Veteran answer, as Veteran (With benefits)
+  if (get('VETERAN').toUpperCase() === 'TRUE') values['PROFESSION GROUPS'] = JSON.stringify(clientGroups_(values['PROFESSION GROUPS'], 'TRUE'));
   return values;
 }
 // ...plus their credit score, from their income document (blank without one)
@@ -2461,12 +2518,18 @@ async function adminUpdateClient_(account, body) {
       const v = cleanClientDetail_(f.type, raw);
       if (v === null) return { ok: false, error: 'invalid_value' };
       next[f.col] = v;
+    } else if (f.type === 'llcs' || f.type === 'trusts') {
+      const v = cleanClientDetail_(f.type, raw);
+      if (v === null) return { ok: false, error: 'invalid_' + f.type };
+      next[f.col] = v;
+      if (f.type === 'llcs') Object.assign(next, OLD_LLC_CLEARED);
     } else {
       const text = cleanText_(raw, 100);
       if (f.required && !text) return { ok: false, error: 'missing_' + f.col.toLowerCase().replace(/ /g, '_') };
       next[f.col] = text;
     }
   }
+  groupsSaved_(next);
   // (their credit score is kept with their income)
   if (CLIENT_CREDIT in given) {
     const err = await saveCreditScore_(clientId, given[CLIENT_CREDIT]);
@@ -2491,7 +2554,7 @@ async function adminUpdateIncome_(account, body) {
 }
 
 // Admins: a new ACCOUNT LIST document from the Settings page's New Client form. Every shown answer is required except
-// email; Lender Bank only when Lender is yes, Flipper LLC / Title only for flipper buyers or sellers.
+// email; Lender Bank only when Lender is yes (LLCs are added afterwards, from Edit Clients).
 // ADMIN and CUM are always FALSE.
 async function adminCreateClient_(account, body) {
   if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
@@ -2510,7 +2573,7 @@ async function adminCreateClient_(account, body) {
       const email = String(raw || '').trim().toLowerCase().slice(0, 120);
       if (email && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
       values[f.col] = email;
-    } else if (f.type === 'groups' || f.type === 'owned') {
+    } else if (f.type === 'groups' || f.type === 'owned' || f.type === 'llcs' || f.type === 'trusts') {
       // (not asked when a client is added)
       values[f.col] = f.type === 'groups' ? '[]' : '';
     } else {
@@ -2518,13 +2581,9 @@ async function adminCreateClient_(account, body) {
     }
   }
   // Text answers that are only asked sometimes
-  const asked = {
-    'LENDER BANK': values['LENDER'],
-    'FLIPPER LLC': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
-    'FLIPPER TITLE': values['FLIPPER BUYER'] || values['FLIPPER SELLER'],
-  };
+  const asked = { 'LENDER BANK': values['LENDER'] };
   // Last and preferred names can wait (the home page's quick add asks only for a first name)
-  const textCols = ['FIRST NAME', 'LENDER BANK', 'FLIPPER LLC', 'FLIPPER TITLE'];
+  const textCols = ['FIRST NAME', 'LENDER BANK'];
   for (let j = 0; j < textCols.length; j++) {
     const c = textCols[j];
     if (c in asked && !asked[c]) { values[c] = ''; continue; }
@@ -3795,17 +3854,17 @@ async function inspectorRow_(collection, nameColumn, name) {
 
 // Each person on the page (PRIMARY, then ALT 1-5) with their name, Purchaser/Collaborator type and INCOME row
 // (null if they have none; it also holds their CREDIT SCORE), for the rate and approval estimate, whether they're a
-// veteran and have used a VA loan before (for a VA loan's funding fee), and the details a Down Payment Assistance
-// program can ask about (groups: their PROFESSION GROUPS names; lastOwned: LAST OWNED HOME; education: HOMEBUYER EDUCATION)
+// veteran with benefits and have used a VA loan before (for a VA loan's funding fee), and the details a Down Payment
+// Assistance program can ask about (groups: their PROFESSION GROUPS names, with the old Veteran answer folded in;
+// lastOwned: LAST OWNED HOME; education: HOMEBUYER EDUCATION)
 async function pageClients_(page) {
   const names = {}, va = {};
   (await rows('accounts')).forEach(r => {
     const rid = phoneToId_(r['ACCOUNT ID']);
     names[rid] = fullName_(r);
-    let groups = [];
-    try { groups = JSON.parse(String(r['PROFESSION GROUPS'] || '[]')); } catch (e) { groups = []; }
-    va[rid] = { veteran: hasRole_(r, 'VETERAN'), vaUsed: hasRole_(r, 'VA LOAN USED'),
-      groups: Array.isArray(groups) ? groups.filter(g => DPA_GROUPS.includes(g)) : [],
+    const groups = clientGroups_(r['PROFESSION GROUPS'], r['VETERAN']);
+    va[rid] = { veteran: groups.includes(VA_GROUP), vaUsed: hasRole_(r, 'VA LOAN USED'),
+      groups,
       lastOwned: String(r['LAST OWNED HOME'] === undefined || r['LAST OWNED HOME'] === null ? '' : r['LAST OWNED HOME']).trim(),
       education: hasRole_(r, 'HOMEBUYER EDUCATION') };
   });

@@ -5,7 +5,8 @@
 //     lender), plus HUD's annual MIP (fhaAnnualMip), paid monthly.
 //   VA: no mortgage insurance, but the VA funding fee: a percent of the loan from the VA's chart by down payment, one chart
 //     for a veteran's first use of a VA loan and one for any later use (VA_FUNDING_FEES). Whether a purchaser is a
-//     veteran and has used a VA loan before is on their account (VETERAN, VA LOAN USED; Settings > Edit Clients > Other).
+//     veteran with benefits (Veteran (With benefits) in their Professions & Groups) and has used a VA loan before
+//     (VA LOAN USED) is on their account (Settings: their own Buyer Settings, or Edit Clients > Other).
 //   Conventional, and a Jumbo or Non-Conforming product that has mortgage insurance guidelines (NO MI GUIDELINES isn't
 //     TRUE): the lender quotes the annual premium (a percent of the loan each year) for 27 scenarios, the same credit
 //     scores and DTIs as the rate quotes but LTVs of 85%, 90% and 95% (a loan at 80% LTV or less has no mortgage

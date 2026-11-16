@@ -2552,8 +2552,9 @@
 
         // Purchasers on this page (collaborators don't count toward the loan)
         const purchasers = () => (data.clients || []).filter(c => c.type !== 'Collaborator');
-        // A VA loan's funding fee: the first-use chart unless every purchaser who's a veteran has used a VA loan before (their
-        // Edit Clients > Other answers). With no purchaser marked as a veteran, it counts as a first use (known: false).
+        // A VA loan's funding fee: the first-use chart unless every purchaser who's a veteran with benefits (Veteran (With
+        // benefits) in their Professions & Groups) has used a VA loan before. With no such purchaser, it counts as a first
+        // use (known: false).
         function purchaserVaUse() {
             const vets = purchasers().filter(c => c.veteran);
             return vets.length ? { firstUse: vets.some(c => !c.vaUsed), known: true } : { firstUse: true, known: false };

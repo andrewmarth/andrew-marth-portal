@@ -1284,8 +1284,6 @@
             { key: 'lender', label: 'Lender', col: 'LENDER', kind: 'bool' },
             { key: 'lender-bank', label: 'Lender Bank', col: 'LENDER BANK', kind: 'text', when: v => v['LENDER'] },
             { key: 'wholesaler', label: 'Wholesaler', col: 'WHOLESALER', kind: 'bool' },
-            { key: 'flipper-llc', label: 'Flipper LLC', col: 'FLIPPER LLC', kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
-            { key: 'flipper-title', label: 'Flipper Title', col: 'FLIPPER TITLE', kind: 'text', when: v => v['FLIPPER BUYER'] || v['FLIPPER SELLER'] },
             { key: 'hard-money', label: 'Hard Money Lender', col: 'HARD MONEY LENDER', kind: 'bool' },
             { key: 'preflipper', label: 'Preflipper', col: 'PREFLIPPER', kind: 'bool' },
         ];
@@ -1351,7 +1349,7 @@
                 form.querySelectorAll('.nc-tile input').forEach(box => { v[box.dataset.col] = box.checked; });
                 return v;
             };
-            // Lender Bank / Flipper LLC / Flipper Title follow the answers above them
+            // Lender Bank follows the Lender answer (LLCs are added afterwards, in Settings' Edit Clients)
             const refresh = () => {
                 const v = answers();
                 NC_LINES.forEach(line => {
