@@ -74,6 +74,8 @@ const PAGE_SETTING_FIELDS = {
   // Seller Net: what the sellers also qualify as, for the title company's discounts (they replace CLIENT QUALIFIES AS
   // there, still read while they're blank): SELLER NON PROFIT (a Global Setting) and CORPORATE RELOCATION
   'SELLER NON PROFIT': 'bool', 'CORPORATE RELOCATION': 'bool',
+  // Both page types: the clients certify they're investors (for a title company's Investor discount with the certify rule)
+  'SELF CERTIFIED INVESTOR': 'bool',
   // Seller Net: Cash when the buyer pays cash (the Buyer Inputs' Loan Product picker); otherwise blank, and the buyer's
   // loan product decides the loan type. Older pages can still have one of the others.
   'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
@@ -1863,12 +1865,15 @@ function titleDiscountOut_(d, applies) {
   return { name: String(d['NAME'] || ''), percent: titleNum_(d['PERCENT']), qualifies,
     applies: TITLE_DISCOUNT_APPLIES.includes(d['APPLIES']) ? d['APPLIES'] : applies,
     investorProperties: titleNum_(d['INVESTOR PROPERTIES']), investorYears: titleNum_(d['INVESTOR YEARS']),
+    // (saved before the rule: 'owned' with a number of properties, otherwise 'certify')
+    investorRule: INVESTOR_RULES.includes(d['INVESTOR RULE']) ? d['INVESTOR RULE'] : titleNum_(d['INVESTOR PROPERTIES']) > 0 ? 'owned' : 'certify',
     // Prior Policy: PRIOR POLICY COMPANY 'same' (only when this company issued it) or 'any' (also when blank), and PRIOR
     // POLICY YEARS (issued within that many years; blank: any age)
     priorCompany: PRIOR_POLICY_COMPANY.includes(d['PRIOR POLICY COMPANY']) ? d['PRIOR POLICY COMPANY'] : 'any',
     priorYears: titleNum_(d['PRIOR POLICY YEARS']) };
 }
 const PRIOR_POLICY_COMPANY = ['same', 'any'];
+const INVESTOR_RULES = ['owned', 'current', 'certify'];
 // The card's discounts, checked: the list to save, or an error code. An investor discount needs its rule (1-1000
 // properties in the last 1-100 years).
 function cleanTitleDiscounts_(list, applies, error) {
@@ -1881,11 +1886,16 @@ function cleanTitleDiscounts_(list, applies, error) {
     const qualifies = DISCOUNT_QUALIFIERS.filter(q => Array.isArray(d.qualifies) && d.qualifies.includes(q));
     const row = { 'NAME': name, 'PERCENT': pct, 'QUALIFIES': qualifies.length ? qualifies : ['Other'],
       'APPLIES': TITLE_DISCOUNT_APPLIES.includes(d.applies) ? d.applies : applies };
+    // An investor's rule: 'owned' (INVESTOR PROPERTIES in the last INVESTOR YEARS years), 'current' (owns INVESTOR
+    // PROPERTIES now) or 'certify' (certifies they're one, on the page)
     if (row['QUALIFIES'].includes('Investor')) {
+      const rule = INVESTOR_RULES.includes(d.investorRule) ? d.investorRule : 'owned';
       const n = Number(d.investorProperties), y = Number(d.investorYears);
-      if (!(Number.isInteger(n) && n >= 1 && n <= 1000 && Number.isInteger(y) && y >= 1 && y <= 100)) return 'invalid_investor_rule';
-      row['INVESTOR PROPERTIES'] = n;
-      row['INVESTOR YEARS'] = y;
+      const okN = Number.isInteger(n) && n >= 1 && n <= 1000, okY = Number.isInteger(y) && y >= 1 && y <= 100;
+      if ((rule === 'owned' && !(okN && okY)) || (rule === 'current' && !okN)) return 'invalid_investor_rule';
+      row['INVESTOR RULE'] = rule;
+      row['INVESTOR PROPERTIES'] = rule === 'certify' ? null : n;
+      row['INVESTOR YEARS'] = rule === 'owned' ? y : null;
     }
     // A Prior Policy discount: which company's policy counts, and how recent it has to be (1-100 years, or blank)
     if (row['QUALIFIES'].includes('Prior Policy')) {

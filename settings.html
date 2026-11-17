@@ -645,6 +645,12 @@
         @media (hover: hover) { .tc-who-list label:hover { background: #f4efe8; } }
         .tc-investor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: 12px; background: #f2ede6; font-size: 0.9rem; }
         .tc-investor[hidden] { display: none; }
+        /* An Investor discount's rule: only the boxes it needs (owned: properties + years; current: properties; certify: none) */
+        .tc-ir { display: inline-flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+        .tc-investor[data-rule="owned"] [data-ir="current"], .tc-investor[data-rule="current"] [data-ir="owned"],
+        .tc-investor[data-rule="certify"] [data-ir="count"], .tc-investor[data-rule="certify"] [data-ir="owned"],
+        .tc-investor:not([data-rule="certify"]) [data-ir="certify"] { display: none; }
+        .tc-row .tc-investor select { min-height: 36px; padding: 4px 10px; border: 2px solid var(--navy); border-radius: 10px; background: #f7f4f0; font-family: inherit; font-size: 0.9rem; color: var(--brown); }
         .tc-row .tc-investor input { width: 64px; min-height: 36px; text-align: center; }
         .tc-row.is-endorse { grid-template-columns: 2.2fr 0.9fr 1.3fr 40px; }
         /* Notes: a fixed size that fits the longest notes on file (Fidelity's) */
@@ -1534,7 +1540,7 @@
         import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
         import { loadPlaces, ensurePickerStyles } from '/new-property.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf, PRIOR_POLICY_COMPANY, FEE_WHEN } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf, PRIOR_POLICY_COMPANY, FEE_WHEN, INVESTOR_RULES, investorRuleOf } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -3591,9 +3597,18 @@
         const whoText = list => (list.length ? list.join(', ') : 'Who qualifies...');
         const qualifierPicker = picked => '<details class="tc-who" data-k="qualifies"><summary aria-label="Who qualifies">' + esc(whoText(picked)) + '</summary>'
             + '<div class="tc-who-list">' + QUALIFIER_CHOICES.map(q => '<label><input type="checkbox" value="' + esc(q) + '"' + (picked.includes(q) ? ' checked' : '') + '><span>' + esc(q) + '</span></label>').join('') + '</div></details>';
-        const investorRule = (d, picked) => '<div class="tc-investor" data-investor' + (picked.includes('Investor') ? '' : ' hidden') + '><span>An investor has owned</span>'
-            + '<input type="text" inputmode="numeric" data-k="investorProperties" aria-label="How many properties" placeholder="3" value="' + esc(d.investorProperties ?? '') + '">'
-            + '<span>properties in the last</span><input type="text" inputmode="numeric" data-k="investorYears" aria-label="How many years" placeholder="5" value="' + esc(d.investorYears ?? '') + '"><span>years</span></div>';
+        // Who counts as an investor: owned X properties in the last X years, currently owns X properties, or certifies
+        // they're one (the page then asks Self-Certify As An Investor). Only the boxes the rule needs show.
+        const investorRule = (d, picked) => {
+            const rule = d.name ? investorRuleOf(d) : 'owned';
+            return '<div class="tc-investor" data-investor data-rule="' + rule + '"' + (picked.includes('Investor') ? '' : ' hidden') + '><span>An investor:</span>'
+                + '<select data-k="investorRule" aria-label="Who counts as an investor">' + options(INVESTOR_RULES, rule, 'owned') + '</select>'
+                + '<span class="tc-ir" data-ir="count"><span data-ir="owned">owned</span><span data-ir="current">owns</span>'
+                + '<input type="text" inputmode="numeric" data-k="investorProperties" aria-label="How many properties" placeholder="3" value="' + esc(d.investorProperties ?? '') + '">'
+                + '<span>properties</span><span data-ir="current">now</span></span>'
+                + '<span class="tc-ir" data-ir="owned"><span>in the last</span><input type="text" inputmode="numeric" data-k="investorYears" aria-label="How many years" placeholder="5" value="' + esc(d.investorYears ?? '') + '"><span>years</span></span>'
+                + '<span class="tc-ir" data-ir="certify">The page asks Self-Certify As An Investor.</span></div>';
+        };
         // A Prior Policy discount applies on its own on a page (from its Last Title Policy Issued and Insured By): which
         // company's policy counts, and how recent it has to be (blank: any age)
         const priorPolicyRule = (d, picked) => '<div class="tc-investor" data-prior' + (picked.includes('Prior Policy') ? '' : ' hidden') + '><span>Prior policy from</span>'
@@ -3706,7 +3721,7 @@
                     + tcField('Seller’s share of recording', tcBox('pct', 'id="tc-recording-share" placeholder="50"', c.sellerRecordingShare)) + '</div>'
                     + '<label class="tc-check"><input type="checkbox" id="tc-va"' + (c.vaSellerPays ? ' checked' : '') + '><span>On a <b>VA loan</b>, the seller pays the buyer’s share of the escrow fee. VA doesn’t let a veteran pay escrow or closing fees (38 CFR 36.4313), so in Arizona the seller usually covers them (WFG 6.6 lets the company agree to a VA rate instead). Recording fees and title insurance are allowed, so the buyer still pays those.</span></label>')
 
-                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6), off the <b>table rate</b> (the sale add-on is still charged in full). Each side gets the one biggest discount it qualifies for. <b>Who qualifies</b> works on its own on the pages: a client’s Professions &amp; Groups, an <b>Investor</b> by their Real Estate Owned (owned that many properties in that many years), and <b>Church / Non-Profit</b> or <b>Corporate Relocation</b> as set on the page. <b>Prior Policy</b> and <b>Other</b> are picked on the page. <b>What it comes off</b>: the qualifying side’s share, or the whole fee.',
+                + section('Discounts', 'Percent off the escrow fee for people who qualify (WFG section 6), off the <b>table rate</b> (the sale add-on is still charged in full). Each side gets the one biggest discount it qualifies for. <b>Who qualifies</b> works on its own on the pages: a client’s Professions &amp; Groups, an <b>Investor</b> by the discount’s rule (owned that many properties in that many years, or owns that many now, by their Real Estate Owned; or <b>certifies they’re an investor</b>, asked on the page as Self-Certify As An Investor), and <b>Church / Non-Profit</b> or <b>Corporate Relocation</b> as set on the page. <b>Prior Policy</b> and <b>Other</b> are picked on the page. <b>What it comes off</b>: the qualifying side’s share, or the whole fee.',
                     '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span></span></div>'
                     + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
 
@@ -3806,7 +3821,7 @@
                     const k = i.dataset.k;
                     if (k === 'qualifies') { o[k] = [...i.querySelectorAll('input:checked')].map(x => x.value); return; }
                     if (k === 'investorProperties' || k === 'investorYears' || k === 'priorYears' || k === 'maxDays') { const t = i.value.replace(/\D/g, ''); o[k] = t === '' ? null : Number(t); return; }
-                    o[k] = ['name', 'when', 'applies', 'priorCompany'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                    o[k] = ['name', 'when', 'applies', 'priorCompany', 'investorRule'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
                 });
                 // A Holdback fee's amount ranges (blank rows left out)
                 const holdback = row.querySelector('[data-holdback]');
@@ -3952,6 +3967,8 @@
                 who.closest('[data-row]').querySelector('[data-investor]').hidden = !picked.includes('Investor');
                 who.closest('[data-row]').querySelector('[data-prior]').hidden = !picked.includes('Prior Policy');
             }
+            // An Investor discount's rule shows only the boxes it needs
+            if (e.target.matches('select[data-k="investorRule"]')) e.target.closest('[data-investor]').dataset.rule = e.target.value;
             // An Accelerated Escrow fee asks how short the escrow has to be
             // (and a Holdback fee, its amount ranges)
             if (e.target.matches('.is-fee select[data-k="when"]')) {
@@ -4003,7 +4020,7 @@
             invalid_simultaneousPercent: 'The simultaneous issue percent must be 0 to 100%.',
             invalid_sellerOwnerShare: 'The seller’s share of the owner’s policy must be 0 to 100%.',
             invalid_discount: 'Each discount needs a name and a percent from 0 to 100.',
-            invalid_investor_rule: 'Each investor discount needs how many properties (1 to 1,000) in how many years (1 to 100) make someone an investor.',
+            invalid_investor_rule: 'Each investor discount needs its rule: how many properties (1 to 1,000), and for “owned in the last X years” how many years (1 to 100).',
             invalid_prior_policy_rule: 'A prior policy discount’s years need to be 1 to 100, or left blank for any age.',
             invalid_accelerated_escrow: 'Each Accelerated Escrow fee needs how short the escrow has to be: 1 to 365 days.',
             invalid_holdback_range: 'Each holdback range needs a fee, and only one range can leave “up to” blank.',

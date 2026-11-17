@@ -159,8 +159,10 @@ export const pickableFees = (c, conditions) => ((c && c.otherFees) || []).filter
 // --- Discounts (escrow and owner's policy) ---
 // Who qualifies for a discount (its qualifies: any of them): a profession or group a client can tick (/dpa.js
 // PROFESSION_GROUPS), or one of these:
-//   Investor              someone who has owned investorProperties properties in the last investorYears years (by their
-//                         Real Estate Owned)
+//   Investor              by the discount's investorRule (INVESTOR_RULES): 'owned' (owned investorProperties properties in
+//                         the last investorYears years, by their Real Estate Owned), 'current' (owns investorProperties
+//                         properties now) or 'certify' (certifies they're an investor: the page's Self-Certify As An
+//                         Investor)
 //   Church / Non-Profit, Corporate Relocation   set on the page (PAGE_QUALIFIERS)
 //   Prior Policy, Other   never on their own: picked on the page (a reissue / short-term rate comes from the property)
 export const DISCOUNT_SPECIAL = ['Investor', 'Church / Non-Profit', 'Corporate Relocation'];
@@ -197,9 +199,21 @@ export function propertiesOwnedWithin(owned, years, today = new Date()) {
     const from = iso(start), to = iso(today);
     return (owned || []).filter(p => p && p.purchased && p.purchased <= to && (!p.sold || p.sold >= from)).length;
 }
+// How many properties someone owns today (bought, and not sold yet)
+export function propertiesOwnedNow(owned, today = new Date()) {
+    const iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    return (owned || []).filter(p => p && p.purchased && p.purchased <= iso && (!p.sold || p.sold > iso)).length;
+}
+// An Investor discount's rule: [value, label]. A discount saved before the rule: 'owned' when it has a number of
+// properties, otherwise 'certify'.
+export const INVESTOR_RULES = [['owned', 'Owned X properties in the last X years'], ['current', 'Currently owns X properties'], ['certify', 'Certifies they’re an investor']];
+export const investorRuleOf = d => (INVESTOR_RULES.some(r => r[0] === d.investorRule) ? d.investorRule : d.investorProperties > 0 ? 'owned' : 'certify');
+// Whether a company has an Investor discount people certify for (the page then asks Self-Certify As An Investor)
+export const hasCertifyInvestor = c => Boolean(c) && (c.discounts || []).concat(c.titleDiscounts || []).some(d => qualifiersOf(d).includes('Investor') && investorRuleOf(d) === 'certify');
 // Whether a party qualifies for a discount. party: { tags: [groups and page qualifiers they have], owned: [each person's
-// [{ purchased, sold }] (null: not answered)], today } (any one person meeting the investor rule counts). A tag of
-// 'Investor' counts as an investor on its own (a Seller Net's expected buyer).
+// [{ purchased, sold }] (null: not answered)], certifiedInvestor (the page's Self-Certify As An Investor), today } (any
+// one person meeting the investor rule counts). A tag of 'Investor' counts as an investor on its own (an old Seller
+// Net's expected buyer, the Try It box).
 export function partyQualifies(d, party) {
     if (!party) return false;
     const tags = party.tags || [];
@@ -207,8 +221,10 @@ export function partyQualifies(d, party) {
         if (PICKED_QUALIFIERS.includes(q)) return false;
         if (q !== 'Investor') return tags.includes(q);
         if (tags.includes('Investor')) return true;
-        const n = d.investorProperties, y = d.investorYears;
-        return n > 0 && y > 0 && (party.owned || []).some(list => propertiesOwnedWithin(list, y, party.today || new Date()) >= n);
+        const rule = investorRuleOf(d), n = d.investorProperties, y = d.investorYears, today = party.today || new Date();
+        if (rule === 'certify') return Boolean(party.certifiedInvestor);
+        if (rule === 'current') return n > 0 && (party.owned || []).some(list => propertiesOwnedNow(list, today) >= n);
+        return n > 0 && y > 0 && (party.owned || []).some(list => propertiesOwnedWithin(list, y, today) >= n);
     });
 }
 // Each side's escrow discount (the biggest one that applies to it): { seller, buyer } (each a discount, or null).

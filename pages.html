@@ -1439,7 +1439,7 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
-        import { saleFees, pickableTitleDiscounts, pickableFees, qualifiersOf, PAGE_QUALIFIERS, PICKED_QUALIFIERS } from '/title-fees.js';
+        import { saleFees, pickableTitleDiscounts, pickableFees, hasCertifyInvestor, qualifiersOf, PAGE_QUALIFIERS, PICKED_QUALIFIERS } from '/title-fees.js';
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
         import { productMarkups, productBuydown } from '/rate-markups.js';
         import { loanMi, productMiKind, MI_REQUIRED_ABOVE } from '/mortgage-insurance.js';
@@ -1621,7 +1621,9 @@
             // (Seller Net: the Church / Non-Profit and Corporate Relocation settings instead of a list)
             const also = isSellerNet() ? sellerQualifiers(c => col(page, c)) : listOf(col(page, 'CLIENT QUALIFIES AS'));
             const clients = { tags: [...new Set(people.flatMap(c => c.groups || []).concat(also))],
-                owned: people.map(c => c.owned).filter(Array.isArray) };
+                owned: people.map(c => c.owned).filter(Array.isArray),
+                // (a company whose Investor discount people certify for: Self-Certify As An Investor)
+                certifiedInvestor: isTrue(col(page, 'SELF CERTIFIED INVESTOR')) };
             return isSellerNet() ? { seller: clients, buyer: { tags: expectedBuyerTags(c => col(page, c)) } } : { buyer: clients, seller: null };
         }
         // Seller Net: what the sellers also qualify as for the title company's discounts: SELLER NON PROFIT (the Sellers
@@ -4271,6 +4273,10 @@
                     fallback: () => (((company() || {}).sellerOwnerShare ?? 1) >= 0.5 ? 'Seller' : 'Buyer') },
                 { label: 'FinCEN Report', column: 'FINCEN REPORT', kind: 'seg', short: 'FinCEN:', items: [{ value: 'TRUE', main: 'Yes' }, { value: 'FALSE', main: 'No' }],
                     show: () => has() && Boolean((company() || {}).fincenFee) && cash(), fallback: () => 'FALSE' },
+                // The company has an Investor discount people certify for: do the clients (the sellers on a Seller Net, the
+                // buyers on a Buyer Breakdown) certify they're investors?
+                { label: 'Self-Certify As An Investor', column: 'SELF CERTIFIED INVESTOR', kind: 'seg', short: 'Self-certified investor:',
+                    items: [{ value: 'TRUE', main: 'Yes' }, { value: 'FALSE', main: 'No' }], show: () => has() && hasCertifyInvestor(company()), fallback: () => 'FALSE' },
                 // The discounts the client qualifies for apply on their own (their Professions & Groups and Real Estate
                 // Owned); these are what they also qualify as. (Seller Net: Seller Also Qualifies As is its own setting,
                 // and the expected buyer's are in the Buyer Inputs.)
