@@ -20,9 +20,9 @@ const PAGE_ROLE_COLUMNS = ['PRIMARY ACCOUNT TYPE', 'ALT ACCOUNT TYPE 1', 'ALT AC
 // Seller Net: each of those six people's title when they sign for an LLC or trust (blank for collaborators)
 const PAGE_SIGNER_COLUMNS = ['PRIMARY SIGNER TITLE', 'ALT SIGNER TITLE 1', 'ALT SIGNER TITLE 2', 'ALT SIGNER TITLE 3',
   'ALT SIGNER TITLE 4', 'ALT SIGNER TITLE 5'];
-// Buyer Breakdown: the buyers come first, in order (Buyer 1 in PRIMARY, Buyer 2 in ALT 1...), at most MAX_BUYERS; then
-// the collaborators, as many as there are. Collaborators past the six columns are in MORE COLLABORATORS (a JSON list of
-// account IDs).
+// Buyer Breakdown and Seller Net: the buyers (or sellers) come first, in order (Buyer 1 in PRIMARY, Buyer 2 in ALT 1...),
+// at most MAX_BUYERS; then the collaborators, as many as there are. Collaborators past the six columns are in MORE
+// COLLABORATORS (a JSON list of account IDs).
 const MAX_BUYERS = 4;
 const PAGE_MORE_COLLABORATORS = 'MORE COLLABORATORS';
 function moreCollaborators_(page) {
@@ -35,11 +35,18 @@ function moreCollaborators_(page) {
 const BUYER_ENTITY_TYPES = ['Individual(s)', 'LLC', 'Trust'];
 // The names in an account's LLCS or TRUSTS (JSON [{ NAME, TITLE }]); LLCs before the list was saved: the old FLIPPER LLC
 function holdingNames_(raw, legacy) {
+  return holdings_(raw, legacy).map(h => h.name);
+}
+// The same as [{ name, title }] (the account's title in that LLC or trust; the old FLIPPER TITLE for the old FLIPPER LLC)
+function holdings_(raw, legacy, legacyTitle) {
   let list;
   try { list = JSON.parse(String(raw || '').trim() || 'null'); } catch (e) { list = null; }
-  if (!Array.isArray(list)) return legacy ? [String(legacy).trim()].filter(Boolean) : [];
-  return list.map(x => String((x && x.NAME) || '').trim()).filter(Boolean);
+  if (!Array.isArray(list)) list = legacy ? [{ NAME: legacy, TITLE: legacyTitle }] : [];
+  return list.map(x => ({ name: String((x && x.NAME) || '').trim(), title: String((x && x.TITLE) || '').trim() })).filter(h => h.name);
 }
+// Seller Net: who's selling. SELLER TYPE 'Individual(s)' (or blank), or 'LLC' with LLC NAME / 'Trust' with TRUST NAME:
+// one every seller has in their own LLCs or Trusts.
+const SELLER_ENTITY_NAME_COLUMN = { LLC: 'LLC NAME', Trust: 'TRUST NAME' };
 // TRUE when the buyer is paying cash (no loan)
 const PAGE_CASH_COLUMN = 'CASH PURCHASE';
 
@@ -679,6 +686,9 @@ async function accountChoices_() {
     bank: String(r['LENDER BANK'] || '').trim(),
     llcs: holdingNames_(r['LLCS'], r['FLIPPER LLC']),
     trusts: holdingNames_(r['TRUSTS']),
+    // Seller Net: each seller's title in those LLCs and trusts ({ name: title }), to fill in their signer title
+    llcTitles: Object.fromEntries(holdings_(r['LLCS'], r['FLIPPER LLC'], r['FLIPPER TITLE']).map(h => [h.name, h.title])),
+    trustTitles: Object.fromEntries(holdings_(r['TRUSTS']).map(h => [h.name, h.title])),
   })).filter(a => a.id);
 }
 
@@ -710,9 +720,8 @@ async function updatePageAccess_(id, account, body) {
   addAll(body.collaborators, 'Collaborator');
   const buyers = people.filter(p => p.type !== 'Collaborator');
   if (!buyers.length) return { ok: false, error: 'need_one_purchaser' };
-  // Buyer Breakdown: up to four buyers, and any number of collaborators. Seller Net: six people in all.
-  if (!isSellerNet && buyers.length > MAX_BUYERS) return { ok: false, error: 'too_many_buyers' };
-  if (isSellerNet && people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
+  // Up to four buyers (or sellers), and any number of collaborators
+  if (buyers.length > MAX_BUYERS) return { ok: false, error: isSellerNet ? 'too_many_sellers' : 'too_many_buyers' };
 
   // Lender: blank for "None", otherwise an account marked LENDER = TRUE.
   // Cash purchase comes from the "Cash" choice in the Loan Product picker.
@@ -732,25 +741,33 @@ async function updatePageAccess_(id, account, body) {
   }
   if (Object.prototype.hasOwnProperty.call(fields, 'HOA DISCLOSURE FEE')) fields['WHO PAYS DISCLOSURE FEE'] = 'Seller';
 
-  // Buyer Breakdown: an LLC or trust as the Buyer Type has to be on every buyer's own list (checked when it, or the
-  // buyers, change). Individual(s) has no name.
-  if (!isSellerNet) {
+  // The Buyer Type (Seller Net: Seller Type): an LLC or trust has to be on every buyer's (or seller's) own list (checked
+  // when it, or the buyers, change). Individual(s) has no name.
+  {
     const has = c => Object.prototype.hasOwnProperty.call(fields, c);
-    const type = has('BUYER ENTITY TYPE') ? fields['BUYER ENTITY TYPE'] : String(found.row['BUYER ENTITY TYPE'] || '').trim();
-    const name = has('BUYER ENTITY NAME') ? fields['BUYER ENTITY NAME'] : String(found.row['BUYER ENTITY NAME'] || '').trim();
+    const typeColumn = isSellerNet ? 'SELLER TYPE' : 'BUYER ENTITY TYPE';
+    const type = has(typeColumn) ? fields[typeColumn] : String(found.row[typeColumn] || '').trim();
+    const nameColumn = isSellerNet ? SELLER_ENTITY_NAME_COLUMN[type] : 'BUYER ENTITY NAME';
+    const name = !nameColumn ? '' : has(nameColumn) ? fields[nameColumn] : String(found.row[nameColumn] || '').trim();
     const before = PAGE_PEOPLE_COLUMNS.map((c, i) => String(found.row[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() === 'collaborator' ? '' : phoneToId_(found.row[c])).filter(Boolean);
     const buyersChanged = before.join(',') !== buyers.map(b => b.id).join(',');
+    const missing = isSellerNet ? 'missing_seller_entity' : 'missing_buyer_entity';
+    const notShared = isSellerNet ? 'seller_entity_not_shared' : 'buyer_entity_not_shared';
     if (type === 'LLC' || type === 'Trust') {
-      if (has('BUYER ENTITY TYPE') || has('BUYER ENTITY NAME') || buyersChanged) {
-        if (!name) return { ok: false, error: 'missing_buyer_entity' };
+      if (has(typeColumn) || (nameColumn && has(nameColumn)) || buyersChanged) {
+        if (!name) return { ok: false, error: missing };
         const listOf = b => (type === 'LLC' ? known[b.id].llcs : known[b.id].trusts).map(n => n.toLowerCase());
-        if (!buyers.every(b => listOf(b).includes(name.toLowerCase()))) return { ok: false, error: 'buyer_entity_not_shared' };
+        if (!buyers.every(b => listOf(b).includes(name.toLowerCase()))) return { ok: false, error: notShared };
       }
-    } else if (has('BUYER ENTITY TYPE')) fields['BUYER ENTITY NAME'] = '';
+      // Seller Net: only the picked kind keeps a name
+      if (isSellerNet && has(typeColumn)) fields[SELLER_ENTITY_NAME_COLUMN[type === 'LLC' ? 'Trust' : 'LLC']] = '';
+    } else if (has(typeColumn)) {
+      if (isSellerNet) { fields['LLC NAME'] = ''; fields['TRUST NAME'] = ''; } else fields['BUYER ENTITY NAME'] = '';
+    }
   }
 
   if (!isSellerNet) fields[PAGE_CASH_COLUMN] = cash;
-  if (!isSellerNet) fields[PAGE_MORE_COLLABORATORS] = people.length > PAGE_PEOPLE_COLUMNS.length ? JSON.stringify(people.slice(PAGE_PEOPLE_COLUMNS.length).map(p => p.id)) : '';
+  fields[PAGE_MORE_COLLABORATORS] = people.length > PAGE_PEOPLE_COLUMNS.length ? JSON.stringify(people.slice(PAGE_PEOPLE_COLUMNS.length).map(p => p.id)) : '';
   PAGE_PEOPLE_COLUMNS.forEach((col, i) => {
     const person = people[i];
     fields[col] = person ? person.id : '';
@@ -791,7 +808,8 @@ async function otherVersions_(found) {
 }
 
 // Copies the Global Settings in fields to the other versions. sellers (when given): the new sellers, who replace
-// each version's own; its collaborators stay (minus anyone who is now a seller), up to six people in all.
+// each version's own; its collaborators stay (minus anyone who is now a seller), past the six columns in MORE
+// COLLABORATORS.
 async function shareGlobalSettings_(siblings, fields, sellers) {
   const shared = {};
   SELLER_NET_GLOBAL_FIELDS().forEach(c => { if (Object.prototype.hasOwnProperty.call(fields, c)) shared[c] = fields[c]; });
@@ -799,10 +817,13 @@ async function shareGlobalSettings_(siblings, fields, sellers) {
     const own = Object.assign({}, shared);
     if (sellers) {
       const sellerIds = sellers.map(s => s.id);
-      const collaborators = PAGE_PEOPLE_COLUMNS.map((col, i) => ({ id: phoneToId_(p[col]), role: String(p[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() }))
-        .filter(x => x.id && x.role === 'collaborator' && !sellerIds.includes(x.id))
-        .map(x => ({ id: x.id, type: 'Collaborator' }));
-      const people = sellers.concat(collaborators).slice(0, PAGE_PEOPLE_COLUMNS.length);
+      const collaborators = [...new Set(PAGE_PEOPLE_COLUMNS
+        .map((col, i) => String(p[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() === 'collaborator' ? phoneToId_(p[col]) : '')
+        .concat(moreCollaborators_(p)))]
+        .filter(cid => cid && !sellerIds.includes(cid))
+        .map(cid => ({ id: cid, type: 'Collaborator' }));
+      const people = sellers.concat(collaborators);
+      own[PAGE_MORE_COLLABORATORS] = people.length > PAGE_PEOPLE_COLUMNS.length ? JSON.stringify(people.slice(PAGE_PEOPLE_COLUMNS.length).map(x => x.id)) : '';
       PAGE_PEOPLE_COLUMNS.forEach((col, i) => {
         own[col] = people[i] ? people[i].id : '';
         own[PAGE_ROLE_COLUMNS[i]] = people[i] ? people[i].type : '';

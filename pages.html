@@ -3509,58 +3509,32 @@
             const onPage = PEOPLE_COLUMNS.map((c, i) => ({ id: idOf(col(data.page, c)), collaborator: isCollaborator(i) })).filter(p => p.id);
             let people = null;
             let collaborators = null;
-            // Buyer Breakdown: one line per buyer (Buyer 1 required, up to MAX_BUYERS) and per collaborator (no limit),
-            // with the Buyer Type under the buyers
+            // One line per buyer or seller (Buyer 1 / Seller 1 required, up to MAX_BUYERS) and per collaborator (no
+            // limit). Buyer Breakdown: the Buyer Type under the buyers; Seller Net: the Seller Type (setupSellerFields).
+            const more = idList(col(data.page, 'MORE COLLABORATORS'));
+            const takenBy = list => v => Boolean(list && list.value().includes(v));
+            const onPageBuyers = onPage.filter(p => !p.collaborator).map(p => p.id);
+            // (a Seller Net saved before the limit can have more sellers: they all show, and one has to go before saving)
+            const maxBuyers = isSellerNet() ? Math.max(MAX_BUYERS, onPageBuyers.length) : MAX_BUYERS;
+            people = makeSlotList({ mount: document.getElementById('people-picker'), noun: isSellerNet() ? 'Seller' : 'Buyer', items: accountItems,
+                selected: onPageBuyers.slice(0, maxBuyers), min: 1, max: maxBuyers,
+                taken: v => takenBy(collaborators)(v), onChange: changed });
+            collaborators = makeSlotList({ mount: document.getElementById('collab-picker'), noun: 'Collaborator', items: accountItems,
+                selected: onPage.filter(p => p.collaborator).map(p => p.id).concat(more.filter(id => !onPage.some(p => p.id === id))),
+                taken: v => takenBy(people)(v), onChange: changed });
+            const nameOfAccount = id => { const a = accounts.find(x => x.id === id); return (a && a.name) || phone(id); };
+            const collabField = document.getElementById('collab-picker').closest('.field');
+            collabField.dataset.display = 'group';
+            collabField.groupDisplay = () => collaborators.value().map(nameOfAccount).join(', ');
             if (!isSellerNet()) {
-                const more = idList(col(data.page, 'MORE COLLABORATORS'));
-                const takenBy = list => v => Boolean(list && list.value().includes(v));
-                people = makeSlotList({ mount: document.getElementById('people-picker'), noun: 'Buyer', items: accountItems,
-                    selected: onPage.filter(p => !p.collaborator).map(p => p.id).slice(0, MAX_BUYERS), min: 1, max: MAX_BUYERS,
-                    taken: v => takenBy(collaborators)(v), onChange: changed });
-                collaborators = makeSlotList({ mount: document.getElementById('collab-picker'), noun: 'Collaborator', items: accountItems,
-                    selected: onPage.filter(p => p.collaborator).map(p => p.id).concat(more.filter(id => !onPage.some(p => p.id === id))),
-                    taken: v => takenBy(people)(v), onChange: changed });
                 document.getElementById('people-label').textContent = 'Buyers';
                 document.getElementById('people-help').textContent = 'Buyer 1 is the primary buyer. Up to ' + MAX_BUYERS + ' buyers: their incomes count toward approval, and their credit scores are averaged for the rate.';
                 document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren\u2019t part of the loan.';
-                const nameOf = id => { const a = accounts.find(x => x.id === id); return (a && a.name) || phone(id); };
                 const buyerField = document.getElementById('people-picker').closest('.field');
-                const collabField = document.getElementById('collab-picker').closest('.field');
                 const buyerType = buyerTypeQuestion(buyerField, () => people.value());
                 buyerField.dataset.display = 'group';
-                buyerField.groupDisplay = () => people.value().map(nameOf).join(', ') + buyerType.summary();
-                collabField.dataset.display = 'group';
-                collabField.groupDisplay = () => collaborators.value().map(nameOf).join(', ');
+                buyerField.groupDisplay = () => people.value().map(nameOfAccount).join(', ') + buyerType.summary();
                 onPeopleChanged = buyerType.buyersChanged;
-            } else {
-            // Seller Net: sellers and collaborators share the six spots, and nobody can be both
-            const spotsLeft = () => MAX_PEOPLE - (people ? people.value().length : 0) - (collaborators ? collaborators.value().length : 0);
-            const spotsText = n => n + ' selected \u00b7 ' + spotsLeft() + ' of ' + MAX_PEOPLE + ' spots left';
-            people = makePicker({
-                mount: document.getElementById('people-picker'),
-                labelId: 'people-label',
-                items: accountItems,
-                multiple: true,
-                max: () => MAX_PEOPLE - (collaborators ? collaborators.value().length : 0),
-                blocked: v => Boolean(collaborators && collaborators.value().includes(v)),
-                summary: n => (collaborators ? spotsText(n) : n + ' selected'),
-                tag: 'Primary',
-                selected: onPage.filter(p => !p.collaborator).map(p => p.id),
-                placeholder: 'Choose purchasers',
-                onChange: changed,
-            });
-            collaborators = makePicker({
-                mount: document.getElementById('collab-picker'),
-                labelId: 'collab-label',
-                items: accountItems,
-                multiple: true,
-                max: () => MAX_PEOPLE - people.value().length,
-                blocked: v => people.value().includes(v),
-                summary: spotsText,
-                selected: onPage.filter(p => p.collaborator).map(p => p.id),
-                placeholder: 'Choose collaborators',
-                onChange: changed,
-            });
             }
             people.refresh();
             collaborators.refresh();
@@ -3584,7 +3558,7 @@
                 validateSettings();
                 setMessage('', '');
                 setSaveDisabled(!people.value().length || Object.keys(fieldErrors).length > 0);
-                if (!people.value().length) setMessage(isSellerNet() ? 'Choose at least one seller.' : 'Choose Buyer 1.', 'error');
+                if (!people.value().length) setMessage(isSellerNet() ? 'Choose Seller 1.' : 'Choose Buyer 1.', 'error');
                 else if (Object.keys(fieldErrors).length) setMessage('Please fix the highlighted settings before saving.', 'error');
             }
 
@@ -3616,6 +3590,9 @@
                         buyer_entity_not_shared: 'Every buyer needs the Buyer Type’s LLC or trust in their own profile.',
                         missing_buyer_entity: 'Pick the Buyer Type’s LLC or trust again.',
                         too_many_buyers: 'A page can have up to ' + MAX_BUYERS + ' buyers.',
+                        seller_entity_not_shared: 'Every seller needs the Seller Type’s LLC or trust in their own profile.',
+                        missing_seller_entity: 'Pick the Seller Type’s LLC or trust again.',
+                        too_many_sellers: 'A page can have up to ' + MAX_BUYERS + ' sellers. Remove one before saving.',
                     };
                     setMessage(SAVE_ERRORS[err.message] || 'We couldn\'t save your settings. Please try again.', 'error');
                     setSaveDisabled(false);
@@ -4366,24 +4343,75 @@
             groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
         }
 
-        // Sellers: Seller Type (Individual(s) / LLC / Trust); for an LLC or trust, its name and each seller's title
+        // Sellers: Seller Type under the sellers, like the Buyer Type: As Individual(s), or an LLC or trust that every
+        // seller has in their own profile (SELLER TYPE with LLC NAME / TRUST NAME). For an LLC or trust, each seller's
+        // signer title, filled in from their profile when it's picked.
         function sellerTypeQuestions() {
             const field = document.getElementById('people-picker').closest('.field');
             const extras = el('div', 'seller-extras');
             field.querySelector('.field-help').after(extras);
-            const nameOf = id => { const a = (data.accounts || []).find(x => x.id === id); return (a && a.name) || phone(id); };
+            const accountOf = id => (data.accounts || []).find(a => a.id === id) || {};
+            const nameOf = id => accountOf(id).name || phone(id);
             const sellers = () => (peoplePicker ? peoplePicker.value() : []);
+            const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+            const nameColumnOf = type => (type === 'LLC' ? 'LLC NAME' : 'TRUST NAME');
             const cell = label => { const c = el('div', 'sub-field'); c.append(el('span', 'sub-label', escapeHtml(label))); extras.append(c); return c; };
+            // The LLCs and trusts on every seller's list ([{ type, name }])
+            function shared() {
+                const ids = sellers();
+                if (!ids.length) return [];
+                const out = [];
+                [['LLC', 'llcs'], ['Trust', 'trusts']].forEach(([type, key]) => {
+                    (accountOf(ids[0])[key] || []).forEach(name => {
+                        if (out.some(o => o.type === type && same(o.name, name))) return;
+                        if (ids.every(id => (accountOf(id)[key] || []).some(n => same(n, name)))) out.push({ type, name });
+                    });
+                });
+                return out;
+            }
+            const now = () => {
+                const type = current('SELLER TYPE');
+                return type === 'LLC' || type === 'Trust' ? { type, name: current(nameColumnOf(type)) } : null;
+            };
+            const keyOf = e => (e ? JSON.stringify([e.type, e.name.toLowerCase()]) : '');
+            // A seller's title in that LLC or trust, from their profile
+            const profileTitle = (id, e) => {
+                const titles = accountOf(id)[e.type === 'LLC' ? 'llcTitles' : 'trustTitles'] || {};
+                const key = Object.keys(titles).find(n => same(n, e.name));
+                return key ? text(titles[key]) : '';
+            };
+            function pick(e) {
+                setDraft('SELLER TYPE', e ? e.type : 'Individual(s)');
+                setDraft('LLC NAME', e && e.type === 'LLC' ? e.name : '');
+                setDraft('TRUST NAME', e && e.type === 'Trust' ? e.name : '');
+                if (e) {
+                    const all = signerTitles();
+                    sellers().forEach(id => { const t = profileTitle(id, e); if (t) all[id] = t; });
+                    setDraft('SIGNER TITLES', JSON.stringify(all));
+                }
+                build();
+            }
             let shownFor = '';
             function build() {
                 extras.innerHTML = '';
                 shownFor = sellers().join(',');
-                const type = current('SELLER TYPE');
-                cell('Seller Type').append(segToggle([['Individual(s)', 'Individual(s)'], ['LLC', 'LLC'], ['Trust', 'Trust']], type, v => { setDraft('SELLER TYPE', v); build(); }, 'Seller type'));
-                if (type !== 'LLC' && type !== 'Trust') return;
-                const nameColumn = type === 'LLC' ? 'LLC NAME' : 'TRUST NAME';
-                cell(type + ' Name').append(textBox({ value: current(nameColumn), inputmode: 'text', placeholder: type === 'LLC' ? 'e.g. Ludlow Holdings LLC' : 'e.g. The Smith Family Trust',
-                    onInput: i => setDraft(nameColumn, i.value) }).wrap);
+                const typeCell = cell('Seller Type');
+                typeCell.querySelector('.sub-label').id = 'seller-type-label';
+                const mount = el('div');
+                typeCell.append(mount);
+                const options = shared();
+                const picked = now();
+                // A saved LLC or trust that isn't on every seller's list (or was typed in before) still shows, marked
+                if (picked && picked.name && !options.some(o => keyOf(o) === keyOf(picked))) options.push({ ...picked, stale: true });
+                makePicker({ mount, labelId: 'seller-type-label',
+                    items: [{ value: '', main: 'As Individual(s)', secondary: sellers().length > 1 ? 'The sellers in their own names' : 'In their own name', icon: 'person' }]
+                        .concat(options.map(o => ({ value: keyOf(o), main: o.name, secondary: o.stale ? o.type + ' · not on every seller’s profile' : o.type, icon: 'bank' }))),
+                    selected: [picked && picked.name ? keyOf(picked) : ''],
+                    onChange: v => pick(options.find(x => keyOf(x) === v)) });
+                typeCell.append(el('p', 'field-help', options.some(o => !o.stale) ? 'An LLC or trust shows here when every seller has it in their profile.'
+                    : 'An LLC or trust shows here once every seller has it in their profile (Settings &gt; LLCs or Trusts).'));
+                if (!picked) return;
+                const type = picked.type;
                 const titles = cell('Authorized Signer Title');
                 const list = el('div', 'signer-list');
                 titles.append(list);
@@ -4397,8 +4425,14 @@
                 });
             }
             build();
-            // New or removed sellers get (or lose) a title box
-            onPeopleChanged = () => { if (sellers().join(',') !== shownFor) build(); };
+            // New or removed sellers get (or lose) a title box; an LLC or trust the sellers no longer all have goes back
+            // to As Individual(s)
+            onPeopleChanged = () => {
+                if (sellers().join(',') === shownFor) return;
+                const e = now();
+                if (e && !shared().some(o => keyOf(o) === keyOf(e))) { pick(null); return; }
+                build();
+            };
             // The closed row: "Seller Test, Jane Doe · LLC: Ludlow Holdings LLC (Managing Member, Member)"
             field.dataset.display = 'group';
             field.groupDisplay = () => {
@@ -4418,8 +4452,8 @@
             document.getElementById('people-label').textContent = 'Sellers';
             document.getElementById('global-people-fields').append(document.getElementById('people-picker').closest('.field'));
             sellerTypeQuestions();
-            document.getElementById('people-help').textContent = 'The owners selling this home.';
-            document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren\'t selling. Up to 6 sellers and collaborators in total.';
+            document.getElementById('people-help').textContent = 'The owners selling this home. Seller 1 is the primary seller. Up to ' + MAX_BUYERS + ' sellers.';
+            document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren’t selling.';
             document.getElementById('lender-field').hidden = true;
             document.getElementById('loan-product-field').hidden = true;
             document.getElementById('inspection-section').hidden = true;
