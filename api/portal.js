@@ -65,6 +65,17 @@ const PAGE_SETTING_FIELDS = {
   'ESCROW FEE RATE': 'rate', 'OWNERS TITLE RATE': 'rate', 'ALTA TITLE RATE': 'rate', 'HOMEOWNERS INSURANCE RATE': 'rate',
   // Title & Escrow: the title company (a titleCompanies document ID; blank uses the three rates above) and this sale's details
   'TITLE COMPANY': 'id', 'SALE TYPE': ['Standard', 'Short Sale', 'REO'],
+  // The property's last owner's title policy: when it was issued and which title company insured it (a titleCompanies
+  // document ID), for the companies' Prior Policy discounts (they apply on their own; see /title-fees.js)
+  'PRIOR POLICY DATE': 'date', 'PRIOR POLICY INSURER': 'id',
+  // Seller Net: what the title company's other fees follow (their WHEN; see /title-fees.js feeApplies). FOREIGN SELLER
+  // and HAS SEPTIC are Global Settings; HOLDBACK AMOUNT is dollars held back in escrow (0: none)
+  'FOREIGN SELLER': 'bool', 'HAS SEPTIC': 'bool', '1031 EXCHANGE': 'bool', 'HOLDBACK AMOUNT': 'money', 'ELECTRONIC SERVICE': 'bool',
+  // Seller Net: what the sellers also qualify as, for the title company's discounts (they replace CLIENT QUALIFIES AS
+  // there, still read while they're blank): SELLER NON PROFIT (a Global Setting) and CORPORATE RELOCATION
+  'SELLER NON PROFIT': 'bool', 'CORPORATE RELOCATION': 'bool',
+  // Seller Net: Cash when the buyer pays cash (the Buyer Inputs' Loan Product picker); otherwise blank, and the buyer's
+  // loan product decides the loan type. Older pages can still have one of the others.
   'BUYER FINANCING': ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'], 'SECOND LOAN AMOUNT': 'money',
   // Buyer Breakdown: the down payment assistance loan (a Down Payment Assistance product, by name) and its amount as a
   // share of the price (a product the client can't adjust always uses its own)
@@ -82,8 +93,10 @@ const PAGE_SETTING_FIELDS = {
   'CLIENT VIEW': ['Seller Only', 'Both Sides'],
   // Title company discounts: what the page's client (the buyer on a Buyer Breakdown, the seller on a Seller Net) also
   // qualifies as (Church / Non-Profit, Corporate Relocation; their professions, groups and real estate owned count on
-  // their own), and on a Seller Net, what the expected buyer qualifies as (any of the company's buyer discounts' groups)
-  'CLIENT QUALIFIES AS': 'list', 'BUYER QUALIFIES AS': 'list',
+  // their own). Seller Net: the expected buyer's Professions & Groups (BUYER PROFESSION GROUPS) and what they also
+  // qualify as (BUYER ALSO QUALIFIES AS), from the Buyer Inputs; BUYER QUALIFIES AS is the old single setting they
+  // replace (still read on a page with neither, and cleared when they're saved)
+  'CLIENT QUALIFIES AS': 'list', 'BUYER QUALIFIES AS': 'list', 'BUYER PROFESSION GROUPS': 'list', 'BUYER ALSO QUALIFIES AS': 'list',
   // Buyer Breakdown: Buyer Type (checked against the buyers' own LLCs and trusts when saved)
   'BUYER ENTITY TYPE': BUYER_ENTITY_TYPES, 'BUYER ENTITY NAME': 'text',
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
@@ -796,7 +809,7 @@ async function updatePageAccess_(id, account, body) {
 // Versions of a Seller Net page are the pages with the same PAGE TYPE, the same home (addressKey_) and the same
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
-const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
+const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
   'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
@@ -1849,8 +1862,13 @@ function titleDiscountOut_(d, applies) {
   const qualifies = listed.length ? listed : LEGACY_DISCOUNT_CATEGORY[category] || (DISCOUNT_QUALIFIERS.includes(category) ? [category] : ['Other']);
   return { name: String(d['NAME'] || ''), percent: titleNum_(d['PERCENT']), qualifies,
     applies: TITLE_DISCOUNT_APPLIES.includes(d['APPLIES']) ? d['APPLIES'] : applies,
-    investorProperties: titleNum_(d['INVESTOR PROPERTIES']), investorYears: titleNum_(d['INVESTOR YEARS']) };
+    investorProperties: titleNum_(d['INVESTOR PROPERTIES']), investorYears: titleNum_(d['INVESTOR YEARS']),
+    // Prior Policy: PRIOR POLICY COMPANY 'same' (only when this company issued it) or 'any' (also when blank), and PRIOR
+    // POLICY YEARS (issued within that many years; blank: any age)
+    priorCompany: PRIOR_POLICY_COMPANY.includes(d['PRIOR POLICY COMPANY']) ? d['PRIOR POLICY COMPANY'] : 'any',
+    priorYears: titleNum_(d['PRIOR POLICY YEARS']) };
 }
+const PRIOR_POLICY_COMPANY = ['same', 'any'];
 // The card's discounts, checked: the list to save, or an error code. An investor discount needs its rule (1-1000
 // properties in the last 1-100 years).
 function cleanTitleDiscounts_(list, applies, error) {
@@ -1869,11 +1887,21 @@ function cleanTitleDiscounts_(list, applies, error) {
       row['INVESTOR PROPERTIES'] = n;
       row['INVESTOR YEARS'] = y;
     }
+    // A Prior Policy discount: which company's policy counts, and how recent it has to be (1-100 years, or blank)
+    if (row['QUALIFIES'].includes('Prior Policy')) {
+      row['PRIOR POLICY COMPANY'] = PRIOR_POLICY_COMPANY.includes(d.priorCompany) ? d.priorCompany : 'any';
+      const y = d.priorYears === null || d.priorYears === undefined || d.priorYears === '' ? null : Number(d.priorYears);
+      if (y !== null && !(Number.isInteger(y) && y >= 1 && y <= 100)) return 'invalid_prior_policy_rule';
+      row['PRIOR POLICY YEARS'] = y;
+    }
     out.push(row);
   }
   return out;
 }
-const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'];
+// (the same list as /title-fees.js FEE_WHEN: Foreign Seller ... Electronic Service follow a Seller Net's settings)
+// Accelerated Escrow follows either page's Escrow Duration: MAX ESCROW DAYS or fewer
+const TITLE_FEE_WHEN = ['Every Sale', 'With a Loan', 'Manufactured Home', 'Foreign Seller', 'Septic', '1031 Exchange', 'Holdback',
+  'Electronic Service', 'Accelerated Escrow', 'Refinance', 'Sometimes'];
 const TITLE_ENDORSEMENT_WHEN = ['Every Loan', 'Condo', 'HOA (PUD)', 'Adjustable Rate', 'Manufactured Home'];
 
 function titleCompanyOut_(doc) {
@@ -1929,7 +1957,8 @@ function titleCompanyOut_(doc) {
     refiPolicyPercent: num(f['REFINANCE POLICY PERCENT']),
     refiEndorsements: num(f['REFINANCE ENDORSEMENTS']),
     titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => titleDiscountOut_(d, 'property')) : [],
-    otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || '') })) : [],
+    otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || ''), maxDays: num(d['MAX ESCROW DAYS']),
+      ranges: Array.isArray(d['RANGES']) ? d['RANGES'].map(r => ({ upTo: num(r['UP TO']), fee: num(r['FEE']) })) : [] })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
     titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
     titleOverPer: num(f['OWNERS TITLE OVER TABLE PER']),
@@ -2028,10 +2057,31 @@ async function saveTitleCompany_(account, body) {
     const dn = cleanText_(d && d.name, 100);
     const amount = titleMoney_(d && d.amount);
     const share = titleShare_(d && d.sellerShare);
-    if (!dn && amount === null) continue;
-    if (!dn || amount === null || Number.isNaN(amount) || share === null || Number.isNaN(share)) return { ok: false, error: 'invalid_other_fee' };
-    const when = TITLE_FEE_WHEN.includes(d.when) ? d.when : 'Sometimes';
-    otherFees.push({ 'NAME': dn, 'AMOUNT': amount, 'SELLER SHARE': share, 'WHEN': when });
+    const when = TITLE_FEE_WHEN.includes(d && d.when) ? d.when : 'Sometimes';
+    // A Holdback fee's amount ranges: up to 20 of { UP TO (blank: any amount above), FEE }, sorted; with them, the fee's
+    // own amount can be blank
+    const ranges = [];
+    if (when === 'Holdback') {
+      for (const r of (Array.isArray(d && d.ranges) ? d.ranges : []).slice(0, 20)) {
+        const upTo = titleMoney_(r && r.upTo), rf = titleMoney_(r && r.fee);
+        if (upTo === null && rf === null) continue;
+        if (rf === null || Number.isNaN(rf) || Number.isNaN(upTo)) return { ok: false, error: 'invalid_holdback_range' };
+        ranges.push({ 'UP TO': upTo, 'FEE': rf });
+      }
+      if (ranges.filter(r => r['UP TO'] === null).length > 1) return { ok: false, error: 'invalid_holdback_range' };
+      ranges.sort((a, b) => (a['UP TO'] ?? Infinity) - (b['UP TO'] ?? Infinity));
+    }
+    if (!dn && amount === null && !ranges.length) continue;
+    if (!dn || (amount === null && !ranges.length) || Number.isNaN(amount) || share === null || Number.isNaN(share)) return { ok: false, error: 'invalid_other_fee' };
+    const fee = { 'NAME': dn, 'AMOUNT': amount === null ? 0 : amount, 'SELLER SHARE': share, 'WHEN': when };
+    if (ranges.length) fee['RANGES'] = ranges;
+    // Accelerated Escrow: how short the escrow has to be (1-365 days)
+    if (when === 'Accelerated Escrow') {
+      const days = Number(d.maxDays);
+      if (!(Number.isInteger(days) && days >= 1 && days <= 365)) return { ok: false, error: 'invalid_accelerated_escrow' };
+      fee['MAX ESCROW DAYS'] = days;
+    }
+    otherFees.push(fee);
   }
   fields['OTHER FEES'] = otherFees;
   const endorsements = [];
@@ -3385,10 +3435,9 @@ async function createProperty_(account, body) {
     'HOA PRIMARY MONTHLY DUES': whole(hoa.primary),
     'HOA MASTER MONTHLY DUES': whole(hoa.master),
     // Placeholders: the seller pays every HOA fee, and both commissions start at 2.5%; escrow and title come from the
-    // title company the form asks for, assuming a buyer with a fixed-rate loan
+    // title company the form asks for, with the buyer's loan type from the buyer's loan product below
     'SELLER CREDIT': 0,
     'SALE TYPE': 'Standard',
-    'BUYER FINANCING': 'Fixed Rate Loan',
     // Buyer Inputs (the buyer's side): the first loan product, 80% loan, the Buyer Breakdown's insurance placeholder
     'BUYER LOAN PRODUCT': String(((await rows('loanProducts'))[0] || {})['LOAN PRODUCT NAME'] || '').trim(),
     'RETAIL LTV': 0.8,

@@ -995,6 +995,12 @@
         .client-dialog .tf-step .cl-suffix input[type="text"] { padding-right: 90px; }
         /* (minmax(0, 1fr): a long choice can't push the box past the card's edge) */
         .sub-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; }
+        /* One setting per line (Title & Escrow); two marked half share a line */
+        .sub-grid.is-lines > .sub-field { grid-column: 1 / -1; }
+        .sub-grid.is-lines > .sub-field.is-half { grid-column: auto; }
+        /* A yes / no checkbox on its own line (Sellers: a foreign seller) */
+        .field label.check-line { display: flex; align-items: center; gap: 10px; padding: 4px 6px; font-weight: bold; cursor: pointer; }
+        .field label.check-line input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--navy); cursor: pointer; }
         .sub-field { min-width: 0; }
         /* An open list wraps long names (a closed picker still ends them with "…") */
         .sub-field .picker-list .picker-main, .sub-field .picker-list .picker-secondary { white-space: normal; overflow-wrap: anywhere; }
@@ -1386,7 +1392,7 @@
             <!-- Seller Net: what prices the buyer's side of the escrow breakdown -->
             <div class="settings-section" id="buyer-inputs-section" hidden>
                 <h3 class="money-section-title">Buyer Inputs</h3>
-                <p class="field-help buyer-inputs-help">What you expect the buyer to bring: these price the buyer’s side of the escrow breakdown, like a Buyer Breakdown. Buyer’s Financing and Expected Buyer Qualifies As are in Title &amp; Escrow.</p>
+                <p class="field-help buyer-inputs-help">What you expect the buyer to bring: these price the buyer’s side of the escrow breakdown, like a Buyer Breakdown. The loan product’s type and the buyer’s professions, groups and qualifications also price the seller’s title fees and discounts.</p>
                 <div class="settings-grid" id="buyer-inputs-fields"></div>
             </div>
 
@@ -1433,11 +1439,11 @@
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor, ensureDialogStyles, lockPageScroll } from '/income-editor.js';
         import { ensureStepFormStyles } from '/task-form.js';
-        import { saleFees, pickableTitleDiscounts, qualifiersOf, PAGE_QUALIFIERS, PICKED_QUALIFIERS } from '/title-fees.js';
+        import { saleFees, pickableTitleDiscounts, pickableFees, qualifiersOf, PAGE_QUALIFIERS, PICKED_QUALIFIERS } from '/title-fees.js';
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
         import { productMarkups, productBuydown } from '/rate-markups.js';
         import { loanMi, productMiKind, MI_REQUIRED_ABOVE } from '/mortgage-insurance.js';
-        import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer } from '/dpa.js';
+        import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer, PROFESSION_GROUPS } from '/dpa.js';
         import { productLenderCredits, creditCheck, creditAmount, creditTerms, conditionText } from '/lender-credits.js';
 
         const params = new URLSearchParams(location.search);
@@ -1588,24 +1594,56 @@
                 property: titlePropertyKind(page), loanType, saleType: text(col(page, 'SALE TYPE')) || 'Standard',
                 secondLoan: secondLoan !== undefined ? secondLoan : num(col(page, 'SECOND LOAN AMOUNT')), sellerHasPayoff,
                 fincen: isTrue(col(page, 'FINCEN REPORT')), extraFees: listOf(col(page, 'EXTRA TITLE FEES')),
+                conditions: feeConditions(page),
                 ownerPayer: text(col(page, 'WHO PAYS OWNERS POLICY')) || undefined,
                 ...titleParties(page), titleDiscount: text(col(page, 'OWNERS TITLE DISCOUNT')),
+                // The property's last owner's policy, for a Prior Policy discount
+                priorPolicy: (issued => (issued ? { issued, sameCompany: text(col(page, 'PRIOR POLICY INSURER')) === company.id } : null))(parseDate(col(page, 'PRIOR POLICY DATE'))),
             });
+        }
+        // What the title company's other fees follow (see feeApplies in /title-fees.js): either page's Escrow Duration (for
+        // Accelerated Escrow; blank: not known yet), and a Seller Net's settings for the rest (a Buyer Breakdown doesn't
+        // have them: those fees are picked in Other Fees That Apply there)
+        function feeConditions(page) {
+            const days = text(col(page, 'ESCROW DURATION'));
+            const out = days === '' ? {} : { escrowDays: num(days) };
+            if (!isSellerNet()) return out;
+            return { ...out, 'Foreign Seller': isTrue(col(page, 'FOREIGN SELLER')), 'Septic': isTrue(col(page, 'HAS SEPTIC')),
+                '1031 Exchange': isTrue(col(page, '1031 EXCHANGE')), 'Holdback': num(col(page, 'HOLDBACK AMOUNT')) > 0, holdbackAmount: num(col(page, 'HOLDBACK AMOUNT')),
+                'Electronic Service': isTrue(col(page, 'ELECTRONIC SERVICE')) };
         }
         // Who each side is, for the title company's escrow and owner's policy discounts (see partyQualifies in
         // /title-fees.js): the page's clients (the purchasers on a Buyer Breakdown, the sellers on a Seller Net) by their
         // Professions & Groups and Real Estate Owned, plus what the page says they also qualify as (CLIENT QUALIFIES AS:
-        // Church / Non-Profit, Corporate Relocation); a Seller Net's expected buyer by what the page says (BUYER QUALIFIES AS)
+        // Church / Non-Profit, Corporate Relocation); a Seller Net's expected buyer by the Buyer Inputs (expectedBuyerTags)
         function titleParties(page) {
             const people = isSellerNet() ? (data.sellers || []) : purchasers();
-            const clients = { tags: [...new Set(people.flatMap(c => c.groups || []).concat(listOf(col(page, 'CLIENT QUALIFIES AS'))))],
+            // (Seller Net: the Church / Non-Profit and Corporate Relocation settings instead of a list)
+            const also = isSellerNet() ? sellerQualifiers(c => col(page, c)) : listOf(col(page, 'CLIENT QUALIFIES AS'));
+            const clients = { tags: [...new Set(people.flatMap(c => c.groups || []).concat(also))],
                 owned: people.map(c => c.owned).filter(Array.isArray) };
-            return isSellerNet() ? { seller: clients, buyer: { tags: listOf(col(page, 'BUYER QUALIFIES AS')) } } : { buyer: clients, seller: null };
+            return isSellerNet() ? { seller: clients, buyer: { tags: expectedBuyerTags(c => col(page, c)) } } : { buyer: clients, seller: null };
         }
-        // What a Seller Net's expected buyer can qualify as: the groups in the company's discounts a buyer can get
-        const buyerQualifierChoices = c => [...new Set((c ? (c.discounts || []).concat(c.titleDiscounts || []) : [])
-            .filter(d => ['buyer', 'buyerPays', 'eitherPays'].includes(d.applies))
-            .flatMap(qualifiersOf).filter(q => !PICKED_QUALIFIERS.includes(q)))];
+        // Seller Net: what the sellers also qualify as for the title company's discounts: SELLER NON PROFIT (the Sellers
+        // menu's Church / Non-Profit checkbox, a Global Setting) and CORPORATE RELOCATION (Miscellaneous). A page saved
+        // before them has them in CLIENT QUALIFIES AS (the old Seller Also Qualifies As), read while each is blank.
+        const SELLER_FLAGS = [['SELLER NON PROFIT', 'Church / Non-Profit'], ['CORPORATE RELOCATION', 'Corporate Relocation']];
+        const sellerFlag = (get, column) => {
+            const v = text(get(column));
+            return v !== '' ? v.toUpperCase() === 'TRUE' : listOf(get('CLIENT QUALIFIES AS')).includes(SELLER_FLAGS.find(f => f[0] === column)[1]);
+        };
+        const sellerQualifiers = get => SELLER_FLAGS.filter(([column]) => sellerFlag(get, column)).map(f => f[1]);
+        // Seller Net: the expected buyer's Professions & Groups (BUYER PROFESSION GROUPS) and what they also qualify as
+        // (BUYER ALSO QUALIFIES AS: Church / Non-Profit, Corporate Relocation). A page saved before those, with neither set,
+        // reads its old Expected Buyer Qualifies As (BUYER QUALIFIES AS) instead. get(column) → the value.
+        const legacyBuyerTags = get => (text(get('BUYER PROFESSION GROUPS')) === '' && text(get('BUYER ALSO QUALIFIES AS')) === '' ? listOf(get('BUYER QUALIFIES AS')) : []);
+        const expectedBuyerGroups = get => [...new Set(listOf(get('BUYER PROFESSION GROUPS')).concat(legacyBuyerTags(get).filter(t => PROFESSION_GROUPS.includes(t))))];
+        const expectedBuyerAlso = get => [...new Set(listOf(get('BUYER ALSO QUALIFIES AS')).concat(legacyBuyerTags(get).filter(t => PAGE_QUALIFIERS.includes(t))))];
+        // (an old page's other tags, like Investor, still count until its buyer settings are saved again)
+        const expectedBuyerTags = get => [...new Set(expectedBuyerGroups(get).concat(expectedBuyerAlso(get), legacyBuyerTags(get)))];
+        // Seller Net: the buyer's loan product from the Buyer Inputs (null when the buyer pays cash, or none is picked)
+        const sellerNetBuyerProduct = page => (text(col(page, 'BUYER FINANCING')) === 'Cash' ? null
+            : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === text(col(page, 'BUYER LOAN PRODUCT'))) || null);
         // One side's share as escrow breakdown lines (side: 'buyer' or 'seller'); the lender's endorsements are one line
         const TITLE_LABELS = { escrow: 'Escrow Fee', recording: 'Recording Service Fee', owner: 'Owner’s Title Policy', loanPolicy: 'Lender’s Title Policy', fincen: 'FinCEN Report' };
         function titleLines(sale, side, extra = {}) {
@@ -2041,7 +2079,7 @@
         // { missing: why it can't be priced yet } until there's a price and (unless the buyer pays cash) a loan product.
         function buyerSide(page) {
             const isCash = text(col(page, 'BUYER FINANCING')) === 'Cash';
-            const product = (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === text(col(page, 'BUYER LOAN PRODUCT')));
+            const product = sellerNetBuyerProduct(page);
             if (!num(col(page, 'PURCHASE PRICE'))) return { missing: 'Add the sale price to see the buyer’s side.' };
             if (!isCash && !product) return { missing: 'Pick the buyer’s loan product in Buyer Inputs to see the buyer’s side.' };
             const score = text(col(page, 'BUYER CREDIT SCORE'));
@@ -2126,11 +2164,13 @@
                 { section: 'Prorations', label: 'Property Taxes Credit', amount: -taxCharge },
 
                 // Escrow and title: the seller's share from the title company (or, without one, the old rates). The buyer's
-                // loan is assumed to be 80% of the price (it only decides the loan add-on); BUYER FINANCING Cash is no loan.
+                // loan is the buyer side's (until it can be priced, 80% of the price: it only decides the loan add-on);
+                // BUYER FINANCING Cash is no loan. Its type (fixed, adjustable or VA) is the buyer's loan product's.
                 ...((sellerTitle => sellerTitle ? titleLines(sellerTitle, 'seller') : [
                     { section: 'Title', label: 'Escrow Services Fee', amount: -(price * num(col(page, 'ESCROW FEE RATE'))) },
                     { section: 'Title', label: 'Owners Title Insurance Fee', amount: -(price * num(col(page, 'OWNERS TITLE RATE'))) },
-                ])(titleSale(page, buyerLoan !== null ? buyerLoan : text(col(page, 'BUYER FINANCING')) === 'Cash' ? 0 : price * 0.8, { sellerHasPayoff: !noLoan }))),
+                ])(titleSale(page, buyerLoan !== null ? buyerLoan : text(col(page, 'BUYER FINANCING')) === 'Cash' ? 0 : price * 0.8,
+                    { sellerHasPayoff: !noLoan, loanType: (p => (p ? productLoanType(p) : undefined))(sellerNetBuyerProduct(page)) }))),
 
                 hoaFee('HOA Transfer Fee', 'TRANSFER'),
                 hoaFee('HOA Capital Improvement Fee', 'CAP'),
@@ -2222,7 +2262,7 @@
             if (!data.isAdmin) return;
             const b = result.buyer;
             const buyerReady = Boolean(b && !b.missing);
-            const buyerSub = buyerReady ? [b.productName].concat(listOf(col({ ...data.page, ...draft }, 'BUYER QUALIFIES AS'))).filter(Boolean).join(' · ') : '';
+            const buyerSub = buyerReady ? [b.productName].concat(expectedBuyerTags(c => col({ ...data.page, ...draft }, c))).filter(Boolean).join(' · ') : '';
             const keep = ['Purchase Price', 'Loan Amount'];
             const lines = buyerReady ? b.lines.filter(l => !l.hidden && l.label !== b.cashLabel
                 && (toDollars(l.amount) !== 0 || keep.includes(l.label) || (l.warnings || []).length)) : [];
@@ -3754,9 +3794,25 @@
             parent.append(f.wrap);
             makePicker({ mount, labelId: f.labelId, items, selected: [current(column)], placeholder: 'Choose...', onChange: v => setDraft(column, v) });
         }
+        // A setting where any number of items can be picked (saved as names joined by " | "). opts.selected: what shows as
+        // picked (default: the column's list); opts.onChange(list): instead of saving the column. Its row shows the names.
+        function multiField(parent, label, column, items, opts = {}) {
+            const f = fieldShell(label, opts);
+            const mount = el('div');
+            f.body.append(mount);
+            parent.append(f.wrap);
+            const picked = () => (opts.selected ? opts.selected() : listOf(current(column)));
+            makePicker({ mount, labelId: f.labelId, multiple: true, items, selected: picked(), placeholder: 'None', summary: n => n + ' selected',
+                onChange: chosen => (opts.onChange ? opts.onChange(chosen) : setDraft(column, chosen.join(' | '))) });
+            f.wrap.dataset.display = 'group';
+            f.wrap.groupDisplay = () => picked().join(', ') || 'None';
+            return f.wrap;
+        }
+        // (opts.isOn(): whether it shows the first option, when that's not just the column saying TRUE)
         function toggleField(parent, label, column, options, opts = {}) {
             const f = fieldShell(label, opts);
-            f.body.append(segToggle(options, current(column).toUpperCase() === 'TRUE' ? options[0][0] : options[1][0], v => setDraft(column, v), label));
+            const on = opts.isOn ? opts.isOn() : current(column).toUpperCase() === 'TRUE';
+            f.body.append(segToggle(options, on ? options[0][0] : options[1][0], v => setDraft(column, v), label));
             parent.append(f.wrap);
             return f.wrap;
         }
@@ -4066,7 +4122,8 @@
             const key = opts.key || label.toUpperCase();
             const f = fieldShell(label, { span: true, key, help: opts.help });
             f.wrap.dataset.display = 'group';
-            const grid = el('div', 'sub-grid');
+            // (opts.lines: one setting per line, except parts marked half, which share one)
+            const grid = el('div', 'sub-grid' + (opts.lines ? ' is-lines' : ''));
             f.body.append(grid);
             parent.append(f.wrap);
             const bad = new Set();
@@ -4094,7 +4151,7 @@
                 bad.clear();
                 io.bad(key, '');
                 parts.forEach(p => {
-                    const cell = el('div', 'sub-field');
+                    const cell = el('div', 'sub-field' + (p.half ? ' is-half' : ''));
                     const lab = el('span', 'sub-label', escapeHtml(p.label));
                     lab.id = 'set-' + (++fieldCount) + '-label';
                     cell.append(lab);
@@ -4201,38 +4258,46 @@
                 { label: 'Title Company', column: 'TITLE COMPANY', kind: 'choice', icon: 'bank', rebuild: true, blank: 'Percentages below',
                     items: () => [{ value: '', main: 'None', secondary: 'Use the percentages below', icon: 'none' }].concat(titleCompanies().map(c => ({ value: c.id, main: c.name }))),
                     // A company's own discounts don't carry over to another company
-                    then: () => ['SELLER ESCROW DISCOUNT', 'BUYER ESCROW DISCOUNT', 'OWNERS TITLE DISCOUNT', 'EXTRA TITLE FEES', 'BUYER QUALIFIES AS'].forEach(c => io.put(c, '')) },
-                { label: 'Sale Type', column: 'SALE TYPE', kind: 'seg', items: [['Standard', 'Standard'], ['Short Sale', 'Short Sale'], ['REO', 'REO']].map(([value, main]) => ({ value, main })), show: has, blank: 'Standard', fallback: () => 'Standard' },
-                // (a Buyer Breakdown's loan type and second loan come from its loan products: the Loan section)
-                ...(side === 'seller' ? [{ label: 'Buyer’s Financing', column: 'BUYER FINANCING', kind: 'choice', icon: 'bank', short: '',
-                    items: ['Fixed Rate Loan', 'Adjustable Rate Loan', 'VA Loan', 'Cash'].map(v => ({ value: v, main: v })), show: has, blank: '' }] : []),
+                    then: () => ['SELLER ESCROW DISCOUNT', 'BUYER ESCROW DISCOUNT', 'OWNERS TITLE DISCOUNT', 'EXTRA TITLE FEES'].forEach(c => io.put(c, '')) },
+                // The property's last owner's policy (one line): a Prior Policy discount (a reissue or short-term rate)
+                // applies on its own when it's recent enough and, if the discount says so, from this same title company
+                { label: 'Last Title Policy Issued', column: 'PRIOR POLICY DATE', kind: 'date', short: 'Prior policy:', show: has, half: true },
+                { label: 'Insured By', column: 'PRIOR POLICY INSURER', kind: 'choice', icon: 'bank', short: 'by', show: has, half: true,
+                    items: () => [{ value: '', main: 'Not known', icon: 'none' }].concat(titleCompanies().map(c => ({ value: c.id, main: c.name }))) },
+                // (the buyer's loan type and second loan come from the loan products: a Buyer Breakdown's Loan section, a
+                // Seller Net's Buyer Inputs)
                 { label: 'Owner’s Policy Paid By', column: 'WHO PAYS OWNERS POLICY', kind: 'seg', short: 'Owner’s Policy:', items: [{ value: 'Seller', main: 'Seller' }, { value: 'Buyer', main: 'Buyer' }], show: has,
                     // Blank: the company's custom (the seller in Arizona)
                     fallback: () => (((company() || {}).sellerOwnerShare ?? 1) >= 0.5 ? 'Seller' : 'Buyer') },
                 { label: 'FinCEN Report', column: 'FINCEN REPORT', kind: 'seg', short: 'FinCEN:', items: [{ value: 'TRUE', main: 'Yes' }, { value: 'FALSE', main: 'No' }],
                     show: () => has() && Boolean((company() || {}).fincenFee) && cash(), fallback: () => 'FALSE' },
                 // The discounts the client qualifies for apply on their own (their Professions & Groups and Real Estate
-                // Owned); these are what they also qualify as
-                { label: side === 'buyer' ? 'Buyer Also Qualifies As' : 'Seller Also Qualifies As', column: 'CLIENT QUALIFIES AS', kind: 'multi', names: true, short: 'Also:',
-                    items: () => PAGE_QUALIFIERS.map(v => ({ value: v, main: v })), show: has },
-                // Seller Net: what the expected buyer qualifies as (only the groups the company's buyer discounts are for)
-                ...(side === 'seller' ? [{ label: 'Expected Buyer Qualifies As', column: 'BUYER QUALIFIES AS', kind: 'multi', names: true, short: 'Buyer:',
-                    items: () => buyerQualifierChoices(company()).map(v => ({ value: v, main: v })), show: () => has() && buyerQualifierChoices(company()).length > 0 }] : []),
-                // Picked by hand: a discount from the property's prior policy (or "Other"), and on a Buyer Breakdown one the
-                // seller qualifies for (the seller isn't a client there)
-                { label: side === 'buyer' ? 'Seller / Prior Policy Discount' : 'Prior Policy Discount', column: 'OWNERS TITLE DISCOUNT', kind: 'choice', short: 'Title discount:',
+                // Owned); these are what they also qualify as. (Seller Net: Seller Also Qualifies As is its own setting,
+                // and the expected buyer's are in the Buyer Inputs.)
+                ...(side === 'buyer' ? [{ label: 'Buyer Also Qualifies As', column: 'CLIENT QUALIFIES AS', kind: 'multi', names: true, short: 'Also:',
+                    items: () => PAGE_QUALIFIERS.map(v => ({ value: v, main: v })), show: has }] : []),
+                // Picked by hand: an "Other" discount, and on a Buyer Breakdown one the seller qualifies for (the seller isn't
+                // a client there). Prior Policy discounts aren't picked: they follow the Last Title Policy Issued above.
+                { label: side === 'buyer' ? 'Seller Title Discount' : 'Other Title Discount', column: 'OWNERS TITLE DISCOUNT', kind: 'choice', short: 'Title discount:',
                     items: () => [{ value: '', main: 'None', icon: 'none' }].concat(pickableTitleDiscounts(company() || {}, side === 'buyer').map(d => ({ value: d.name, main: d.name, icon: 'cash',
                         secondary: Math.round((d.percent || 0) * 100) + '% off the owner’s policy' + ((d.applies || 'property') === 'property' ? '' : ', on what the seller pays') }))),
                     show: () => has() && pickableTitleDiscounts(company() || {}, side === 'buyer').length > 0 },
                 { label: 'Other Fees That Apply', column: 'EXTRA TITLE FEES', kind: 'multi', one: 'other fee', many: 'other fees',
-                    items: () => ((company() || {}).otherFees || []).filter(f => f.when === 'Sometimes' && f.name).map(f => ({ value: f.name, main: f.name, secondary: wholeMoney.format(f.amount || 0) })),
-                    show: () => has() && ((company() || {}).otherFees || []).some(f => f.when === 'Sometimes') },
+                    // Only fees with no setting of their own here ("Sometimes"; on a Buyer Breakdown, also the ones that follow
+                    // a Seller Net's settings), and only when the company has any
+                    items: () => pickableFees(company(), feeConditions({ ...data.page, ...draft })).map(f => ({ value: f.name, main: f.name, secondary: wholeMoney.format(f.amount || 0) })),
+                    show: () => has() && pickableFees(company(), feeConditions({ ...data.page, ...draft })).length > 0 },
             ];
-            groupField(parent, 'Title & Escrow', parts, {
-                help: side === 'buyer'
+            groupField(parent, 'Title & Escrow', parts, { lines: true,
+                help: (side === 'buyer'
                     ? 'The title company’s filed rates price the escrow fee, recording, title policies and endorsements. Condo, HOA and manufactured home endorsements follow the property; the loan type (fixed, adjustable or VA) and any second loan follow the loan products. The purchasers’ discounts apply on their own, from their Professions & Groups and Real Estate Owned.'
-                    : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. The sellers’ discounts apply on their own, from their Professions & Groups and Real Estate Owned. Buyer’s Financing and Expected Buyer are what you expect the buyer to be: a buyer’s discount only lowers the seller’s cost when the company takes it off the whole fee or policy.',
+                    : 'The title company’s filed rates price the escrow fee, recording and owner’s policy. The sellers’ discounts apply on their own, from their Professions & Groups and Real Estate Owned. The buyer’s loan type and discounts come from the Buyer Inputs: a buyer’s discount only lowers the seller’s cost when the company takes it off the whole fee or policy.')
+                    + ' A prior policy discount (a reissue or short-term rate) applies on its own from when the last title policy was issued and who insured it.',
             });
+            // Sale Type: its own line, right below (a short sale or REO can have its own escrow rate)
+            const sale = fieldShell('Sale Type', { help: 'A short sale or REO uses the title company’s own escrow rate for it, when it has one.' });
+            sale.body.append(segToggle([['Standard', 'Standard'], ['Short Sale', 'Short Sale'], ['REO', 'REO']], io.get('SALE TYPE') || 'Standard', v => setDraft('SALE TYPE', v), 'Sale Type'));
+            parent.append(sale.wrap);
         }
 
         // The kind of loan the seller is paying off
@@ -4403,6 +4468,19 @@
                     onChange: v => pick(options.find(x => keyOf(x) === v)) });
                 typeCell.append(el('p', 'field-help', options.some(o => !o.stale) ? 'An LLC or trust shows here when every seller has it in their profile. Each seller signs with their title from their profile.'
                     : 'An LLC or trust shows here once every seller has it in their profile (Settings &gt; LLCs or Trusts).'));
+                // At the bottom: a foreign seller (FIRPTA, for the title company's foreign seller fee) and a church or
+                // non-profit (for its discounts)
+                const checkLine = (column, label, isOn) => {
+                    const line = el('label', 'check-line');
+                    const box = el('input');
+                    box.type = 'checkbox';
+                    box.checked = isOn();
+                    box.addEventListener('change', () => setDraft(column, box.checked ? 'TRUE' : 'FALSE'));
+                    line.append(box, el('span', '', escapeHtml(label)));
+                    extras.append(line);
+                };
+                checkLine('FOREIGN SELLER', 'Seller is a foreign person or entity', () => isTrue(current('FOREIGN SELLER')));
+                checkLine('SELLER NON PROFIT', 'Seller is a Church/Non-Profit', () => sellerFlag(current, 'SELLER NON PROFIT'));
             }
             build();
             // An LLC or trust the sellers no longer all have goes back to As Individual(s)
@@ -4421,7 +4499,8 @@
                 const e = now();
                 const names = ids.map(id => { const t = e && e.name ? titleOf(id, e) : ''; return nameOf(id) + (t ? ' (' + t + ')' : ''); }).join(', ');
                 const entityName = type === 'LLC' ? current('LLC NAME') : type === 'Trust' ? current('TRUST NAME') : '';
-                return names + (type ? ' \u00b7 ' + type + (entityName ? ': ' + entityName : '') : '');
+                return names + (type ? ' \u00b7 ' + type + (entityName ? ': ' + entityName : '') : '') + (isTrue(current('FOREIGN SELLER')) ? ' \u00b7 Foreign seller' : '')
+                    + (sellerFlag(current, 'SELLER NON PROFIT') ? ' \u00b7 Church / Non-Profit' : '');
             };
         }
 
@@ -4448,6 +4527,8 @@
             decimalField(home, 'Baths', 'BATHS');
             wholeField(home, 'Sqft', 'SQFT', { commas: true, suffix: 'sq ft' });
             moneyField(home, 'Yearly Taxes', 'YEARLY TAXES');
+            const YES_NO = [['TRUE', 'Yes'], ['FALSE', 'No']];
+            toggleField(home, 'Septic', 'HAS SEPTIC', YES_NO, { help: 'A septic system instead of a sewer (for the title company’s septic transfer fee).' });
 
             const sale = document.getElementById('purchase-fields');
             moneyField(sale, 'Sale Price', 'PURCHASE PRICE');
@@ -4478,6 +4559,13 @@
 
             const misc = document.getElementById('misc-fields');
             titleEscrowField(misc, 'seller');
+            // (Church / Non-Profit is a checkbox in the Sellers menu)
+            toggleField(misc, 'Corporate Relocation', 'CORPORATE RELOCATION', YES_NO, { help: 'The seller is selling as part of a corporate relocation (for the title company’s discounts).',
+                isOn: () => sellerFlag(current, 'CORPORATE RELOCATION') });
+            // What the title company's other fees follow (a fee with no setting of its own is picked in Other Fees That Apply)
+            toggleField(misc, '1031 Exchange', '1031 EXCHANGE', YES_NO, { help: 'The seller is doing a 1031 exchange.' });
+            moneyField(misc, 'Holdback', 'HOLDBACK AMOUNT', { help: 'Money held back in escrow at closing (for repairs, say). $0 for none.' });
+            toggleField(misc, 'Title Company Electronic Service', 'ELECTRONIC SERVICE', YES_NO, { help: 'The title company’s electronic (e-commerce) service.' });
             const titleStart = misc.children.length;
             percentField(misc, 'Escrow Fee', 'ESCROW FEE RATE');
             percentField(misc, 'Owners Title Insurance', 'OWNERS TITLE RATE');
@@ -4488,16 +4576,44 @@
             // Buyer Inputs: the buyer's side of the escrow breakdown
             document.getElementById('buyer-inputs-section').hidden = false;
             const buyerIn = document.getElementById('buyer-inputs-fields');
-            choiceField(buyerIn, 'Loan Product', 'BUYER LOAN PRODUCT', (data.loanProducts || []).filter(p => !isDpaProduct(p)).map(p => ({
-                value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')), secondary: text(col(p, 'LENDER NAME')), icon: 'bank' })),
-                { help: 'Not used when Buyer’s Financing is Cash.' });
+            // Loan Product, or Cash (BUYER FINANCING Cash; the product stays picked for switching back). The product's type
+            // (fixed, adjustable or VA) also decides the title fees: there's no Buyer's Financing to pick anymore.
+            const CASH_CHOICE = '__cash__';
+            const productField = fieldShell('Loan Product', { help: 'Cash: the buyer pays cash, with no loan. A loan product’s rate type (fixed, adjustable or VA) also prices the title fees.' });
+            const productMount = el('div');
+            productField.body.append(productMount);
+            buyerIn.append(productField.wrap);
+            makePicker({ mount: productMount, labelId: productField.labelId, placeholder: 'Choose...',
+                items: [{ value: CASH_CHOICE, main: 'Cash', secondary: 'No loan', icon: 'cash' }].concat((data.loanProducts || []).filter(p => !isDpaProduct(p)).map(p => ({
+                    value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')), secondary: text(col(p, 'LENDER NAME')), icon: 'bank' }))),
+                selected: [current('BUYER FINANCING') === 'Cash' ? CASH_CHOICE : current('BUYER LOAN PRODUCT')],
+                onChange: v => {
+                    if (v === CASH_CHOICE) { setDraft('BUYER FINANCING', 'Cash'); return; }
+                    // (an old page's Fixed Rate / Adjustable Rate / VA Loan answer is cleared: the product decides)
+                    setDraft('BUYER FINANCING', '');
+                    setDraft('BUYER LOAN PRODUCT', v);
+                } });
             percentField(buyerIn, 'Loan Amount', 'RETAIL LTV', { help: 'A percent of the sale price.' });
             percentField(buyerIn, 'Points Purchased', 'LENDER POINTS PURCHASED');
-            const buyerProduct = () => (current('BUYER FINANCING') === 'Cash' ? null
-                : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === current('BUYER LOAN PRODUCT')) || null);
+            const buyerProduct = () => sellerNetBuyerProduct({ ...data.page, ...draft });
             miFields(buyerIn, buyerProduct,
                 'How the upfront charge is paid: the FHA UFMIP, the VA funding fee (a first-time use here), or a conventional single premium. Financed adds it to the loan amount.');
             lenderFeesField(buyerIn, buyerProduct, () => current('BUYER FINANCING') === 'Cash');
+            // The expected buyer's Professions & Groups and what they also qualify as, for the title company's discounts.
+            // Saving either clears an old page's Expected Buyer Qualifies As (which they replace).
+            const saveBuyerTags = (column, list) => {
+                // (the other setting keeps what it shows, which on an old page came from the setting being cleared)
+                const groups = column === 'BUYER PROFESSION GROUPS' ? list : expectedBuyerGroups(current);
+                const also = column === 'BUYER ALSO QUALIFIES AS' ? list : expectedBuyerAlso(current);
+                draft['BUYER PROFESSION GROUPS'] = groups.join(' | ');
+                draft['BUYER ALSO QUALIFIES AS'] = also.join(' | ');
+                setDraft('BUYER QUALIFIES AS', '');
+            };
+            multiField(buyerIn, 'Buyer Professions & Groups', 'BUYER PROFESSION GROUPS', PROFESSION_GROUPS.map(v => ({ value: v, main: v })),
+                { help: 'The professions and groups you expect the buyer to fit into, for the title company’s discounts.',
+                    selected: () => expectedBuyerGroups(current), onChange: list => saveBuyerTags('BUYER PROFESSION GROUPS', list) });
+            multiField(buyerIn, 'Buyer Also Qualifies As', 'BUYER ALSO QUALIFIES AS', PAGE_QUALIFIERS.map(v => ({ value: v, main: v })),
+                { selected: () => expectedBuyerAlso(current), onChange: list => saveBuyerTags('BUYER ALSO QUALIFIES AS', list) });
             wholeField(buyerIn, 'Buyer Credit Score', 'BUYER CREDIT SCORE', { help: 'Blank uses ' + FALLBACK_CREDIT_SCORE + '.' });
             percentField(buyerIn, 'Homeowners Insurance', 'HOMEOWNERS INSURANCE RATE', { help: 'A yearly percent of the price.' });
             moneyField(buyerIn, 'Earnest Money Deposit', 'EARNEST MONEY DEPOSIT');

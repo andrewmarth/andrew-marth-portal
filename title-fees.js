@@ -120,9 +120,41 @@ export function endorsementApplies(e, hasLoan, property, loanType) {
     return e.when === 'Every Loan' || (e.when === 'Condo' && property === 'condo') || (e.when === 'HOA (PUD)' && property === 'hoa')
         || (e.when === 'Adjustable Rate' && loanType === 'arm') || (e.when === 'Manufactured Home' && property === 'manufactured');
 }
-export function feeApplies(f, hasLoan, property) {
-    return f.when === 'Every Sale' || (f.when === 'With a Loan' && hasLoan) || (f.when === 'Manufactured Home' && property === 'manufactured');
+// An "other fee"'s WHEN: Every Sale, With a Loan, Manufactured Home (the property), Refinance (refinances only); one of
+// SALE_CONDITIONS, from the page's own settings (a Seller Net's Foreign Seller, Septic, 1031 Exchange, Holdback over $0,
+// Title Company Electronic Service; either page's Escrow Duration for Accelerated Escrow: at most the fee's maxDays); or
+// Sometimes: picked on the page (Other Fees That Apply), for a fee with no setting of its own. [value, label]
+export const FEE_WHEN = [['Every Sale', 'Every Sale'], ['With a Loan', 'With a Loan'], ['Manufactured Home', 'Manufactured Home'],
+    ['Foreign Seller', 'Foreign Seller (FIRPTA)'], ['Septic', 'Septic System'], ['1031 Exchange', '1031 Exchange'], ['Holdback', 'Holdback'],
+    ['Electronic Service', 'Electronic Service'], ['Accelerated Escrow', 'Accelerated Escrow (short escrow)'], ['Refinance', 'Refinance'],
+    ['Sometimes', 'Sometimes (picked on the page)']];
+export const SALE_CONDITIONS = ['Foreign Seller', 'Septic', '1031 Exchange', 'Holdback', 'Electronic Service', 'Accelerated Escrow'];
+// conditions: what the page's settings say ({ 'Foreign Seller': true, ..., escrowDays: 21 }), or null. A condition the
+// page doesn't have (a Buyer Breakdown has no Foreign Seller...; no Escrow Duration yet; an Accelerated Escrow fee
+// without its days) can't apply on its own there: that fee is picked instead, like a Sometimes one.
+const answered = (f, conditions) => Boolean(conditions) && (f.when === 'Accelerated Escrow'
+    ? typeof conditions.escrowDays === 'number' && f.maxDays > 0
+    : Object.prototype.hasOwnProperty.call(conditions, f.when));
+export function feeApplies(f, hasLoan, property, conditions = null) {
+    if (f.when === 'Accelerated Escrow') return answered(f, conditions) && conditions.escrowDays <= f.maxDays;
+    return f.when === 'Every Sale' || (f.when === 'With a Loan' && hasLoan) || (f.when === 'Manufactured Home' && property === 'manufactured')
+        || (SALE_CONDITIONS.includes(f.when) && Boolean(conditions && conditions[f.when]));
 }
+// A fee's amount on this sale: a Holdback fee with ranges ([{ upTo, fee }]; upTo blank: any amount above) charges the
+// range the page's holdback falls in (conditions.holdbackAmount; above every range, the last one's fee), otherwise its
+// own amount. → { amount, note }
+export function feeAmount(f, conditions) {
+    const ranges = f.when === 'Holdback' && Array.isArray(f.ranges) ? f.ranges.filter(r => r && typeof r.fee === 'number') : [];
+    const held = conditions && typeof conditions.holdbackAmount === 'number' ? conditions.holdbackAmount : null;
+    const sorted = ranges.slice().sort((a, b) => (a.upTo ?? Infinity) - (b.upTo ?? Infinity));
+    // (no holdback amount here, a Buyer Breakdown: its Amount, or without one the first range's fee)
+    if (!ranges.length || held === null) return { amount: f.amount || (sorted.length ? sorted[0].fee : 0), note: '' };
+    const hit = sorted.find(r => r.upTo === null || r.upTo === undefined || held <= r.upTo) || sorted[sorted.length - 1];
+    return { amount: hit.fee, note: 'For a ' + money(held) + ' holdback' };
+}
+// The fees a page picks by hand (Other Fees That Apply): Sometimes ones, plus the ones whose setting the page doesn't have
+export const isPickableFee = (f, conditions) => f.when === 'Sometimes' || (SALE_CONDITIONS.includes(f.when) && !answered(f, conditions));
+export const pickableFees = (c, conditions) => ((c && c.otherFees) || []).filter(f => f.name && isPickableFee(f, conditions));
 
 // --- Discounts (escrow and owner's policy) ---
 // Who qualifies for a discount (its qualifies: any of them): a profession or group a client can tick (/dpa.js
@@ -148,13 +180,14 @@ export const qualifiersOf = d => (Array.isArray(d.qualifies) && d.qualifies.leng
 //   sellerPays  the seller qualifies; only the seller's share costs less
 //   eitherPays  either party can qualify; only what that party pays costs less (First American B.6, Fidelity 803, the
 //               escrow discounts of WFG 6.2-6.4)
-//   property    picked on the page (a reissue / short-term rate on the seller's prior policy); the whole fee or policy
+//   property    the property's prior policy (a reissue / short-term rate: on its own, see priorPolicyDiscounts) or picked
+//               on the page ("Other"); the whole fee or policy
 export const DISCOUNT_APPLIES = [
     ['buyer', 'Buyer qualifies: the whole fee'],
     ['buyerPays', 'Buyer qualifies: their share only'],
     ['sellerPays', 'Seller qualifies: their share only'],
     ['eitherPays', 'Either qualifies: their share only'],
-    ['property', 'Picked on the page: the whole fee'],
+    ['property', 'Prior policy or picked on the page: the whole fee'],
 ];
 // How many properties someone owned at any time in the last `years` years. owned: [{ purchased, sold }] (YYYY-MM-DD;
 // sold blank while they still own it). today: a Date.
@@ -186,7 +219,7 @@ export function escrowDiscounts(c, o = {}) {
         const p = d.percent || 0;
         if (!(p > 0)) return;
         const applies = d.applies || 'eitherPays';
-        const pickedHere = Boolean(o.picked) && d.name === o.picked;
+        const pickedHere = [].concat(o.picked || []).includes(d.name);
         const bq = partyQualifies(d, o.buyer), sq = partyQualifies(d, o.seller) || pickedHere;
         const forSeller = (applies === 'buyer' && bq) || ((applies === 'sellerPays' || applies === 'eitherPays') && sq) || (applies === 'property' && pickedHere);
         const forBuyer = ((applies === 'buyer' || applies === 'buyerPays' || applies === 'eitherPays') && bq) || (applies === 'property' && pickedHere);
@@ -195,11 +228,33 @@ export function escrowDiscounts(c, o = {}) {
     });
     return { seller, buyer };
 }
-// Owner's policy discounts the page picks by hand: ones only a pick can apply (a prior policy, or "Other"), plus, on a
-// Buyer Breakdown (sellerToo), ones the seller qualifies for (the seller isn't a client there)
-export const pickableTitleDiscounts = (c, sellerToo) => (c.titleDiscounts || []).filter(d => (d.applies || 'property') === 'property'
+// --- Prior Policy discounts (a reissue or short-term rate) ---
+// They apply on their own from the property's last owner's policy (a page's PRIOR POLICY DATE and PRIOR POLICY INSURER).
+// A discount's rule: priorCompany 'same' (only when this sale's title company issued it) or 'any' (blank: any), and
+// priorYears (issued within that many years; blank: any age).
+export const PRIOR_POLICY_COMPANY = [['same', 'Only at the same company'], ['any', 'Any company']];
+export const isPriorPolicyDiscount = d => qualifiersOf(d).includes('Prior Policy');
+// The names of the company's Prior Policy discounts this sale gets. prior: { issued (a Date), sameCompany (whether this
+// sale's title company issued it), today } or null.
+export function priorPolicyDiscounts(c, prior) {
+    if (!c || !prior || !(prior.issued instanceof Date) || isNaN(prior.issued)) return [];
+    const today = prior.today || new Date();
+    return (c.discounts || []).concat(c.titleDiscounts || []).filter(d => {
+        if (!isPriorPolicyDiscount(d) || !(d.percent > 0)) return false;
+        if (d.priorCompany === 'same' && !prior.sameCompany) return false;
+        if (d.priorYears > 0) {
+            const since = new Date(today.getFullYear() - d.priorYears, today.getMonth(), today.getDate());
+            if (prior.issued < since) return false;
+        }
+        return prior.issued <= today;
+    }).map(d => d.name);
+}
+
+// Owner's policy discounts the page picks by hand: "Other" ones, plus, on a Buyer Breakdown (sellerToo), ones the seller
+// qualifies for (the seller isn't a client there). (Prior Policy ones apply on their own: priorPolicyDiscounts.)
+export const pickableTitleDiscounts = (c, sellerToo) => (c.titleDiscounts || []).filter(d => !isPriorPolicyDiscount(d) && ((d.applies || 'property') === 'property'
     || (qualifiersOf(d).some(q => PICKED_QUALIFIERS.includes(q)) && d.applies !== 'buyer' && d.applies !== 'buyerPays')
-    || (sellerToo && (d.applies === 'sellerPays' || d.applies === 'eitherPays')));
+    || (sellerToo && (d.applies === 'sellerPays' || d.applies === 'eitherPays'))));
 // The owner's policy after the one discount that saves the most: { seller, buyer, note }. sellerPart / buyerPart: each
 // side's share before it. o: { buyer, seller, picked }, as for escrowDiscounts.
 export function ownerPolicyDiscount(c, sellerPart, buyerPart, o = {}) {
@@ -207,7 +262,7 @@ export function ownerPolicyDiscount(c, sellerPart, buyerPart, o = {}) {
     (c.titleDiscounts || []).forEach(d => {
         const p = d.percent || 0;
         const applies = d.applies || 'property';
-        const pickedHere = Boolean(o.picked) && d.name === o.picked;
+        const pickedHere = [].concat(o.picked || []).includes(d.name);
         const bq = partyQualifies(d, o.buyer), sq = partyQualifies(d, o.seller) || pickedHere;
         let s = 0, b = 0;
         if (applies === 'buyer' && bq) { s = sellerPart * p; b = buyerPart * p; }
@@ -228,10 +283,13 @@ export function ownerPolicyDiscount(c, sellerPart, buyerPart, o = {}) {
 //   secondLoan: a second loan's amount (its policy is priced on the combined amount, plus the company's per-policy fee)
 //   sellerHasPayoff: false when the seller owns the home free and clear (some companies charge less on a cash sale then)
 //   fincen: the buyer is an entity or trust paying cash, so a FinCEN report is filed
-//   extraFees: names of the company's "Sometimes" fees that apply to this sale
+//   extraFees: names of the company's fees picked on the page ("Sometimes" ones; see pickableFees)
+//   conditions: the page's settings the other fees follow (see feeApplies), or null when it has none
 //   ownerPayer: 'Seller' or 'Buyer' pays the owner's policy (default: the company's custom)
 //   buyer / seller: who each side is, for the escrow and owner's policy discounts (see partyQualifies)
-//   titleDiscount: a discount picked by hand on the page (a prior policy, or one the seller qualifies for)
+//   titleDiscount: a discount picked by hand on the page ("Other", or one the seller qualifies for; a Prior Policy one
+//     picked before they applied on their own no longer counts)
+//   priorPolicy: the property's last owner's policy, for the Prior Policy discounts (see priorPolicyDiscounts)
 // On a VA loan (when the company says so) the seller pays the buyer's share of the escrow fee: VA doesn't let a veteran pay
 // escrow or closing fees (38 CFR 36.4313). Recording fees and title insurance are allowed, so the buyer still pays those.
 export function saleFees(c, price, loanAmount, o = {}) {
@@ -270,7 +328,8 @@ export function saleFees(c, price, loanAmount, o = {}) {
     if (base === null) return null;
     // A discount comes off the table rate (that person's share of it, or both shares for a whole-fee discount), not the
     // add-on; each side gets the biggest one it qualifies for
-    const parties = { buyer: o.buyer, seller: o.seller, picked: o.titleDiscount };
+    const handPicked = (c.discounts || []).concat(c.titleDiscounts || []).some(d => d.name === o.titleDiscount && isPriorPolicyDiscount(d)) ? [] : [o.titleDiscount].filter(Boolean);
+    const parties = { buyer: o.buyer, seller: o.seller, picked: handPicked.concat(priorPolicyDiscounts(c, o.priorPolicy)) };
     const ed = escrowDiscounts(c, parties);
     const sd = ed.seller ? ed.seller.percent : 0, bd = ed.buyer ? ed.buyer.percent : 0;
     if (ed.seller) note += '; ' + Math.round(sd * 100) + '% off the seller’s share: ' + ed.seller.name;
@@ -284,8 +343,9 @@ export function saleFees(c, price, loanAmount, o = {}) {
     const recording = c.recordingFee || 0;
     if (recording) add('Recording Service Fee', recording, recording * (c.sellerRecordingShare ?? 0.5), 'recording');
     const extras = o.extraFees || [];
-    (c.otherFees || []).filter(f => f.amount && (feeApplies(f, hasLoan, property) || (f.when !== 'Refinance' && extras.includes(f.name))))
-        .forEach(f => add(f.name, f.amount, f.amount * (f.sellerShare ?? 0.5), 'fee'));
+    const conditions = o.conditions || null;
+    (c.otherFees || []).filter(f => feeApplies(f, hasLoan, property, conditions) || (isPickableFee(f, conditions) && extras.includes(f.name)))
+        .forEach(f => { const { amount, note } = feeAmount(f, conditions); if (amount) add(f.name, amount, amount * (f.sellerShare ?? 0.5), 'fee', note); });
     if (o.fincen && c.fincenFee) add('FinCEN Report', c.fincenFee, 0, 'fincen', 'Entity or trust buyer paying cash');
 
     if (q.owner !== null) {

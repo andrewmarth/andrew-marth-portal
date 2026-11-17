@@ -594,6 +594,22 @@
         .tc-fill .tc-wfg { margin: 0; }
         .tc-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(79, 45, 44, 0.15); }
         .tc-section h3 { font-size: 1.12rem; margin: 0 0 4px 0; }
+        /* Each section is a setting: locked until its Edit button (Done locks it again) */
+        .tc-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+        .tc-section-head h3 { margin: 0; }
+        .tc-edit { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 14px; border: 2px solid var(--navy); border-radius: 999px; background: transparent; color: var(--brown); font-family: inherit; font-size: 0.85rem; font-weight: bold; cursor: pointer; }
+        .tc-edit svg { width: 14px; height: 14px; }
+        .tc-section:not(.is-locked) .tc-edit { background: var(--navy); color: #fff; }
+        .tc-lock-body { min-width: 0; margin: 0; padding: 0; border: 0; }
+        .tc-section.is-locked .tc-add-row, .tc-section.is-locked .tc-remove { display: none; }
+        .tc-section.is-locked .tc-lock-body :is(input, select, textarea):disabled { opacity: 1; color: var(--brown); -webkit-text-fill-color: var(--brown); background-color: transparent; border-color: rgba(14, 42, 59, 0.18); cursor: default; }
+        .tc-section.is-locked .tc-lock-body .tc-who summary { pointer-events: none; background-color: transparent; border-color: rgba(14, 42, 59, 0.18); }
+        .tc-section:not(.is-locked) { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; padding-bottom: 12px; border-radius: 14px; background: rgba(192, 144, 80, 0.08); box-shadow: inset 4px 0 0 var(--tan); }
+        .tc-row.is-range { grid-template-columns: 1fr 1fr 40px; }
+        .tc-ranges { grid-column: 1 / -1; display: grid; gap: 6px; padding: 8px 10px; border-radius: 12px; background: #f2ede6; }
+        .tc-ranges[hidden] { display: none; }
+        .tc-ranges .tc-help { margin: 0; }
+        .tc-range-list { display: grid; gap: 6px; }
         .tc-help { margin: 0 0 12px 0; font-size: 0.88rem; line-height: 1.45; opacity: 0.78; }
         .tc-help b { font-weight: 700; }
         .tc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
@@ -610,7 +626,8 @@
         .tc-table { display: grid; gap: 8px; }
         .tc-row { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
         .tc-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
-        .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; }
+        .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; row-gap: 6px; }
+        .tc-row.is-fee .tc-investor { grid-column: 1 / -1; }
         /* Discounts: the name on its own line, then the percent, who qualifies and what it comes off; an investor's rule under */
         .tc-row.is-discount { grid-template-columns: 96px minmax(0, 1fr) 40px; row-gap: 6px; align-items: start; }
         .tc-row.is-discount .tc-disc-name, .tc-row.is-discount .tc-investor { grid-column: 1 / -1; }
@@ -1517,7 +1534,7 @@
         import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
         import { loadPlaces, ensurePickerStyles } from '/new-property.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf, PRIOR_POLICY_COMPANY, FEE_WHEN } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -3280,10 +3297,10 @@
                 { name: 'Corporate relocation', percent: 0.3, qualifies: ['Corporate Relocation'], applies: 'eitherPays' },
             ],
             otherFees: [
-                { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Sometimes' },
-                { name: 'FIRPTA Filing Service Fee', amount: 300, sellerShare: 1, when: 'Sometimes' },
+                { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Electronic Service' },
+                { name: 'FIRPTA Filing Service Fee', amount: 300, sellerShare: 1, when: 'Foreign Seller' },
                 { name: 'Manufactured Home Title Transfer / Affixture', amount: 200, sellerShare: 0.5, when: 'Manufactured Home' },
-                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3 },
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (lender)', amount: 25, sellerShare: 0, when: 'With a Loan' },
@@ -3318,7 +3335,7 @@
             vaSellerPays: true,
             titleDiscounts: [
                 // 4.4: the property's prior policy; 10.2: an owner's policy insuring an investor who is buying
-                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Reissue (seller’s owner’s policy is under 5 years old)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property', priorCompany: 'any', priorYears: 5 },
                 { name: 'Buyer is an investor', percent: 0.3, qualifies: ['Investor'], applies: 'buyer', investorProperties: 3, investorYears: 1 },
             ],
         };
@@ -3335,7 +3352,7 @@
             otherFees: [
                 { name: 'Reconveyance Tracking (lien release not ready at closing)', amount: 100, sellerShare: 1, when: 'Sometimes' },
                 { name: 'Mobile Home Affixture / Title Transfer', amount: 150, sellerShare: 0.5, when: 'Manufactured Home' },
-                { name: 'Holdback (up to 5 disbursements)', amount: 100, sellerShare: 0.5, when: 'Sometimes' },
+                { name: 'Holdback (up to 5 disbursements)', amount: 100, sellerShare: 0.5, when: 'Holdback' },
                 // Title manual B.3(c): $25 per letter
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
@@ -3370,7 +3387,7 @@
             ],
             titleDiscounts: [
                 // E.2: the property's prior policy; B.6: only on what the investor pays for
-                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Short-term rate (First American insured the seller in the last 5 years; at least $200)', percent: 0.35, qualifies: ['Prior Policy'], applies: 'property', priorCompany: 'same', priorYears: 5 },
                 { name: 'Investor (on the policies the investor pays for)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' },
             ],
             // F.3: extended coverage refinance, ALTA 4/4.1, 5/5.1, 6/6.2 and 8.1 included
@@ -3395,8 +3412,8 @@
             otherFees: [
                 { name: 'Manufactured Home Title Transfer (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
                 { name: 'Manufactured Home Affidavit of Affixture (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
-                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Sometimes' },
-                { name: '1031 Exchange Accommodation', amount: 100, sellerShare: 1, when: 'Sometimes' },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3 },
+                { name: '1031 Exchange Accommodation', amount: 100, sellerShare: 1, when: '1031 Exchange' },
                 // Title manual M: $25 per party
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
@@ -3431,7 +3448,7 @@
             // Chapter VIII
             titleDiscounts: [
                 // 807: the property's prior policy; 803-806: a party to the sale, on what they pay
-                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property' },
+                { name: 'Short-term rate (insured by a Fidelity company in the last 3 years)', percent: 0.2, qualifies: ['Prior Policy'], applies: 'property', priorCompany: 'same', priorYears: 3 },
                 { name: 'Investor or builder (a party to the sale)', percent: 0.3, qualifies: ['Investor'], applies: 'eitherPays' },
                 { name: 'Real estate agent or broker (a party to the sale)', percent: 0.3, qualifies: ['Real Estate Agent'], applies: 'eitherPays' },
                 { name: 'First responder or military (active or retired)', percent: 0.3, qualifies: ['Firefighter', 'Law Enforcement', 'EMTs', 'Active Military', 'Veteran (With benefits)', 'Veteran (Without benefits)'], applies: 'eitherPays' },
@@ -3577,6 +3594,11 @@
         const investorRule = (d, picked) => '<div class="tc-investor" data-investor' + (picked.includes('Investor') ? '' : ' hidden') + '><span>An investor has owned</span>'
             + '<input type="text" inputmode="numeric" data-k="investorProperties" aria-label="How many properties" placeholder="3" value="' + esc(d.investorProperties ?? '') + '">'
             + '<span>properties in the last</span><input type="text" inputmode="numeric" data-k="investorYears" aria-label="How many years" placeholder="5" value="' + esc(d.investorYears ?? '') + '"><span>years</span></div>';
+        // A Prior Policy discount applies on its own on a page (from its Last Title Policy Issued and Insured By): which
+        // company's policy counts, and how recent it has to be (blank: any age)
+        const priorPolicyRule = (d, picked) => '<div class="tc-investor" data-prior' + (picked.includes('Prior Policy') ? '' : ' hidden') + '><span>Prior policy from</span>'
+            + '<select data-k="priorCompany" aria-label="Which company’s prior policy counts">' + options(PRIOR_POLICY_COMPANY, d.priorCompany, 'any') + '</select>'
+            + '<span>issued in the last</span><input type="text" inputmode="numeric" data-k="priorYears" aria-label="How many years" placeholder="any" value="' + esc(d.priorYears ?? '') + '"><span>years</span></div>';
         const discountRowOf = (placeholder, fallback) => (d = {}) => {
             const picked = d.name ? qualifiersOf(d) : [];
             return '<div class="tc-row is-discount" data-row><input type="text" class="tc-disc-name" data-k="name" aria-label="Discount name" placeholder="' + placeholder + '" value="' + esc(d.name || '') + '">'
@@ -3584,15 +3606,31 @@
                 + qualifierPicker(picked)
                 + '<select data-k="applies" aria-label="What it comes off">' + options(DISCOUNT_APPLIES, d.applies, fallback) + '</select>'
                 + '<button type="button" class="tc-remove" data-remove aria-label="Remove discount">' + REMOVE_ICON + '</button>'
-                + investorRule(d, picked) + '</div>';
+                + investorRule(d, picked) + priorPolicyRule(d, picked) + '</div>';
         };
         const discountRow = discountRowOf('Senior (60 or older)', 'eitherPays');
         const titleDiscountRow = discountRowOf('Reissue (prior policy under 5 years old)', 'property');
         const feeRow = (f = {}) => '<div class="tc-row is-fee" data-row><input type="text" class="tc-fee-name" data-k="name" aria-label="Fee name" placeholder="FIRPTA Filing Service Fee" value="' + esc(f.name || '') + '">'
             + tcBox('money', 'data-k="amount" aria-label="Amount" placeholder="125"', f.amount)
             + tcBox('pct', 'data-k="sellerShare" aria-label="Seller pays" placeholder="50"', f.sellerShare ?? (f.name ? 0.5 : null))
-            + '<select data-k="when" aria-label="When it applies">' + ['Every Sale', 'With a Loan', 'Manufactured Home', 'Refinance', 'Sometimes'].map(w => '<option' + ((f.when || 'Sometimes') === w ? ' selected' : '') + '>' + w + '</option>').join('') + '</select>'
-            + '<button type="button" class="tc-remove" data-remove aria-label="Remove fee">' + REMOVE_ICON + '</button></div>';
+            + '<select data-k="when" aria-label="When it applies">' + options(FEE_WHEN, f.when, 'Sometimes') + '</select>'
+            + '<button type="button" class="tc-remove" data-remove aria-label="Remove fee">' + REMOVE_ICON + '</button>'
+            // Accelerated Escrow: how short the page's Escrow Duration has to be for it to apply
+            + '<div class="tc-investor" data-accelerated' + (f.when === 'Accelerated Escrow' ? '' : ' hidden') + '><span>Applies when escrow is</span>'
+            + '<input type="text" inputmode="numeric" data-k="maxDays" aria-label="Most days of escrow" placeholder="3" value="' + esc(f.maxDays ?? '') + '">'
+            + '<span>days or fewer (the page’s Escrow Duration)</span></div>'
+            // Holdback: the fee for each range of the page's holdback amount (none: the Amount, whatever the holdback)
+            + '<div class="tc-ranges" data-holdback' + (f.when === 'Holdback' ? '' : ' hidden') + '>'
+            + '<p class="tc-help">Fee by the holdback amount (optional). Each row is the fee for a holdback up to that amount, starting where the row above ends; leave the last row’s “up to” blank for any amount above it. With no rows, the Amount is charged for any holdback.</p>'
+            + '<div class="tc-row is-range is-head"><span>Holdback up to</span><span>Fee</span><span></span></div>'
+            + '<div class="tc-range-list">' + (f.ranges || []).map(rangeRow).join('') + '</div>'
+            + '<button type="button" class="tc-add-row" data-add-range>+ Add Range</button></div></div>';
+        // One holdback range: up to an amount (blank: any amount above the row before), and its fee
+        function rangeRow(r = {}) {
+            return '<div class="tc-row is-range" data-range>' + tcBox('money', 'data-rk="upTo" aria-label="Holdback up to" placeholder="Any amount"', r.upTo)
+                + tcBox('money', 'data-rk="fee" aria-label="Fee for this range" placeholder="150"', r.fee)
+                + '<button type="button" class="tc-remove" data-remove-range aria-label="Remove range">' + REMOVE_ICON + '</button></div>';
+        }
         // A standard ALTA endorsement: its name and when it applies are fixed, only its price is entered (blank counts as $0)
         const standardEndorsementRow = e => '<div class="tc-row is-std-endorse" data-row data-std="' + esc(e.code) + '"><span class="tc-std-name">' + esc(e.name) + '</span>'
             + tcBox('money', 'data-k="amount" aria-label="' + esc(e.name) + ' price" placeholder="Not priced"', e.amount) + '<span class="tc-std-when">' + esc(e.when) + '</span></div>';
@@ -3629,12 +3667,24 @@
                         + tcBox('pct', 'id="tc-refi-over-pct" aria-label="Percent of the basic rate" placeholder="36"', c.refiOverPercent) + 'of the basic rate on the loan amount</span>')
                 + '</div>' + tiersBlock(key + 'OverTiers', c[key + 'OverTiers']) + '</div>';
         }
-        const section = (title, help, inner) => '<section class="tc-section"><h3>' + title + '</h3><p class="tc-help">' + help + '</p>' + inner + '</section>';
+        // Each section is one setting: locked (its boxes and buttons disabled) until its Edit button is pressed; Done locks it
+        // again. A new company starts with every section open. (PENCIL_ICON is above)
+        const section = (title, help, inner) => '<section class="tc-section" data-lock><div class="tc-section-head"><h3>' + title + '</h3>'
+            + '<button type="button" class="tc-edit" data-edit-section aria-label="Edit ' + esc(title.replace(/&amp;/g, '&')) + '">' + PENCIL_ICON + '<span>Edit</span></button></div>'
+            + (help ? '<p class="tc-help">' + help + '</p>' : '') + '<fieldset class="tc-lock-body">' + inner + '</fieldset></section>';
+        function setSectionLocked(s, locked) {
+            s.classList.toggle('is-locked', locked);
+            s.querySelector('.tc-lock-body').disabled = locked;
+            const btn = s.querySelector('[data-edit-section]');
+            btn.querySelector('span').textContent = locked ? 'Edit' : 'Done';
+            btn.setAttribute('aria-expanded', String(!locked));
+        }
 
-        function drawTitleForm(c) {
+        // locked: a saved company opens with every section locked
+        function drawTitleForm(c, { locked = false } = {}) {
             tcBody.innerHTML =
-                '<div class="tc-grid" style="margin-top:14px">' + tcField('Company Name', '<input type="text" id="tc-name" maxlength="100" placeholder="WFG National Title" value="' + esc(c.name || '') + '">')
-                + tcField('Escrow Rates Effective', '<input type="date" id="tc-date" value="' + esc(c.manualDate || '') + '">') + '</div>'
+                section('Company', '', '<div class="tc-grid">' + tcField('Company Name', '<input type="text" id="tc-name" maxlength="100" placeholder="WFG National Title" value="' + esc(c.name || '') + '">')
+                + tcField('Escrow Rates Effective', '<input type="date" id="tc-date" value="' + esc(c.manualDate || '') + '">') + '</div>')
 
                 + section('Escrow Fee', 'From the <b>Basic Escrow Rate Schedule</b> (WFG section 2.1, the <b>Standard</b> column). Each row is the fee for a sale price up to that amount. Add one row per line of the table.',
                     '<div class="tc-table" data-table="escrow"><div class="tc-row is-head"><span>Sale price up to</span><span>Fee</span><span></span></div>'
@@ -3660,7 +3710,7 @@
                     '<div class="tc-table" data-table="discounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span></span></div>'
                     + (c.discounts || []).map(discountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="discounts">+ Add Discount</button>')
 
-                + section('Other Fees', 'Extra charges from the escrow manual’s Miscellaneous Fees (WFG section 5) and the title manual (closing protection letters, WFG title section 12). <b>Every Sale</b> fees go on every sheet; <b>With a Loan</b> only when the buyer has a loan; <b>Manufactured Home</b> only for a manufactured home; <b>Refinance</b> only on a refinance (the borrower pays); <b>Sometimes</b> only in certain cases (a foreign seller’s FIRPTA filing, a manufactured home). Seller pays: the seller’s share; the buyer pays the rest.',
+                + section('Other Fees', 'Extra charges from the escrow manual’s Miscellaneous Fees (WFG section 5) and the title manual (closing protection letters, WFG title section 12). <b>Every Sale</b> fees go on every sheet; <b>With a Loan</b> only when the buyer has a loan; <b>Manufactured Home</b> only for a manufactured home; <b>Refinance</b> only on a refinance (the borrower pays). <b>Foreign Seller (FIRPTA)</b>, <b>Septic System</b>, <b>1031 Exchange</b>, <b>Holdback</b> and <b>Electronic Service</b> apply on their own when a Seller Net’s setting says so (on a Buyer Breakdown they’re picked in Other Fees That Apply). <b>Accelerated Escrow</b> applies on its own when the page’s Escrow Duration is that many days or fewer. <b>Sometimes</b> is for a fee with no setting of its own (reconveyance tracking, say): it’s picked on the page. Seller pays: the seller’s share; the buyer pays the rest.',
                     '<div class="tc-table" data-table="fees"><div class="tc-row is-fee is-head"><span>Fee</span><span>Amount</span><span>Seller pays</span><span>When</span><span></span></div>'
                     + (c.otherFees || []).map(feeRow).join('') + '</div><button type="button" class="tc-add-row" data-add="fees">+ Add Fee</button>')
 
@@ -3689,7 +3739,7 @@
                     + '<div class="tc-table" data-table="endorsements"><div class="tc-row is-endorse is-head"><span>Endorsement</span><span>Price</span><span>When</span><span></span></div>'
                     + splitEndorsements(c.loanEndorsementList).extras.map(endorsementRow).join('') + '</div><button type="button" class="tc-add-row" data-add="endorsements">+ Add Endorsement</button>')
 
-                + section('Title Discounts', 'Percent off the owner’s policy. <b>What it comes off</b> matters because the seller usually pays the owner’s policy: WFG’s investor rate (10.2) prices the whole policy lower when the <b>buyer</b> is an investor, so the seller saves; First American (B.6) and Fidelity (803–806) only take it off <b>what the qualifying party pays</b>, so an investor buyer saves nothing when the seller pays. A <b>reissue / short-term rate</b> comes from the seller’s prior policy (the property): pick it on the page. Who qualifies works the same as the escrow discounts. Only the one discount that saves the most applies.',
+                + section('Title Discounts', 'Percent off the owner’s policy. <b>What it comes off</b> matters because the seller usually pays the owner’s policy: WFG’s investor rate (10.2) prices the whole policy lower when the <b>buyer</b> is an investor, so the seller saves; First American (B.6) and Fidelity (803–806) only take it off <b>what the qualifying party pays</b>, so an investor buyer saves nothing when the seller pays. A <b>reissue / short-term rate</b> comes from the seller’s prior policy (the property): tick Prior Policy and it applies on its own from a page’s Last Title Policy Issued and Insured By, when the policy is recent enough and (if you say so) from this same company. Who qualifies works the same as the escrow discounts. Only the one discount that saves the most applies.',
                     '<div class="tc-table" data-table="titleDiscounts"><div class="tc-row is-discount is-head"><span>Discount</span><span>Percent off</span><span>Who qualifies</span><span>What it comes off</span><span></span></div>'
                     + (c.titleDiscounts || []).map(titleDiscountRow).join('') + '</div><button type="button" class="tc-add-row" data-add="titleDiscounts">+ Add Discount</button>')
 
@@ -3740,8 +3790,11 @@
                 + '</select></div>'
                 + '<div class="tc-sentence tc-try-opts">Second loan ' + tcBox('money', 'id="tc-try-second" aria-label="Second loan" placeholder="0"', '') + '</div>'
                 + '<ul class="tc-try-out" id="tc-try-out"></ul></div>';
+            tcBody.querySelectorAll('[data-lock]').forEach(s => setSectionLocked(s, locked));
             updateTitleTry();
             markMissing();
+            // A section missing a required rate opens, so it can be filled in
+            tcBody.querySelectorAll('[data-lock].is-locked').forEach(s => { if (s.querySelector('.tc-missing:not([data-std])')) setSectionLocked(s, false); });
         }
 
         // The form -> a company (numbers parsed; blank rows dropped by the API)
@@ -3752,9 +3805,15 @@
                 row.querySelectorAll('[data-k]').forEach(i => {
                     const k = i.dataset.k;
                     if (k === 'qualifies') { o[k] = [...i.querySelectorAll('input:checked')].map(x => x.value); return; }
-                    if (k === 'investorProperties' || k === 'investorYears') { const t = i.value.replace(/\D/g, ''); o[k] = t === '' ? null : Number(t); return; }
-                    o[k] = ['name', 'when', 'applies'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                    if (k === 'investorProperties' || k === 'investorYears' || k === 'priorYears' || k === 'maxDays') { const t = i.value.replace(/\D/g, ''); o[k] = t === '' ? null : Number(t); return; }
+                    o[k] = ['name', 'when', 'applies', 'priorCompany'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
                 });
+                // A Holdback fee's amount ranges (blank rows left out)
+                const holdback = row.querySelector('[data-holdback]');
+                if (holdback && o.when === 'Holdback') {
+                    o.ranges = [...holdback.querySelectorAll('[data-range]')].map(r => ({ upTo: parseMoney(r.querySelector('[data-rk="upTo"]').value), fee: parseMoney(r.querySelector('[data-rk="fee"]').value) }))
+                        .filter(r => r.upTo !== null || r.fee !== null);
+                }
                 return o;
             });
             return {
@@ -3831,11 +3890,12 @@
             document.getElementById('tc-dialog-title').textContent = c ? 'Edit ' + c.name : 'New Title Company';
             tcDelete.hidden = !c;
             tcWfg.hidden = false;
-            drawTitleForm(c || { sellerEscrowShare: 0.5, sellerRecordingShare: 0.5, sellerOwnerShare: 1 });
+            drawTitleForm(c || { sellerEscrowShare: 0.5, sellerRecordingShare: 0.5, sellerOwnerShare: 1 }, { locked: Boolean(c) });
             tcStart = JSON.stringify(readTitleForm());
             tcDialog.showModal();
             tcDialog.scrollTop = 0;
-            document.getElementById('tc-name').focus();
+            // (a saved company: the first Edit button; a new one: its name)
+            (c ? tcBody.querySelector('[data-edit-section]') : document.getElementById('tc-name')).focus();
         }
         tcAdd.addEventListener('click', () => openTitleCompany(null));
         tcList.addEventListener('click', e => { const b = e.target.closest('[data-tc-edit]'); if (b) openTitleCompany(tcCompanies[Number(b.dataset.tcEdit)]); });
@@ -3847,6 +3907,25 @@
             tcMessage.textContent = '';
         });
         tcBody.addEventListener('click', e => {
+            // A section's Edit / Done
+            const edit = e.target.closest('[data-edit-section]');
+            if (edit) {
+                const s = edit.closest('[data-lock]');
+                const opening = s.classList.contains('is-locked');
+                setSectionLocked(s, !opening);
+                if (opening) { const first = s.querySelector('.tc-lock-body input, .tc-lock-body select, .tc-lock-body textarea'); if (first) first.focus({ preventScroll: true }); }
+                return;
+            }
+            // A Holdback fee's amount ranges
+            const addRange = e.target.closest('[data-add-range]');
+            if (addRange) {
+                const list = addRange.closest('[data-holdback]').querySelector('.tc-range-list');
+                list.insertAdjacentHTML('beforeend', rangeRow());
+                list.lastElementChild.querySelector('input').focus();
+                return;
+            }
+            const removeRange = e.target.closest('[data-remove-range]');
+            if (removeRange) { removeRange.closest('[data-range]').remove(); return; }
             const add = e.target.closest('[data-add]');
             if (add) {
                 const table = tcBody.querySelector('[data-table="' + add.dataset.add + '"]');
@@ -3871,6 +3950,14 @@
                 const picked = [...who.querySelectorAll('input:checked')].map(x => x.value);
                 who.querySelector('summary').textContent = whoText(picked);
                 who.closest('[data-row]').querySelector('[data-investor]').hidden = !picked.includes('Investor');
+                who.closest('[data-row]').querySelector('[data-prior]').hidden = !picked.includes('Prior Policy');
+            }
+            // An Accelerated Escrow fee asks how short the escrow has to be
+            // (and a Holdback fee, its amount ranges)
+            if (e.target.matches('.is-fee select[data-k="when"]')) {
+                const row = e.target.closest('[data-row]');
+                row.querySelector('[data-accelerated]').hidden = e.target.value !== 'Accelerated Escrow';
+                row.querySelector('[data-holdback]').hidden = e.target.value !== 'Holdback';
             }
             // "No separate rate" hides that sale type's table, share and above-the-table charge
             if (e.target.matches('[data-over-mode]')) e.target.closest('.tc-over').dataset.mode = e.target.value;
@@ -3917,6 +4004,9 @@
             invalid_sellerOwnerShare: 'The seller’s share of the owner’s policy must be 0 to 100%.',
             invalid_discount: 'Each discount needs a name and a percent from 0 to 100.',
             invalid_investor_rule: 'Each investor discount needs how many properties (1 to 1,000) in how many years (1 to 100) make someone an investor.',
+            invalid_prior_policy_rule: 'A prior policy discount’s years need to be 1 to 100, or left blank for any age.',
+            invalid_accelerated_escrow: 'Each Accelerated Escrow fee needs how short the escrow has to be: 1 to 365 days.',
+            invalid_holdback_range: 'Each holdback range needs a fee, and only one range can leave “up to” blank.',
             invalid_other_fee: 'Each other fee needs a name, an amount and the seller’s share (0 to 100%).',
             invalid_sellerEscrowShare: 'The seller’s share of the escrow fee must be 0 to 100%.',
             invalid_sellerRecordingShare: 'The seller’s share of recording must be 0 to 100%.',
