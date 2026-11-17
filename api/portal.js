@@ -105,7 +105,9 @@ const PAGE_SETTING_FIELDS = {
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
   // HOA Other Fees: Yes / No, then each fee's name, amount and who pays it (replacing the single HOA OTHER FEE above,
   // which is still read on a page without a list)
-  'HAS HOA OTHER FEES': ['Yes', 'No'], 'HOA OTHER FEES': 'hoaFees',
+  'HAS HOA OTHER FEES': ['Yes', 'No'], 'HOA OTHER FEES': 'feeLines',
+  // Seller Net: the seller's Other Fees (Miscellaneous): Yes / No, then each fee's name and amount (the seller pays them)
+  'HAS SELLER OTHER FEES': ['Yes', 'No'], 'SELLER OTHER FEES': 'feeLines',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
   'BUYERS AGENT COMMISSION %': 'rate', 'BUYERS AGENT COMMISSION $': 'money',
   'SELLER PAID BUYER COMMISSION %': 'rate', 'SELLER PAID BUYER COMMISSION $': 'money',
@@ -162,9 +164,9 @@ function cleanSetting_(kind, value) {
     }
     return JSON.stringify(out);
   }
-  // A page's HOA other fees: JSON [{ NAME, AMOUNT, PAYER }] (up to 30, each named, $0 to $100,000,000, paid by the Buyer,
-  // the Seller or blank)
-  if (kind === 'hoaFees') {
+  // A page's fee lines (HOA other fees, the seller's other fees): JSON [{ NAME, AMOUNT, PAYER }] (up to 30, each named,
+  // $0 to $100,000,000, paid by the Buyer, the Seller or blank)
+  if (kind === 'feeLines') {
     let list;
     try { list = JSON.parse(raw); } catch (e) { return null; }
     if (!Array.isArray(list) || list.length > 30) return null;
@@ -174,7 +176,7 @@ function cleanSetting_(kind, value) {
       const amount = Number(f && f.AMOUNT);
       const payer = cleanSetting_('payer', f && f.PAYER);
       if (!name || !isFinite(amount) || amount < 0 || amount > 100000000 || payer === null) return null;
-      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100, PAYER: payer });
+      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100, ...(payer ? { PAYER: payer } : {}) });
     }
     return JSON.stringify(out);
   }

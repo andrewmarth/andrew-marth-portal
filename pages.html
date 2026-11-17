@@ -982,6 +982,7 @@
         .fee-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
         .fee-line .sub-label { grid-column: 1 / -1; margin-bottom: 0; }
         .fee-line .fee-name { grid-column: 1 / -1; }
+        .fee-line.no-payer { grid-template-columns: minmax(0, 1fr) auto; }
         @media (max-width: 600px) {
             .fee-line { grid-template-columns: minmax(0, 1fr) auto; }
             .fee-line .seg { grid-column: 1 / -1; grid-row: 4; }
@@ -1587,11 +1588,12 @@
         // (HOA OTHER FEES: JSON [{ NAME, AMOUNT, PAYER }]). Pages from before have one fee (HOA OTHER FEE, paid by WHO PAYS
         // OTHER FEE): it reads as a fee named "HOA Other Fee", and the blank yes / no as Yes when it's over $0 (No at $0). get(column)
         // reads a value. → [{ name, amount, payer }]
+        // A saved list of fee lines (JSON [{ NAME, AMOUNT, PAYER? }]) → [{ name, amount, payer }]
+        const feeLinesOf = raw => {
+            try { const l = JSON.parse(text(raw) || '[]'); return Array.isArray(l) ? l.map(f => ({ name: text(f && f.NAME), amount: num(f && f.AMOUNT), payer: text(f && f.PAYER) })) : []; } catch (e) { return []; }
+        };
         function hoaOtherFeeRows(get) {
-            const raw = text(get('HOA OTHER FEES'));
-            if (raw) {
-                try { const l = JSON.parse(raw); return Array.isArray(l) ? l.map(f => ({ name: text(f && f.NAME), amount: num(f && f.AMOUNT), payer: text(f && f.PAYER) })) : []; } catch (e) { return []; }
-            }
+            if (text(get('HOA OTHER FEES'))) return feeLinesOf(get('HOA OTHER FEES'));
             // (a $0 one from before is no fee)
             return num(get('HOA OTHER FEE')) > 0 ? [{ name: 'HOA Other Fee', amount: num(get('HOA OTHER FEE')), payer: text(get('WHO PAYS OTHER FEE')) }] : [];
         }
@@ -1603,6 +1605,11 @@
         }
         // The fees that count (none with No)
         const hoaOtherFees = get => (hoaOtherAnswer(get) === 'Yes' ? hoaOtherFeeRows(get) : []);
+        // Seller Net: the seller's Other Fees (in Miscellaneous; the seller pays them): HAS SELLER OTHER FEES (Yes / No)
+        // and SELLER OTHER FEES (JSON [{ NAME, AMOUNT }]). Blank is no fees (it doesn't hold the net sheet back).
+        const sellerOtherFeeRows = get => feeLinesOf(get('SELLER OTHER FEES'));
+        const sellerOtherAnswer = get => text(get('HAS SELLER OTHER FEES')) || (sellerOtherFeeRows(get).length ? 'Yes' : '');
+        const sellerOtherFees = get => (sellerOtherAnswer(get) === 'Yes' ? sellerOtherFeeRows(get) : []);
         // Condo, manufactured home, a home in an HOA (a planned unit development) or one without (for the lender's endorsements)
         function titlePropertyKind(page) {
             const type = text(col(page, 'PROPERTY TYPE'));
@@ -2215,6 +2222,8 @@
                 ...hoaOtherLines(),
                 { section: 'Miscellaneous', label: 'Buyers Agent Commission', amount: -percentPlus('SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', price) },
                 { section: 'Miscellaneous', label: 'Listing Agent Commission', amount: -percentPlus('LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', price) },
+                // The seller's Other Fees, one line each
+                ...sellerOtherFees(c => col(page, c)).map(f => ({ section: 'Miscellaneous', label: f.name, amount: -f.amount })),
             ].map(line => ({ ...line, amount: round2(line.amount) }));
 
             const sum = list => round2(list.reduce((s, l) => s + l.amount, 0));
@@ -3964,37 +3973,47 @@
         // shows its single HOA Other Fee as the first line, and saving the list clears that one. required (Seller Net): a
         // fee's payer has to be picked (new lines start at Seller Pays); Buyer Breakdown: blank is Buyer (new: Buyer Pays).
         function hoaOtherFeesField(parent, required) {
-            const f = fieldShell('HOA Other Fees', { span: true, key: 'HOA OTHER FEES' });
+            feeLinesField(parent, { label: 'HOA Other Fees', question: 'Any other HOA fees?', listColumn: 'HOA OTHER FEES', answerColumn: 'HAS HOA OTHER FEES',
+                rowsOf: hoaOtherFeeRows, answerOf: hoaOtherAnswer, payers: true, required,
+                onWrite: () => { draft['HOA OTHER FEE'] = ''; draft['WHO PAYS OTHER FEE'] = ''; } });
+        }
+        // A Yes / No question, then with Yes any number of fees, one per line: a name and an amount (and with cfg.payers, who
+        // pays it), "+ Add Fee" adding one. Saved as cfg.answerColumn (Yes / No) and cfg.listColumn (JSON [{ NAME, AMOUNT,
+        // PAYER? }]). cfg: { label, question, help, listColumn, answerColumn, rowsOf(get), answerOf(get), payers, required,
+        // onWrite() (anything else to clear when the list is saved) }
+        function feeLinesField(parent, cfg) {
+            const key = cfg.listColumn;
+            const f = fieldShell(cfg.label, { span: true, key, help: cfg.help });
             f.wrap.dataset.display = 'group';
             const box = el('div', 'hoa-other');
             f.body.append(box);
             parent.append(f.wrap);
-            const payerOf = p => (/^seller$/i.test(p) ? 'Seller' : /^buyer$/i.test(p) || !required ? 'Buyer' : '');
-            const blankRow = () => ({ name: '', amount: '', payer: required ? 'Seller' : 'Buyer' });
-            const load = () => hoaOtherFeeRows(current).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer) }));
+            const required = cfg.required;
+            const payerOf = p => (!cfg.payers ? '' : /^seller$/i.test(p) ? 'Seller' : /^buyer$/i.test(p) || !required ? 'Buyer' : '');
+            const blankRow = () => ({ name: '', amount: '', payer: cfg.payers ? (required ? 'Seller' : 'Buyer') : '' });
+            const load = () => cfg.rowsOf(current).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer) }));
             let rows = load();
             // The lines as saved (one with neither a name nor an amount is left out; one with an amount needs a name)
             function write() {
                 const kept = rows.filter(r => r.name.trim() || r.amount !== '');
-                fieldBad('HOA OTHER FEES', kept.some(r => !r.name.trim()) ? 'Please name each fee.' : '');
-                draft['HOA OTHER FEES'] = JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), PAYER: r.payer })));
-                draft['HOA OTHER FEE'] = '';
-                draft['WHO PAYS OTHER FEE'] = '';
+                fieldBad(key, kept.some(r => !r.name.trim()) ? 'Please name each fee.' : '');
+                draft[key] = JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), ...(cfg.payers ? { PAYER: r.payer } : {}) })));
+                if (cfg.onWrite) cfg.onWrite();
                 // (the lines only show with Yes)
-                draft['HAS HOA OTHER FEES'] = 'Yes';
+                draft[cfg.answerColumn] = 'Yes';
                 settingsEdited();
             }
             function build(focusName) {
                 box.innerHTML = '';
-                const answer = hoaOtherAnswer(current);
+                const answer = cfg.answerOf(current);
                 const q = el('div', 'sub-field');
-                q.append(el('span', 'sub-label', 'Any other HOA fees?'));
+                q.append(el('span', 'sub-label', escapeHtml(cfg.question)));
                 q.append(segToggle([['Yes', 'Yes'], ['No', 'No']], answer, v => {
-                    draft['HAS HOA OTHER FEES'] = v;
+                    draft[cfg.answerColumn] = v;
                     if (v === 'Yes' && !rows.length) rows.push(blankRow());
-                    if (v === 'Yes') write(); else { fieldBad('HOA OTHER FEES', ''); settingsEdited(); }
+                    if (v === 'Yes') write(); else { fieldBad(key, ''); settingsEdited(); }
                     build(v === 'Yes' ? rows.length - 1 : null);
-                }, 'Any other HOA fees'));
+                }, cfg.question));
                 box.append(q);
                 if (answer !== 'Yes') return;
                 const list = el('div', 'fee-lines');
@@ -4007,14 +4026,17 @@
                     const amount = textBox({ value: withCommas(r.amount), prefix: '$', placeholder: '0',
                         onInput: inp => { r.amount = digits(inp.value); write(); }, onBlur: inp => { inp.value = withCommas(digits(inp.value)); } });
                     amount.input.setAttribute('aria-label', 'Fee ' + (i + 1) + ' amount');
-                    const payer = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], r.payer, v => { r.payer = v; write(); }, 'Fee ' + (i + 1) + ' paid by');
-                    payer.classList.add('fee-payer');
                     const remove = el('button', 'slot-remove', CLOSE_ICON);
                     remove.type = 'button';
                     remove.title = 'Remove fee ' + (i + 1);
                     remove.setAttribute('aria-label', 'Remove fee ' + (i + 1));
                     remove.addEventListener('click', () => { rows.splice(i, 1); write(); build(); });
-                    line.append(el('span', 'sub-label', 'Fee ' + (i + 1)), name.wrap, amount.wrap, payer, remove);
+                    line.append(el('span', 'sub-label', 'Fee ' + (i + 1)), name.wrap, amount.wrap);
+                    if (cfg.payers) {
+                        const payer = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], r.payer, v => { r.payer = v; write(); }, 'Fee ' + (i + 1) + ' paid by');
+                        line.append(payer);
+                    } else line.classList.add('no-payer');
+                    line.append(remove);
                     list.append(line);
                     if (focusName === i) setTimeout(() => name.input.focus({ preventScroll: true }));
                 });
@@ -4028,9 +4050,9 @@
             // Opening it again reads the saved / draft lines
             f.wrap.groupSync = () => { rows = load(); build(); };
             f.wrap.groupDisplay = () => {
-                const answer = hoaOtherAnswer(current);
+                const answer = cfg.answerOf(current);
                 if (answer !== 'Yes') return answer === 'No' ? 'None' : '';
-                const fees = hoaOtherFeeRows(current);
+                const fees = cfg.rowsOf(current);
                 return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')).join(' · ') : 'Yes';
             };
         }
@@ -4690,6 +4712,9 @@
             titleRateFields = [...misc.children].slice(titleStart);
             percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.');
             percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price and a flat amount. Enter 0 for none.');
+            // The seller's own other costs, one line each
+            feeLinesField(misc, { label: 'Other Fees', question: 'Any other fees?', listColumn: 'SELLER OTHER FEES', answerColumn: 'HAS SELLER OTHER FEES',
+                rowsOf: sellerOtherFeeRows, answerOf: sellerOtherAnswer, payers: false, help: 'Any other costs the seller pays at closing.' });
 
             // Buyer Inputs: the buyer's side of the escrow breakdown
             document.getElementById('buyer-inputs-section').hidden = false;
