@@ -20,6 +20,26 @@ const PAGE_ROLE_COLUMNS = ['PRIMARY ACCOUNT TYPE', 'ALT ACCOUNT TYPE 1', 'ALT AC
 // Seller Net: each of those six people's title when they sign for an LLC or trust (blank for collaborators)
 const PAGE_SIGNER_COLUMNS = ['PRIMARY SIGNER TITLE', 'ALT SIGNER TITLE 1', 'ALT SIGNER TITLE 2', 'ALT SIGNER TITLE 3',
   'ALT SIGNER TITLE 4', 'ALT SIGNER TITLE 5'];
+// Buyer Breakdown: the buyers come first, in order (Buyer 1 in PRIMARY, Buyer 2 in ALT 1...), at most MAX_BUYERS; then
+// the collaborators, as many as there are. Collaborators past the six columns are in MORE COLLABORATORS (a JSON list of
+// account IDs).
+const MAX_BUYERS = 4;
+const PAGE_MORE_COLLABORATORS = 'MORE COLLABORATORS';
+function moreCollaborators_(page) {
+  let list;
+  try { list = JSON.parse(String(page[PAGE_MORE_COLLABORATORS] || '').trim() || '[]'); } catch (e) { list = []; }
+  return Array.isArray(list) ? [...new Set(list.map(phoneToId_).filter(Boolean))] : [];
+}
+// Buyer Breakdown: who's buying. BUYER ENTITY TYPE 'Individual(s)' (or blank), or 'LLC' / 'Trust' with BUYER ENTITY
+// NAME: one every buyer has in their own LLCs or Trusts.
+const BUYER_ENTITY_TYPES = ['Individual(s)', 'LLC', 'Trust'];
+// The names in an account's LLCS or TRUSTS (JSON [{ NAME, TITLE }]); LLCs before the list was saved: the old FLIPPER LLC
+function holdingNames_(raw, legacy) {
+  let list;
+  try { list = JSON.parse(String(raw || '').trim() || 'null'); } catch (e) { list = null; }
+  if (!Array.isArray(list)) return legacy ? [String(legacy).trim()].filter(Boolean) : [];
+  return list.map(x => String((x && x.NAME) || '').trim()).filter(Boolean);
+}
 // TRUE when the buyer is paying cash (no loan)
 const PAGE_CASH_COLUMN = 'CASH PURCHASE';
 
@@ -57,6 +77,8 @@ const PAGE_SETTING_FIELDS = {
   // qualifies as (Church / Non-Profit, Corporate Relocation; their professions, groups and real estate owned count on
   // their own), and on a Seller Net, what the expected buyer qualifies as (any of the company's buyer discounts' groups)
   'CLIENT QUALIFIES AS': 'list', 'BUYER QUALIFIES AS': 'list',
+  // Buyer Breakdown: Buyer Type (checked against the buyers' own LLCs and trusts when saved)
+  'BUYER ENTITY TYPE': BUYER_ENTITY_TYPES, 'BUYER ENTITY NAME': 'text',
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
@@ -625,9 +647,9 @@ async function findPage_(pageId) {
   return r ? { row: r, docId: r._id } : null;
 }
 
-// Whether an account is listed in one of the page's access columns
+// Whether an account is listed in one of the page's access columns (or its MORE COLLABORATORS)
 function isOnPage_(page, id) {
-  return PAGE_ACCESS_COLUMNS.some(col => page[col] && phoneToId_(page[col]) === id);
+  return PAGE_ACCESS_COLUMNS.some(col => page[col] && phoneToId_(page[col]) === id) || moreCollaborators_(page).includes(id);
 }
 
 // Who may open a page: the accounts listed on it, and admins (always)
@@ -647,18 +669,22 @@ function isAdmin_(account) {
 
 const fullName_ = r => [r['FIRST NAME'], r['LAST NAME']].map(s => String(s || '').trim()).filter(String).join(' ');
 
-// Everyone in ACCOUNT LIST, for the admin's access pickers
+// Everyone in ACCOUNT LIST, for the admin's access pickers (with the names of their LLCs and trusts, for a Buyer
+// Breakdown's Buyer Type)
 async function accountChoices_() {
   return (await rows('accounts')).map(r => ({
     id: phoneToId_(r['ACCOUNT ID']),
     name: fullName_(r),
     isLender: hasRole_(r, 'LENDER'),
     bank: String(r['LENDER BANK'] || '').trim(),
+    llcs: holdingNames_(r['LLCS'], r['FLIPPER LLC']),
+    trusts: holdingNames_(r['TRUSTS']),
   })).filter(a => a.id);
 }
 
 // Admins only: saves the purchasers (first one goes in PRIMARY), then the collaborators, into the six
-// account columns with their type beside them, plus one lender (or none)
+// account columns with their type beside them (Buyer Breakdown: more collaborators in MORE COLLABORATORS), plus one
+// lender (or none)
 async function updatePageAccess_(id, account, body) {
   const found = await findPage_(body.pageId);
   if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
@@ -682,8 +708,11 @@ async function updatePageAccess_(id, account, body) {
   const titles = body.signerTitles && typeof body.signerTitles === 'object' ? body.signerTitles : {};
   if (isSellerNet) people.forEach(p => { p.title = cleanText_(titles[p.id], 60); });
   addAll(body.collaborators, 'Collaborator');
-  if (!people.some(p => p.type !== 'Collaborator')) return { ok: false, error: 'need_one_purchaser' };
-  if (people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
+  const buyers = people.filter(p => p.type !== 'Collaborator');
+  if (!buyers.length) return { ok: false, error: 'need_one_purchaser' };
+  // Buyer Breakdown: up to four buyers, and any number of collaborators. Seller Net: six people in all.
+  if (!isSellerNet && buyers.length > MAX_BUYERS) return { ok: false, error: 'too_many_buyers' };
+  if (isSellerNet && people.length > PAGE_PEOPLE_COLUMNS.length) return { ok: false, error: 'too_many_people' };
 
   // Lender: blank for "None", otherwise an account marked LENDER = TRUE.
   // Cash purchase comes from the "Cash" choice in the Loan Product picker.
@@ -703,7 +732,25 @@ async function updatePageAccess_(id, account, body) {
   }
   if (Object.prototype.hasOwnProperty.call(fields, 'HOA DISCLOSURE FEE')) fields['WHO PAYS DISCLOSURE FEE'] = 'Seller';
 
+  // Buyer Breakdown: an LLC or trust as the Buyer Type has to be on every buyer's own list (checked when it, or the
+  // buyers, change). Individual(s) has no name.
+  if (!isSellerNet) {
+    const has = c => Object.prototype.hasOwnProperty.call(fields, c);
+    const type = has('BUYER ENTITY TYPE') ? fields['BUYER ENTITY TYPE'] : String(found.row['BUYER ENTITY TYPE'] || '').trim();
+    const name = has('BUYER ENTITY NAME') ? fields['BUYER ENTITY NAME'] : String(found.row['BUYER ENTITY NAME'] || '').trim();
+    const before = PAGE_PEOPLE_COLUMNS.map((c, i) => String(found.row[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() === 'collaborator' ? '' : phoneToId_(found.row[c])).filter(Boolean);
+    const buyersChanged = before.join(',') !== buyers.map(b => b.id).join(',');
+    if (type === 'LLC' || type === 'Trust') {
+      if (has('BUYER ENTITY TYPE') || has('BUYER ENTITY NAME') || buyersChanged) {
+        if (!name) return { ok: false, error: 'missing_buyer_entity' };
+        const listOf = b => (type === 'LLC' ? known[b.id].llcs : known[b.id].trusts).map(n => n.toLowerCase());
+        if (!buyers.every(b => listOf(b).includes(name.toLowerCase()))) return { ok: false, error: 'buyer_entity_not_shared' };
+      }
+    } else if (has('BUYER ENTITY TYPE')) fields['BUYER ENTITY NAME'] = '';
+  }
+
   if (!isSellerNet) fields[PAGE_CASH_COLUMN] = cash;
+  if (!isSellerNet) fields[PAGE_MORE_COLLABORATORS] = people.length > PAGE_PEOPLE_COLUMNS.length ? JSON.stringify(people.slice(PAGE_PEOPLE_COLUMNS.length).map(p => p.id)) : '';
   PAGE_PEOPLE_COLUMNS.forEach((col, i) => {
     const person = people[i];
     fields[col] = person ? person.id : '';
@@ -3467,7 +3514,7 @@ async function myPagesData_(id, account) {
     const lenderPages = pages.filter(p => isOnPage_(p, id));
     const onLenderPages = {};
     lenderPages.forEach(p => {
-      PAGE_PEOPLE_COLUMNS.forEach(c => { const pid = phoneToId_(p[c]); if (pid && pid !== id) onLenderPages[pid] = true; });
+      PAGE_PEOPLE_COLUMNS.map(c => phoneToId_(p[c])).concat(moreCollaborators_(p)).forEach(pid => { if (pid && pid !== id) onLenderPages[pid] = true; });
     });
     result.lenderBuyers = accounts
       .filter(r => hasRole_(r, 'BUYER') && onLenderPages[phoneToId_(r['ACCOUNT ID'])])
@@ -3475,7 +3522,7 @@ async function myPagesData_(id, account) {
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
     result.lenderBuyerPages = lenderPages.map(p => {
       const page = summary(p);
-      page.people = PAGE_PEOPLE_COLUMNS.map(c => phoneToId_(p[c])).filter(String);
+      page.people = PAGE_PEOPLE_COLUMNS.map(c => phoneToId_(p[c])).concat(moreCollaborators_(p)).filter(String);
       return page;
     });
     // "My Loan Products": this lender's LOAN_PRODUCTS rows and the questions the form asks
@@ -3977,7 +4024,7 @@ async function pageClients_(page) {
   return PAGE_PEOPLE_COLUMNS.map((col, i) => {
     const type = String(page[PAGE_ROLE_COLUMNS[i]] || '').trim().toLowerCase() === 'collaborator' ? 'Collaborator' : 'Purchaser';
     return { id: phoneToId_(page[col]), type };
-  })
+  }).concat(moreCollaborators_(page).map(id => ({ id, type: 'Collaborator' })))
     .filter(p => { if (!p.id || seen[p.id]) return false; seen[p.id] = true; return true; })
     .map(p => ({ id: p.id, type: p.type, name: names[p.id] || '', income: incomes[p.id] || null,
       veteran: va[p.id] ? va[p.id].veteran : false, vaUsed: va[p.id] ? va[p.id].vaUsed : false,

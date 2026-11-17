@@ -1005,6 +1005,20 @@
         .signer-list { display: grid; gap: 10px; }
         .signer-name { display: block; margin: 0 0 4px 6px; font-size: 0.82rem; opacity: 0.7; }
         .seller-extras .field-help { margin-top: 0; }
+        /* Buyer Breakdown: Buyer 1-4 and Collaborator 1, 2... one per line (each removable but Buyer 1), + Add under them,
+           and the Buyer Type under the buyers */
+        .slot-list { display: grid; gap: 12px; }
+        .slot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+        .slot-row .sub-label { grid-column: 1 / -1; }
+        .slot-row .slot-picker { min-width: 0; }
+        .slot-row.is-fixed .slot-picker { grid-column: 1 / -1; }
+        .slot-remove { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 2px solid rgba(14, 42, 59, 0.35); border-radius: 50%; background: transparent; color: var(--navy); cursor: pointer; transition: border-color 0.15s ease, color 0.15s ease; }
+        .slot-remove svg { width: 16px; height: 16px; }
+        .slot-remove:hover, .slot-remove:focus-visible { border-color: var(--rust); color: var(--rust); outline: none; }
+        .slot-add { justify-self: start; min-height: 40px; padding: 6px 18px; border: 2px dashed rgba(14, 42, 59, 0.35); border-radius: 999px; background: transparent; color: var(--rust); font-family: inherit; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: border-color 0.15s ease; }
+        .slot-add:hover, .slot-add:focus-visible { border-color: var(--rust); border-style: solid; outline: none; }
+        .buyer-extras { margin-top: 16px; }
+        .buyer-extras .field-help { margin-top: 6px; }
         .field-help a { color: var(--tan); font-weight: bold; }
         .field-error { margin: 6px 0 0 6px; font-size: 0.85rem; font-weight: bold; color: #b3392f; }
         .field-error + .field-help, .field-help + .field-error { margin-top: 4px; }
@@ -1325,7 +1339,9 @@
         <section class="main-card reveal" id="loan-card" hidden>
             <span class="card-eyebrow">The Inputs</span>
             <h2>Version Settings</h2>
-            <!-- People: who can see this page (up to 6 purchasers / collaborators) and the lender -->
+            <!-- People: who can see this page and the lender. Buyer Breakdown: Buyer 1-4 and any number of collaborators,
+                 one per line. Seller Net: up to 6 sellers / collaborators. -->
+
             <div class="settings-section">
             <h3 class="money-section-title">People</h3>
             <div class="field">
@@ -3238,6 +3254,7 @@
                 options.forEach((o, i) => {
                     const on = chosen.includes(items[i].value);
                     o.setAttribute('aria-selected', String(on));
+                    if (!multiple) o.setAttribute('aria-disabled', String(!on && blocked(items[i].value)));
                     if (multiple) {
                         o.setAttribute('aria-disabled', String(!on && (full || blocked(items[i].value))));
                         // Tag the first pick (e.g. "Buyer")
@@ -3285,6 +3302,8 @@
                     else if (chosen.length < maxNow() && !blocked(value)) chosen = chosen.concat([value]);
                     else return; // already at the limit
                 } else {
+                    // (taken on another line)
+                    if (chosen[0] !== value && blocked(value)) return;
                     close();
                     if (chosen[0] === value) return;
                     chosen = [value];
@@ -3366,6 +3385,118 @@
         const isCollaborator = i => text(col(data.page, TYPE_COLUMNS[i])).toLowerCase() === 'collaborator';
         const idOf = v => { const d = text(v).replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? d.slice(1) : d; };
         const phone = id => id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id;
+        // Buyer Breakdown: up to four buyers (Buyer 1 in PRIMARY, Buyer 2 in ALT 1...); collaborators fill the columns
+        // after them, and any past the sixth are in MORE COLLABORATORS (a JSON list of account IDs)
+        const MAX_BUYERS = 4;
+        const idList = raw => { try { const l = JSON.parse(text(raw) || '[]'); return Array.isArray(l) ? l.map(idOf).filter(Boolean) : []; } catch (e) { return []; } };
+        // People one per line ("Buyer 1", "Buyer 2"...), each with its own dropdown. The first `min` lines can't be removed;
+        // "+ Add Buyer 3" adds a line, up to max. taken(id): picked in another list. Returns { value(): the IDs picked, in
+        // order (empty lines left out), refresh() }.
+        function makeSlotList({ mount, noun, items, selected, min = 0, max = Infinity, taken, onChange }) {
+            const slots = selected.slice();
+            while (slots.length < min) slots.push('');
+            let pickers = [];
+            const list = el('div', 'slot-list');
+            mount.innerHTML = '';
+            mount.append(list);
+            function build(focusLast) {
+                list.innerHTML = '';
+                pickers = slots.map((id, i) => {
+                    const row = el('div', 'slot-row');
+                    const label = el('span', 'sub-label', escapeHtml(noun + ' ' + (i + 1)));
+                    label.id = mount.id + '-line-' + i;
+                    const holder = el('div', 'slot-picker');
+                    row.append(label, holder);
+                    const picker = makePicker({ mount: holder, labelId: label.id, items, selected: [id],
+                        placeholder: 'Choose ' + noun.toLowerCase() + ' ' + (i + 1),
+                        blocked: v => v !== slots[i] && (slots.some((s, j) => j !== i && s === v) || taken(v)),
+                        onChange: v => { slots[i] = v; onChange(); } });
+                    if (i >= min) {
+                        const remove = el('button', 'slot-remove', CLOSE_ICON);
+                        remove.type = 'button';
+                        remove.title = 'Remove ' + noun + ' ' + (i + 1);
+                        remove.setAttribute('aria-label', 'Remove ' + noun + ' ' + (i + 1));
+                        // (later lines move up: Buyer 3 becomes Buyer 2)
+                        remove.addEventListener('click', () => { slots.splice(i, 1); build(); onChange(); });
+                        row.append(remove);
+                    } else row.classList.add('is-fixed');
+                    list.append(row);
+                    return picker;
+                });
+                if (slots.length < max) {
+                    const add = el('button', 'slot-add', '+ Add ' + escapeHtml(noun) + ' ' + (slots.length + 1));
+                    add.type = 'button';
+                    add.addEventListener('click', () => { slots.push(''); build(true); });
+                    list.append(add);
+                }
+                if (focusLast) { const btns = list.querySelectorAll('.picker-btn'); if (btns.length) btns[btns.length - 1].focus({ preventScroll: true }); }
+            }
+            build();
+            return { value: () => slots.filter(Boolean), refresh: () => pickers.forEach(p => p.refresh()) };
+        }
+        // Buyer Breakdown: Buyer Type under the buyers. As Individual(s), or an LLC or trust that every buyer has in their
+        // own profile (BUYER ENTITY TYPE / BUYER ENTITY NAME). buyers() → the buyers' IDs. Returns summary() (for the closed
+        // row) and buyersChanged() (an LLC or trust the buyers no longer all have goes back to As Individual(s)).
+        function buyerTypeQuestion(field, buyers) {
+            const box = el('div', 'buyer-extras');
+            field.querySelector('.field-help').after(box);
+            const accountOf = id => (data.accounts || []).find(a => a.id === id) || {};
+            const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+            // The LLCs and trusts on every buyer's list ([{ type, name }])
+            function shared() {
+                const ids = buyers();
+                if (!ids.length) return [];
+                const out = [];
+                [['LLC', 'llcs'], ['Trust', 'trusts']].forEach(([type, key]) => {
+                    (accountOf(ids[0])[key] || []).forEach(name => {
+                        if (out.some(o => o.type === type && same(o.name, name))) return;
+                        if (ids.every(id => (accountOf(id)[key] || []).some(n => same(n, name)))) out.push({ type, name });
+                    });
+                });
+                return out;
+            }
+            const now = () => {
+                const type = current('BUYER ENTITY TYPE');
+                return type === 'LLC' || type === 'Trust' ? { type, name: current('BUYER ENTITY NAME') } : null;
+            };
+            const keyOf = e => (e ? JSON.stringify([e.type, e.name.toLowerCase()]) : '');
+            function build() {
+                box.innerHTML = '';
+                const cell = el('div', 'sub-field');
+                const label = el('span', 'sub-label', 'Buyer Type');
+                label.id = 'buyer-type-label';
+                const mount = el('div');
+                cell.append(label, mount);
+                box.append(cell);
+                const options = shared();
+                const picked = now();
+                // A saved LLC or trust that isn't on every buyer's list anymore still shows, marked
+                if (picked && !options.some(o => keyOf(o) === keyOf(picked))) options.push({ ...picked, stale: true });
+                makePicker({ mount, labelId: label.id,
+                    items: [{ value: '', main: 'As Individual(s)', secondary: buyers().length > 1 ? 'The buyers in their own names' : 'In their own name', icon: 'person' }]
+                        .concat(options.map(o => ({ value: keyOf(o), main: o.name, secondary: o.stale ? o.type + ' · not on every buyer’s profile' : o.type, icon: 'bank' }))),
+                    selected: [keyOf(picked)],
+                    onChange: v => {
+                        const o = options.find(x => keyOf(x) === v);
+                        setDraft('BUYER ENTITY TYPE', o ? o.type : 'Individual(s)');
+                        setDraft('BUYER ENTITY NAME', o ? o.name : '');
+                    } });
+                box.append(el('p', 'field-help', options.some(o => !o.stale) ? 'An LLC or trust shows here when every buyer has it in their profile.'
+                    : 'An LLC or trust shows here once every buyer has it in their profile (Settings &gt; LLCs or Trusts).'));
+            }
+            build();
+            let builtFor = buyers().join(',');
+            return {
+                summary: () => { const e = now(); return e ? ' · ' + e.type + ': ' + e.name : ''; },
+                buyersChanged: () => {
+                    if (buyers().join(',') === builtFor) return;
+                    builtFor = buyers().join(',');
+                    const e = now();
+                    if (e && !shared().some(o => keyOf(o) === keyOf(e))) { setDraft('BUYER ENTITY TYPE', 'Individual(s)'); setDraft('BUYER ENTITY NAME', ''); }
+                    build();
+                },
+            };
+        }
         function setupAccessPickers() {
             const accounts = data.accounts || [];
             // Settings and (Seller Net) Global Settings and Property Status each have a Save button; each saves every edit
@@ -3376,9 +3507,33 @@
 
             const accountItems = accounts.map(a => ({ value: a.id, main: a.name || phone(a.id), secondary: phone(a.id) }));
             const onPage = PEOPLE_COLUMNS.map((c, i) => ({ id: idOf(col(data.page, c)), collaborator: isCollaborator(i) })).filter(p => p.id);
-            // Purchasers and collaborators share the six spots, and nobody can be both
             let people = null;
             let collaborators = null;
+            // Buyer Breakdown: one line per buyer (Buyer 1 required, up to MAX_BUYERS) and per collaborator (no limit),
+            // with the Buyer Type under the buyers
+            if (!isSellerNet()) {
+                const more = idList(col(data.page, 'MORE COLLABORATORS'));
+                const takenBy = list => v => Boolean(list && list.value().includes(v));
+                people = makeSlotList({ mount: document.getElementById('people-picker'), noun: 'Buyer', items: accountItems,
+                    selected: onPage.filter(p => !p.collaborator).map(p => p.id).slice(0, MAX_BUYERS), min: 1, max: MAX_BUYERS,
+                    taken: v => takenBy(collaborators)(v), onChange: changed });
+                collaborators = makeSlotList({ mount: document.getElementById('collab-picker'), noun: 'Collaborator', items: accountItems,
+                    selected: onPage.filter(p => p.collaborator).map(p => p.id).concat(more.filter(id => !onPage.some(p => p.id === id))),
+                    taken: v => takenBy(people)(v), onChange: changed });
+                document.getElementById('people-label').textContent = 'Buyers';
+                document.getElementById('people-help').textContent = 'Buyer 1 is the primary buyer. Up to ' + MAX_BUYERS + ' buyers: their incomes count toward approval, and their credit scores are averaged for the rate.';
+                document.getElementById('collab-help').textContent = 'Collaborators can view this page but aren\u2019t part of the loan.';
+                const nameOf = id => { const a = accounts.find(x => x.id === id); return (a && a.name) || phone(id); };
+                const buyerField = document.getElementById('people-picker').closest('.field');
+                const collabField = document.getElementById('collab-picker').closest('.field');
+                const buyerType = buyerTypeQuestion(buyerField, () => people.value());
+                buyerField.dataset.display = 'group';
+                buyerField.groupDisplay = () => people.value().map(nameOf).join(', ') + buyerType.summary();
+                collabField.dataset.display = 'group';
+                collabField.groupDisplay = () => collaborators.value().map(nameOf).join(', ');
+                onPeopleChanged = buyerType.buyersChanged;
+            } else {
+            // Seller Net: sellers and collaborators share the six spots, and nobody can be both
             const spotsLeft = () => MAX_PEOPLE - (people ? people.value().length : 0) - (collaborators ? collaborators.value().length : 0);
             const spotsText = n => n + ' selected \u00b7 ' + spotsLeft() + ' of ' + MAX_PEOPLE + ' spots left';
             people = makePicker({
@@ -3406,6 +3561,7 @@
                 placeholder: 'Choose collaborators',
                 onChange: changed,
             });
+            }
             people.refresh();
             collaborators.refresh();
             peoplePicker = people;
@@ -3428,7 +3584,7 @@
                 validateSettings();
                 setMessage('', '');
                 setSaveDisabled(!people.value().length || Object.keys(fieldErrors).length > 0);
-                if (!people.value().length) setMessage(isSellerNet() ? 'Choose at least one seller.' : 'Choose at least one purchaser.', 'error');
+                if (!people.value().length) setMessage(isSellerNet() ? 'Choose at least one seller.' : 'Choose Buyer 1.', 'error');
                 else if (Object.keys(fieldErrors).length) setMessage('Please fix the highlighted settings before saving.', 'error');
             }
 
@@ -3456,7 +3612,12 @@
                     setMessage('Saved! Your settings have been updated.', 'success');
                 } catch (err) {
                     console.error(err);
-                    setMessage('We couldn\'t save your settings. Please try again.', 'error');
+                    const SAVE_ERRORS = {
+                        buyer_entity_not_shared: 'Every buyer needs the Buyer Type’s LLC or trust in their own profile.',
+                        missing_buyer_entity: 'Pick the Buyer Type’s LLC or trust again.',
+                        too_many_buyers: 'A page can have up to ' + MAX_BUYERS + ' buyers.',
+                    };
+                    setMessage(SAVE_ERRORS[err.message] || 'We couldn\'t save your settings. Please try again.', 'error');
                     setSaveDisabled(false);
                 } finally {
                     saveBtn.classList.remove('is-loading');
