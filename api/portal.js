@@ -103,6 +103,9 @@ const PAGE_SETTING_FIELDS = {
   'BUYER ENTITY TYPE': BUYER_ENTITY_TYPES, 'BUYER ENTITY NAME': 'text',
   'HOA TRANSFER FEE': 'money', 'WHO PAYS TRANSFER FEE': 'payer', 'HOA CAP FEE': 'money', 'WHO PAYS CAP FEE': 'payer',
   'HOA DISCLOSURE FEE': 'money', 'HOA OTHER FEE': 'money', 'WHO PAYS OTHER FEE': 'payer',
+  // HOA Other Fees: Yes / No, then each fee's name, amount and who pays it (replacing the single HOA OTHER FEE above,
+  // which is still read on a page without a list)
+  'HAS HOA OTHER FEES': ['Yes', 'No'], 'HOA OTHER FEES': 'hoaFees',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
   'BUYERS AGENT COMMISSION %': 'rate', 'BUYERS AGENT COMMISSION $': 'money',
   'SELLER PAID BUYER COMMISSION %': 'rate', 'SELLER PAID BUYER COMMISSION $': 'money',
@@ -156,6 +159,22 @@ function cleanSetting_(kind, value) {
       const amount = Number(f && f.AMOUNT);
       if (!name || !isFinite(amount) || amount < 0 || amount > 100000000) return null;
       out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100 });
+    }
+    return JSON.stringify(out);
+  }
+  // A page's HOA other fees: JSON [{ NAME, AMOUNT, PAYER }] (up to 30, each named, $0 to $100,000,000, paid by the Buyer,
+  // the Seller or blank)
+  if (kind === 'hoaFees') {
+    let list;
+    try { list = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(list) || list.length > 30) return null;
+    const out = [];
+    for (const f of list) {
+      const name = cleanText_(f && f.NAME, 100);
+      const amount = Number(f && f.AMOUNT);
+      const payer = cleanSetting_('payer', f && f.PAYER);
+      if (!name || !isFinite(amount) || amount < 0 || amount > 100000000 || payer === null) return null;
+      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100, PAYER: payer });
     }
     return JSON.stringify(out);
   }

@@ -3636,7 +3636,7 @@
             + '<div class="tc-investor" data-accelerated' + (f.when === 'Accelerated Escrow' ? '' : ' hidden') + '><span>Applies when escrow is</span>'
             + '<input type="text" inputmode="numeric" data-k="maxDays" aria-label="Most days of escrow" placeholder="3" value="' + esc(f.maxDays ?? '') + '">'
             + '<select data-k="dayType" aria-label="Calendar or business days">' + options(ESCROW_DAY_TYPES, f.dayType, 'calendar') + '</select>'
-            + '<span>or fewer (the page’s Escrow Duration; business days are the weekdays from the offer acceptance to closing)</span></div>'
+            + '<span>or fewer (the page’s Escrow Duration; business days are the weekdays from the offer acceptance to closing, less federal holidays)</span></div>'
             // Holdback: the fee for each range of the page's holdback amount (none: the Amount, whatever the holdback)
             + '<div class="tc-ranges" data-holdback' + (f.when === 'Holdback' ? '' : ' hidden') + '>'
             + '<p class="tc-help">Fee by the holdback amount (optional). Each row is the fee for a holdback up to that amount, starting where the row above ends; leave the last row’s “up to” blank for any amount above it. With no rows, the Amount is charged for any holdback.</p>'

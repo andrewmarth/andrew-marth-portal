@@ -136,8 +136,33 @@ const answered = (f, conditions) => Boolean(conditions) && (f.when === 'Accelera
     ? typeof conditions.escrowDays === 'number' && f.maxDays > 0
     : Object.prototype.hasOwnProperty.call(conditions, f.when));
 // (Accelerated Escrow: its maxDays in calendar days, or with dayType 'business', in business days: conditions.
-// escrowBusinessDays, weekdays from the offer acceptance to the close of escrow)
+// escrowBusinessDays, weekdays from the offer acceptance to the close of escrow, less federal holidays)
 export const ESCROW_DAY_TYPES = [['calendar', 'calendar days'], ['business', 'business days']];
+// The federal holidays (5 U.S.C. 6103) as observed: one on a Saturday is taken the Friday before, one on a Sunday the
+// Monday after (so New Year's Day on a Saturday is observed the Dec 31 before). → 'y-m-d' keys
+const dayKey = d => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+const holidayCache = {};
+function federalHolidays(year) {
+    if (holidayCache[year]) return holidayCache[year];
+    const nth = (month, weekday, n) => { const first = new Date(year, month, 1); return new Date(year, month, 1 + ((weekday - first.getDay() + 7) % 7) + (n - 1) * 7); };
+    const last = (month, weekday) => { const end = new Date(year, month + 1, 0); return new Date(year, month, end.getDate() - ((end.getDay() - weekday + 7) % 7)); };
+    const observed = d => (d.getDay() === 6 ? new Date(year, d.getMonth(), d.getDate() - 1) : d.getDay() === 0 ? new Date(year, d.getMonth(), d.getDate() + 1) : d);
+    const days = [
+        observed(new Date(year, 0, 1)), nth(0, 1, 3), nth(1, 1, 3), last(4, 1), observed(new Date(year, 5, 19)), observed(new Date(year, 6, 4)),
+        nth(8, 1, 1), nth(9, 1, 2), observed(new Date(year, 10, 11)), nth(10, 4, 4), observed(new Date(year, 11, 25)),
+    ];
+    return (holidayCache[year] = new Set(days.map(dayKey)));
+}
+export const isFederalHoliday = d => federalHolidays(d.getFullYear()).has(dayKey(d)) || federalHolidays(d.getFullYear() + 1).has(dayKey(d));
+// The business days in the `days` days after `start` (a weekday that isn't a federal holiday)
+export function businessDaysAfter(start, days) {
+    let n = 0;
+    for (let i = 1; i <= days; i++) {
+        const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+        if (d.getDay() !== 0 && d.getDay() !== 6 && !isFederalHoliday(d)) n++;
+    }
+    return n;
+}
 export function feeApplies(f, hasLoan, property, conditions = null) {
     if (f.when === 'Accelerated Escrow') return answered(f, conditions) && (f.dayType === 'business' ? conditions.escrowBusinessDays : conditions.escrowDays) <= f.maxDays;
     return f.when === 'Every Sale' || (f.when === 'With a Loan' && hasLoan) || (f.when === 'Manufactured Home' && property === 'manufactured')
