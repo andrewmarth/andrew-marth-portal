@@ -115,7 +115,7 @@ const PAGE_SETTING_FIELDS = {
   'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
   'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
   'LISTING STATUS': ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'],
-  // Seller Net: who is selling (the signer titles come in separately, as body.signerTitles)
+  // Seller Net: who is selling (each seller's signer title comes from their own profile)
   'SELLER TYPE': ['Individual(s)', 'LLC', 'Trust'], 'LLC NAME': 'text', 'TRUST NAME': 'text',
 };
 
@@ -714,9 +714,6 @@ async function updatePageAccess_(id, account, body) {
     });
   };
   addAll(body.purchasers, isSellerNet ? 'Seller' : 'Purchaser');
-  // Seller Net: each seller's title for signing for the LLC or trust, from { accountId: title }
-  const titles = body.signerTitles && typeof body.signerTitles === 'object' ? body.signerTitles : {};
-  if (isSellerNet) people.forEach(p => { p.title = cleanText_(titles[p.id], 60); });
   addAll(body.collaborators, 'Collaborator');
   const buyers = people.filter(p => p.type !== 'Collaborator');
   if (!buyers.length) return { ok: false, error: 'need_one_purchaser' };
@@ -763,6 +760,19 @@ async function updatePageAccess_(id, account, body) {
       if (isSellerNet && has(typeColumn)) fields[SELLER_ENTITY_NAME_COLUMN[type === 'LLC' ? 'Trust' : 'LLC']] = '';
     } else if (has(typeColumn)) {
       if (isSellerNet) { fields['LLC NAME'] = ''; fields['TRUST NAME'] = ''; } else fields['BUYER ENTITY NAME'] = '';
+    }
+    // Seller Net: each seller's signer title is their title in that LLC or trust, from their own profile (a page saved
+    // before, whose seller has no title in their profile, keeps the one it has). Individual(s): none.
+    if (isSellerNet) {
+      const saved = {};
+      PAGE_PEOPLE_COLUMNS.forEach((c, i) => { const pid = phoneToId_(found.row[c]); if (pid) saved[pid] = String(found.row[PAGE_SIGNER_COLUMNS[i]] || '').trim(); });
+      const entity = (type === 'LLC' || type === 'Trust') && name;
+      buyers.forEach(b => {
+        if (!entity) { b.title = ''; return; }
+        const titles = (type === 'LLC' ? known[b.id].llcTitles : known[b.id].trustTitles) || {};
+        const key = Object.keys(titles).find(n => n.toLowerCase() === name.toLowerCase());
+        b.title = cleanText_((key && titles[key]) || saved[b.id] || '', 60);
+      });
     }
   }
 

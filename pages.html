@@ -1002,8 +1002,6 @@
         @media (max-width: 600px) { .sub-grid { grid-template-columns: minmax(0, 1fr); } }
         /* Sellers: seller type, the LLC / trust name and each seller's signer title, under the picker */
         .seller-extras { display: grid; gap: 14px; margin-top: 16px; }
-        .signer-list { display: grid; gap: 10px; }
-        .signer-name { display: block; margin: 0 0 4px 6px; font-size: 0.82rem; opacity: 0.7; }
         .seller-extras .field-help { margin-top: 0; }
         /* Buyer Breakdown: Buyer 1-4 and Collaborator 1, 2... one per line (each removable but Buyer 1), + Add under them,
            and the Buyer Type under the buyers */
@@ -3374,9 +3372,8 @@
         const MAX_PEOPLE = 6;
         // Seller Net: each person's title when signing for an LLC or trust, beside their ACCOUNT ID column
         const SIGNER_COLUMNS = ['PRIMARY SIGNER TITLE', 'ALT SIGNER TITLE 1', 'ALT SIGNER TITLE 2', 'ALT SIGNER TITLE 3', 'ALT SIGNER TITLE 4', 'ALT SIGNER TITLE 5'];
-        // { accountId: title }, with any unsaved edits (kept in the draft as "SIGNER TITLES", sent separately on save)
-        function signerTitles() {
-            if ('SIGNER TITLES' in draft) return JSON.parse(draft['SIGNER TITLES']);
+        // { accountId: title } as saved on the page (the API sets them from each seller's profile)
+        function savedSignerTitles() {
             const titles = {};
             PEOPLE_COLUMNS.forEach((c, i) => { const id = idOf(col(data.page, c)); if (id) titles[id] = text(col(data.page, SIGNER_COLUMNS[i])); });
             return titles;
@@ -3570,9 +3567,7 @@
                     // The API marks the HOA disclosure fee as seller-paid itself (and won't take that column from here)
                     const fields = { ...draft };
                     delete fields['WHO PAYS DISCLOSURE FEE'];
-                    delete fields['SIGNER TITLES'];
-                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields,
-                        signerTitles: isSellerNet() ? signerTitles() : undefined });
+                    const json = await api({ action: 'updatePageAccess', pageId, purchasers: people.value(), collaborators: collaborators.value(), lender: lender.value() || '', cash: pickedCash, fields });
                     if (!json.ok) throw new Error(json.error);
                     data.page = json.page;
                     // Reload the people list so incomes and credit scores match the new purchasers
@@ -4380,15 +4375,13 @@
                 const key = Object.keys(titles).find(n => same(n, e.name));
                 return key ? text(titles[key]) : '';
             };
+            // A seller's signer title: their title in the LLC or trust from their profile (as the API saves it), or the
+            // one a page saved before already has
+            const titleOf = (id, e) => profileTitle(id, e) || savedSignerTitles()[id] || '';
             function pick(e) {
                 setDraft('SELLER TYPE', e ? e.type : 'Individual(s)');
                 setDraft('LLC NAME', e && e.type === 'LLC' ? e.name : '');
                 setDraft('TRUST NAME', e && e.type === 'Trust' ? e.name : '');
-                if (e) {
-                    const all = signerTitles();
-                    sellers().forEach(id => { const t = profileTitle(id, e); if (t) all[id] = t; });
-                    setDraft('SIGNER TITLES', JSON.stringify(all));
-                }
                 build();
             }
             let shownFor = '';
@@ -4408,25 +4401,11 @@
                         .concat(options.map(o => ({ value: keyOf(o), main: o.name, secondary: o.stale ? o.type + ' · not on every seller’s profile' : o.type, icon: 'bank' }))),
                     selected: [picked && picked.name ? keyOf(picked) : ''],
                     onChange: v => pick(options.find(x => keyOf(x) === v)) });
-                typeCell.append(el('p', 'field-help', options.some(o => !o.stale) ? 'An LLC or trust shows here when every seller has it in their profile.'
+                typeCell.append(el('p', 'field-help', options.some(o => !o.stale) ? 'An LLC or trust shows here when every seller has it in their profile. Each seller signs with their title from their profile.'
                     : 'An LLC or trust shows here once every seller has it in their profile (Settings &gt; LLCs or Trusts).'));
-                if (!picked) return;
-                const type = picked.type;
-                const titles = cell('Authorized Signer Title');
-                const list = el('div', 'signer-list');
-                titles.append(list);
-                if (!sellers().length) { list.append(el('p', 'field-help', 'Choose the sellers first.')); return; }
-                sellers().forEach(id => {
-                    const row = el('div');
-                    row.append(el('span', 'signer-name', escapeHtml(nameOf(id))));
-                    row.append(textBox({ value: signerTitles()[id] || '', inputmode: 'text', placeholder: type === 'LLC' ? 'e.g. Managing Member' : 'e.g. Trustee',
-                        onInput: i => { const all = signerTitles(); all[id] = i.value; setDraft('SIGNER TITLES', JSON.stringify(all)); } }).wrap);
-                    list.append(row);
-                });
             }
             build();
-            // New or removed sellers get (or lose) a title box; an LLC or trust the sellers no longer all have goes back
-            // to As Individual(s)
+            // An LLC or trust the sellers no longer all have goes back to As Individual(s)
             onPeopleChanged = () => {
                 if (sellers().join(',') === shownFor) return;
                 const e = now();
@@ -4439,9 +4418,8 @@
                 const ids = sellers();
                 if (!ids.length) return '';
                 const type = current('SELLER TYPE');
-                const entity = type === 'LLC' || type === 'Trust';
-                const all = signerTitles();
-                const names = ids.map(id => nameOf(id) + (entity && all[id] ? ' (' + all[id] + ')' : '')).join(', ');
+                const e = now();
+                const names = ids.map(id => { const t = e && e.name ? titleOf(id, e) : ''; return nameOf(id) + (t ? ' (' + t + ')' : ''); }).join(', ');
                 const entityName = type === 'LLC' ? current('LLC NAME') : type === 'Trust' ? current('TRUST NAME') : '';
                 return names + (type ? ' \u00b7 ' + type + (entityName ? ': ' + entityName : '') : '');
             };
