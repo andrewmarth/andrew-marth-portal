@@ -1606,7 +1606,15 @@
         // have them: those fees are picked in Other Fees That Apply there)
         function feeConditions(page) {
             const days = text(col(page, 'ESCROW DURATION'));
-            const out = days === '' ? {} : { escrowDays: num(days) };
+            // (and in business days: the weekdays after the offer acceptance, or today without one, through the close of
+            // escrow; holidays aren't counted out)
+            const businessDays = () => {
+                const start = parseDate(col(page, 'OFFER ACCEPTANCE DATE')) || new Date();
+                let n = 0;
+                for (let d = 1; d <= num(days); d++) { const day = addDays(start, d).getDay(); if (day !== 0 && day !== 6) n++; }
+                return n;
+            };
+            const out = days === '' ? {} : { escrowDays: num(days), escrowBusinessDays: businessDays() };
             if (!isSellerNet()) return out;
             return { ...out, 'Foreign Seller': isTrue(col(page, 'FOREIGN SELLER')), 'Septic': isTrue(col(page, 'HAS SEPTIC')),
                 '1031 Exchange': isTrue(col(page, '1031 EXCHANGE')), 'Holdback': num(col(page, 'HOLDBACK AMOUNT')) > 0, holdbackAmount: num(col(page, 'HOLDBACK AMOUNT')),

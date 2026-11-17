@@ -628,6 +628,8 @@
         .tc-row.is-head { font-size: 0.8rem; font-weight: bold; opacity: 0.7; padding: 0 6px; }
         .tc-row.is-fee { grid-template-columns: 2.2fr 0.9fr 0.8fr 1.1fr 40px; row-gap: 6px; }
         .tc-row.is-fee .tc-investor { grid-column: 1 / -1; }
+        .tc-row .tc-investor select[data-k="dayType"], .tc-row .tc-investor select[data-k="investorRule"] { width: auto; max-width: 100%; }
+        .tc-row .tc-investor select[data-k="dayType"] { min-height: 36px; padding: 4px 10px; border: 2px solid var(--navy); border-radius: 10px; background: #f7f4f0; font-family: inherit; font-size: 0.9rem; color: var(--brown); }
         /* Discounts: the name on its own line, then the percent, who qualifies and what it comes off; an investor's rule under */
         .tc-row.is-discount { grid-template-columns: 96px minmax(0, 1fr) 40px; row-gap: 6px; align-items: start; }
         .tc-row.is-discount .tc-disc-name, .tc-row.is-discount .tc-investor { grid-column: 1 / -1; }
@@ -1540,7 +1542,7 @@
         import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';
         import { loadPlaces, ensurePickerStyles } from '/new-property.js';
-        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf, PRIOR_POLICY_COMPANY, FEE_WHEN, INVESTOR_RULES, investorRuleOf } from '/title-fees.js';
+        import { tableFee, titleQuote, refiQuote, saleFees, ENDORSEMENT_WHEN, TITLE_REQUIRED, missingRates, STANDARD_ENDORSEMENTS, splitEndorsements, unpricedEndorsements, DISCOUNT_SPECIAL, PICKED_QUALIFIERS, DISCOUNT_APPLIES, qualifiersOf, PRIOR_POLICY_COMPANY, FEE_WHEN, INVESTOR_RULES, investorRuleOf, ESCROW_DAY_TYPES } from '/title-fees.js';
 
         const nameValue = document.getElementById('name-value');
         const editBtn = document.getElementById('edit-name');
@@ -3306,7 +3308,7 @@
                 { name: 'Electronic Commerce Service Fee', amount: 50, sellerShare: 0.5, when: 'Electronic Service' },
                 { name: 'FIRPTA Filing Service Fee', amount: 300, sellerShare: 1, when: 'Foreign Seller' },
                 { name: 'Manufactured Home Title Transfer / Affixture', amount: 200, sellerShare: 0.5, when: 'Manufactured Home' },
-                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3 },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3, dayType: 'business' },
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (buyer)', amount: 25, sellerShare: 0, when: 'Every Sale' },
                 { name: 'Closing Protection Letter (lender)', amount: 25, sellerShare: 0, when: 'With a Loan' },
@@ -3418,7 +3420,7 @@
             otherFees: [
                 { name: 'Manufactured Home Title Transfer (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
                 { name: 'Manufactured Home Affidavit of Affixture (per unit)', amount: 250, sellerShare: 0.5, when: 'Manufactured Home' },
-                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3 },
+                { name: 'Accelerated Escrow (3 business days)', amount: 250, sellerShare: 0.5, when: 'Accelerated Escrow', maxDays: 3, dayType: 'business' },
                 { name: '1031 Exchange Accommodation', amount: 100, sellerShare: 1, when: '1031 Exchange' },
                 // Title manual M: $25 per party
                 { name: 'Closing Protection Letter (seller)', amount: 25, sellerShare: 1, when: 'Every Sale' },
@@ -3633,7 +3635,8 @@
             // Accelerated Escrow: how short the page's Escrow Duration has to be for it to apply
             + '<div class="tc-investor" data-accelerated' + (f.when === 'Accelerated Escrow' ? '' : ' hidden') + '><span>Applies when escrow is</span>'
             + '<input type="text" inputmode="numeric" data-k="maxDays" aria-label="Most days of escrow" placeholder="3" value="' + esc(f.maxDays ?? '') + '">'
-            + '<span>days or fewer (the page’s Escrow Duration)</span></div>'
+            + '<select data-k="dayType" aria-label="Calendar or business days">' + options(ESCROW_DAY_TYPES, f.dayType, 'calendar') + '</select>'
+            + '<span>or fewer (the page’s Escrow Duration; business days are the weekdays from the offer acceptance to closing)</span></div>'
             // Holdback: the fee for each range of the page's holdback amount (none: the Amount, whatever the holdback)
             + '<div class="tc-ranges" data-holdback' + (f.when === 'Holdback' ? '' : ' hidden') + '>'
             + '<p class="tc-help">Fee by the holdback amount (optional). Each row is the fee for a holdback up to that amount, starting where the row above ends; leave the last row’s “up to” blank for any amount above it. With no rows, the Amount is charged for any holdback.</p>'
@@ -3821,7 +3824,7 @@
                     const k = i.dataset.k;
                     if (k === 'qualifies') { o[k] = [...i.querySelectorAll('input:checked')].map(x => x.value); return; }
                     if (k === 'investorProperties' || k === 'investorYears' || k === 'priorYears' || k === 'maxDays') { const t = i.value.replace(/\D/g, ''); o[k] = t === '' ? null : Number(t); return; }
-                    o[k] = ['name', 'when', 'applies', 'priorCompany', 'investorRule'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
+                    o[k] = ['name', 'when', 'applies', 'priorCompany', 'investorRule', 'dayType'].includes(k) ? i.value.trim() : i.closest('.is-pct') ? parsePct(i.value) : parseMoney(i.value);
                 });
                 // A Holdback fee's amount ranges (blank rows left out)
                 const holdback = row.querySelector('[data-holdback]');

@@ -135,8 +135,11 @@ export const SALE_CONDITIONS = ['Foreign Seller', 'Septic', '1031 Exchange', 'Ho
 const answered = (f, conditions) => Boolean(conditions) && (f.when === 'Accelerated Escrow'
     ? typeof conditions.escrowDays === 'number' && f.maxDays > 0
     : Object.prototype.hasOwnProperty.call(conditions, f.when));
+// (Accelerated Escrow: its maxDays in calendar days, or with dayType 'business', in business days: conditions.
+// escrowBusinessDays, weekdays from the offer acceptance to the close of escrow)
+export const ESCROW_DAY_TYPES = [['calendar', 'calendar days'], ['business', 'business days']];
 export function feeApplies(f, hasLoan, property, conditions = null) {
-    if (f.when === 'Accelerated Escrow') return answered(f, conditions) && conditions.escrowDays <= f.maxDays;
+    if (f.when === 'Accelerated Escrow') return answered(f, conditions) && (f.dayType === 'business' ? conditions.escrowBusinessDays : conditions.escrowDays) <= f.maxDays;
     return f.when === 'Every Sale' || (f.when === 'With a Loan' && hasLoan) || (f.when === 'Manufactured Home' && property === 'manufactured')
         || (SALE_CONDITIONS.includes(f.when) && Boolean(conditions && conditions[f.when]));
 }

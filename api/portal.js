@@ -1967,7 +1967,7 @@ function titleCompanyOut_(doc) {
     refiPolicyPercent: num(f['REFINANCE POLICY PERCENT']),
     refiEndorsements: num(f['REFINANCE ENDORSEMENTS']),
     titleDiscounts: Array.isArray(f['TITLE DISCOUNTS']) ? f['TITLE DISCOUNTS'].map(d => titleDiscountOut_(d, 'property')) : [],
-    otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || ''), maxDays: num(d['MAX ESCROW DAYS']),
+    otherFees: Array.isArray(f['OTHER FEES']) ? f['OTHER FEES'].map(d => ({ name: String(d['NAME'] || ''), amount: num(d['AMOUNT']), sellerShare: num(d['SELLER SHARE']), when: String(d['WHEN'] || ''), maxDays: num(d['MAX ESCROW DAYS']), dayType: d['DAY TYPE'] === 'business' ? 'business' : 'calendar',
       ranges: Array.isArray(d['RANGES']) ? d['RANGES'].map(r => ({ upTo: num(r['UP TO']), fee: num(r['FEE']) })) : [] })) : [],
     titleTable: table(f['OWNERS TITLE TABLE']),
     titleOverFee: num(f['OWNERS TITLE OVER TABLE FEE']),
@@ -2090,6 +2090,8 @@ async function saveTitleCompany_(account, body) {
       const days = Number(d.maxDays);
       if (!(Number.isInteger(days) && days >= 1 && days <= 365)) return { ok: false, error: 'invalid_accelerated_escrow' };
       fee['MAX ESCROW DAYS'] = days;
+      // ...counted in calendar days or business days
+      fee['DAY TYPE'] = d.dayType === 'business' ? 'business' : 'calendar';
     }
     otherFees.push(fee);
   }
