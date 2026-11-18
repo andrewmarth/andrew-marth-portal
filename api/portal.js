@@ -139,6 +139,9 @@ const PAGE_SETTING_FIELDS = {
   'RECORDING FEE': 'money', 'PAYOFF STATEMENT FEE': 'money',
   'PREPAYMENT PENALTY %': 'rate', 'PREPAYMENT PENALTY $': 'money',
   'OTHER LOAN PAYOFF FEES %': 'rate', 'OTHER LOAN PAYOFF FEES $': 'money',
+  // Seller Net: Other Loan Payoff Fees as lines (each name, amount and Estimated / Final), replacing the % and $ above (still
+  // read on a page without a list)
+  'HAS OTHER LOAN PAYOFF FEES': ['Yes', 'No'], 'OTHER LOAN PAYOFF FEES': 'feeLines',
   'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
   'LISTING STATUS': ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'],
   // Seller Net: who is selling (each seller's signer title comes from their own profile)
@@ -170,8 +173,8 @@ function cleanSetting_(kind, value) {
     }
     return JSON.stringify(out);
   }
-  // A page's fee lines (HOA other fees, the seller's other fees): JSON [{ NAME, AMOUNT, PAYER }] (up to 30, each named,
-  // $0 to $100,000,000, paid by the Buyer, the Seller or blank)
+  // A page's fee lines (HOA other fees, the seller's other fees, other loan payoff fees): JSON [{ NAME, AMOUNT, PAYER,
+  // STATUS }] (up to 30, each named, $0 to $100,000,000, paid by the Buyer, the Seller or blank, Estimated, Final or blank)
   if (kind === 'feeLines') {
     let list;
     try { list = JSON.parse(raw); } catch (e) { return null; }
@@ -181,8 +184,9 @@ function cleanSetting_(kind, value) {
       const name = cleanText_(f && f.NAME, 100);
       const amount = Number(f && f.AMOUNT);
       const payer = cleanSetting_('payer', f && f.PAYER);
-      if (!name || !isFinite(amount) || amount < 0 || amount > 100000000 || payer === null) return null;
-      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100, ...(payer ? { PAYER: payer } : {}) });
+      const status = cleanSetting_(['Estimated', 'Final'], f && f.STATUS);
+      if (!name || !isFinite(amount) || amount < 0 || amount > 100000000 || payer === null || status === null) return null;
+      out.push({ NAME: name, AMOUNT: Math.round(amount * 100) / 100, ...(payer ? { PAYER: payer } : {}), ...(status ? { STATUS: status } : {}) });
     }
     return JSON.stringify(out);
   }

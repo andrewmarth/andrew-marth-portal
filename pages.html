@@ -987,9 +987,11 @@
         .fee-line .sub-label { grid-column: 1 / -1; margin-bottom: 0; }
         .fee-line .fee-name { grid-column: 1 / -1; }
         .fee-line.no-payer { grid-template-columns: minmax(0, 1fr) auto; }
+        /* (Seller Net: Estimated / Final under the line) */
+        .fee-line .fee-status { grid-column: 1 / -1; }
         @media (max-width: 600px) {
             .fee-line { grid-template-columns: minmax(0, 1fr) auto; }
-            .fee-line .seg { grid-column: 1 / -1; grid-row: 4; }
+            .fee-line .fee-payer { grid-column: 1 / -1; grid-row: 4; }
         }
         .pair-even { grid-template-columns: 1fr 1fr; }
         /* Several labeled boxes edited together (Seller Net's Loan Payoff) */
@@ -1592,9 +1594,9 @@
         // (HOA OTHER FEES: JSON [{ NAME, AMOUNT, PAYER }]). Pages from before have one fee (HOA OTHER FEE, paid by WHO PAYS
         // OTHER FEE): it reads as a fee named "HOA Other Fee", and the blank yes / no as Yes when it's over $0 (No at $0). get(column)
         // reads a value. → [{ name, amount, payer }]
-        // A saved list of fee lines (JSON [{ NAME, AMOUNT, PAYER? }]) → [{ name, amount, payer }]
+        // A saved list of fee lines (JSON [{ NAME, AMOUNT, PAYER?, STATUS? }]) → [{ name, amount, payer, status }]
         const feeLinesOf = raw => {
-            try { const l = JSON.parse(text(raw) || '[]'); return Array.isArray(l) ? l.map(f => ({ name: text(f && f.NAME), amount: num(f && f.AMOUNT), payer: text(f && f.PAYER) })) : []; } catch (e) { return []; }
+            try { const l = JSON.parse(text(raw) || '[]'); return Array.isArray(l) ? l.map(f => ({ name: text(f && f.NAME), amount: num(f && f.AMOUNT), payer: text(f && f.PAYER), status: text(f && f.STATUS) })) : []; } catch (e) { return []; }
         };
         function hoaOtherFeeRows(get) {
             if (text(get('HOA OTHER FEES'))) return feeLinesOf(get('HOA OTHER FEES'));
@@ -1614,6 +1616,23 @@
         const sellerOtherFeeRows = get => feeLinesOf(get('SELLER OTHER FEES'));
         const sellerOtherAnswer = get => text(get('HAS SELLER OTHER FEES')) || (sellerOtherFeeRows(get).length ? 'Yes' : '');
         const sellerOtherFees = get => (sellerOtherAnswer(get) === 'Yes' ? sellerOtherFeeRows(get) : []);
+        // Seller Net: Other Loan Payoff Fees (with the loan payoff): HAS OTHER LOAN PAYOFF FEES (Yes / No) and OTHER LOAN
+        // PAYOFF FEES (JSON [{ NAME, AMOUNT, STATUS }]). A page from before has a percent of the loan balance and a flat
+        // amount (OTHER LOAN PAYOFF FEES % / $, with OTHER LOAN PAYOFF FEES STATUS): its flat amount shows as one line, both
+        // still count (as one line, as before) until the list is saved, which clears them, and its yes / no is Yes when
+        // either is over 0. Blank: not answered yet.
+        const payoffFeeList = get => text(get('OTHER LOAN PAYOFF FEES')) !== '';
+        const payoffFeeRows = get => (payoffFeeList(get) ? feeLinesOf(get('OTHER LOAN PAYOFF FEES'))
+            : num(get('OTHER LOAN PAYOFF FEES $')) > 0 ? [{ name: 'Other Loan Payoff Fees', amount: num(get('OTHER LOAN PAYOFF FEES $')), payer: '', status: text(get('OTHER LOAN PAYOFF FEES STATUS')) }] : []);
+        // (a page from before: the percent of the loan balance)
+        const payoffFeePct = get => (payoffFeeList(get) ? 0 : num(get('OTHER LOAN PAYOFF FEES %')));
+        function payoffFeeAnswer(get) {
+            const answer = text(get('HAS OTHER LOAN PAYOFF FEES'));
+            if (answer) return answer;
+            if (payoffFeeList(get)) return payoffFeeRows(get).length ? 'Yes' : 'No';
+            if (text(get('OTHER LOAN PAYOFF FEES $')) === '' && text(get('OTHER LOAN PAYOFF FEES %')) === '') return '';
+            return payoffFeeRows(get).length || payoffFeePct(get) > 0 ? 'Yes' : 'No';
+        }
         // HOA dues: each association's amount per payment (HOA PRIMARY / MASTER MONTHLY DUES: the column names are from when
         // they were always monthly) and how often it's paid (HOA PRIMARY / MASTER DUES INTERVAL; blank: Monthly). The HOA is
         // taken to bill on the calendar: quarters from January, April, July and October, halves from January and July, years
@@ -2260,7 +2279,10 @@
                 { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -payoffFee('RECORDING FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -payoffFee('PAYOFF STATEMENT FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: noLoan ? 0 : -(penaltyPct + penaltyDollars) },
-                { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: noLoan ? 0 : -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
+                // Other Loan Payoff Fees: a line each (a page from before: its percent of the balance + flat amount, one line)
+                ...(noLoan || payoffFeeAnswer(c => col(page, c)) !== 'Yes' ? []
+                    : payoffFeeList(c => col(page, c)) ? payoffFeeRows(c => col(page, c)).map(f => ({ section: 'Payoffs', payoff: true, label: f.name, amount: -f.amount }))
+                    : [{ section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) }]),
 
                 // The buyer breakdown's prorations, the other way around
                 // (by how often the dues are paid: the rest of the billing period closing falls in)
@@ -2811,9 +2833,8 @@
                 if (get('LOAN INTEREST RATE') === '') need('Estimated Interest Rate', 'ESTIMATED INTEREST RATE');
                 fee('Recording Fee', 'RECORDING FEE');
                 fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
-                need('Other Loan Payoff Fees %', 'OTHER LOAN PAYOFF FEES %');
-                need('Other Loan Payoff Fees $', 'OTHER LOAN PAYOFF FEES $');
-                need('Other Loan Payoff Fees (Estimated / Final)', 'OTHER LOAN PAYOFF FEES STATUS');
+                // (each line's Estimated / Final: blank counts as Estimated)
+                if (payoffFeeAnswer(get) === '') { agent.push('Other Loan Payoff Fees'); rows.add('Other Loan Payoff Fees'); }
             }
             if (get('TITLE COMPANY') === '') {
                 need('Escrow Fee', 'ESCROW FEE RATE');
@@ -4053,12 +4074,15 @@
         function hoaOtherFeesField(parent, required) {
             feeLinesField(parent, { label: 'HOA Other Fees', question: 'Any other HOA fees?', listColumn: 'HOA OTHER FEES', answerColumn: 'HAS HOA OTHER FEES',
                 rowsOf: hoaOtherFeeRows, answerOf: hoaOtherAnswer, payers: true, required,
+                // (Seller Net: each line Estimated or Final)
+                statuses: required,
                 onWrite: () => { draft['HOA OTHER FEE'] = ''; draft['WHO PAYS OTHER FEE'] = ''; } });
         }
         // A Yes / No question, then with Yes any number of fees, one per line: a name and an amount (and with cfg.payers, who
         // pays it), "+ Add Fee" adding one. Saved as cfg.answerColumn (Yes / No) and cfg.listColumn (JSON [{ NAME, AMOUNT,
-        // PAYER? }]). cfg: { label, question, help, listColumn, answerColumn, rowsOf(get), answerOf(get), payers, required,
-        // onWrite() (anything else to clear when the list is saved) }
+        // PAYER?, STATUS? }]). cfg: { label, question, help, listColumn, answerColumn, rowsOf(get), answerOf(get), payers, required,
+        // statuses (Seller Net: each line Estimated or Final; blank shows, and counts as, Estimated), onWrite() (anything
+        // else to clear when the list is saved) }
         function feeLinesField(parent, cfg) {
             const key = cfg.listColumn;
             const f = fieldShell(cfg.label, { span: true, key, help: cfg.help });
@@ -4068,14 +4092,15 @@
             parent.append(f.wrap);
             const required = cfg.required;
             const payerOf = p => (!cfg.payers ? '' : /^seller$/i.test(p) ? 'Seller' : /^buyer$/i.test(p) || !required ? 'Buyer' : '');
-            const blankRow = () => ({ name: '', amount: '', payer: cfg.payers ? (required ? 'Seller' : 'Buyer') : '' });
-            const load = () => cfg.rowsOf(current).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer) }));
+            const statusOf = s => (!cfg.statuses ? '' : /^final$/i.test(s) ? 'Final' : 'Estimated');
+            const blankRow = () => ({ name: '', amount: '', payer: cfg.payers ? (required ? 'Seller' : 'Buyer') : '', status: statusOf('') });
+            const load = () => cfg.rowsOf(current).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer), status: statusOf(x.status) }));
             let rows = load();
             // The lines as saved (one with neither a name nor an amount is left out; one with an amount needs a name)
             function write() {
                 const kept = rows.filter(r => r.name.trim() || r.amount !== '');
                 fieldBad(key, kept.some(r => !r.name.trim()) ? 'Please name each fee.' : '');
-                draft[key] = JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), ...(cfg.payers ? { PAYER: r.payer } : {}) })));
+                draft[key] = JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), ...(cfg.payers ? { PAYER: r.payer } : {}), ...(cfg.statuses ? { STATUS: r.status } : {}) })));
                 if (cfg.onWrite) cfg.onWrite();
                 // (the lines only show with Yes)
                 draft[cfg.answerColumn] = 'Yes';
@@ -4112,9 +4137,15 @@
                     line.append(el('span', 'sub-label', 'Fee ' + (i + 1)), name.wrap, amount.wrap);
                     if (cfg.payers) {
                         const payer = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], r.payer, v => { r.payer = v; write(); }, 'Fee ' + (i + 1) + ' paid by');
+                        payer.classList.add('fee-payer');
                         line.append(payer);
                     } else line.classList.add('no-payer');
                     line.append(remove);
+                    if (cfg.statuses) {
+                        const status = segToggle([['Estimated', 'Estimated'], ['Final', 'Final']], r.status, v => { r.status = v; write(); }, 'Fee ' + (i + 1) + ' estimated or final');
+                        status.classList.add('fee-status');
+                        line.append(status);
+                    }
                     list.append(line);
                     if (focusName === i) setTimeout(() => name.input.focus({ preventScroll: true }));
                 });
@@ -4131,7 +4162,8 @@
                 const answer = cfg.answerOf(current);
                 if (answer !== 'Yes') return answer === 'No' ? 'None' : '';
                 const fees = cfg.rowsOf(current);
-                return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')).join(' · ') : 'Yes';
+                return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')
+                    + (cfg.statuses ? ', ' + statusOf(x.status).toLowerCase() : '')).join(' · ') : 'Yes';
             };
         }
         // HOA dues (which: 'PRIMARY' or 'MASTER'): the amount of each payment, and under it how often it's paid (HOA ...
@@ -4807,7 +4839,13 @@
             const payoffStart = payoffs.children.length;
             moneyField(payoffs, 'Recording Fee', 'RECORDING FEE', { status: 'RECORDING FEE STATUS' });
             moneyField(payoffs, 'Payoff Statement Fee', 'PAYOFF STATEMENT FEE', { status: 'PAYOFF STATEMENT FEE STATUS' });
-            percentAndDollars(payoffs, 'Other Loan Payoff Fees', 'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'A percent of the loan balance and a flat amount. Enter 0 for none.', 'OTHER LOAN PAYOFF FEES STATUS');
+            // Other Loan Payoff Fees: a line each, Estimated or Final (a page from before: its percent of the loan balance still
+            // counts until these are saved)
+            const oldPct = payoffFeePct(current);
+            feeLinesField(payoffs, { label: 'Other Loan Payoff Fees', question: 'Any other loan payoff fees?', listColumn: 'OTHER LOAN PAYOFF FEES', answerColumn: 'HAS OTHER LOAN PAYOFF FEES',
+                rowsOf: payoffFeeRows, answerOf: payoffFeeAnswer, statuses: true,
+                help: 'Any other fees the lender charges to pay off the loan.' + (oldPct > 0 ? ' This page also has the old ' + percent(oldPct) + ' of the loan balance; saving these lines replaces it.' : ''),
+                onWrite: () => { draft['OTHER LOAN PAYOFF FEES %'] = ''; draft['OTHER LOAN PAYOFF FEES $'] = ''; draft['OTHER LOAN PAYOFF FEES STATUS'] = ''; } });
             loanFeeFields = [...payoffs.children].slice(payoffStart);
 
             // HOA yes / no (also in Client Input)
@@ -4839,7 +4877,7 @@
             percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', 'A percent of the price and a flat amount. Enter 0 for none.');
             // The seller's own other costs, one line each
             feeLinesField(misc, { label: 'Other Fees', question: 'Any other fees?', listColumn: 'SELLER OTHER FEES', answerColumn: 'HAS SELLER OTHER FEES',
-                rowsOf: sellerOtherFeeRows, answerOf: sellerOtherAnswer, payers: false, help: 'Any other costs the seller pays at closing.' });
+                rowsOf: sellerOtherFeeRows, answerOf: sellerOtherAnswer, payers: false, statuses: true, help: 'Any other costs the seller pays at closing.' });
 
             // Buyer Inputs: the buyer's side of the escrow breakdown
             document.getElementById('buyer-inputs-section').hidden = false;
