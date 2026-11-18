@@ -907,9 +907,9 @@ const CLIENT_INPUT_FIELDS = ['LOAN TYPE', 'LOAN PRINCIPAL BALANCE', 'PRINCIPAL L
   'HAS OTHER HOLDBACKS', 'OTHER HOLDBACKS', 'DRAW FEE HOLDBACK', 'OTHER HOLDBACK',
   'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS', 'HOA PRIMARY DUES INTERVAL',
   'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS', 'HOA MASTER DUES INTERVAL'];
-// The seller's answers that lock the agent's copy (Agent Loan Input's DSCR and Hard Money questions, the HOA section's
-// HOA yes / no and dues): each one the seller saves (not blank) is added to CLIENT ANSWERED
-const CLIENT_LOCK_FIELDS = ['INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+// The seller's answers that lock the agent's copy (Agent Loan Input's Loan Term and DSCR and Hard Money questions, the HOA
+// section's HOA yes / no and dues): each one the seller saves (not blank) is added to CLIENT ANSWERED
+const CLIENT_LOCK_FIELDS = ['LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
   'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
 async function saveClientInput_(id, account, body) {
   const found = await findPage_(body.pageId);

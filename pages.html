@@ -994,6 +994,14 @@
             .fee-line .fee-payer { grid-column: 1 / -1; grid-row: 4; }
         }
         .pair-even { grid-template-columns: 1fr 1fr; }
+        /* Seller Net: every setting in an open menu on its own line, never side by side: a fee's amount over who pays it, a
+           commission's % over its $, a group's boxes one per line (Title & Escrow's prior policy too), and a fee line's
+           amount over who pays it (its remove button stays by the amount) */
+        body.seller-net .pair, body.seller-net .pair-even { grid-template-columns: minmax(0, 1fr); }
+        body.seller-net .sub-grid { grid-template-columns: minmax(0, 1fr); }
+        body.seller-net .sub-grid > .sub-field, body.seller-net .sub-grid.is-lines > .sub-field.is-half { grid-column: 1 / -1; }
+        body.seller-net .fee-line { grid-template-columns: minmax(0, 1fr) auto; }
+        body.seller-net .fee-line .fee-payer { grid-column: 1 / -1; grid-row: 4; }
         /* Several labeled boxes edited together (Seller Net's Loan Payoff) */
         .field-body > .status-seg { margin-top: 10px; }
         /* Seller Net: the breakdown is held back until every input is in */
@@ -1689,8 +1697,9 @@
         }
         // Seller Net: questions in both the agent's and the client's settings (the same columns). Once the client answers
         // one (in their Add Your Loan Details pop-up, or Client Loan / HOA Input), it's listed in CLIENT ANSWERED and the
-        // agent's copy is locked: Agent Loan Input's DSCR and Hard Money questions, and the HOA section's HOA yes / no and dues.
-        const CLIENT_LOCKS = ['INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+        // agent's copy is locked: Agent Loan Input's Loan Term and DSCR and Hard Money questions, and the HOA section's HOA
+        // yes / no and dues.
+        const CLIENT_LOCKS = ['LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
             'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
         const clientAnswered = (get, column) => listOf(get('CLIENT ANSWERED')).includes(column);
         // HOA dues: each association's amount per payment (HOA PRIMARY / MASTER MONTHLY DUES: the column names are from when
@@ -4918,17 +4927,21 @@
 
         // Seller Net's loan questions, as groupField parts: read with get(column), written with put(column, value).
         // Agent Loan Input has the agent's (the original loan and an estimated rate), Client Loan Input the seller's (their
-        // statement's balance, date and rate, and the rest). Both ask Loan Type and Loan Term, and (lock: once the seller
-        // has answered, the agent's copy is locked) a DSCR loan's interest only questions and a Hard Money loan's holdbacks.
-        function loanTypePart(get, put) {
+        // statement's balance, date and rate, and the rest). Both ask Loan Type, and (lock: once the seller has answered,
+        // the agent's copy is locked) Loan Term, a DSCR loan's interest only questions and a Hard Money loan's holdbacks.
+        // lockable: the agent's copy.
+        function loanTypePart(get, put, lockable) {
             return { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES, rebuild: true,
-                // (Hard Money terms are in months, the others in years: a term that isn't one of the new type's doesn't carry over)
+                // (Hard Money terms are in months, the others in years: a term that isn't one of the new type's doesn't carry
+                // over, unless it's the seller's answer and this is the agent's copy)
                 then: (v, old) => {
                     const term = get('LOAN TERM MONTHS');
+                    if (lockable && clientAnswered(get, 'LOAN TERM MONTHS')) return;
                     if (term !== '' && termInMonths(v) !== termInMonths(old) && !loanTermPresets(v).some(([m]) => m === term)) put('LOAN TERM MONTHS', '');
                 } };
         }
-        const loanTermPart = (get, show) => ({ label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'term', type: () => get('LOAN TYPE'), show });
+        const loanTermPart = (get, show, lockable) => ({ label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'term', type: () => get('LOAN TYPE'), show,
+            lock: lockable ? () => clientAnswered(get, 'LOAN TERM MONTHS') : null });
         // extra: needed for the net sheet when it applies (sellerNetMissing)
         function dscrParts(get, lockable) {
             const dscr = () => get('LOAN TYPE') === 'DSCR';
@@ -4954,10 +4967,10 @@
         function agentLoanParts(get, put) {
             const loan = () => !hasNoLoan(get);
             return [
-                loanTypePart(get, put),
+                loanTypePart(get, put, true),
                 { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
                 { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
-                loanTermPart(get, loan),
+                loanTermPart(get, loan, true),
                 { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: () => loan() && get('LOAN INTEREST RATE') === '' },
                 ...dscrParts(get, true),
                 ...holdbackParts(get, true),
@@ -5011,7 +5024,7 @@
         // and the seller's HOA answers as a third
         function loanPayoffFields(parent) {
             groupField(parent, 'Agent Loan Input', agentLoanParts(SETTINGS_IO.get, SETTINGS_IO.put), { lines: true,
-                help: 'Your estimate of the seller’s loan, until they add theirs. A DSCR loan’s interest only questions and a hard money loan’s holdbacks lock once the seller answers them.' });
+                help: 'Your estimate of the seller’s loan, until they add theirs. The Loan Term, a DSCR loan’s interest only questions and a hard money loan’s holdbacks lock once the seller answers them.' });
             groupField(parent, 'Client Loan Input', clientLoanParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO, help: 'The seller’s own answers, from a recent statement.' });
             groupField(document.getElementById('client-hoa-fields'), 'Client HOA Input', clientHoaParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO,
                 help: 'The seller’s own HOA answers. Once they’re in, the HOA section’s HOA, Primary Dues and Master Dues are locked to them.' });
@@ -5709,6 +5722,8 @@
 
         // PAGE TYPE "Seller Net": property details, the seller's escrow breakdown, and the admin settings card
         function showSellerNet() {
+            // (the settings menus list every setting on its own line)
+            document.body.classList.add('seller-net');
             document.getElementById('escrow-eyebrow').textContent = 'Net Proceeds';
             document.getElementById('cash-total').hidden = true;
             document.getElementById('buyer-note').hidden = true;
