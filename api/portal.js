@@ -50,6 +50,8 @@ const SELLER_ENTITY_NAME_COLUMN = { LLC: 'LLC NAME', Trust: 'TRUST NAME' };
 // TRUE when the buyer is paying cash (no loan)
 const PAGE_CASH_COLUMN = 'CASH PURCHASE';
 
+// How often HOA dues are paid (HOA PRIMARY / MASTER DUES INTERVAL)
+const HOA_DUES_INTERVALS = ['Monthly', 'Quarterly', 'Bi-Annually', 'Annually'];
 // PAGES columns admins can edit from the page's Settings card, and the kind of value each one takes:
 //   money / int: whole numbers (no commas)   rate: a decimal like 0.03 for 3%   bool: TRUE / FALSE
 //   date: m/d/yyyy   payer: Buyer or Seller   text: any short text   [list]: one of those values
@@ -109,6 +111,10 @@ const PAGE_SETTING_FIELDS = {
   // Seller Net: the seller's Other Fees (Miscellaneous): Yes / No, then each fee's name and amount (the seller pays them)
   'HAS SELLER OTHER FEES': ['Yes', 'No'], 'SELLER OTHER FEES': 'feeLines',
   'HOA PRIMARY MONTHLY DUES': 'money', 'HOA MASTER MONTHLY DUES': 'money',
+  // HOA dues: how often each is paid (its amount is per payment; blank: Monthly), and the months of dues the HOA collects
+  // ahead at closing (at both associations' dues) and who pays them
+  'HOA PRIMARY DUES INTERVAL': HOA_DUES_INTERVALS, 'HOA MASTER DUES INTERVAL': HOA_DUES_INTERVALS,
+  'HOA PREPAID DUES MONTHS': 'int', 'WHO PAYS PREPAID DUES': 'payer',
   'BUYERS AGENT COMMISSION %': 'rate', 'BUYERS AGENT COMMISSION $': 'money',
   'SELLER PAID BUYER COMMISSION %': 'rate', 'SELLER PAID BUYER COMMISSION $': 'money',
   'HOME INSPECTOR': 'text', 'HOME INSPECTOR POOL': 'bool', 'HOME INSPECTOR SEWER': 'bool', 'HOME INSPECTOR TERMITE': 'bool',
@@ -885,8 +891,8 @@ async function shareGlobalSettings_(siblings, fields, sellers) {
 const CLIENT_INPUT_FIELDS = ['LOAN TYPE', 'LOAN PRINCIPAL BALANCE', 'PRINCIPAL LOAN BALANCE DATE', 'LOAN INTEREST RATE',
   'LOAN TERM MONTHS', 'ORIGINAL PREPAID MORTGAGE INSURANCE', 'PREPAYMENT PENALTY', 'PREPAYMENT PENALTY TYPE',
   'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'OUTSTANDING CONSTRUCTION HOLDBACK', 'OUTSTANDING INTEREST RESERVE',
-  'DRAW FEE HOLDBACK', 'OTHER HOLDBACK', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS',
-  'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS'];
+  'DRAW FEE HOLDBACK', 'OTHER HOLDBACK', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS', 'HOA PRIMARY DUES INTERVAL',
+  'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS', 'HOA MASTER DUES INTERVAL'];
 async function saveClientInput_(id, account, body) {
   const found = await findPage_(body.pageId);
   if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
@@ -3762,7 +3768,11 @@ export async function checkTodayRate(now = new Date()) {
   // (field names without dots: "30 Yr. Fixed" is saved as "30 YR FIXED")
   const history = { DATE: today };
   Object.keys(index.rates).forEach(k => { history[historyKey(k)] = index.rates[k]; });
-  try { await add('rateHistory', history, today); } catch (err) { await update('rateHistory', today, history); }
+  // (a day already saved, filling in its other rates, is updated: an update can't name a field with a "/", like
+  // "7/6 SOFR ARM", so that one stays as it was saved)
+  const updatable = Object.fromEntries(Object.entries(history).filter(([k]) => !/[~*/[\]]/.test(k)));
+  if (have.has(today)) await update('rateHistory', today, updatable);
+  else { try { await add('rateHistory', history, today); } catch (err) { await update('rateHistory', today, updatable); } }
   return { ok: true, status: 'saved', date: today, rate, previous: fields['PREVIOUS INTEREST RATE'] || null,
     rates: Object.fromEntries(RATE_BASES.map(b => [b.base, fields[b.column] || null])) };
 }

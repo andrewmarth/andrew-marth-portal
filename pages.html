@@ -976,6 +976,10 @@
         .seg button.is-on { background: var(--olive); color: var(--cream); }
         .seg button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
         .pair { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+        /* HOA dues: how often they're paid (four choices: two rows on a phone) */
+        .seg.seg-four { margin-top: 10px; grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); border-radius: 28px; }
+        .seg.seg-four button { padding: 0 6px; }
+        @media (max-width: 520px) { .seg.seg-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         /* HOA Other Fees: the yes / no, then a line per fee (name, amount, who pays, remove) and + Add Fee */
         .hoa-other { display: grid; gap: 14px; }
         .fee-lines { display: grid; gap: 16px; }
@@ -1610,6 +1614,43 @@
         const sellerOtherFeeRows = get => feeLinesOf(get('SELLER OTHER FEES'));
         const sellerOtherAnswer = get => text(get('HAS SELLER OTHER FEES')) || (sellerOtherFeeRows(get).length ? 'Yes' : '');
         const sellerOtherFees = get => (sellerOtherAnswer(get) === 'Yes' ? sellerOtherFeeRows(get) : []);
+        // HOA dues: each association's amount per payment (HOA PRIMARY / MASTER MONTHLY DUES: the column names are from when
+        // they were always monthly) and how often it's paid (HOA PRIMARY / MASTER DUES INTERVAL; blank: Monthly). The HOA is
+        // taken to bill on the calendar: quarters from January, April, July and October, halves from January and July, years
+        // from January.
+        const DUES_INTERVALS = [['Monthly', 1], ['Quarterly', 3], ['Bi-Annually', 6], ['Annually', 12]];
+        const DUES_PER = { Monthly: 'a month', Quarterly: 'a quarter', 'Bi-Annually': 'every 6 months', Annually: 'a year' };
+        // which: 'PRIMARY' or 'MASTER'; get(column) reads a value. → { amount (per payment), interval, months (per payment),
+        // monthly (what it comes to a month) }
+        function hoaDues(get, which) {
+            const amount = num(get('HOA ' + which + ' MONTHLY DUES'));
+            const iv = DUES_INTERVALS.find(([n]) => n.toLowerCase() === text(get('HOA ' + which + ' DUES INTERVAL')).toLowerCase()) || DUES_INTERVALS[0];
+            return { amount, interval: iv[0], months: iv[1], monthly: amount / iv[1] };
+        }
+        // The billing period closing falls in, for dues paid every `months` months: { start, end (its last day), days, daysLeft
+        // (closing day through the end, both included) }
+        function duesPeriod(closing, months) {
+            const startMonth = Math.floor(closing.getMonth() / months) * months;
+            const start = new Date(closing.getFullYear(), startMonth, 1);
+            const end = new Date(closing.getFullYear(), startMonth + months, 0);
+            const dayCount = (a, b) => Math.round((b - a) / 864e5) + 1;
+            return { start, end, days: dayCount(start, end), daysLeft: dayCount(new Date(closing.getFullYear(), closing.getMonth(), closing.getDate()), end) };
+        }
+        // An association's dues proration: the seller has paid the period closing falls in, so they're credited for the rest
+        // of it (closing day included). → { amount, period } (amount 0 without a closing date)
+        function duesProration(dues, closing) {
+            if (!closing || !dues.amount) return { amount: 0, period: closing ? duesPeriod(closing, dues.months) : null };
+            const period = duesPeriod(closing, dues.months);
+            return { amount: dues.amount / period.days * period.daysLeft, period };
+        }
+        // HOA Prepaid Dues: the months of dues the HOA collects ahead at closing (HOA PREPAID DUES MONTHS), at both
+        // associations' monthly dues, paid by WHO PAYS PREPAID DUES (blank: the seller, like the other HOA fees).
+        // → { months, monthly, amount, payer }
+        function hoaPrepaid(get) {
+            const months = num(get('HOA PREPAID DUES MONTHS'));
+            const monthly = hoaDues(get, 'PRIMARY').monthly + hoaDues(get, 'MASTER').monthly;
+            return { months, monthly, amount: months * monthly, payer: text(get('WHO PAYS PREPAID DUES')) };
+        }
         // Condo, manufactured home, a home in an HOA (a planned unit development) or one without (for the lender's endorsements)
         function titlePropertyKind(page) {
             const type = text(col(page, 'PROPERTY TYPE'));
@@ -1893,8 +1934,22 @@
             const shortDay = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             const noClosing = 'Needs the closing date (the offer acceptance date + escrow duration)';
             const daysHow = closing ? daysLeft + ' days (' + shortDay(closing) + ' through the end of the month, closing day included)' : '';
-            const prorationHow = dues => (!closing ? noClosing : $(dues) + ' a month ÷ ' + daysInMonth + ' days × ' + daysHow
-                + ': the seller has paid this month’s dues, so the buyer pays back their part');
+            // (HOA dues: by how often they're paid; the seller has paid the period closing falls in)
+            const get = c => col(page, c);
+            const duesOf = which => hoaDues(get, which);
+            const periodText = p => shortDay(p.start) + '–' + shortDay(p.end);
+            const prorationHow = dues => {
+                if (!closing) return noClosing;
+                const { period } = duesProration(dues, closing);
+                if (dues.months === 1) return $(dues.amount) + ' a month ÷ ' + daysInMonth + ' days × ' + daysHow + ': the seller has paid this month’s dues, so the buyer pays back their part';
+                return $(dues.amount) + ' ' + DUES_PER[dues.interval] + ' (' + periodText(period) + ', ' + period.days + ' days) ÷ ' + period.days + ' × ' + period.daysLeft
+                    + ' days (' + shortDay(closing) + ' through ' + shortDay(period.end) + ', closing day included): the seller has paid this period’s dues, so the buyer pays back their part';
+            };
+            const prepaid = noHoaHere ? { months: 0, monthly: 0, amount: 0, payer: '' } : hoaPrepaid(get);
+            const prepaidLine = hoaLine('Miscellaneous', 'HOA Prepaid Dues', prepaid.amount, prepaid.payer);
+            if (prepaid.amount) prepaidLine.how = prepaid.months + ' months × ' + $(prepaid.monthly) + ' a month in dues (primary + master), collected ahead by the HOA; '
+                + (prepaid.payer.toLowerCase() === 'buyer' ? 'the buyer pays it' : 'paid by the ' + (prepaid.payer || 'seller').toLowerCase() + ', so $0 here');
+            else prepaidLine.how = 'None entered';
             const parts = (...list) => list.filter(Boolean).join(' + ') || 'None for this loan product';
             const dpaRequested = dpa ? dpaAsked(page, dpa, price) : 0;
             const dpaMaxAmount = dpaI ? dpaMax(dpaI, price) : 0;
@@ -1938,10 +1993,10 @@
                     how: isCash ? 'None: seller credits only apply to loans' : $(price) + ' × ' + percent(sellerPct) + ' seller credit'
                         + (enteredSellerPct > maxSellerPct ? ' (' + percent(enteredSellerPct) + ' entered, but this loan allows ' + percent(maxSellerPct) + ')' : '') + '. It can only pay closing costs' },
 
-                { section: 'Prorations', cost: true, label: 'Primary HOA Dues Proration', amount: -(num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft),
-                    how: num(col(page, 'HOA PRIMARY MONTHLY DUES')) ? prorationHow(num(col(page, 'HOA PRIMARY MONTHLY DUES'))) : 'No primary HOA dues' },
-                { section: 'Prorations', cost: true, label: 'Master HOA Dues Proration', amount: -(num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft),
-                    how: num(col(page, 'HOA MASTER MONTHLY DUES')) ? prorationHow(num(col(page, 'HOA MASTER MONTHLY DUES'))) : 'No master HOA dues' },
+                { section: 'Prorations', cost: true, label: 'Primary HOA Dues Proration', amount: -duesProration(duesOf('PRIMARY'), closing).amount,
+                    how: duesOf('PRIMARY').amount ? prorationHow(duesOf('PRIMARY')) : 'No primary HOA dues' },
+                { section: 'Prorations', cost: true, label: 'Master HOA Dues Proration', amount: -duesProration(duesOf('MASTER'), closing).amount,
+                    how: duesOf('MASTER').amount ? prorationHow(duesOf('MASTER')) : 'No master HOA dues' },
                 { section: 'Prorations', cost: true, label: 'Property Taxes Credit', amount: taxCredit, how: yearlyTaxes ? taxHow : 'No yearly taxes entered' },
 
                 { section: 'Loan', label: 'Loan Amount', amount: loan, warnings: loanWarnings,
@@ -1993,6 +2048,7 @@
                 hoaFee('Miscellaneous', 'HOA Capital Improvement Fee', 'CAP'),
                 hoaFee('Miscellaneous', 'HOA Disclosure Fee', 'DISCLOSURE'),
                 ...hoaOtherLines('Miscellaneous'),
+                prepaidLine,
                 { section: 'Miscellaneous', cost: true, label: 'Buyers Agent Commission', amount: -(price * num(col(page, 'BUYERS AGENT COMMISSION %')) + num(col(page, 'BUYERS AGENT COMMISSION $'))),
                     how: parts(num(col(page, 'BUYERS AGENT COMMISSION %')) ? $(price) + ' × ' + percent(num(col(page, 'BUYERS AGENT COMMISSION %'))) : '',
                         num(col(page, 'BUYERS AGENT COMMISSION $')) ? $(num(col(page, 'BUYERS AGENT COMMISSION $'))) + ' flat' : '').replace('None for this loan product', 'None entered') },
@@ -2066,8 +2122,9 @@
             const secondPayment = !secondLoan || !secondMonths ? 0
                 : secondRate > 0 ? secondLoan * (secondRate / 12) / (1 - Math.pow(1 + secondRate / 12, -secondMonths)) : secondLoan / secondMonths;
             const mortgagePayment = principalInterest + monthlyTaxes + monthlyInsurance + monthlyPMI + secondPayment;
-            const primaryDues = num(col(page, 'HOA PRIMARY MONTHLY DUES'));
-            const masterDues = num(col(page, 'HOA MASTER MONTHLY DUES'));
+            // (what the dues come to a month, however often they're paid)
+            const primaryDues = hoaDues(c => col(page, c), 'PRIMARY').monthly;
+            const masterDues = hoaDues(c => col(page, c), 'MASTER').monthly;
             const payment = {
                 principalInterest, monthlyTaxes, monthlyInsurance, monthlyPMI, miNote: mi ? mi.annualNote : '', mortgagePayment, primaryDues, masterDues,
                 secondPayment, secondNote: secondPayment ? ratePct(secondRate) + ' for ' + dpaI.termYears + ' years' : '',
@@ -2206,8 +2263,11 @@
                 { section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: noLoan ? 0 : -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) },
 
                 // The buyer breakdown's prorations, the other way around
-                { section: 'Prorations', label: 'Primary HOA Dues Proration', amount: num(col(page, 'HOA PRIMARY MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
-                { section: 'Prorations', label: 'Master HOA Dues Proration', amount: num(col(page, 'HOA MASTER MONTHLY DUES')) / daysInMonth * daysLeft, note: closing ? daysLeft + ' days' : '' },
+                // (by how often the dues are paid: the rest of the billing period closing falls in)
+                ...['PRIMARY', 'MASTER'].map(which => {
+                    const p = duesProration(hoaDues(c => col(page, c), which), closing);
+                    return { section: 'Prorations', label: (which === 'PRIMARY' ? 'Primary' : 'Master') + ' HOA Dues Proration', amount: p.amount, note: closing ? p.period.daysLeft + ' days' : '' };
+                }),
                 { section: 'Prorations', label: 'Property Taxes Credit', amount: -taxCharge },
 
                 // Escrow and title: the seller's share from the title company (or, without one, the old rates). The buyer's
@@ -2223,6 +2283,8 @@
                 hoaFee('HOA Capital Improvement Fee', 'CAP'),
                 hoaFee('HOA Disclosure Fee', 'DISCLOSURE'),
                 ...hoaOtherLines(),
+                // HOA Prepaid Dues: months of dues collected ahead, when the seller pays them
+                (pre => hoaLine('HOA Prepaid Dues', noHoaHere ? 0 : pre.amount, pre.payer))(hoaPrepaid(c => col(page, c))),
                 { section: 'Miscellaneous', label: 'Buyers Agent Commission', amount: -percentPlus('SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', price) },
                 { section: 'Miscellaneous', label: 'Listing Agent Commission', amount: -percentPlus('LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', price) },
                 // The seller's Other Fees, one line each
@@ -2420,19 +2482,22 @@
                 loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'), 'The balance entered, not projected'));
             }
 
-            // 2 & 3. HOA dues prorations: the seller is credited for the dues already paid for the rest of the closing month
-            const hoa = (title, column) => {
-                const dues = num(col(page, column));
-                const rows = [step('Monthly Dues', cents(dues))];
+            // 2 & 3. HOA dues prorations: the seller is credited for the dues already paid for the rest of the billing period
+            // closing falls in (the month, quarter, half year or year, by how often the dues are paid)
+            const hoa = (title, which) => {
+                const dues = hoaDues(c => col(page, c), which);
+                const duesName = { Monthly: 'Monthly Dues', Quarterly: 'Quarterly Dues', 'Bi-Annually': 'Bi-Annual Dues', Annually: 'Annual Dues' }[dues.interval];
+                const rows = [step(duesName, cents(dues.amount), dues.months > 1 ? cents(dues.monthly) + ' a month' : '')];
                 if (!closing) return section(title, rows.concat(warn(noClosing), resultRow(title, lineAmount(title))));
-                const monthName = closing.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                const lastDay = new Date(closing.getFullYear(), closing.getMonth() + 1, 0);
-                const daily = dues / m.daysInMonth;
+                const period = duesPeriod(closing, dues.months);
+                const periodName = dues.months === 1 ? closing.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                    : shortDate(period.start) + ' – ' + shortDate(period.end);
+                const daily = dues.amount / period.days;
                 rows.push(
-                    step('Days In ' + monthName, String(m.daysInMonth)),
-                    step('Daily Dues', cents(daily), cents(dues) + ' ÷ ' + m.daysInMonth + ' days'),
-                    step('Days Credited', String(m.daysLeft), shortDate(closing) + ' through ' + shortDate(lastDay) + ', closing day included'),
-                    resultRow(title, lineAmount(title), cents(daily) + ' × ' + m.daysLeft + ' days, credited to the seller'),
+                    step('Days In ' + periodName, String(period.days)),
+                    step('Daily Dues', cents(daily), cents(dues.amount) + ' ÷ ' + period.days + ' days'),
+                    step('Days Credited', String(period.daysLeft), shortDate(closing) + ' through ' + shortDate(period.end) + ', closing day included'),
+                    resultRow(title, lineAmount(title), cents(daily) + ' × ' + period.daysLeft + ' days, credited to the seller'),
                 );
                 return section(title, rows);
             };
@@ -2457,8 +2522,8 @@
 
             document.getElementById('math-list').innerHTML = section('Closing Date', dates)
                 + section('Principal Loan Amount', loanRows, schedule)
-                + hoa('Primary HOA Dues Proration', 'HOA PRIMARY MONTHLY DUES')
-                + hoa('Master HOA Dues Proration', 'HOA MASTER MONTHLY DUES')
+                + hoa('Primary HOA Dues Proration', 'PRIMARY')
+                + hoa('Master HOA Dues Proration', 'MASTER')
                 + section('Property Taxes Credit', taxRows);
         }
 
@@ -2706,7 +2771,7 @@
         // Only agent inputs hold the numbers back: without the seller's answers the loan balance is estimated from the
         // original loan, the loan term and the agent's ESTIMATED INTEREST RATE.
         function sellerNetMissing(page, get = c => text(col(page, c))) {
-            const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && get(p.column) === '').map(p => p.label);
+            const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && !p.optional && get(p.column) === '').map(p => p.label);
             const rows = new Set();
             if (client.length) rows.add('Client Input');
             // Loan Type and Loan Term are in Agent Input too; HOA yes / no has its own row
@@ -2767,6 +2832,8 @@
                 // HOA Other Fees: the yes / no, and with Yes who pays each fee
                 const otherAnswer = hoaOtherAnswer(get);
                 if (otherAnswer === '' || (otherAnswer === 'Yes' && hoaOtherFeeRows(get).some(f => !f.payer))) { agent.push('HOA Other Fees'); rows.add('HOA Other Fees'); }
+                // HOA Prepaid Dues: with any months, who pays them
+                if (num(get('HOA PREPAID DUES MONTHS')) > 0 && !get('WHO PAYS PREPAID DUES')) { agent.push('HOA Prepaid Dues'); rows.add('HOA Prepaid Dues'); }
                 fee('HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES');
                 fee('HOA Master Dues', 'HOA MASTER MONTHLY DUES');
             }
@@ -2817,9 +2884,11 @@
             'DRAW FEE HOLDBACK': ['How much is the draw fee holdback?', 'Enter 0 if there isn’t one.'],
             'OTHER HOLDBACK': ['Is there any other holdback?', 'Enter 0 if there isn’t one.'],
             'HAS HOA': ['Is the home in an HOA?', ''],
-            'HOA PRIMARY MONTHLY DUES': ['How much are the HOA dues each month?', ''],
+            'HOA PRIMARY DUES INTERVAL': ['How often do you pay the HOA dues?', ''],
+            'HOA PRIMARY MONTHLY DUES': ['How much is each HOA dues payment?', ''],
             'HAS MASTER ASSOCIATION': ['Is there a master association too?', 'Some communities have a second, larger association.'],
-            'HOA MASTER MONTHLY DUES': ['How much are the master association dues each month?', ''],
+            'HOA MASTER DUES INTERVAL': ['How often do you pay the master association dues?', ''],
+            'HOA MASTER MONTHLY DUES': ['How much is each master association dues payment?', ''],
         };
         const STEP_ICON = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
         const ANSWER_ICONS = {
@@ -3961,10 +4030,14 @@
             const row = el('div', 'pair');
             const box = textBox({
                 value: withCommas(wholeDollars(current(feeColumn))), prefix: '$', placeholder: '0',
-                onInput: i => setDraft(feeColumn, digits(i.value)),
+                onInput: i => {
+                    // (the payer shown is the one saved: a blank one would count as the seller)
+                    if (!current(payerColumn) && payerOf()) draft[payerColumn] = payerOf();
+                    setDraft(feeColumn, digits(i.value));
+                },
                 onBlur: i => { i.value = withCommas(digits(i.value)); },
             });
-            // Seller Net (opts.required): blank picks neither, so it has to be answered. Buyer Breakdown: blank is Buyer.
+            // Seller Net (opts.required): blank picks neither, so it has to be answered. Buyer Breakdown: blank shows Buyer.
             const payerOf = () => (/^seller$/i.test(current(payerColumn)) ? 'Seller' : /^buyer$/i.test(current(payerColumn)) || !opts.required ? 'Buyer' : '');
             const payerSeg = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payerOf(), v => setDraft(payerColumn, v), label + ' paid by');
             row.append(box.wrap, payerSeg);
@@ -4060,6 +4133,48 @@
                 const fees = cfg.rowsOf(current);
                 return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')).join(' · ') : 'Yes';
             };
+        }
+        // HOA dues (which: 'PRIMARY' or 'MASTER'): the amount of each payment, and under it how often it's paid (HOA ...
+        // DUES INTERVAL; blank shows Monthly). opts.status: Seller Net's Estimated / Final.
+        function duesField(parent, label, which, opts = {}) {
+            const column = 'HOA ' + which + ' MONTHLY DUES', ivColumn = 'HOA ' + which + ' DUES INTERVAL';
+            const f = fieldShell(label, { help: opts.help });
+            const box = textBox({
+                value: withCommas(wholeDollars(current(column))), prefix: '$', placeholder: '0',
+                onInput: i => setDraft(column, digits(i.value)),
+                onBlur: i => { i.value = withCommas(digits(i.value)); },
+            });
+            box.input.setAttribute('aria-label', label + ' amount');
+            f.body.append(box.wrap);
+            const ivOf = () => hoaDues(current, which).interval;
+            const seg = segToggle(DUES_INTERVALS.map(([n]) => [n, n]), ivOf(), v => setDraft(ivColumn, v), label + ' paid');
+            seg.classList.add('seg-four');
+            f.body.append(seg);
+            const syncStatus = opts.status ? statusToggle(f, opts.status) : null;
+            // (Client Input can change them too)
+            f.wrap.syncInputs = () => { box.input.value = withCommas(wholeDollars(current(column))); setSeg(seg, ivOf()); if (syncStatus) syncStatus(); };
+            parent.append(f.wrap);
+        }
+        // HOA Prepaid Dues: the months of dues the HOA collects ahead at closing (HOA PREPAID DUES MONTHS, at both
+        // associations' dues) with a Buyer / Seller toggle on the same line (WHO PAYS PREPAID DUES). required (Seller Net):
+        // blank picks neither, so it has to be answered; Buyer Breakdown: blank shows Buyer.
+        function prepaidDuesField(parent, required) {
+            const f = fieldShell('HOA Prepaid Dues', { span: true, help: 'The months of dues the HOA collects ahead at closing (at the primary and master dues), and who pays them. 0 for none.' });
+            const row = el('div', 'pair');
+            const box = textBox({ value: digits(current('HOA PREPAID DUES MONTHS')), suffix: 'months', placeholder: '0',
+                onInput: i => {
+                    i.value = digits(i.value).slice(0, 2);
+                    // (the payer shown is the one saved: a blank one would count as the seller)
+                    if (!current('WHO PAYS PREPAID DUES') && payerOf()) draft['WHO PAYS PREPAID DUES'] = payerOf();
+                    setDraft('HOA PREPAID DUES MONTHS', i.value);
+                } });
+            box.input.setAttribute('aria-label', 'HOA prepaid dues months');
+            const payerOf = () => (/^seller$/i.test(current('WHO PAYS PREPAID DUES')) ? 'Seller' : /^buyer$/i.test(current('WHO PAYS PREPAID DUES')) || !required ? 'Buyer' : '');
+            const payerSeg = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], payerOf(), v => setDraft('WHO PAYS PREPAID DUES', v), 'HOA prepaid dues paid by');
+            row.append(box.wrap, payerSeg);
+            f.body.append(row);
+            f.wrap.syncInputs = () => { box.input.value = digits(current('HOA PREPAID DUES MONTHS')); setSeg(payerSeg, payerOf()); };
+            parent.append(f.wrap);
         }
         // Optional % and $ boxes side by side
         function percentAndDollars(parent, label, pctColumn, dollarColumn, help, status) {
@@ -4207,8 +4322,9 @@
             // The seller always pays the disclosure fee
             moneyField(hoa, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
             hoaOtherFeesField(hoa, false);
-            moneyField(hoa, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month' });
-            moneyField(hoa, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month' });
+            duesField(hoa, 'HOA Primary Dues', 'PRIMARY', { help: 'The amount of each payment, and how often it’s paid.' });
+            duesField(hoa, 'HOA Master Dues', 'MASTER', { help: 'The amount of each payment, and how often it’s paid.' });
+            prepaidDuesField(hoa, false);
             hoaFields = [...hoa.children].slice(hoaStart);
 
             const misc = document.getElementById('misc-fields');
@@ -4527,10 +4643,13 @@
                 { label: 'HOA', column: 'HAS HOA', kind: 'seg', options: ['Yes', 'No'], short: 'HOA:', then: v => {
                     if (v === 'Yes') { yesHoa(put, get); put('HOA PRIMARY MONTHLY DUES STATUS', 'Final'); } else noHoa(put, get);
                 } },
+                // (how often the dues are paid: blank is Monthly, so it doesn't count as missing)
+                { label: 'HOA Primary Dues Paid', column: 'HOA PRIMARY DUES INTERVAL', kind: 'seg', options: DUES_INTERVALS.map(([n]) => n), short: 'Paid', show: hoa, optional: true, blank: 'Monthly', fallback: () => 'Monthly' },
                 { label: 'HOA Primary Dues', column: 'HOA PRIMARY MONTHLY DUES', kind: 'money', short: 'Primary Dues', show: hoa, then: () => put('HOA PRIMARY MONTHLY DUES STATUS', 'Final') },
                 { label: 'Is there a master association?', column: 'HAS MASTER ASSOCIATION', kind: 'seg', options: ['Yes', 'No'], short: 'Master Association:', show: hoa, then: v => {
                     if (v === 'Yes') { restoreDues('HOA MASTER MONTHLY DUES', put, get); put('HOA MASTER MONTHLY DUES STATUS', 'Final'); } else noDues('HOA MASTER MONTHLY DUES', put, get);
                 } },
+                { label: 'HOA Master Dues Paid', column: 'HOA MASTER DUES INTERVAL', kind: 'seg', options: DUES_INTERVALS.map(([n]) => n), short: 'Paid', show: () => hoa() && get('HAS MASTER ASSOCIATION') === 'Yes', optional: true, blank: 'Monthly', fallback: () => 'Monthly' },
                 { label: 'HOA Master Dues', column: 'HOA MASTER MONTHLY DUES', kind: 'money', short: 'Master Dues', show: () => hoa() && get('HAS MASTER ASSOCIATION') === 'Yes', then: () => put('HOA MASTER MONTHLY DUES STATUS', 'Final') },
             ];
         }
@@ -4698,8 +4817,9 @@
             feeWithPayer(hoa, 'HOA Cap Fee', 'HOA CAP FEE', 'WHO PAYS CAP FEE', { status: 'HOA CAP FEE STATUS', required: true });
             moneyField(hoa, 'HOA Disclosure Fee', 'HOA DISCLOSURE FEE', { help: 'Always paid by the seller.', status: 'HOA DISCLOSURE FEE STATUS' }).input.addEventListener('input', () => { draft['WHO PAYS DISCLOSURE FEE'] = 'Seller'; });
             hoaOtherFeesField(hoa, true);
-            moneyField(hoa, 'HOA Primary Dues', 'HOA PRIMARY MONTHLY DUES', { help: 'Per month', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
-            moneyField(hoa, 'HOA Master Dues', 'HOA MASTER MONTHLY DUES', { help: 'Per month', status: 'HOA MASTER MONTHLY DUES STATUS' });
+            duesField(hoa, 'HOA Primary Dues', 'PRIMARY', { help: 'The amount of each payment, and how often it’s paid.', status: 'HOA PRIMARY MONTHLY DUES STATUS' });
+            duesField(hoa, 'HOA Master Dues', 'MASTER', { help: 'The amount of each payment, and how often it’s paid.', status: 'HOA MASTER MONTHLY DUES STATUS' });
+            prepaidDuesField(hoa, true);
             hoaFields = [...hoa.children].slice(hoaStart);
 
             const misc = document.getElementById('misc-fields');
