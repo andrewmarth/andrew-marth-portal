@@ -7,7 +7,7 @@ import { db } from './lib/store.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL } from './lib/mnd-rate.js';
+import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL, RATE_BASES, rateBaseOfType, historyKey } from './lib/mnd-rate.js';
 
 // The only people who may view a page. The first six are clients (PRIMARY is the buyer); the last is the lender.
 const PAGE_PEOPLE_COLUMNS = ['PRIMARY ACCOUNT ID', 'ALT ACCOUNT ID 1', 'ALT ACCOUNT ID 2', 'ALT ACCOUNT ID 3',
@@ -3590,7 +3590,7 @@ async function pageData_(id, account, pageId) {
   // Seller Net: every version the viewer can see (this one included), for the version dropdown
   if (result.pageType.toLowerCase() === 'seller net') {
     // The buyer's side of the escrow breakdown: the loan products and today's rate, like a Buyer Breakdown
-    result.loanProducts = await rows('loanProducts');
+    result.loanProducts = await rebaseProducts_(await rows('loanProducts'));
     result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
     result.miSettings = await miSettingsRow_();
     result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
@@ -3639,8 +3639,8 @@ async function myPagesData_(id, account) {
       return page;
     });
     // "My Loan Products": this lender's LOAN_PRODUCTS rows and the questions the form asks
-    result.myLoanProducts = await lenderLoanProducts_(id);
-    result.loanProductFields = loanProductFields_(await columns('loanProducts'), await todayInterestRate_(), await miSettingsRow_());
+    result.myLoanProducts = await rebaseLenderProducts_(await lenderLoanProducts_(id));
+    result.loanProductFields = loanProductFields_(await columns('loanProducts'), await todayRates_(), await miSettingsRow_());
   }
   if (isAdmin_(account)) {
     // For the New Property form: everyone (collaborators can be anyone) and the loan products, by row
@@ -3709,36 +3709,62 @@ function cleanLoanProduct_(fields, submitted) {
 }
 
 // --- Today's interest rate, from Mortgage News Daily ---
-// Cloud Scheduler calls checkTodayRate every 15 minutes on weekday afternoons, Eastern time (see index.js), and an admin
-// can run it from the API (adminCheckRate). Once today's rate is saved it does nothing more that day. Otherwise it reads
-// MND's index table (lib/mnd-rate.js) and, when its newest row is today's (Eastern), saves that day's 30 year fixed rate
-// as TODAY INTEREST RATE (settings interestRate) with RATE DATE (the MND day, YYYY-MM-DD), PREVIOUS INTEREST RATE,
-// RATE SOURCE and RATE UPDATED AT, and every product's rate that day in rateHistory (document ID: the date). A flat day
-// (the same rate as yesterday) still counts: the row's date says it's been updated.
+// Cloud Scheduler calls checkTodayRate every 15 minutes on weekdays, 9 AM to midnight Eastern (see index.js), and an admin
+// can run it from the API (adminCheckRate). Once today's rates are saved it does nothing more that day. Otherwise it
+// reads MND's index table (lib/mnd-rate.js) and, when its newest row is today's (Eastern), saves that day's 30 year
+// rates (settings interestRate): each RATE_BASES column (TODAY INTEREST RATE: the 30 year fixed, for Conventional;
+// TODAY FHA RATE, TODAY VA RATE, TODAY JUMBO RATE) and the one before it (PREVIOUS ...), with RATE DATE (the MND day,
+// YYYY-MM-DD), RATE SOURCE and RATE UPDATED AT, and every product's rate that day in rateHistory (document ID: the
+// date). A flat day (the same rate as yesterday) still counts: the row's date says it's been updated. A day saved
+// before the FHA / VA / Jumbo rates were (one of them blank) is read again to fill them in.
 const isoDate_ = v => { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0') : s; };
+const positive_ = v => { const n = Number(v); return isFinite(n) && n > 0 ? n : null; };
 export async function checkTodayRate(now = new Date()) {
   const today = easternDate(now);
   const setting = (await rows('settings')).find(r => r._id === 'interestRate') || null;
   const storedDate = setting ? isoDate_(setting['RATE DATE']) : '';
-  if (storedDate === today) return { ok: true, status: 'done', date: today, rate: Number(setting['TODAY INTEREST RATE']) };
+  const complete = setting && RATE_BASES.every(b => positive_(setting[b.column]) !== null);
+  if (storedDate === today && complete) return { ok: true, status: 'done', date: today, rate: Number(setting['TODAY INTEREST RATE']) };
   let index = null;
   try { index = await fetchMndIndex(); } catch (err) { console.error('MND rate check', err); }
-  const step = rateCheckStep(storedDate, index, today);
+  // (filling in today's missing rates: as if nothing were saved today)
+  const step = rateCheckStep(complete ? storedDate : '', index, today);
   if (step !== 'save') return { ok: true, status: step, today, newest: index ? index.date : null };
   const rate = index.rates[MND_MAIN_PRODUCT];
-  const previous = setting ? Number(setting['TODAY INTEREST RATE']) : NaN;
+  // MND's table has about a month of days: any rateHistory doesn't have yet are added (old quote sheets are measured
+  // against their own type's rate from it; see rebaseQuotes_)
+  const pastDays = await rows('rateHistory');
+  const have = new Set(pastDays.map(r => r._id));
+  for (const d of index.days || []) {
+    if (d.date >= today || have.has(d.date)) continue;
+    const doc = { DATE: d.date };
+    Object.keys(d.rates).forEach(k => { doc[historyKey(k)] = d.rates[k]; });
+    try { await add('rateHistory', doc, d.date); pastDays.push(Object.assign({ _id: d.date }, doc)); } catch (err) { console.error('rateHistory backfill', d.date, err); }
+  }
+  // Each rate before today's: the saved one (from an earlier day), else the newest earlier day in rateHistory
+  const earlier = pastDays.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r._id) && r._id < today).sort((a, b) => b._id.localeCompare(a._id))[0] || null;
   const fields = {
-    'TODAY INTEREST RATE': rate, 'RATE DATE': today, 'PREVIOUS INTEREST RATE': isFinite(previous) && previous > 0 ? previous : '',
-    'RATE SOURCE': 'Mortgage News Daily', 'RATE UPDATED AT': now.toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
+    'RATE DATE': today, 'RATE SOURCE': 'Mortgage News Daily', 'RATE UPDATED AT': now.toLocaleString('en-US', { timeZone: 'America/New_York' }) + ' ET',
     // (the same moment, for showing in any time zone)
     'RATE UPDATED ISO': now.toISOString(),
   };
+  RATE_BASES.forEach(b => {
+    const value = positive_(index.rates[b.product]);
+    // (a product missing from the table keeps its saved rate)
+    if (value === null) return;
+    const before = storedDate !== today && setting ? positive_(setting[b.column]) : null;
+    const previous = before !== null ? before : storedDate === today && setting && positive_(setting[b.previous]) !== null ? positive_(setting[b.previous])
+      : earlier ? positive_(earlier[historyKey(b.product)]) : null;
+    fields[b.column] = value;
+    fields[b.previous] = previous !== null ? previous : '';
+  });
   if (setting) await update('settings', 'interestRate', fields); else await add('settings', fields, 'interestRate');
   // (field names without dots: "30 Yr. Fixed" is saved as "30 YR FIXED")
   const history = { DATE: today };
-  Object.keys(index.rates).forEach(k => { history[k.replace(/\./g, '').toUpperCase()] = index.rates[k]; });
+  Object.keys(index.rates).forEach(k => { history[historyKey(k)] = index.rates[k]; });
   try { await add('rateHistory', history, today); } catch (err) { await update('rateHistory', today, history); }
-  return { ok: true, status: 'saved', date: today, rate, previous: fields['PREVIOUS INTEREST RATE'] || null };
+  return { ok: true, status: 'saved', date: today, rate, previous: fields['PREVIOUS INTEREST RATE'] || null,
+    rates: Object.fromEntries(RATE_BASES.map(b => [b.base, fields[b.column] || null])) };
 }
 
 // The Settings page's Today's Interest Rate card: the saved rate (and the one before it), the MND day it's for, when it
@@ -3751,34 +3777,91 @@ async function rateStatus_(now = new Date()) {
   const iso = String(get('RATE UPDATED ISO') || '').trim();
   const updated = iso ? new Date(iso) : easternTextToDate(get('RATE UPDATED AT'));
   const s = rateSchedule(now, date);
-  const recent = (await rows('rateHistory')).map(r => ({ date: r._id, rate: Number(r['30 YR FIXED']) }))
-    .filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && r.rate > 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  // (each day: every kind of loan's rate that day)
+  const recent = (await rows('rateHistory')).filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r._id) && positive_(r['30 YR FIXED']) !== null)
+    .sort((a, b) => b._id.localeCompare(a._id)).slice(0, 5)
+    .map(r => ({ date: r._id, rate: Number(r['30 YR FIXED']), rates: Object.fromEntries(RATE_BASES.map(b => [b.base, positive_(r[historyKey(b.product)])])) }));
   return { ok: true, rate: n('TODAY INTEREST RATE'), previous: n('PREVIOUS INTEREST RATE'), date, source: get('RATE SOURCE') || '',
+    // Every kind of loan's rate: [{ base ('Conventional', 'FHA'...), product (MND's name), rate, previous }]
+    rates: RATE_BASES.map(b => ({ base: b.base, product: b.product, rate: n(b.column), previous: n(b.previous) })),
     sourceUrl: MND_INDEX_URL, updatedAt: updated && !isNaN(updated) ? updated.toISOString() : null,
     state: s.state, today: s.today, nextCheck: s.nextCheck.toISOString(), windowStart: s.windowStart.toISOString(), windowEnd: s.windowEnd.toISOString(), recent };
 }
 
-// Today's interest rate (settings interestRate: TODAY INTEREST RATE, a decimal), or null
-async function todayInterestRate_() {
-  const r = (await rows('settings')).find(s => s._id === 'interestRate');
-  const n = r ? Number(r['TODAY INTEREST RATE']) : NaN;
-  return isFinite(n) && n > 0 ? n : null;
+// Today's rate for each kind of loan (settings interestRate): { Conventional: 0.0746, FHA: 0.0704, ... }, each null when
+// it isn't saved (Conventional's is TODAY INTEREST RATE)
+async function todayRates_() {
+  const r = (await rows('settings')).find(s => s._id === 'interestRate') || {};
+  return Object.fromEntries(RATE_BASES.map(b => [b.base, positive_(r[b.column])]));
 }
-// Adds TODAY and DATE to a cleaned product's RATE QUOTES: the saved ones when the quotes haven't changed (old: the saved
-// RATE QUOTES), else today's interest rate and today's date (Arizona, YYYY-MM-DD), so each quote's markup is measured
-// against the rate on the day it was quoted. old null: always today's (a quote sheet submitted today).
-async function stampRateQuotes_(clean, old) {
+// Today's interest rate (Conventional's: TODAY INTEREST RATE, a decimal), or null
+async function todayInterestRate_() {
+  return (await todayRates_()).Conventional;
+}
+// Adds TODAY, BASE and DATE to a cleaned product's RATE QUOTES: the saved ones when the quotes haven't changed (old: the
+// saved RATE QUOTES), else today's rate for the product's type (type: its PRODUCT TYPE; see RATE_BASES: FHA, VA and
+// Jumbo have their own, any other type Conventional's, as does a type whose rate isn't saved yet), which one that is
+// (BASE) and today's date (Arizona, YYYY-MM-DD), so each quote's markup is measured against that rate on the day it was
+// quoted, and the pages price it from the same kind of rate. old null: always today's (a quote sheet submitted today).
+// A sheet from before BASE was saved was measured against Conventional's.
+async function stampRateQuotes_(clean, old, type) {
   if (!clean['RATE QUOTES']) return null;
   const v = JSON.parse(clean['RATE QUOTES']);
   let before = null;
   try { before = old ? JSON.parse(old) : null; } catch (e) { before = null; }
   const same = before && Array.isArray(before.QUOTES) && before.QUOTES.length === 27 && isFinite(Number(before.TODAY)) && Number(before.TODAY) > 0
     && before.QUOTES.every((q, i) => Math.abs(Number(q) - v.QUOTES[i]) < 1e-9);
-  const today = same ? Number(before.TODAY) : await todayInterestRate_();
+  let today, base;
+  if (same) { today = Number(before.TODAY); base = before.BASE || ''; }
+  else {
+    const rates = await todayRates_();
+    base = rateBaseOfType(type);
+    if (!rates[base]) base = 'Conventional';
+    today = rates[base];
+  }
   if (!today) return 'no_today_rate';
   const date = same ? String(before.DATE || '') : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' });
-  clean['RATE QUOTES'] = JSON.stringify(Object.assign({ QUOTES: v.QUOTES, TODAY: today }, date ? { DATE: date } : {}));
+  clean['RATE QUOTES'] = JSON.stringify(Object.assign({ QUOTES: v.QUOTES, TODAY: today }, base ? { BASE: base } : {}, date ? { DATE: date } : {}));
   return null;
+}
+// For showing products: a quote sheet from before BASE (measured against Conventional's rate) for an FHA, VA or Jumbo
+// product, measured against that type's own rate instead, so it's priced from it. Its TODAY moves by how far that type's
+// rate was from the 30 year fixed the day it was quoted (from rateHistory: the day whose 30 year fixed was its TODAY, or
+// without one, the newest day on or before its DATE, within a week; so a TODAY that was MND's rate becomes exactly that
+// type's rate that day, and one entered by hand moves by that day's difference). A sheet with no such day (quoted
+// before the history), or a type whose rate isn't saved yet, stays on Conventional's. Nothing is saved.
+// ctx: rateBaseContext_(). → the product's values (a copy when changed)
+async function rateBaseContext_() {
+  const history = (await rows('rateHistory')).filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r._id)).sort((a, b) => b._id.localeCompare(a._id));
+  return { rates: await todayRates_(), history };
+}
+function rebaseQuotes_(values, ctx) {
+  const raw = values && values['RATE QUOTES'];
+  if (!raw) return values;
+  let v;
+  try { v = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return values; }
+  if (!v || v.BASE || !(Number(v.TODAY) > 0)) return values;
+  const base = rateBaseOfType(values['PRODUCT TYPE']);
+  const b = RATE_BASES.find(x => x.base === base);
+  if (base === 'Conventional' || !ctx.rates[base]) return values;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(v.DATE || '')) ? v.DATE : '';
+  if (!date) return values;
+  const weekBefore = new Date(new Date(date + 'T12:00:00Z').getTime() - 7 * 864e5).toISOString().slice(0, 10);
+  const days = ctx.history.filter(r => r._id <= date && r._id >= weekBefore && positive_(r['30 YR FIXED']) !== null && positive_(r[historyKey(b.product)]) !== null);
+  const day = days.find(r => Math.abs(Number(r['30 YR FIXED']) - Number(v.TODAY)) < 1e-6) || days[0];
+  if (!day) return values;
+  const today = Number(v.TODAY) + Number(day[historyKey(b.product)]) - Number(day['30 YR FIXED']);
+  const converted = Object.assign({}, v, { TODAY: Math.round(today * 1e6) / 1e6, BASE: base });
+  return Object.assign({}, values, { 'RATE QUOTES': JSON.stringify(converted) });
+}
+async function rebaseProducts_(list) {
+  const ctx = await rateBaseContext_();
+  return list.map(p => rebaseQuotes_(p, ctx));
+}
+// (a lender's products: [{ row, values, docId }])
+async function rebaseLenderProducts_(list) {
+  const ctx = await rateBaseContext_();
+  return list.map(p => Object.assign({}, p, { values: rebaseQuotes_(p.values, ctx) }));
 }
 
 // The quote sheet: a product's 27 quotes (RATE QUOTES), 4 buydown quotes (BUYDOWN QUOTES) and, for a product type with
@@ -3809,14 +3892,16 @@ async function quoteSheet_(submitted, old) {
     if (mi === null) return { error: 'invalid_value' };
     clean['MI QUOTES'] = mi;
   }
-  const stampError = await stampRateQuotes_(clean, null);
+  const stampError = await stampRateQuotes_(clean, null, old['PRODUCT TYPE']);
   return stampError ? { error: stampError } : { clean };
 }
 
 // The questions for a LOAN_PRODUCTS row: LOAN_PRODUCT_FIELDS, then any other column as text (not ACCOUNT ID or LENDER NAME)
-// (RATE QUOTES also carries today: today's interest rate, for the form's markup tables; MI QUOTES carries mi: the
+// (RATE QUOTES also carries todays: today's rate for each kind of loan, { Conventional, FHA, VA, Jumbo } (see
+// todayRates_), and today: Conventional's, for the form's markup tables; MI QUOTES carries mi: the
 // mortgage insurance settings, for its upfront premium tables)
-function loanProductFields_(headers, today, mi) {
+function loanProductFields_(headers, todays, mi) {
+  const today = todays ? todays.Conventional : undefined;
   const known = { 'LENDER NAME': true, 'OTHER FEE': true, 'POINT RATE BUYDOWN AMOUNT': true, 'PMI LTV THRESHOLD': true, 'LOAN PRODUCT PMI RATE': true, 'INCOME LIMIT': true,
     // (the old lender credit and census credit columns: LENDER CREDITS replaced them)
     'LENDER CREDIT % OF PURCHASE PRICE': true, 'LENDER CREDIT % OF LOAN AMOUNT': true, 'LENDER CREDIT FLAT $': true, 'ADDITIONAL LENDER CREDIT': true };
@@ -3825,7 +3910,7 @@ function loanProductFields_(headers, today, mi) {
   LOAN_PRODUCT_FIELDS.forEach(f => { known[f.col] = true; });
   ['<600', '600-620', '620-640', '640-660', '660-680', '680-700', '700-720', '720-740', '740-760', '760-780', '780-800', '800+']
     .forEach(s => { ['PAR RATE CREDIT SCORE ', 'MAX DTI CREDIT SCORE ', 'MAX DTI HOUSING ONLY CREDIT SCORE '].forEach(p => { known[p + s] = true; }); });
-  return LOAN_PRODUCT_FIELDS.map(f => (f.col === 'RATE QUOTES' ? Object.assign({ today }, f) : f.col === 'MI QUOTES' ? Object.assign({ mi: mi || null }, f) : f)).concat(headers
+  return LOAN_PRODUCT_FIELDS.map(f => (f.col === 'RATE QUOTES' ? Object.assign({ today, todays: todays || null }, f) : f.col === 'MI QUOTES' ? Object.assign({ mi: mi || null }, f) : f)).concat(headers
     .map(h => String(h).trim().toUpperCase())
     .filter(h => h && h !== 'ACCOUNT ID' && !known[h])
     .map(h => ({ section: 'Other', col: h, kind: 'text' })));
@@ -3857,7 +3942,7 @@ async function saveLoanProduct_(id, account, body) {
     const mine = await lenderLoanProducts_(id);
     const target = rowNumber ? mine.find(p => p.row === rowNumber) : null;
     if (rowNumber && !target) return { ok: false, error: 'not_found' };
-    const products = async () => (await lenderLoanProducts_(id)).map(p => ({ row: p.row, values: p.values }));
+    const products = async () => (await rebaseLenderProducts_(await lenderLoanProducts_(id))).map(p => ({ row: p.row, values: p.values }));
     if (body.quotesOnly) {
       const sheet = await quoteSheet_(body.values, target && target.values);
       if (sheet.error) return { ok: false, error: sheet.error };
@@ -3868,7 +3953,7 @@ async function saveLoanProduct_(id, account, body) {
     const checked = cleanLoanProduct_(loanProductFields_(await columns('loanProducts')), submitted);
     if (checked.error) return { ok: false, error: checked.error, field: checked.field };
     const clean = checked.clean;
-    const stampError = await stampRateQuotes_(clean, target ? target.values['RATE QUOTES'] : null);
+    const stampError = await stampRateQuotes_(clean, target ? target.values['RATE QUOTES'] : null, clean['PRODUCT TYPE']);
     if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
     const name = String(clean['LOAN PRODUCT NAME']).toLowerCase();
@@ -3891,6 +3976,8 @@ async function lenderList_() {
   const docs = await rows('lenders');
   const products = await rows('loanProducts');
   const accounts = (await rows('accounts')).filter(r => phoneToId_(r['ACCOUNT ID']));
+  // (old quote sheets measured against their own type's rate: see rebaseQuotes_)
+  const rateCtx = await rateBaseContext_();
   const byKey = new Map();
   const touch = (name, id) => {
     const key = lenderKey_(name);
@@ -3906,7 +3993,7 @@ async function lenderList_() {
     if (!l) return;
     const values = {};
     Object.keys(p).forEach(h => { const key = h.trim().toUpperCase(); if (key && key !== 'ACCOUNT ID') values[key] = p[h]; });
-    l.products.push({ row: p._order, values });
+    l.products.push({ row: p._order, values: rebaseQuotes_(values, rateCtx) });
   });
   accounts.filter(a => hasRole_(a, 'LENDER')).forEach(a => {
     const l = touch(a['LENDER BANK']);
@@ -3920,7 +4007,7 @@ async function lenders_(account) {
     .map(r => ({ id: phoneToId_(r['ACCOUNT ID']), name: fullName_(r) || phoneToId_(r['ACCOUNT ID']), bank: String(r['LENDER BANK'] || '').trim() }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { ok: true, lenders: await lenderList_(), lenderAccounts, miSettings: await miSettingsRow_(),
-    loanProductFields: loanProductFields_(await columns('loanProducts'), await todayInterestRate_(), await miSettingsRow_()) };
+    loanProductFields: loanProductFields_(await columns('loanProducts'), await todayRates_(), await miSettingsRow_()) };
 }
 // The upfront mortgage insurance estimate's settings (settings mortgageInsurance; see MI_SETTINGS in
 // /mortgage-insurance.js, which fills in a blank one with its default), or null
@@ -4014,7 +4101,7 @@ async function saveLenderProduct_(account, body) {
     if (checked.error) return { ok: false, error: checked.error, field: checked.field };
     const clean = checked.clean;
     clean['LENDER NAME'] = lenderName;
-    const stampError = await stampRateQuotes_(clean, target ? target['RATE QUOTES'] : null);
+    const stampError = await stampRateQuotes_(clean, target ? target['RATE QUOTES'] : null, clean['PRODUCT TYPE']);
     if (stampError) return { ok: false, error: stampError };
     // Pages pick a product by name, so one lender can't have two with the same name
     const lender = lenderKey_(clean['LENDER NAME']), name = lenderKey_(clean['LOAN PRODUCT NAME']);
@@ -4046,7 +4133,7 @@ async function adminLinks_() {
 // Buyer Breakdown pages: every loan product, today's rate and the buyer's credit score
 async function addBuyerBreakdownData_(result, page) {
   const own = await versionData_(page);
-  result.loanProducts = await rows('loanProducts');
+  result.loanProducts = await rebaseProducts_(await rows('loanProducts'));
   result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
   // The upfront mortgage insurance estimate's settings (see /mortgage-insurance.js)
   result.miSettings = await miSettingsRow_();

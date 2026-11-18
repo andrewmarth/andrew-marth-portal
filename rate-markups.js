@@ -43,8 +43,9 @@ export { steps as stepList };
 // model with their own LTV levels.
 export const RATE_GRID = { credit: QUOTE_CREDIT, dti: QUOTE_DTI, ltv: QUOTE_LTV, steps: { credit: CREDIT_STEPS, dti: DTI_STEPS, ltv: LTV_STEPS } };
 
-// A saved RATE QUOTES value → { quotes: [27 numbers], today: number|null, date: 'YYYY-MM-DD' or '' (the day they were
-// submitted) }, or null when there are no quotes
+// A saved RATE QUOTES value → { quotes: [27 numbers], today: number|null, base: which kind of loan's rate today is
+// (RATE_BASES; a sheet from before BASE: 'Conventional'), date: 'YYYY-MM-DD' or '' (the day they were submitted) }, or
+// null when there are no quotes
 export function rateQuotes(raw) {
     let v = raw;
     if (typeof v === 'string') { if (!v.trim()) return null; try { v = JSON.parse(v); } catch (e) { return null; } }
@@ -53,7 +54,35 @@ export function rateQuotes(raw) {
     if (quotes.some(q => !isFinite(q) || q <= 0)) return null;
     const today = Number(v.TODAY);
     return { quotes, today: v.TODAY !== undefined && v.TODAY !== null && v.TODAY !== '' && isFinite(today) ? today : null,
-        date: typeof v.DATE === 'string' ? v.DATE : '' };
+        base: rateBaseOfType(v.BASE), date: typeof v.DATE === 'string' ? v.DATE : '' };
+}
+
+// --- Today's rate by kind of loan ---
+// Mortgage News Daily's 30 year rates, saved each weekday (settings interestRate; see the API's lib/mnd-rate.js, which has
+// the same list): a loan product is priced from its PRODUCT TYPE's (FHA, VA and Jumbo have their own; Conventional and
+// any other type, the 30 year fixed: TODAY INTEREST RATE). label: how it's named on the pages.
+export const RATE_BASES = [
+    { base: 'Conventional', product: '30 Yr. Fixed', column: 'TODAY INTEREST RATE', previous: 'PREVIOUS INTEREST RATE', label: 'Conventional' },
+    { base: 'FHA', product: '30 Yr. FHA', column: 'TODAY FHA RATE', previous: 'PREVIOUS FHA RATE', label: 'FHA' },
+    { base: 'VA', product: '30 Yr. VA', column: 'TODAY VA RATE', previous: 'PREVIOUS VA RATE', label: 'VA' },
+    { base: 'Jumbo', product: '30 Yr. Jumbo', column: 'TODAY JUMBO RATE', previous: 'PREVIOUS JUMBO RATE', label: 'Jumbo' },
+];
+export const rateBaseOfType = type => (RATE_BASES.find(b => b.base.toLowerCase() === String(type || '').trim().toLowerCase()) || RATE_BASES[0]).base;
+// Today's rate for a kind of loan from the settings row (get(column) → its value), or null when it isn't saved
+export function todayRateOf(get, base) {
+    const b = RATE_BASES.find(x => x.base === base) || RATE_BASES[0];
+    const n = Number(get(b.column));
+    return isFinite(n) && n > 0 ? n : null;
+}
+// The rate a loan product is priced from: its quote sheet's kind (the markups are measured from that kind's rate the
+// day they were quoted), or without quotes, its type's; when that kind's rate isn't saved yet, Conventional's.
+// product(column) and rates(column) read the product and the settings row. → { base, rate (0 when none is saved) }
+export function productTodayRate(product, rates) {
+    const q = rateQuotes(product('RATE QUOTES'));
+    let base = q && q.today !== null ? q.base : rateBaseOfType(product('PRODUCT TYPE'));
+    let rate = todayRateOf(rates, base);
+    if (rate === null && base !== 'Conventional') { base = 'Conventional'; rate = todayRateOf(rates, base); }
+    return { base, rate: rate || 0 };
 }
 
 // One metric's markup curve. levels: the quoted values (best first); marks: the markup at each (0 at the best);

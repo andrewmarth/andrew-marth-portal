@@ -1452,7 +1452,7 @@
         import { ensureStepFormStyles } from '/task-form.js';
         import { saleFees, pickableTitleDiscounts, pickableFees, hasCertifyInvestor, qualifiersOf, PAGE_QUALIFIERS, PICKED_QUALIFIERS, businessDaysAfter } from '/title-fees.js';
         import { lenderFees, productDtiTiers, dtiTierFor, minCreditScore } from '/loan-products.js';
-        import { productMarkups, productBuydown } from '/rate-markups.js';
+        import { productMarkups, productBuydown, productTodayRate, RATE_BASES } from '/rate-markups.js';
         import { loanMi, productMiKind, MI_REQUIRED_ABOVE } from '/mortgage-insurance.js';
         import { dpaInfo, dpaMax, dpaDisclaimers, dpaKindText, productGroups, groupsDisclaimer, PROFESSION_GROUPS } from '/dpa.js';
         import { productLenderCredits, creditCheck, creditAmount, creditTerms, conditionText } from '/lender-credits.js';
@@ -1806,10 +1806,13 @@
                 : num(col(product, 'PAR RATE CREDIT SCORE ' + creditTier(creditScore)));
             const buydown = productBuydown(col(product, 'RATE QUOTES'), col(product, 'BUYDOWN QUOTES'));
             const buydownAmount = buydown ? buydown(pointsPurchased) : num(col(product, 'POINT RATE BUYDOWN AMOUNT')) * (pointsPurchased * 100);
+            // Today's rate for this kind of loan (/rate-markups.js: FHA, VA and Jumbo products their own 30 year rate, the rest
+            // the 30 year fixed; a quoted product the kind its quotes were measured from)
+            const todayRate = productTodayRate(name => col(product, name), c => col(rateRow, c));
             // (a down payment assistance program can raise the first loan's rate: its average markup)
-            const rate = num(col(rateRow, 'TODAY INTEREST RATE')) + markup + (dpaI ? dpaI.rateMarkup : 0) - buydownAmount;
+            const rate = todayRate.rate + markup + (dpaI ? dpaI.rateMarkup : 0) - buydownAmount;
             // Each part of the rate, for the admin How The Numbers Work card
-            const rateParts = { today: num(col(rateRow, 'TODAY INTEREST RATE')), quoted: Boolean(markups), creditTier: creditTier(creditScore),
+            const rateParts = { today: todayRate.rate, base: todayRate.base, quoted: Boolean(markups), creditTier: creditTier(creditScore),
                 start: markups ? markups.start : 0, credit: markups ? markups.credit(creditScore) : markup, dti: markups ? markups.dti(dtiUsed) : 0,
                 ltv: markups ? markups.ltv(ltv) : 0, dpa: dpaI ? dpaI.rateMarkup : 0, buydown: buydownAmount, curve: Boolean(buydown) };
 
@@ -2495,7 +2498,9 @@
                 const r = m.rateParts;
                 const scoreHow = result.hasScore ? (result.scoreCount > 1 ? 'The purchasers’ average score' : 'The purchaser’s score')
                     : 'Not every purchaser has a score on file, so ' + FALLBACK_CREDIT_SCORE + ' is used for anyone missing one';
-                const rows = [step('Today’s Interest Rate', ratePct(r.today), 'Set in Settings')];
+                const base = RATE_BASES.find(b => b.base === r.base) || RATE_BASES[0];
+                const rows = [step('Today’s ' + base.label + ' Rate', ratePct(r.today), 'Mortgage News Daily’s ' + base.product + ' rate (Settings)'
+                    + (r.base === 'Conventional' ? '' : ', for ' + base.label + ' loans'))];
                 if (r.quoted) {
                     rows.push(
                         step('Starting Markup', signedPct(r.start), 'From the lender’s 27 quoted rates (the markup before credit score, DTI and LTV)'),

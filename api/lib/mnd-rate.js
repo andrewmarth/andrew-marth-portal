@@ -1,6 +1,6 @@
 // Mortgage News Daily's daily rate index (https://www.mortgagenewsdaily.com/mortgage-rates/mnd): the newest row of the
 // table on that page. MND updates the index each weekday afternoon, Eastern time (excluding market holidays), with no set
-// time (usually around 2 to 4 PM ET). Its rates RSS feed (/rss/rates) is the day's article, which doesn't reliably
+// time (usually early to mid afternoon ET). Its rates RSS feed (/rss/rates) is the day's article, which doesn't reliably
 // state the rate, so the number comes from the index table: one row per day, newest first, with each product's rate in
 // its cell's title ("7.50%").
 
@@ -8,12 +8,25 @@ export const MND_INDEX_URL = 'https://www.mortgagenewsdaily.com/mortgage-rates/m
 export const MND_TIME_ZONE = 'America/New_York';
 // The product the portal's "today's interest rate" follows
 export const MND_MAIN_PRODUCT = '30 Yr. Fixed';
+// Today's rate for each kind of loan (a loan product's PRODUCT TYPE picks its own; any other type uses Conventional's),
+// as saved in settings interestRate: MND's product, the column and the one before it. Conventional's is the 30 year
+// fixed (TODAY INTEREST RATE, the portal's main rate). The same list is in /rate-markups.js for the pages.
+export const RATE_BASES = [
+  { base: 'Conventional', product: '30 Yr. Fixed', column: 'TODAY INTEREST RATE', previous: 'PREVIOUS INTEREST RATE' },
+  { base: 'FHA', product: '30 Yr. FHA', column: 'TODAY FHA RATE', previous: 'PREVIOUS FHA RATE' },
+  { base: 'VA', product: '30 Yr. VA', column: 'TODAY VA RATE', previous: 'PREVIOUS VA RATE' },
+  { base: 'Jumbo', product: '30 Yr. Jumbo', column: 'TODAY JUMBO RATE', previous: 'PREVIOUS JUMBO RATE' },
+];
+export const rateBaseOfType = type => (RATE_BASES.find(b => b.base.toLowerCase() === String(type || '').trim().toLowerCase()) || RATE_BASES[0]).base;
+// A rateHistory field for an MND product ("30 Yr. FHA" is saved as "30 YR FHA")
+export const historyKey = product => product.replace(/\./g, '').toUpperCase();
 
 const clean = s => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
  * The index table's newest day: { date: 'YYYY-MM-DD', rates: { '30 Yr. Fixed': 0.075, '15 Yr. Fixed': 0.0703, ... } }
- * (rates as decimals), or null when the page doesn't have the table it should (or its 30 year rate isn't a believable
+ * (rates as decimals) and days: every day in the table, newest first, each { date, rates }; or null when the page
+ * doesn't have the table it should (or its newest 30 year rate isn't a believable
  * rate: 1% to 20%).
  */
 export function parseMndIndex(html) {
@@ -25,7 +38,8 @@ export function parseMndIndex(html) {
     if (!head) continue;
     const names = [...head.matchAll(/<th[^>]*colspan="2"[^>]*>([\s\S]*?)<\/th>/gi)].map(m => clean(m[1]));
     if (!names.includes(MND_MAIN_PRODUCT)) continue;
-    // The first row that starts with a date is the newest day
+    // Each row that starts with a date is a day, newest first (days: every one in the table, about a month)
+    const days = [];
     for (const r of rowsHtml) {
       const first = (r.match(/<td[^>]*>([\s\S]*?)<\/td>/i) || [])[1];
       const d = clean(first).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -34,9 +48,11 @@ export function parseMndIndex(html) {
       const rates = {};
       names.forEach((n, i) => { if (isFinite(values[i]) && values[i] > 0) rates[n] = Math.round(values[i] * 1e6) / 1e6; });
       const main = rates[MND_MAIN_PRODUCT];
-      if (!(main >= 0.01 && main <= 0.2)) return null;
-      return { date: d[3] + '-' + String(d[1]).padStart(2, '0') + '-' + String(d[2]).padStart(2, '0'), rates };
+      // (the newest day has to be readable; an older one that isn't is left out)
+      if (!(main >= 0.01 && main <= 0.2)) { if (!days.length) return null; continue; }
+      days.push({ date: d[3] + '-' + String(d[1]).padStart(2, '0') + '-' + String(d[2]).padStart(2, '0'), rates });
     }
+    if (days.length) return { date: days[0].date, rates: days[0].rates, days };
   }
   return null;
 }
@@ -75,12 +91,13 @@ export function easternTextToDate(s) {
   return null;
 }
 
-// The scheduled checks (Cloud Scheduler job portal-rate-check): weekdays every 15 minutes, 2:00 through 6:45 PM Eastern
-export const CHECK_FIRST = 14 * 60, CHECK_LAST = 18 * 60 + 45;   // minutes after midnight, Eastern
+// The scheduled checks (Cloud Scheduler job portal-rate-check, "*/15 9-23 * * 1-5" in America/New_York): weekdays every
+// 15 minutes, 9:00 AM through 11:45 PM Eastern, until that day's rate is saved (MND posts at no set time)
+export const CHECK_FIRST = 9 * 60, CHECK_LAST = 23 * 60 + 45;   // minutes after midnight, Eastern
 const isWeekday = w => w !== 'Sat' && w !== 'Sun';
 /**
  * Where the checks stand at now, with savedDate the MND day already saved (YYYY-MM-DD):
- *   state: 'current' (today's is saved), 'before' (a weekday before 2:00 PM ET), 'checking' (in the window, not saved yet),
+ *   state: 'current' (today's is saved), 'before' (a weekday before 9:00 AM ET), 'checking' (in the window, not saved yet),
  *          'missed' (a weekday after the window with nothing posted: a market holiday), 'weekend'
  *   nextCheck: the next check that could save a rate (today's are skipped once it's saved); windowStart / windowEnd:
  *   that day's first and last checks (Dates)

@@ -1,6 +1,6 @@
 // HTTP entry point (Cloud Run function "portalApi"). The portal's pages POST JSON as text/plain (no CORS preflight);
 // Documenso's webhook (unused for now) could POST here with ?documensoWebhook=<secret>.
-// Cloud Scheduler POSTs ?rateCheck every 15 minutes on weekday afternoons (job portal-rate-check, Eastern time) to pull
+// Cloud Scheduler POSTs ?rateCheck every 15 minutes on weekdays, 9 AM to midnight (job portal-rate-check, Eastern time) to pull
 // Mortgage News Daily's rate; it's only run for a Google-signed token from the portal-api service account.
 import functions from '@google-cloud/functions-framework';
 import { OAuth2Client } from 'google-auth-library';

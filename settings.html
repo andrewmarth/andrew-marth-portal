@@ -558,6 +558,14 @@
         .rate-row .v { font-weight: bold; text-align: right; }
         .rate-row .v small { display: block; font-weight: normal; opacity: 0.7; }
         .rate-status { margin-top: 12px; font-size: 0.9rem; line-height: 1.5; }
+        .rate-kind-head { margin: 12px 0 0; font-size: 0.78rem; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.75; }
+        .rate-kind-head + .rate-big { margin-top: 2px; }
+        /* FHA, VA and Jumbo: a tile each */
+        .rate-kinds { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .rate-kind { padding: 8px 12px; border-radius: 14px; background: rgba(233, 226, 216, 0.08); font-variant-numeric: tabular-nums; }
+        .rate-kind .k { display: block; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; opacity: 0.75; }
+        .rate-kind b { display: block; font-size: 1.25rem; }
+        .rate-kind .rate-change { font-size: 0.78rem; }
         .rate-recent { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
         .rate-day { padding: 6px 10px; border-radius: 12px; background: rgba(233, 226, 216, 0.08); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
         .rate-day b { display: block; font-size: 0.95rem; }
@@ -1136,12 +1144,12 @@
             <h2>Today's Interest Rate</h2>
             <div class="usage-item">
                 <div class="usage-top">
-                    <span class="usage-name">30 Year Fixed · Mortgage News Daily</span>
+                    <span class="usage-name">30 Year Rates · Mortgage News Daily</span>
                     <span class="usage-pill is-idle" id="rate-pill">Loading</span>
                 </div>
                 <div id="rate-body"><div class="usage-notes"><span>Loading...</span></div></div>
             </div>
-            <p class="usage-foot" id="rate-foot">Every Buyer Breakdown prices its loans from this rate.</p>
+            <p class="usage-foot" id="rate-foot">Every Buyer Breakdown prices its loans from these rates.</p>
         </section>
 
         <section class="main-card glow-card reveal" id="usage-card" hidden>
@@ -2861,7 +2869,7 @@
             return li;
         }
         // --- Today's Interest Rate (admins) ---
-        // The rate every Buyer Breakdown uses (Mortgage News Daily's 30 year fixed, pulled by the API each weekday
+        // The rates every Buyer Breakdown uses (Mortgage News Daily's 30 year fixed, FHA, VA and Jumbo, pulled by the API each weekday
         // afternoon), the day it's for, when it was saved and where today's checks stand. Times show in Arizona time, with
         // Eastern (MND's, and the schedule's) beside them. Check Now runs the check right away.
         const AZ_ZONE = 'America/Phoenix', ET_ZONE = 'America/New_York';
@@ -2893,15 +2901,25 @@
             const next = 'the next check is ' + azDayTime(s.nextCheck) + ' (' + etTime(s.nextCheck) + ' ET)';
             const status = {
                 current: 'Today’s rate is in, so ' + next + '.',
-                before: 'Mortgage News Daily posts each weekday afternoon. Today’s checks start at ' + azTime(s.windowStart) + ' (' + etTime(s.windowStart) + ' ET).',
+                before: 'Mortgage News Daily posts each weekday, usually in the afternoon. Today’s checks start at ' + azTime(s.windowStart) + ' (' + etTime(s.windowStart) + ' ET).',
                 checking: 'Today’s rate isn’t posted yet. Checking every 15 minutes until ' + azTime(s.windowEnd) + ' (' + etTime(s.windowEnd) + ' ET).',
                 missed: 'Nothing was posted today (usually a market holiday), so ' + next + '.',
                 weekend: 'Rates aren’t posted on weekends, so ' + next + '.',
             }[s.state] || '';
-            const change = s.rate && s.previous ? s.rate - s.previous : null;
-            const changeHtml = change === null ? '' : '<span class="rate-change ' + (Math.abs(change) < 5e-6 ? 'is-flat">No change from ' : change > 0 ? 'is-up">▲ ' + ratePct(change) + ' from ' : 'is-down">▼ ' + ratePct(-change) + ' from ') + ratePct(s.previous) + '</span>';
+            // (short: "▼ 0.03%" without "from 7.49%", for the smaller FHA / VA / Jumbo tiles)
+            const changeOf = (rate, previous, short) => {
+                const change = rate && previous ? rate - previous : null;
+                return change === null ? '' : '<span class="rate-change ' + (Math.abs(change) < 5e-6 ? 'is-flat">' + (short ? 'No change' : 'No change from ')
+                    : change > 0 ? 'is-up">▲ ' + ratePct(change) + (short ? '' : ' from ') : 'is-down">▼ ' + ratePct(-change) + (short ? '' : ' from ')) + (short ? '' : ratePct(previous)) + '</span>';
+            };
+            const changeHtml = changeOf(s.rate, s.previous);
+            // Each kind of loan's own 30 year rate (FHA, VA, Jumbo: their loan products are priced from it)
+            const others = (s.rates || []).filter(r => r.base !== 'Conventional');
+            const othersHtml = others.length ? '<div class="rate-kinds">' + others.map(r => '<div class="rate-kind"><span class="k">' + escapeHtml(r.base) + '</span><b>'
+                + (r.rate ? ratePct(r.rate) : 'Not yet') + '</b>' + changeOf(r.rate, r.previous, true) + '</div>').join('') + '</div>' : '';
             const row = (k, v, sub) => '<div class="rate-row"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + escapeHtml(v) + (sub ? '<small>' + escapeHtml(sub) + '</small>' : '') + '</span></div>';
-            body.innerHTML = (s.rate ? '<div class="rate-big"><span class="usage-used">' + ratePct(s.rate) + '</span>' + changeHtml + '</div>' : '')
+            body.innerHTML = (s.rate ? '<p class="rate-kind-head">Conventional (30 year fixed)</p><div class="rate-big"><span class="usage-used">' + ratePct(s.rate) + '</span>' + changeHtml + '</div>' : '')
+                + othersHtml
                 + '<div class="rate-rows">'
                 + (s.date ? row('Mortgage News Daily’s rate for', rateDay(s.date)) : '')
                 + (s.updatedAt ? row('Last updated', azDayTime(s.updatedAt) + ' Arizona time', etTime(s.updatedAt) + ' Eastern time') : row('Last updated', 'Not yet'))
@@ -2913,7 +2931,7 @@
                 + '<div class="gemini-actions rate-card-actions"><button type="button" class="btn" id="rate-check"><span class="btn-spinner" aria-hidden="true"></span>Check Now</button>'
                 + '<span class="gemini-msg" id="rate-msg" role="status"></span>'
                 + '<a href="' + escapeHtml(s.sourceUrl) + '" target="_blank" rel="noopener">Mortgage News Daily’s rate index</a></div>';
-            document.getElementById('rate-foot').textContent = 'Every Buyer Breakdown prices its loans from this rate. The portal checks weekdays every 15 minutes from '
+            document.getElementById('rate-foot').textContent = 'Loan products are priced from their type’s rate: FHA, VA and Jumbo from their own, every other type from the conventional (30 year fixed) rate. The portal checks weekdays every 15 minutes from '
                 + etTime(s.windowStart) + ' to ' + etTime(s.windowEnd) + ' Eastern time (' + azTime(s.windowStart) + ' to ' + azTime(s.windowEnd)
                 + ' in Arizona right now; Arizona’s times shift an hour when Eastern time changes for daylight saving) until that day’s rate is posted.';
             document.getElementById('rate-check').addEventListener('click', async () => {

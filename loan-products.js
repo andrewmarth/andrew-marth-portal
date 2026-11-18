@@ -4,7 +4,7 @@
 // Columns the API sends that LAYOUT doesn't mention are asked under "Other".
 // Uses the same pop-up styles as the income editor: a card on wide screens, a swipe-up sheet on phones.
 import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
-import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel,
+import { QUOTE_CREDIT, QUOTE_DTI, QUOTE_LTV, quoteIndex, rateQuotes, markupModel, rateBaseOfType,
     BUYDOWN_POINTS, BUYDOWN_SCENARIO, buydownQuotes, buydownBase, buydownModel } from '/rate-markups.js';
 import { MI_CREDIT, MI_DTI, MI_LTV, MI_REQUIRED_ABOVE, MI_REFERENCE, MI_MAX_QUOTE, FHA_UFMIP, VA_FUNDING_FEES, VA_DOWN_LABELS,
     miQuotes, miModel, miSettings, upfrontFactor } from '/mortgage-insurance.js';
@@ -730,6 +730,8 @@ function build() {
         if (term) term.addEventListener('change', showTerm);
         const type = sectionsEl.querySelector('[data-col="PRODUCT TYPE"]');
         if (type) type.addEventListener('change', showScopes);
+        // (the type picks which of today's rates the quotes are measured from)
+        if (type) type.addEventListener('change', () => showMarkups());
         sectionsEl.querySelectorAll('.lp-step').forEach(b => b.addEventListener('click', () => {
             const input = b.parentElement.querySelector('input');
             input.value = String(Math.max(0, Math.min(99, num(input.value) + Number(b.dataset.step))));
@@ -970,7 +972,7 @@ function build() {
     const quoteLabel = (c, d, l) => QUOTE_CREDIT[c] + ' credit score, ' + pctText(QUOTE_DTI[d]) + ' DTI, ' + pctText(QUOTE_LTV[l]) + ' LTV';
     function quotesHtml() {
         return '<div class="lp-sheet-status" data-sheet-status hidden><p data-sheet-text></p><button type="button" class="btn btn-secondary" data-requote>Requote</button></div>'
-            + '<p class="lp-fees-help lp-quote-help" data-quote-entry>Quote the interest rate (no points bought) for each scenario. Today’s interest rate is <strong data-today>not set</strong>; each quote’s markup is how far it is above (or below) it.</p>'
+            + '<p class="lp-fees-help lp-quote-help" data-quote-entry>Quote the interest rate (no points bought) for each scenario. Today’s rate for this type of loan is <strong data-today>not set</strong>; each quote’s markup is how far it is above (or below) it.</p>'
             + '<div class="field lp-quotes" data-quote-entry>' + QUOTE_CREDIT.map((c, ci) => '<div class="lp-quote-block"><p class="lp-quote-title">' + c + ' Credit Score</p>'
                 + '<table class="lp-quote-grid"><thead><tr><th scope="col"><span class="lp-sr">DTI</span></th>'
                 + QUOTE_LTV.map(l => '<th scope="col">' + pctText(l) + ' LTV</th>').join('') + '</tr></thead><tbody>'
@@ -1021,14 +1023,26 @@ function build() {
         const s = saved || {};
         const complete = Boolean(s.quotes && s.buys && (!needsMi() || s.mi));
         const was = sheetMode;
-        locked = complete ? { quotes: s.quotes, buys: s.buys, mi: s.mi || null, today: s.today, date: s.date, pending: Boolean(s.pending) } : null;
+        locked = complete ? { quotes: s.quotes, buys: s.buys, mi: s.mi || null, today: s.today, base: s.base, date: s.date, pending: Boolean(s.pending) } : null;
         sheetMode = complete ? 'locked' : 'open';
         if (init || (was === 'locked' && !complete)) putSheet(s.quotes, s.buys, s.mi);
         showSheet();
     }
     const quoteBoxes = () => [...sectionsEl.querySelectorAll('[data-quote]')].sort((a, b) => a.dataset.quote - b.dataset.quote);
     const quotesField = () => (ctx && ctx.fields || []).find(f => f.col === 'RATE QUOTES');
-    const fieldToday = () => { const f = quotesField(); return f && Number(f.today) > 0 ? Number(f.today) : null; };
+    // Today's rate for the Product Type picked (FHA, VA and Jumbo their own; any other type Conventional's, as is a type
+    // whose rate isn't saved yet): { rate (null: none saved), base }
+    function fieldTodayFor() {
+        const f = quotesField();
+        const of = base => { const v = f && (f.todays ? f.todays[base] : base === 'Conventional' ? f.today : null); return Number(v) > 0 ? Number(v) : null; };
+        let base = rateBaseOfType(productType());
+        let rate = of(base);
+        if (rate === null && base !== 'Conventional') { base = 'Conventional'; rate = of(base); }
+        return { rate, base };
+    }
+    const fieldToday = () => fieldTodayFor().rate;
+    // "Today’s FHA rate" / "today’s conventional rate" (start: capitalized)
+    const baseText = (base, start) => (start ? 'Today’s ' : 'today’s ') + (base === 'Conventional' ? 'conventional' : base) + ' rate';
     // The 27 quotes as decimals, or null while any is blank or not over 0
     function quotesNow() {
         const boxes = quoteBoxes();
@@ -1039,7 +1053,7 @@ function build() {
     // Today's rate the markups are measured from: a submitted sheet's (today's rate the day it was submitted), else today's
     // (a sheet is stamped with today's rate when it's submitted)
     function todayFor() {
-        return sheetMode === 'locked' && locked && !locked.pending && locked.today ? { rate: locked.today, saved: true } : { rate: fieldToday(), saved: false };
+        return sheetMode === 'locked' && locked && !locked.pending && locked.today ? { rate: locked.today, base: locked.base || 'Conventional', saved: true } : { ...fieldTodayFor(), saved: false };
     }
     // Puts a sheet's rates in the boxes (null: blank)
     function putSheet(quotes, buys, mi) {
@@ -1060,7 +1074,7 @@ function build() {
             status.hidden = open;
             if (!open && locked) status.querySelector('[data-sheet-text]').innerHTML = locked.pending
                 ? '<b>Quotes ready.</b> They’re saved when you add the loan product, and can’t be edited after that. To change them, requote all of them.'
-                : '<b>Quotes submitted' + (locked.date ? ' on ' + dateText(locked.date) : '') + '</b>' + (locked.today ? ' (today’s interest rate was ' + rateText(locked.today) + ')' : '')
+                : '<b>Quotes submitted' + (locked.date ? ' on ' + dateText(locked.date) : '') + '</b>' + (locked.today ? ' (' + baseText(locked.base || 'Conventional') + ' was ' + rateText(locked.today) + ')' : '')
                     + '. They can’t be edited. To change them, requote: enter ' + what + ' again.';
         }
         if (actions) {
@@ -1098,10 +1112,10 @@ function build() {
         const rising = buys.findIndex((el, i) => i > 0 && Number(el.value) > Number(buys[i - 1].value));
         if (rising > 0) return fail(buys[rising], 'More points should lower the rate (or keep it the same), so the ' + pointsText(BUYDOWN_POINTS[rising])
             + ' quote can’t be higher than the ' + pointsText(BUYDOWN_POINTS[rising - 1]) + ' quote.');
-        const today = fieldToday();
+        const { rate: today, base } = fieldTodayFor();
         if (!today) return fail(null, ERRORS.no_today_rate);
         const dec = el => Number((Number(el.value.trim()) / 100).toPrecision(10));
-        const sheet = { quotes: quoteBoxes().map(dec), buys: buys.map(dec), mi: withMi ? miBoxes().map(dec) : null, today,
+        const sheet = { quotes: quoteBoxes().map(dec), buys: buys.map(dec), mi: withMi ? miBoxes().map(dec) : null, today, base,
             date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }), pending: !ctx.product };
         if (ctx.product) {
             const values = { 'RATE QUOTES': JSON.stringify({ QUOTES: sheet.quotes }), 'BUYDOWN QUOTES': JSON.stringify({ QUOTES: sheet.buys }),
@@ -1122,7 +1136,7 @@ function build() {
                 btn.classList.remove('is-loading');
                 saveBtn.disabled = false;
             }
-            ctx.product.values['RATE QUOTES'] = JSON.stringify({ QUOTES: sheet.quotes, TODAY: today, DATE: sheet.date });
+            ctx.product.values['RATE QUOTES'] = JSON.stringify({ QUOTES: sheet.quotes, TODAY: today, BASE: base, DATE: sheet.date });
             ctx.product.values['BUYDOWN QUOTES'] = values['BUYDOWN QUOTES'];
             ctx.product.values['MI QUOTES'] = values['MI QUOTES'];
         }
@@ -1147,7 +1161,7 @@ function build() {
         const quotes = quotesNow();
         const today = todayFor(quotes);
         const todayBox = sectionsEl.querySelector('[data-today]');
-        if (todayBox) todayBox.textContent = today.rate ? rateText(today.rate) + (today.saved ? ' (when these were quoted)' : '') : 'not set';
+        if (todayBox) todayBox.textContent = today.rate ? rateText(today.rate) + ' (' + baseText(today.base) + (today.saved ? ', when these were quoted)' : ')') : 'not set';
         if (!quotes) { el.innerHTML = '<p class="lp-markups-empty">Fill in all 27 quotes to see the rate markups.</p>'; return; }
         if (!today.rate) { el.innerHTML = '<p class="lp-markups-empty">Today’s interest rate isn’t set, so the markups can’t be worked out yet.</p>'; return; }
         const m = markupModel(quotes, today.rate);
@@ -1160,7 +1174,7 @@ function build() {
             { key: 'ltv', title: 'Loan-to-Value', head: 'LTV', rows: m.tables.ltv, fn: m.ltv, quoted: QUOTE_LTV, label: pctText, tip: v => pctText(v) + ' LTV', ticks: [0.2, 0.4, 0.6, 0.8, 1], tick: pctText },
         ];
         el.innerHTML = '<p class="lp-markups-head">Rate Markups</p>'
-            + '<p class="lp-markup-sum">Starting markup (800 credit score, 20% DTI, 50% LTV): <b>' + markText(m.start) + '</b>. A buyer’s rate is today’s interest rate + the starting markup + the three markups below'
+            + '<p class="lp-markup-sum">Starting markup (800 credit score, 20% DTI, 50% LTV): <b>' + markText(m.start) + '</b>. A buyer’s rate is ' + baseText(today.base) + ' + the starting markup + the three markups below'
             + (m.worstMiss >= 0.00005 ? '; that comes within <b>' + (Math.round(m.worstMiss * 1e5) / 1e3).toFixed(3) + '%</b> of every quote.' : ', matching every quote.') + '</p>'
             + '<div class="lp-metrics">' + metrics.map(metricCard).join('') + '</div>'
             + '<p class="lp-markup-key"><span class="lp-key-band"></span>Shaded: the quoted range, where the curve passes through the quoted levels (the dots and <b>bold</b> rows). '
@@ -1665,7 +1679,7 @@ function build() {
         // what it has
         const savedQuotes = isNew ? null : rateQuotes(values['RATE QUOTES']);
         const savedBuys = isNew ? null : buydownQuotes(values['BUYDOWN QUOTES']);
-        saved = isNew ? null : { quotes: savedQuotes && savedQuotes.quotes, buys: savedBuys, mi: savedMi, today: savedQuotes && savedQuotes.today, date: savedQuotes && savedQuotes.date, pending: false };
+        saved = isNew ? null : { quotes: savedQuotes && savedQuotes.quotes, buys: savedBuys, mi: savedMi, today: savedQuotes && savedQuotes.today, base: savedQuotes && savedQuotes.base, date: savedQuotes && savedQuotes.date, pending: false };
         requoting = false;
         sheetMode = 'open';
         syncSheetLock(true);
