@@ -1004,12 +1004,16 @@
         .money-list .net-ask p { margin: 0 0 12px 0; line-height: 1.45; font-size: 0.95rem; }
         .money-list .net-ask .btn { margin: 0; }
         .net-waiting .net-waiting-agent { margin: 14px 0 0 0; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; font-size: 0.85rem; color: var(--olive); }
-        /* The seller's Client Input pop-up: a $ in front of amounts, "%" / "months" after */
+        /* The seller's Add Your Loan Details pop-up: a $ in front of amounts, "%" / "months" after */
         .client-dialog .cl-box { position: relative; max-width: 300px; }
         .client-dialog .cl-money::before { content: '$'; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
         .client-dialog .tf-step .cl-money input[type="text"] { padding-left: 36px; }
         .client-dialog .cl-suffix::after { content: attr(data-suffix); position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
         .client-dialog .tf-step .cl-suffix input[type="text"] { padding-right: 90px; }
+        /* (Other Holdbacks: a line per holdback under the Yes) */
+        .client-dialog .cl-lines { margin-top: 18px; }
+        .client-dialog .cl-lines .sub-label { margin-left: 6px; }
+        .client-dialog .tf-step .cl-lines .has-prefix input[type="text"] { padding-left: 36px; }
         /* (minmax(0, 1fr): a long choice can't push the box past the card's edge) */
         .sub-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; }
         /* One setting per line (Title & Escrow); two marked half share a line */
@@ -1022,6 +1026,16 @@
         /* An open list wraps long names (a closed picker still ends them with "…") */
         .sub-field .picker-list .picker-main, .sub-field .picker-list .picker-secondary { white-space: normal; overflow-wrap: anywhere; }
         .sub-label { display: block; margin: 0 0 6px 6px; font-size: 0.82rem; font-weight: bold; opacity: 0.8; }
+        /* A long question or a list of lines takes the whole line */
+        .sub-grid > .sub-field.is-wide { grid-column: 1 / -1; }
+        /* Loan Term's Other: the box under the picker */
+        .sub-field .sub-other { margin-top: 10px; }
+        /* Seller Net: an agent question the client has answered shows their answer, locked */
+        .sub-locked { display: grid; gap: 4px; padding: 12px 18px; border-radius: 22px; background: #f2ede6; }
+        .sub-locked-value { font-weight: bold; overflow-wrap: anywhere; }
+        .sub-locked-note, .client-tag { display: inline-flex; align-items: center; gap: 6px; }
+        .sub-locked-note { font-size: 0.82rem; opacity: 0.75; }
+        .sub-locked-note svg, .client-tag svg { width: 13px; height: 13px; flex: none; }
         @media (max-width: 600px) { .sub-grid { grid-template-columns: minmax(0, 1fr); } }
         /* Sellers: seller type, the LLC / trust name and each seller's signer title, under the picker */
         .seller-extras { display: grid; gap: 14px; margin-top: 16px; }
@@ -1151,6 +1165,10 @@
         /* Missing (Seller Net): the same look as Edited, in red */
         .missing-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(224, 96, 79, 0.25); color: #f2b8a8; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
         .field.editable.is-missing .missing-tag { display: inline-block; }
+        /* Seller Net: an HOA setting the client has answered (locked: changed in Client HOA Input) */
+        .client-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(233, 226, 216, 0.18); color: var(--cream); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .field.editable.is-client-locked .client-tag { display: inline-flex; }
+        .field.editable.is-client-locked > .view-row .edit-btn { opacity: 0.35; cursor: not-allowed; }
         :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
         :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
         /* The open editor stays light, so its inputs read the same as before */
@@ -1179,7 +1197,7 @@
             .view-row .vk { grid-column: 1; }
             .view-row .vv { grid-column: 1; text-align: left; opacity: 0.85; }
             .view-row .edit-btn { grid-column: 2; grid-row: 1 / span 3; }
-            .view-row .edited-tag, .view-row .missing-tag { grid-column: 1; justify-self: start; }
+            .view-row .edited-tag, .view-row .missing-tag, .view-row .client-tag { grid-column: 1; justify-self: start; }
         }
     </style>
 </head>
@@ -1328,6 +1346,11 @@
             <div class="settings-section" id="loan-payoff-section">
                 <h3 class="money-section-title">Loan Payoff</h3>
                 <div class="settings-grid" id="loan-payoff-fields"></div>
+            </div>
+            <!-- The seller's own HOA answers (Client HOA Input) -->
+            <div class="settings-section" id="client-hoa-section">
+                <h3 class="money-section-title">HOA</h3>
+                <div class="settings-grid" id="client-hoa-fields"></div>
             </div>
 
             <div class="access-actions">
@@ -1540,6 +1563,8 @@
         }
         const addDays = (d, days) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
         const fmtDate = d => d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Not set';
+        // "December 1"
+        const fmtMonthDay = d => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 
         // --- Matching a value to the right column ---
         // Credit score tiers in LOAN PRODUCTS: <600, 600-620, ... 780-800, 800+ (lower number included)
@@ -1633,6 +1658,41 @@
             if (text(get('OTHER LOAN PAYOFF FEES $')) === '' && text(get('OTHER LOAN PAYOFF FEES %')) === '') return '';
             return payoffFeeRows(get).length || payoffFeePct(get) > 0 ? 'Yes' : 'No';
         }
+        // Seller Net, a Hard Money loan: the lender's Other Holdbacks (HAS OTHER HOLDBACKS: Yes / No, then OTHER HOLDBACKS: JSON
+        // [{ NAME, AMOUNT }]), credited back at closing like the construction holdback and interest reserve. A page from before
+        // has a Draw Fee Holdback and an Other Holdback ($ each): they read as a line each (over $0) until the list is saved,
+        // which clears them, and its yes / no as Yes when either is over $0 (No at $0). Blank: not answered yet.
+        const holdbackList = get => text(get('OTHER HOLDBACKS')) !== '';
+        const otherHoldbackRows = get => (holdbackList(get) ? feeLinesOf(get('OTHER HOLDBACKS'))
+            : [['Draw Fee Holdback', 'DRAW FEE HOLDBACK'], ['Other Holdback', 'OTHER HOLDBACK']].filter(([, c]) => num(get(c)) > 0)
+                .map(([name, c]) => ({ name, amount: num(get(c)), payer: '', status: '' })));
+        function otherHoldbackAnswer(get) {
+            const answer = text(get('HAS OTHER HOLDBACKS'));
+            if (answer) return answer;
+            if (holdbackList(get)) return otherHoldbackRows(get).length ? 'Yes' : 'No';
+            if (text(get('DRAW FEE HOLDBACK')) === '' && text(get('OTHER HOLDBACK')) === '') return '';
+            return otherHoldbackRows(get).length ? 'Yes' : 'No';
+        }
+        const otherHoldbacks = get => (otherHoldbackAnswer(get) === 'Yes' ? otherHoldbackRows(get) : []);
+        // Loan Term (LOAN TERM MONTHS): the loan type's usual terms ([months, name]), or Other, typed in years (Hard Money: in
+        // months)
+        const loanTermPresets = type => (type === 'Hard Money' ? [6, 9, 12, 18, 24].map(m => [String(m), m + ' Months'])
+            : type === 'DSCR' ? [['360', '30 Years'], ['480', '40 Years']] : [['360', '30 Years'], ['180', '15 Years']]);
+        const termInMonths = type => type === 'Hard Money';
+        // A loan term for a summary: "30 years", "2.5 years", "12 months" (Hard Money, or under a year)
+        function termText(months, type) {
+            const m = num(months);
+            if (!m) return '';
+            if (termInMonths(type) || m < 12) return m + (m === 1 ? ' month' : ' months');
+            const y = Math.round(m / 12 * 100) / 100;
+            return y + (y === 1 ? ' year' : ' years');
+        }
+        // Seller Net: questions in both the agent's and the client's settings (the same columns). Once the client answers
+        // one (in their Add Your Loan Details pop-up, or Client Loan / HOA Input), it's listed in CLIENT ANSWERED and the
+        // agent's copy is locked: Agent Loan Input's DSCR and Hard Money questions, and the HOA section's HOA yes / no and dues.
+        const CLIENT_LOCKS = ['INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+            'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
+        const clientAnswered = (get, column) => listOf(get('CLIENT ANSWERED')).includes(column);
         // HOA dues: each association's amount per payment (HOA PRIMARY / MASTER MONTHLY DUES: the column names are from when
         // they were always monthly) and how often it's paid (HOA PRIMARY / MASTER DUES INTERVAL; blank: Monthly). The HOA is
         // taken to bill on the calendar: quarters from January, April, July and October, halves from January and July, years
@@ -2166,7 +2226,11 @@
         // month after the loan date (a loan from March 15 is first due May 1), for LOAN TERM MONTHS, and are the
         // fixed payment on the original amount at LOAN INTEREST RATE (until the seller enters it, the agent's
         // ESTIMATED INTEREST RATE).
+        // Interest only: a Hard Money loan always is, so its balance never changes. A DSCR loan with an interest only period
+        // (INTEREST ONLY PERIOD Yes) is too when the loan comes due as the period ends (DUE AFTER INTEREST ONLY Yes); if not,
+        // its first INTEREST ONLY MONTHS payments are interest only, and then the fixed payment pays it off over the months left.
         function loanBalanceOn(page, date) {
+            const type = text(col(page, 'LOAN TYPE'));
             const known = text(col(page, 'LOAN PRINCIPAL BALANCE')) !== '';
             const original = num(col(page, 'ORIGINAL LOAN AMOUNT'));
             const originalDate = parseDate(col(page, 'ORIGINAL LOAN DATE'));
@@ -2176,21 +2240,31 @@
             let rate = num(col(page, estimatedRate ? 'ESTIMATED INTEREST RATE' : 'LOAN INTEREST RATE'));
             if (rate > 1) rate /= 100; // "6.5" means 6.5%
             const months = num(col(page, 'LOAN TERM MONTHS'));
+            const dscrPeriod = type === 'DSCR' && text(col(page, 'INTEREST ONLY PERIOD')) === 'Yes';
+            const dueAfter = dscrPeriod && text(col(page, 'DUE AFTER INTEREST ONLY')) === 'Yes';
+            const periodMonths = dscrPeriod && !dueAfter ? num(col(page, 'INTEREST ONLY MONTHS')) : 0;
+            // (a period as long as the loan is all of it)
+            const allInterestOnly = type === 'Hard Money' || dueAfter || (periodMonths > 0 && months > 0 && periodMonths >= months);
             // (the details are for the admin "How The Numbers Work" card)
-            const details = { known, start: balance, from, original, originalDate, rate, estimatedRate, months, date };
+            const details = { known, start: balance, from, original, originalDate, rate, estimatedRate, months, date, type,
+                interestOnly: allInterestOnly ? 'all' : periodMonths > 0 ? 'period' : '', ioMonths: allInterestOnly ? 0 : periodMonths };
+            if (allInterestOnly) return { balance, details, warning: '' };
             if (!balance || !from || !date || !originalDate || !months) return { balance, details, warning: balance && date ? 'Couldn\'t project this to the closing date, so the balance entered is shown' : '' };
             const r = rate / 12;
-            // Fixed monthly payment: from the original amount, or (without one) from the known balance over the months left
+            const ioMonths = details.ioMonths;
+            // Fixed monthly payment (after any interest only payments): from the original amount, or (without one) from the
+            // known balance over the months left
             const firstDue = new Date(originalDate.getFullYear(), originalDate.getMonth() + 2, 1);
             const dueDate = k => new Date(firstDue.getFullYear(), firstDue.getMonth() + k, 1);
             const paidBy = d => { let k = 0; while (k < months && dueDate(k) <= d) k++; return k; };
             const amortized = (amount, n) => !n ? amount : r ? amount * r / (1 - Math.pow(1 + r, -n)) : amount / n;
-            const payment = original ? amortized(original, months) : amortized(balance, months - paidBy(from));
+            const payment = original ? amortized(original, months - ioMonths) : amortized(balance, months - Math.max(paidBy(from), ioMonths));
             const schedule = [];
             for (let k = paidBy(from); k < paidBy(date); k++) {
                 const interest = balance * r;
-                const next = Math.max(0, balance + interest - payment);
-                schedule.push({ number: k + 1, date: dueDate(k), interest, principal: balance - next, balance: next });
+                const interestOnly = k < ioMonths;
+                const next = interestOnly ? balance : Math.max(0, balance + interest - payment);
+                schedule.push({ number: k + 1, date: dueDate(k), interest, principal: balance - next, balance: next, interestOnly });
                 balance = next;
             }
             Object.assign(details, { projected: true, payment, firstDue, paidBefore: paidBy(from), schedule });
@@ -2249,6 +2323,22 @@
             const principal = loan.balance;
             // Until the seller enters their balance and rate, the balance is an estimate (from the original loan and the agent's rate)
             const estimatedBalance = !noLoan && (!loan.details.known || loan.details.estimatedRate);
+            // Remaining Interest: interest is paid a month behind, so the payoff adds this month's so far: the 1st through
+            // closing day (both included), on the balance then (a day's interest: the balance × the yearly rate ÷ 365)
+            const interestDays = closing && !noLoan && principal ? closing.getDate() : 0;
+            const dailyInterest = noLoan ? 0 : principal * (loan.details.rate || 0) / 365;
+            const remainingInterest = { days: interestDays, daily: dailyInterest, amount: dailyInterest * interestDays };
+            const interestNote = interestDays ? (interestDays === 1 ? fmtMonthDay(closing) : fmtMonthDay(new Date(closing.getFullYear(), closing.getMonth(), 1)) + ' – ' + fmtMonthDay(closing))
+                + ' (' + interestDays + (interestDays === 1 ? ' day' : ' days') + ')' : '';
+            // Hard Money: what the lender is still holding back (for construction, interest payments or anything else) is
+            // credited back at closing, a line each
+            const hardMoney = !noLoan && text(col(page, 'LOAN TYPE')) === 'Hard Money';
+            const creditNote = 'Held back by the lender, credited back';
+            const holdbackLines = !hardMoney ? [] : [
+                { section: 'Payoffs', payoff: true, label: 'Construction Holdback', amount: num(col(page, 'OUTSTANDING CONSTRUCTION HOLDBACK')), note: creditNote },
+                { section: 'Payoffs', payoff: true, label: 'Interest Reserve', amount: num(col(page, 'OUTSTANDING INTEREST RESERVE')), note: creditNote },
+                ...otherHoldbacks(c => col(page, c)).map(h => ({ section: 'Payoffs', payoff: true, label: h.name, amount: h.amount, note: creditNote })),
+            ];
             const payoffFee = column => (noLoan ? 0 : num(col(page, column)));
             // HOA fees only count when the seller pays them (a blank WHO PAYS means the seller)
             // No HOA: its fees don't count (they're hidden in the settings)
@@ -2274,8 +2364,9 @@
                 { section: 'Financial', label: 'Sale Price', amount: price },
                 { section: 'Financial', label: 'Seller Credit To Buyer' + (sellerPct ? ' (' + percent(sellerPct) + ')' : ''), amount: -credit, warnings: creditWarnings },
 
-                { section: 'Payoffs', payoff: true, key: 'principal', label: estimatedBalance ? 'Estimated Principal Balance' : 'Principal Loan Amount', amount: -principal,
+                { section: 'Payoffs', payoff: true, key: 'principal', label: 'Principal Balance', amount: -principal,
                     note: closing && principal && !loan.warning ? (estimatedBalance ? 'Estimated balance on ' : 'Projected balance on ') + fmtDate(closing) : '', warnings: loan.warning ? [loan.warning] : [] },
+                { section: 'Payoffs', payoff: true, label: 'Remaining Interest', amount: -remainingInterest.amount, note: interestNote },
                 { section: 'Payoffs', payoff: true, label: 'Recording Fee', amount: -payoffFee('RECORDING FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Payoff Statement Fee', amount: -payoffFee('PAYOFF STATEMENT FEE') },
                 { section: 'Payoffs', payoff: true, label: 'Prepayment Penalty', amount: noLoan ? 0 : -(penaltyPct + penaltyDollars) },
@@ -2283,6 +2374,7 @@
                 ...(noLoan || payoffFeeAnswer(c => col(page, c)) !== 'Yes' ? []
                     : payoffFeeList(c => col(page, c)) ? payoffFeeRows(c => col(page, c)).map(f => ({ section: 'Payoffs', payoff: true, label: f.name, amount: -f.amount }))
                     : [{ section: 'Payoffs', payoff: true, label: 'Other Loan Payoff Fee', amount: -percentPlus('OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', principal) }]),
+                ...holdbackLines,
 
                 // The buyer breakdown's prorations, the other way around
                 // (by how often the dues are paid: the rest of the billing period closing falls in)
@@ -2317,7 +2409,7 @@
             return {
                 sellerNet: true, lines, acceptance, closing, yearlyTaxes, price,
                 // For the admin "How The Numbers Work" card
-                math: { escrowDays: num(col(page, 'ESCROW DURATION')), daysInMonth, daysLeft, tax, taxCharge, loan: loan.details, loanWarning: loan.warning, principal },
+                math: { escrowDays: num(col(page, 'ESCROW DURATION')), daysInMonth, daysLeft, tax, taxCharge, loan: loan.details, loanWarning: loan.warning, principal, remainingInterest },
                 payoffs: sum(lines.filter(l => l.payoff)),
                 costs: sum(lines.filter(l => !l.payoff && l.label !== 'Sale Price')),
                 net: sum(lines),
@@ -2355,6 +2447,8 @@
         }
 
         // Caution triangle in the site's gold, instead of the yellow emoji
+        // A padlock (Seller Net: an answer the client gave, locked for the agent)
+        const LOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
         const CAUTION_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 
         function renderEscrow(result) {
@@ -2437,7 +2531,7 @@
             const m = result.math;
             const cents = n => money.format(n);
             const pct = n => (Math.round(n * 1e6) / 1e4) + '%';
-            const lineAmount = label => (result.lines.find(l => l.label === label || (label === 'Principal Loan Amount' && l.key === 'principal')) || {}).amount || 0;
+            const lineAmount = label => (result.lines.find(l => l.label === label) || {}).amount || 0;
             const shortDate = d => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set';
             // A step: label, its value and (under the label) how it's worked out
             const step = (k, v, how) => '<li><span class="k">' + escapeHtml(k) + (how ? '<small>' + escapeHtml(how) + '</small>' : '')
@@ -2461,9 +2555,10 @@
                 step('Projected Closing Date', fmtDate(closing), 'Offer acceptance date + escrow duration'),
             ];
 
-            // 1. Principal Loan Amount
+            // 1. Principal Balance
             const L = m.loan;
             const loanRows = L.noLoan ? [step('Loan Type', 'No Loan', 'The seller has no loan, so there\'s nothing to pay off')] : [
+                step('Loan Type', L.type || 'Not set'),
                 step('Starting Balance', cents(L.start), L.known
                     ? 'Loan Principal Balance, as of ' + fmtDate(L.from)
                     : 'No principal balance entered, so this starts from the Original Loan Amount on ' + fmtDate(L.originalDate)),
@@ -2471,16 +2566,25 @@
                     + (L.estimatedRate ? (L.rate ? '. ' : '') + 'The agent\'s estimate, until the seller enters their rate' : '')),
                 step('Loan Term', L.months + ' months'),
             ];
+            // (a DSCR loan's interest only period, when its payments are only interest for a while)
+            if (L.interestOnly === 'period') loanRows.push(step('Interest Only Period', L.ioMonths + ' months',
+                'The first ' + L.ioMonths + ' payments are interest only; then the loan is paid off over the ' + Math.max(0, L.months - L.ioMonths) + ' months left'));
             let schedule = '';
             if (L.noLoan) {
-                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'), 'No loan to pay off'));
+                loanRows.push(resultRow('Principal Balance', lineAmount('Principal Balance'), 'No loan to pay off'));
+            } else if (L.interestOnly === 'all') {
+                loanRows.push(resultRow('Principal Balance', lineAmount('Principal Balance'), (L.type === 'Hard Money'
+                    ? 'A hard money loan is interest only'
+                    : 'Interest only: the loan comes due when its interest only period ends') + ', so the starting balance doesn\'t change'));
             } else if (L.projected) {
                 const n = L.schedule.length;
                 const sum = key => L.schedule.reduce((s, p) => s + p[key], 0);
+                const ioNote = L.interestOnly === 'period' ? 'After the ' + L.ioMonths + ' interest only payments (each just the interest), principal and interest: ' : 'Principal and interest: ';
+                const payMonths = L.months - (L.interestOnly === 'period' ? L.ioMonths : 0);
                 loanRows.push(
                     step('Monthly Payment', cents(L.payment), L.original
-                        ? 'Principal and interest: the fixed payment on the ' + cents(L.original) + ' original loan over ' + L.months + ' months at ' + pct(L.rate)
-                        : 'Principal and interest: the fixed payment on the ' + cents(L.start) + ' balance over the ' + (L.months - L.paidBefore) + ' months left at ' + pct(L.rate)),
+                        ? ioNote + 'the fixed payment on the ' + cents(L.original) + ' original loan over ' + payMonths + ' months at ' + pct(L.rate)
+                        : ioNote + 'the fixed payment on the ' + cents(L.start) + ' balance over the ' + (L.months - Math.max(L.paidBefore, L.ioMonths || 0)) + ' months left at ' + pct(L.rate)),
                     step('First Payment Due', fmtDate(L.firstDue), 'Payments are due on the 1st, starting the second month after the ' + fmtDate(L.originalDate) + ' loan date'),
                 );
                 if (L.known) loanRows.push(step('Payments Before The Starting Balance', String(L.paidBefore), 'Payments due on or before ' + fmtDate(L.from) + ' (already in that balance)'));
@@ -2491,9 +2595,10 @@
                 );
                 if (n) loanRows.push(
                     step('Interest In Those Payments', cents(sum('interest')), 'Each month: the balance × the monthly rate'),
-                    step('Principal Paid Down', '−' + cents(sum('principal')), 'Each month: the payment − that month\'s interest'),
+                    step('Principal Paid Down', '−' + cents(sum('principal')), 'Each month: the payment − that month\'s interest'
+                        + (L.schedule.some(p => p.interestOnly) ? ' (nothing in an interest only payment)' : '')),
                 );
-                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'),
+                loanRows.push(resultRow('Principal Balance', lineAmount('Principal Balance'),
                     'Starting balance − principal paid down = ' + cents(m.principal) + ', the projected balance on ' + fmtDate(closing)));
                 if (n) schedule = '<details class="math-schedule"><summary>Payment by payment (' + n + ')</summary><div class="math-table-wrap"><table class="math-table">'
                     + '<thead><tr><th>Due</th><th>Interest</th><th>Principal</th><th>Balance</th></tr></thead><tbody>'
@@ -2501,8 +2606,19 @@
                     + '</tbody></table></div></details>';
             } else {
                 loanRows.push(warn(m.loanWarning || (!L.start ? 'No loan balance entered' : 'Needs the loan dates, term and closing date to project the balance')));
-                loanRows.push(resultRow('Principal Loan Amount', lineAmount('Principal Loan Amount'), 'The balance entered, not projected'));
+                loanRows.push(resultRow('Principal Balance', lineAmount('Principal Balance'), 'The balance entered, not projected'));
             }
+
+            // 1b. Remaining Interest: this month's interest so far, on the balance at closing
+            const ri = m.remainingInterest;
+            const interestRows = L.noLoan ? [resultRow('Remaining Interest', 0, 'No loan to pay off')]
+                : !closing ? [warn(noClosing), resultRow('Remaining Interest', lineAmount('Remaining Interest'))]
+                : [
+                    step('Principal Balance', cents(m.principal), 'At closing, from above'),
+                    step('Daily Interest', cents(ri.daily), cents(m.principal) + ' × ' + pct(L.rate) + ' ÷ 365 days'),
+                    step('Days Of Interest', String(ri.days), shortDate(new Date(closing.getFullYear(), closing.getMonth(), 1)) + ' through ' + shortDate(closing) + ', closing day included'),
+                    resultRow('Remaining Interest', lineAmount('Remaining Interest'), cents(ri.daily) + ' × ' + ri.days + ' days: interest is paid a month behind, so the payoff includes this month’s so far'),
+                ];
 
             // 2 & 3. HOA dues prorations: the seller is credited for the dues already paid for the rest of the billing period
             // closing falls in (the month, quarter, half year or year, by how often the dues are paid)
@@ -2543,7 +2659,8 @@
             }
 
             document.getElementById('math-list').innerHTML = section('Closing Date', dates)
-                + section('Principal Loan Amount', loanRows, schedule)
+                + section('Principal Balance', loanRows, schedule)
+                + section('Remaining Interest', interestRows)
                 + hoa('Primary HOA Dues Proration', 'PRIMARY')
                 + hoa('Master HOA Dues Proration', 'MASTER')
                 + section('Property Taxes Credit', taxRows);
@@ -2787,22 +2904,27 @@
             return { score: Math.round(used.reduce((a, b) => a + b, 0) / used.length), missing, count: used.length };
         }
 
-        // Seller Net: which inputs are still blank. client: the seller's own questions (Client Input) that apply;
+        // Seller Net: which inputs are still blank. client: the seller's own questions (Client Loan Input and Client HOA Input) that apply;
         // agent: everything else the numbers need (the HOA fees only when there's an HOA). rows: the Settings card
         // rows holding them, by name. get(column) reads a value (default: the saved page).
         // Only agent inputs hold the numbers back: without the seller's answers the loan balance is estimated from the
         // original loan, the loan term and the agent's ESTIMATED INTEREST RATE.
         function sellerNetMissing(page, get = c => text(col(page, c))) {
-            const client = clientInputParts(get, () => {}).filter(p => (!p.show || p.show()) && !p.optional && get(p.column) === '').map(p => p.label);
+            const blank = p => (p.kind === 'lines' ? p.answerOf(get) === '' : get(p.column) === '');
+            const unanswered = parts => parts.filter(p => (!p.show || p.show()) && !p.optional && blank(p)).map(p => p.label);
+            const clientLoan = unanswered(clientLoanParts(get, () => {}));
+            const clientHoa = unanswered(clientHoaParts(get, () => {}));
+            const client = clientLoan.concat(clientHoa);
             const rows = new Set();
-            if (client.length) rows.add('Client Input');
-            // Loan Type and Loan Term are in Agent Input too; HOA yes / no has its own row
-            if (client.some(l => l === 'Loan Type' || l === 'Loan Term')) rows.add('Agent Input');
-            if (client.includes('HOA')) rows.add('HOA');
+            if (clientLoan.length) rows.add('Client Loan Input');
+            if (clientHoa.length) rows.add('Client HOA Input');
+            // Loan Type, Loan Term and the DSCR and Hard Money questions are in Agent Loan Input too; HOA yes / no has its own row
+            if (clientLoan.some(l => AGENT_LOAN_LABELS.includes(l))) rows.add('Agent Loan Input');
+            if (clientHoa.includes('HOA')) rows.add('HOA');
             // Everything needs a value (0 counts): each label is listed when any of its columns is blank
             const agent = [];
-            const ROW_OF = { 'Original Loan Amount': 'Agent Input', 'Original Loan Date': 'Agent Input', 'Loan Type': 'Agent Input',
-                'Loan Term': 'Agent Input', 'Estimated Interest Rate': 'Agent Input' };
+            const ROW_OF = {};
+            AGENT_LOAN_LABELS.forEach(l => { ROW_OF[l] = 'Agent Loan Input'; });
             const need = (label, ...columns) => {
                 if (!columns.some(c => get(c) === '')) return;
                 agent.push(label);
@@ -2831,6 +2953,8 @@
                 need('Loan Term', 'LOAN TERM MONTHS');
                 // The agent's estimate stands in for the seller's rate until they enter it
                 if (get('LOAN INTEREST RATE') === '') need('Estimated Interest Rate', 'ESTIMATED INTEREST RATE');
+                // DSCR and Hard Money: their own questions (answered by the agent or the seller)
+                agentLoanParts(get, () => {}).filter(p => p.extra && (!p.show || p.show()) && blank(p)).forEach(p => { agent.push(p.label); rows.add('Agent Loan Input'); });
                 fee('Recording Fee', 'RECORDING FEE');
                 fee('Payoff Statement Fee', 'PAYOFF STATEMENT FEE');
                 // (each line's Estimated / Final: blank counts as Estimated)
@@ -2887,7 +3011,7 @@
             clientDialog.open();
         }));
 
-        // The seller's Client Input questions in a pop-up, one at a time (the same look as the CUM and New Task forms),
+        // The seller's Client Loan Input and Client HOA Input questions in a pop-up, one at a time (the same look as the CUM and New Task forms),
         // saved straight to the page. Questions that don't apply (by the answers so far) are skipped.
         const CLIENT_QUESTIONS = {
             'LOAN TYPE': ['What kind of loan do you have?', 'It’s on your mortgage statement or closing papers.'],
@@ -2895,15 +3019,17 @@
             'PRINCIPAL LOAN BALANCE DATE': ['What date is that balance from?', 'The date on that statement.'],
             'LOAN INTEREST RATE': ['What’s your interest rate?', ''],
             'LOAN TERM MONTHS': ['How long is your loan?', ''],
+            'INTEREST ONLY PERIOD': ['Is there an interest only period?', 'A stretch at the start of the loan when you only pay the interest.'],
+            'DUE AFTER INTEREST ONLY': ['Does the loan become due after the interest only period?', 'Some loans have to be paid off in full when it ends.'],
+            'INTEREST ONLY MONTHS': ['How long is the interest only period?', 'In years, like 10.'],
             'ORIGINAL PREPAID MORTGAGE INSURANCE': ['How much upfront mortgage insurance did you pay?', 'The prepaid mortgage insurance (or VA funding fee) from when you got the loan.'],
             'PREPAYMENT PENALTY': ['Does your loan have a prepayment penalty?', 'A fee for paying the loan off early.'],
             'PREPAYMENT PENALTY TYPE': ['How is the prepayment penalty figured?', ''],
             'PREPAYMENT PENALTY %': ['What percent of the loan is the penalty?', ''],
             'PREPAYMENT PENALTY $': ['How much is the penalty?', ''],
-            'OUTSTANDING CONSTRUCTION HOLDBACK': ['How much is left in the construction holdback?', 'Enter 0 if there isn’t one.'],
-            'OUTSTANDING INTEREST RESERVE': ['How much is left in the interest reserve?', 'Enter 0 if there isn’t one.'],
-            'DRAW FEE HOLDBACK': ['How much is the draw fee holdback?', 'Enter 0 if there isn’t one.'],
-            'OTHER HOLDBACK': ['Is there any other holdback?', 'Enter 0 if there isn’t one.'],
+            'OUTSTANDING CONSTRUCTION HOLDBACK': ['How much is the lender holding back for construction?', 'What’s left of the construction holdback. Enter 0 if there isn’t one.'],
+            'OUTSTANDING INTEREST RESERVE': ['How much is the lender holding back for interest payments?', 'What’s left of the interest reserve. Enter 0 if there isn’t one.'],
+            'HAS OTHER HOLDBACKS': ['Is the lender holding back money for anything else?', 'Like a draw fee holdback. Add each one with its amount.'],
             'HAS HOA': ['Is the home in an HOA?', ''],
             'HOA PRIMARY DUES INTERVAL': ['How often do you pay the HOA dues?', ''],
             'HOA PRIMARY MONTHLY DUES': ['How much is each HOA dues payment?', ''],
@@ -2919,9 +3045,6 @@
         };
         const CAL_PREV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>';
         const CAL_NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
-        // Loan term: 30 or 15 years (saved in months), or another number of months
-        const TERMS = [['360', '30 Years'], ['180', '15 Years'], ['other', 'Other']];
-
         let clientDialog = null;
         function buildClientDialog() {
             ensureStepFormStyles();
@@ -2951,6 +3074,8 @@
             let termOther = false;
             // The month the calendar shows
             let shown = new Date();
+            // Other Holdbacks: what's wrong with the lines ('' when nothing is)
+            let linesBad = '';
 
             const get = c => (c in answers ? answers[c] : text(col(data.page, c)));
             const put = (c, v) => { answers[c] = v; };
@@ -2959,8 +3084,9 @@
             const sameDay = (a, b) => a && b && a.getTime() === b.getTime();
 
             function answer(p, value) {
+                const old = get(p.column);
                 put(p.column, value);
-                if (p.then) p.then(value);
+                if (p.then) p.then(value, old);
                 message.textContent = '';
             }
             // A tap answers and moves on (or, on the last question, waits for Save)
@@ -3002,11 +3128,24 @@
                 let body = '';
                 if (p.kind === 'choice' || p.kind === 'seg') {
                     body = '<div class="tf-choices is-stacked">' + p.options.map(o => choiceHtml(o, o, ANSWER_ICONS[o] || ICONS[p.icon || 'bank'], v === o)).join('') + '</div>';
+                } else if (p.kind === 'term') {
+                    // The loan type's usual terms, or Other: years (Hard Money: months)
+                    const presets = loanTermPresets(p.type());
+                    const inMonths = termInMonths(p.type());
+                    const mode = termOther ? 'other' : presets.some(([m]) => m === v) ? v : v === '' ? '' : 'other';
+                    // (Hard Money's six choices side by side)
+                    body = '<div class="tf-choices' + (presets.length > 2 ? '' : ' is-stacked') + '">' + presets.concat([['other', 'Other']]).map(([value, main]) => choiceHtml(value, main, ICONS.calendar, mode === value)).join('') + '</div>'
+                        + '<div class="tf-other"' + (mode === 'other' ? '' : ' hidden') + '><label for="cl-term">' + (inMonths ? 'How many months?' : 'How many years?') + '</label>'
+                        + '<div class="cl-box cl-suffix" data-suffix="' + (inMonths ? 'months' : 'years') + '"><input id="cl-term" type="text" inputmode="' + (inMonths ? 'numeric' : 'decimal') + '" autocomplete="off" placeholder="0" value="'
+                        + escapeHtml(mode === 'other' ? (inMonths ? digits(v) : termYears(v)) : '') + '"></div></div>';
                 } else if (p.kind === 'months') {
-                    const mode = termOther ? 'other' : v === '360' || v === '180' ? v : v === '' ? '' : 'other';
-                    body = '<div class="tf-choices is-stacked">' + TERMS.map(([value, main]) => choiceHtml(value, main, ICONS.calendar, mode === value)).join('') + '</div>'
-                        + '<div class="tf-other"' + (mode === 'other' ? '' : ' hidden') + '><label for="cl-term">How many months?</label>'
-                        + '<div class="cl-box cl-suffix" data-suffix="months"><input id="cl-term" type="text" inputmode="numeric" autocomplete="off" placeholder="0" value="' + escapeHtml(mode === 'other' ? digits(v) : '') + '"></div></div>';
+                    // Typed in years, saved in months
+                    body = '<div class="cl-box cl-suffix" data-suffix="years"><input id="cl-input" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-labelledby="cl-question" value="' + escapeHtml(termYears(v)) + '"></div>';
+                } else if (p.kind === 'lines') {
+                    // Yes / No, then with Yes a line per holdback (drawn below)
+                    const ans = p.answerOf(get);
+                    body = '<div class="tf-choices is-stacked">' + ['Yes', 'No'].map(o => choiceHtml(o, o, ANSWER_ICONS[o], ans === o)).join('') + '</div>'
+                        + (ans === 'Yes' ? '<div class="cl-lines hoa-other" data-lines></div>' : '');
                 } else if (p.kind === 'date') {
                     body = '<div class="tf-cal"><div class="tf-cal-head">'
                         + '<button type="button" class="tf-cal-nav" data-cal-prev aria-label="Previous month">' + CAL_PREV + '</button>'
@@ -3025,6 +3164,13 @@
                     if (direction !== 0) shown = picked ? new Date(picked.getFullYear(), picked.getMonth(), 1) : new Date(today().getFullYear(), today().getMonth(), 1);
                     drawCalendar(p);
                 }
+                const linesBox = mount.querySelector('[data-lines]');
+                if (linesBox) {
+                    linesBad = '';
+                    feeLinesBox(linesBox, { ...p, answerColumn: p.column, noAnswer: true }, {
+                        get, put, edited: () => { message.textContent = ''; }, bad: m => { linesBad = m; },
+                    });
+                }
                 const list = steps();
                 const n = list.indexOf(p) + 1;
                 $('[data-progress]').textContent = 'Question ' + n + ' of ' + list.length;
@@ -3042,15 +3188,23 @@
                 const p = at;
                 const choice = e.target.closest('.tf-choice');
                 if (choice) {
-                    if (p.kind === 'months') {
+                    if (p.kind === 'term') {
                         termOther = choice.dataset.value === 'other';
                         if (termOther) {
-                            if (get(p.column) === '360' || get(p.column) === '180') answer(p, '');
+                            if (loanTermPresets(p.type()).some(([m]) => m === get(p.column))) answer(p, '');
                             draw(p, 0);
                             setTimeout(() => { const box = mount.querySelector('#cl-term'); if (box) box.focus(); }, 60);
                         } else {
                             tapped(p, choice.dataset.value);
                         }
+                        return;
+                    }
+                    // Other Holdbacks: Yes shows the lines (to fill in before moving on); No moves on
+                    if (p.kind === 'lines') {
+                        if (choice.dataset.value === 'No') { tapped(p, 'No'); return; }
+                        answer(p, 'Yes');
+                        draw(p, 0);
+                        setTimeout(() => { const box = mount.querySelector('[data-lines] input'); if (box) box.focus(); }, 60);
                         return;
                     }
                     tapped(p, choice.dataset.value);
@@ -3066,8 +3220,17 @@
                 const input = e.target;
                 input.classList.remove('is-invalid');
                 message.textContent = '';
-                if (input.id === 'cl-term') { input.value = digits(input.value); answer(p, input.value); return; }
-                if (p.kind === 'money') {
+                if (input.id === 'cl-term') {
+                    if (termInMonths(p.type())) { input.value = digits(input.value); answer(p, input.value); }
+                    else { input.value = typedYears(input.value); answer(p, yearsToMonths(input.value)); }
+                    return;
+                }
+                // (the holdback lines save themselves)
+                if (p.kind === 'lines') return;
+                if (p.kind === 'months') {
+                    input.value = typedYears(input.value);
+                    answer(p, yearsToMonths(input.value));
+                } else if (p.kind === 'money') {
                     const d = digits(input.value);
                     answer(p, d);
                 } else if (p.kind === 'rate') {
@@ -3083,7 +3246,17 @@
                 const input = mount.querySelector('#cl-input, #cl-term');
                 const bad = text => { if (input) { input.classList.add('is-invalid'); input.focus(); } message.textContent = text; return false; };
                 if (p.kind === 'rate' && input && input.dataset.bad) return bad('Please enter a number.');
-                if (p.kind === 'months' && !(Number(get(p.column)) > 0)) return bad(termOther ? 'Please enter the number of months.' : 'Please choose one.');
+                if (p.kind === 'term' && !(Number(get(p.column)) > 0)) {
+                    return bad(!termOther ? 'Please choose one.' : termInMonths(p.type()) ? 'Please enter the number of months.' : 'Please enter the number of years.');
+                }
+                if (p.kind === 'months' && !(Number(get(p.column)) > 0)) return bad('Please enter the number of years.');
+                if (p.kind === 'lines') {
+                    const ans = p.answerOf(get);
+                    if (ans === '') return bad('Please choose one.');
+                    if (ans === 'Yes' && linesBad) return bad(linesBad);
+                    if (ans === 'Yes' && !p.rowsOf(get).length) return bad('Please add each ' + (p.noun || 'item').toLowerCase() + ' and its amount, or choose No.');
+                    return true;
+                }
                 if (get(p.column) === '') {
                     if (p.kind === 'choice' || p.kind === 'seg') return bad('Please choose one.');
                     if (p.kind === 'date') return bad('Please pick a day.');
@@ -3115,6 +3288,9 @@
             form.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[type="text"]')) { e.preventDefault(); go(1); } });
 
             async function save() {
+                // Every question they went through is their answer, changed or not (the API lists the ones that lock the
+                // agent's copy in CLIENT ANSWERED)
+                steps().forEach(p => { if (!(p.column in answers)) put(p.column, p.kind === 'lines' ? p.answerOf(get) : get(p.column)); });
                 // Dues the seller gives are the final amounts
                 if (get('HAS HOA') === 'Yes') put('HOA PRIMARY MONTHLY DUES STATUS', 'Final');
                 if (get('HAS HOA') === 'Yes' && get('HAS MASTER ASSOCIATION') === 'Yes') put('HOA MASTER MONTHLY DUES STATUS', 'Final');
@@ -3890,7 +4066,7 @@
             });
             f.body.append(box.wrap);
             const syncStatus = opts.status ? statusToggle(f, opts.status) : null;
-            // Shows the saved / draft value again (it can be changed from Client Input too)
+            // Shows the saved / draft value again (it can be changed from Client HOA Input too)
             f.wrap.syncInputs = () => { box.input.value = withCommas(wholeDollars(current(column))); if (syncStatus) syncStatus(); };
             parent.append(f.wrap);
             return box;
@@ -4090,80 +4266,98 @@
             const box = el('div', 'hoa-other');
             f.body.append(box);
             parent.append(f.wrap);
+            const lines = feeLinesBox(box, cfg, { get: current, put: (c, v) => { draft[c] = v; }, edited: settingsEdited, bad: m => fieldBad(key, m) });
+            // Opening it again reads the saved / draft lines
+            f.wrap.groupSync = lines.reload;
+            f.wrap.groupDisplay = lines.display;
+        }
+        // A fee lines setting's Yes / No and its lines, drawn in box. io: { get(column), put(column, value), edited(), bad(message) }:
+        // where its values are read and written. cfg as for feeLinesField, plus: noun (what a line is: 'Fee' for "Fee 1",
+        // "+ Add Fee"); no question (cfg.question blank: the Yes / No alone, named by cfg.label); noAnswer (the lines alone, as
+        // if Yes: the client's pop-up asks the Yes / No itself). → { reload(), display() }
+        function feeLinesBox(box, cfg, io) {
+            const noun = cfg.noun || 'Fee';
+            const lower = noun.toLowerCase();
             const required = cfg.required;
             const payerOf = p => (!cfg.payers ? '' : /^seller$/i.test(p) ? 'Seller' : /^buyer$/i.test(p) || !required ? 'Buyer' : '');
             const statusOf = s => (!cfg.statuses ? '' : /^final$/i.test(s) ? 'Final' : 'Estimated');
             const blankRow = () => ({ name: '', amount: '', payer: cfg.payers ? (required ? 'Seller' : 'Buyer') : '', status: statusOf('') });
-            const load = () => cfg.rowsOf(current).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer), status: statusOf(x.status) }));
+            const load = () => {
+                const list = cfg.rowsOf(io.get).map(x => ({ name: x.name, amount: String(Math.round(x.amount)), payer: payerOf(x.payer), status: statusOf(x.status) }));
+                return cfg.noAnswer && !list.length ? [blankRow()] : list;
+            };
             let rows = load();
             // The lines as saved (one with neither a name nor an amount is left out; one with an amount needs a name)
             function write() {
                 const kept = rows.filter(r => r.name.trim() || r.amount !== '');
-                fieldBad(key, kept.some(r => !r.name.trim()) ? 'Please name each fee.' : '');
-                draft[key] = JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), ...(cfg.payers ? { PAYER: r.payer } : {}), ...(cfg.statuses ? { STATUS: r.status } : {}) })));
-                if (cfg.onWrite) cfg.onWrite();
+                io.bad(kept.some(r => !r.name.trim()) ? 'Please name each ' + lower + '.' : '');
+                io.put(cfg.listColumn, JSON.stringify(kept.filter(r => r.name.trim()).map(r => ({ NAME: r.name.trim(), AMOUNT: Number(r.amount || 0), ...(cfg.payers ? { PAYER: r.payer } : {}), ...(cfg.statuses ? { STATUS: r.status } : {}) }))));
+                if (cfg.onWrite) cfg.onWrite(io.put);
                 // (the lines only show with Yes)
-                draft[cfg.answerColumn] = 'Yes';
-                settingsEdited();
+                io.put(cfg.answerColumn, 'Yes');
+                io.edited();
             }
             function build(focusName) {
                 box.innerHTML = '';
-                const answer = cfg.answerOf(current);
-                const q = el('div', 'sub-field');
-                q.append(el('span', 'sub-label', escapeHtml(cfg.question)));
-                q.append(segToggle([['Yes', 'Yes'], ['No', 'No']], answer, v => {
-                    draft[cfg.answerColumn] = v;
-                    if (v === 'Yes' && !rows.length) rows.push(blankRow());
-                    if (v === 'Yes') write(); else { fieldBad(key, ''); settingsEdited(); }
-                    build(v === 'Yes' ? rows.length - 1 : null);
-                }, cfg.question));
-                box.append(q);
+                const answer = cfg.noAnswer ? 'Yes' : cfg.answerOf(io.get);
+                if (!cfg.noAnswer) {
+                    const q = el('div', 'sub-field');
+                    if (cfg.question) q.append(el('span', 'sub-label', escapeHtml(cfg.question)));
+                    q.append(segToggle([['Yes', 'Yes'], ['No', 'No']], answer, v => {
+                        io.put(cfg.answerColumn, v);
+                        if (v === 'Yes' && !rows.length) rows.push(blankRow());
+                        if (v === 'Yes') write(); else { io.bad(''); io.edited(); }
+                        build(v === 'Yes' ? rows.length - 1 : null);
+                    }, cfg.question || cfg.label));
+                    box.append(q);
+                }
                 if (answer !== 'Yes') return;
                 const list = el('div', 'fee-lines');
                 rows.forEach((r, i) => {
                     const line = el('div', 'fee-line');
-                    const name = textBox({ value: r.name, placeholder: 'Fee name', inputmode: 'text', onInput: inp => { r.name = inp.value; write(); } });
+                    const name = textBox({ value: r.name, placeholder: noun + ' name', inputmode: 'text', onInput: inp => { r.name = inp.value; write(); } });
                     name.input.maxLength = 100;
-                    name.input.setAttribute('aria-label', 'Fee ' + (i + 1) + ' name');
+                    name.input.setAttribute('aria-label', noun + ' ' + (i + 1) + ' name');
                     name.wrap.classList.add('fee-name');
                     const amount = textBox({ value: withCommas(r.amount), prefix: '$', placeholder: '0',
                         onInput: inp => { r.amount = digits(inp.value); write(); }, onBlur: inp => { inp.value = withCommas(digits(inp.value)); } });
-                    amount.input.setAttribute('aria-label', 'Fee ' + (i + 1) + ' amount');
+                    amount.input.setAttribute('aria-label', noun + ' ' + (i + 1) + ' amount');
                     const remove = el('button', 'slot-remove', CLOSE_ICON);
                     remove.type = 'button';
-                    remove.title = 'Remove fee ' + (i + 1);
-                    remove.setAttribute('aria-label', 'Remove fee ' + (i + 1));
+                    remove.title = 'Remove ' + lower + ' ' + (i + 1);
+                    remove.setAttribute('aria-label', 'Remove ' + lower + ' ' + (i + 1));
                     remove.addEventListener('click', () => { rows.splice(i, 1); write(); build(); });
-                    line.append(el('span', 'sub-label', 'Fee ' + (i + 1)), name.wrap, amount.wrap);
+                    line.append(el('span', 'sub-label', noun + ' ' + (i + 1)), name.wrap, amount.wrap);
                     if (cfg.payers) {
-                        const payer = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], r.payer, v => { r.payer = v; write(); }, 'Fee ' + (i + 1) + ' paid by');
+                        const payer = segToggle([['Buyer', 'Buyer Pays'], ['Seller', 'Seller Pays']], r.payer, v => { r.payer = v; write(); }, noun + ' ' + (i + 1) + ' paid by');
                         payer.classList.add('fee-payer');
                         line.append(payer);
                     } else line.classList.add('no-payer');
                     line.append(remove);
                     if (cfg.statuses) {
-                        const status = segToggle([['Estimated', 'Estimated'], ['Final', 'Final']], r.status, v => { r.status = v; write(); }, 'Fee ' + (i + 1) + ' estimated or final');
+                        const status = segToggle([['Estimated', 'Estimated'], ['Final', 'Final']], r.status, v => { r.status = v; write(); }, noun + ' ' + (i + 1) + ' estimated or final');
                         status.classList.add('fee-status');
                         line.append(status);
                     }
                     list.append(line);
                     if (focusName === i) setTimeout(() => name.input.focus({ preventScroll: true }));
                 });
-                const add = el('button', 'slot-add', '+ Add Fee');
+                const add = el('button', 'slot-add', '+ Add ' + noun);
                 add.type = 'button';
                 add.addEventListener('click', () => { rows.push(blankRow()); build(rows.length - 1); });
                 list.append(add);
                 box.append(list);
             }
             build();
-            // Opening it again reads the saved / draft lines
-            f.wrap.groupSync = () => { rows = load(); build(); };
-            f.wrap.groupDisplay = () => {
-                const answer = cfg.answerOf(current);
-                if (answer !== 'Yes') return answer === 'No' ? 'None' : '';
-                const fees = cfg.rowsOf(current);
-                return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')
-                    + (cfg.statuses ? ', ' + statusOf(x.status).toLowerCase() : '')).join(' · ') : 'Yes';
+            return {
+                reload: () => { rows = load(); build(); },
+                display: () => {
+                    const answer = cfg.answerOf(io.get);
+                    if (answer !== 'Yes') return answer === 'No' ? 'None' : '';
+                    const fees = cfg.rowsOf(io.get);
+                    return fees.length ? fees.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount)) + (payerOf(x.payer) ? ', ' + payerOf(x.payer).toLowerCase() + ' pays' : '')
+                        + (cfg.statuses ? ', ' + statusOf(x.status).toLowerCase() : '')).join(' · ') : 'Yes';
+                },
             };
         }
         // HOA dues (which: 'PRIMARY' or 'MASTER'): the amount of each payment, and under it how often it's paid (HOA ...
@@ -4183,8 +4377,10 @@
             seg.classList.add('seg-four');
             f.body.append(seg);
             const syncStatus = opts.status ? statusToggle(f, opts.status) : null;
-            // (Client Input can change them too)
+            // (Client HOA Input can change them too)
             f.wrap.syncInputs = () => { box.input.value = withCommas(wholeDollars(current(column))); setSeg(seg, ivOf()); if (syncStatus) syncStatus(); };
+            // Seller Net: locked once the client has answered it
+            f.wrap.clientLock = () => isSellerNet() && clientAnswered(current, column);
             parent.append(f.wrap);
         }
         // HOA Prepaid Dues: the months of dues the HOA collects ahead at closing (HOA PREPAID DUES MONTHS, at both
@@ -4396,16 +4592,30 @@
             makeEditable(document.getElementById('loan-card'));
         }
 
-        // Several settings edited together as one line item (Seller Net's Agent Input and Client Input). parts:
-        // [{ label, column, kind: money | date | rate | months | choice | seg, options (choice / seg), show (when it
-        // applies, from the current values), short (its name in the summary line), then (value: fills in other
-        // settings that follow from the answer) }]. The same column can be in more than one group: each group re-reads
-        // the values whenever it's opened. opts.io says where values are read and written: the settings draft by
-        // default, or the client's own answers in the Client Input pop-up.
+        // Several settings edited together as one line item (Seller Net's Agent Loan Input, Client Loan Input and Client HOA Input). parts:
+        // [{ label, column, kind: money | date | rate | months | term | lines | choice | seg, options (choice / seg), show
+        // (when it applies, from the current values), short (its name in the summary line), then (value, old value: fills in
+        // other settings that follow from the answer), wide (takes the whole line), lock (when the client has answered it:
+        // shows their answer, locked) }]. term: Loan Term's picker (type(): the loan type). lines: a fee lines setting (column:
+        // its Yes / No; listColumn, rowsOf, answerOf, noun, onWrite as for feeLinesBox). The same column can be in more than
+        // one group: each group re-reads the values whenever it's opened. opts.io says where values are read and written: the
+        // settings draft by default, or the client's own answers (CLIENT_IO; the pop-up has its own).
         const SETTINGS_IO = { get: c => current(c), put: (c, v) => { draft[c] = v; }, edited: () => settingsEdited(), bad: (k, m) => fieldBad(k, m) };
+        // Seller Net's Client Loan Input and Client HOA Input: the seller's own answers, so writing one there also lists it in
+        // CLIENT ANSWERED (locking the agent's copy)
+        const CLIENT_IO = { ...SETTINGS_IO, put: (c, v) => { draft[c] = v; noteClientAnswer(c, v); } };
+        function noteClientAnswer(column, value) {
+            if (!CLIENT_LOCKS.includes(column)) return;
+            const list = listOf(current('CLIENT ANSWERED')).filter(c => c !== column);
+            if (text(value) !== '') list.push(column);
+            draft['CLIENT ANSWERED'] = list.join(' | ');
+        }
         let groupVisibility = [];
         // A loan term in months, as years for a box or summary: 360 -> "30", 30 -> "2.5" ('' when blank)
         const termYears = v => { const m = Number(digits(v)); return m ? String(Math.round(m / 12 * 100) / 100) : ''; };
+        // Years typed in a box ("2.5"), kept to digits and one point, and as months ("30"; '' when blank)
+        const typedYears = v => String(v).replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
+        const yearsToMonths = v => { const y = Number(v); return String(v).trim() === '' || !isFinite(y) ? '' : String(Math.round(y * 12)); };
         function groupField(parent, label, parts, opts = {}) {
             const io = opts.io || SETTINGS_IO;
             const key = opts.key || label.toUpperCase();
@@ -4415,13 +4625,21 @@
             const grid = el('div', 'sub-grid' + (opts.lines ? ' is-lines' : ''));
             f.body.append(grid);
             parent.append(f.wrap);
-            const bad = new Set();
+            // What's wrong with each box (by column), the first one shown under the setting
+            const bad = new Map();
+            const setBad = (column, message) => { if (message) bad.set(column, message); else bad.delete(column); io.bad(key, bad.size ? [...bad.values()][0] : ''); };
             const shown = p => !p.show || p.show();
             const money = c => (io.get(c) === '' ? '' : wholeMoney.format(Math.round(num(io.get(c)))));
             const day = c => { const d = parseDate(io.get(c)); return d ? fmtDate(d) : ''; };
             // How each kind shows in the summary line
             const itemsOf = p => (typeof p.items === 'function' ? p.items() : p.items);
             const valueOf = p => {
+                if (p.kind === 'lines') {
+                    const answer = p.answerOf(io.get);
+                    if (answer !== 'Yes') return answer === 'No' ? 'None' : '';
+                    const list = p.rowsOf(io.get);
+                    return list.length ? list.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount))).join(', ') : 'Yes';
+                }
                 const v = io.get(p.column);
                 if (v === '') return p.blank || '';
                 if (p.kind === 'multi') { const l = listOf(v); return p.names ? l.join(', ') : l.length ? l.length + ' ' + (l.length === 1 ? p.one || 'item' : p.many || 'items') : ''; }
@@ -4430,31 +4648,85 @@
                 if (p.kind === 'date') return day(p.column);
                 if (p.kind === 'rate') return decimalToPercent(v) + '%';
                 if (p.kind === 'months') return termYears(v) ? termYears(v) + ' years' : '';
+                if (p.kind === 'term') return termText(v, p.type());
                 return v;
             };
             const visibility = () => { parts.forEach(p => { if (p.cell) p.cell.hidden = !shown(p); }); };
             // An answer in one group can show or hide a box in another (the seller's rate hides the agent's estimate)
             groupVisibility.push(visibility);
+            // Loan Term: Other picked (for this loan type), while its box is still empty or matches a listed term
+            let otherTermFor = null;
             function build() {
                 grid.innerHTML = '';
                 bad.clear();
                 io.bad(key, '');
                 parts.forEach(p => {
-                    const cell = el('div', 'sub-field' + (p.half ? ' is-half' : ''));
+                    const cell = el('div', 'sub-field' + (p.half ? ' is-half' : '') + (p.wide ? ' is-wide' : ''));
                     const lab = el('span', 'sub-label', escapeHtml(p.label));
                     lab.id = 'set-' + (++fieldCount) + '-label';
                     cell.append(lab);
                     p.cell = cell;
-                    const set = v => {
+                    // redraw: whether to redraw the group (default: answers that change other boxes, not while typing in a box)
+                    const set = (v, redraw) => {
+                        const old = io.get(p.column);
                         io.put(p.column, v);
-                        if (p.then) p.then(v);
+                        if (p.then) p.then(v, old);
                         io.edited();
                         cell.classList.remove('is-missing');
-                        // Answers that change other boxes redraw them (not while typing in a box)
-                        if ((p.then && p.kind === 'seg') || p.rebuild) build(); else visibility();
+                        if (redraw !== undefined ? redraw : (p.then && p.kind === 'seg') || p.rebuild) build(); else visibility();
                         groupVisibility.forEach(fn => { if (fn !== visibility) fn(); });
                     };
-                    if (p.kind === 'choice') {
+                    // Seller Net: the client has answered it, so it's theirs (changed in Client Loan Input)
+                    if (p.lock && p.lock()) {
+                        cell.classList.add('is-client-locked');
+                        cell.append(el('div', 'sub-locked', '<span class="sub-locked-value">' + escapeHtml(valueOf(p) || 'Answered') + '</span>'
+                            + '<span class="sub-locked-note">' + LOCK_ICON + 'The client’s answer: change it in Client Loan Input</span>'));
+                        grid.append(cell);
+                        return;
+                    }
+                    if (p.kind === 'term') {
+                        // The loan type's usual terms, or Other with a box under it (years; Hard Money: months). Saved in months.
+                        const type = p.type();
+                        const presets = loanTermPresets(type);
+                        const inMonths = termInMonths(type);
+                        const v = io.get(p.column);
+                        const isPreset = presets.some(([m]) => m === v);
+                        const other = otherTermFor === type || (v !== '' && !isPreset);
+                        const mount = el('div');
+                        cell.append(mount);
+                        makePicker({ mount, labelId: lab.id, placeholder: 'Choose...', selected: [other ? 'other' : v],
+                            items: presets.map(([value, main]) => ({ value, main, icon: 'calendar' }))
+                                .concat([{ value: 'other', main: 'Other', secondary: inMonths ? 'Another number of months' : 'Another number of years', icon: 'calendar' }]),
+                            onChange: pick => {
+                                if (pick === 'other') {
+                                    otherTermFor = type;
+                                    if (isPreset) set('', true); else build();
+                                    setTimeout(() => { const b = grid.querySelector('.sub-other input'); if (b) b.focus({ preventScroll: true }); });
+                                } else {
+                                    otherTermFor = null;
+                                    set(pick, true);
+                                }
+                            } });
+                        if (other) {
+                            const box = textBox({ value: inMonths ? digits(v) : termYears(v), suffix: inMonths ? 'months' : 'years', placeholder: inMonths ? '12' : '30', inputmode: inMonths ? 'numeric' : 'decimal',
+                                onInput: i => {
+                                    i.value = inMonths ? digits(i.value) : typedYears(i.value);
+                                    set(inMonths ? i.value : yearsToMonths(i.value), false);
+                                } });
+                            box.input.setAttribute('aria-label', p.label + (inMonths ? ' in months' : ' in years'));
+                            box.wrap.classList.add('sub-other');
+                            cell.append(box.wrap);
+                        }
+                    } else if (p.kind === 'lines') {
+                        // A Yes / No, then with Yes a line per item (name and amount)
+                        const box = el('div', 'hoa-other');
+                        cell.append(box);
+                        feeLinesBox(box, { ...p, question: '', answerColumn: p.column }, {
+                            get: io.get, put: io.put,
+                            edited: () => { io.edited(); cell.classList.remove('is-missing'); visibility(); groupVisibility.forEach(fn => { if (fn !== visibility) fn(); }); },
+                            bad: m => setBad(p.listColumn, m),
+                        });
+                    } else if (p.kind === 'choice') {
                         const mount = el('div');
                         cell.append(mount);
                         const items = p.items ? itemsOf(p).map(i => ({ icon: p.icon || 'bank', ...i })) : p.options.map(v => ({ value: v, main: v, icon: p.icon || 'bank' }));
@@ -4474,22 +4746,17 @@
                         } else if (p.kind === 'date') {
                             box = textBox({ type: 'date', value: toInputDate(io.get(p.column)), onInput: i => set(toSheetDate(i.value)) });
                         } else if (p.kind === 'months') {
-                            // Saved in months (LOAN TERM MONTHS), typed in years: "30" is 360 months, "2.5" is 30
+                            // Saved in months (like LOAN TERM MONTHS), typed in years: "30" is 360 months, "2.5" is 30
                             box = textBox({
-                                value: termYears(io.get(p.column)), suffix: 'years', placeholder: '30', inputmode: 'decimal',
-                                onInput: i => {
-                                    i.value = i.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
-                                    const y = Number(i.value);
-                                    set(i.value.trim() === '' || !isFinite(y) ? '' : String(Math.round(y * 12)));
-                                },
+                                value: termYears(io.get(p.column)), suffix: 'years', placeholder: p.placeholder || '30', inputmode: 'decimal',
+                                onInput: i => { i.value = typedYears(i.value); set(yearsToMonths(i.value)); },
                             });
                         } else {
                             box = textBox({
                                 value: decimalToPercent(io.get(p.column)), suffix: '%', placeholder: '0', inputmode: 'decimal',
                                 onInput: i => {
                                     const d = percentToDecimal(i.value);
-                                    if (d === null) bad.add(p.column); else bad.delete(p.column);
-                                    io.bad(key, bad.size ? 'Please enter a number.' : '');
+                                    setBad(p.column, d === null ? 'Please enter a number.' : '');
                                     if (d !== null) set(d); else io.edited();
                                 },
                             });
@@ -4643,34 +4910,86 @@
             }, 'HOA');
             f.body.append(seg);
             f.wrap.syncInputs = () => setSeg(seg, current('HAS HOA'));
+            // Seller Net: locked once the client has answered it
+            f.wrap.clientLock = () => isSellerNet() && clientAnswered(current, 'HAS HOA');
             parent.append(f.wrap);
             return parent.children.length;
         }
 
-        // The questions the seller answers about their loan and HOA ("Client Input"), read with get(column) and
-        // written with put(column, value). Used by the settings card and by the client's own pop-up.
-        function clientInputParts(get, put) {
+        // Seller Net's loan questions, as groupField parts: read with get(column), written with put(column, value).
+        // Agent Loan Input has the agent's (the original loan and an estimated rate), Client Loan Input the seller's (their
+        // statement's balance, date and rate, and the rest). Both ask Loan Type and Loan Term, and (lock: once the seller
+        // has answered, the agent's copy is locked) a DSCR loan's interest only questions and a Hard Money loan's holdbacks.
+        function loanTypePart(get, put) {
+            return { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES, rebuild: true,
+                // (Hard Money terms are in months, the others in years: a term that isn't one of the new type's doesn't carry over)
+                then: (v, old) => {
+                    const term = get('LOAN TERM MONTHS');
+                    if (term !== '' && termInMonths(v) !== termInMonths(old) && !loanTermPresets(v).some(([m]) => m === term)) put('LOAN TERM MONTHS', '');
+                } };
+        }
+        const loanTermPart = (get, show) => ({ label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'term', type: () => get('LOAN TYPE'), show });
+        // extra: needed for the net sheet when it applies (sellerNetMissing)
+        function dscrParts(get, lockable) {
+            const dscr = () => get('LOAN TYPE') === 'DSCR';
+            const period = () => dscr() && get('INTEREST ONLY PERIOD') === 'Yes';
+            const lock = column => (lockable ? () => clientAnswered(get, column) : null);
+            return [
+                { label: 'Is there an interest only period?', column: 'INTEREST ONLY PERIOD', kind: 'seg', options: ['Yes', 'No'], short: 'Interest only period:', show: dscr, wide: true, extra: true, lock: lock('INTEREST ONLY PERIOD') },
+                { label: 'Does the loan become due after the interest only period?', column: 'DUE AFTER INTEREST ONLY', kind: 'seg', options: ['Yes', 'No'], short: 'Due after it:', show: period, wide: true, extra: true, lock: lock('DUE AFTER INTEREST ONLY') },
+                { label: 'How long is the interest only period?', column: 'INTEREST ONLY MONTHS', kind: 'months', placeholder: '10', short: 'Interest only for', show: () => period() && get('DUE AFTER INTEREST ONLY') === 'No', wide: true, extra: true, lock: lock('INTEREST ONLY MONTHS') },
+            ];
+        }
+        function holdbackParts(get, lockable) {
+            const hardMoney = () => get('LOAN TYPE') === 'Hard Money';
+            const lock = column => (lockable ? () => clientAnswered(get, column) : null);
+            return [
+                { label: 'Construction Holdback', column: 'OUTSTANDING CONSTRUCTION HOLDBACK', kind: 'money', short: 'Construction Holdback', show: hardMoney, extra: true, lock: lock('OUTSTANDING CONSTRUCTION HOLDBACK') },
+                { label: 'Interest Reserve', column: 'OUTSTANDING INTEREST RESERVE', kind: 'money', short: 'Interest Reserve', show: hardMoney, extra: true, lock: lock('OUTSTANDING INTEREST RESERVE') },
+                // (saving the lines clears a page's old Draw Fee Holdback and Other Holdback, which they replace)
+                { label: 'Other Holdbacks', column: 'HAS OTHER HOLDBACKS', kind: 'lines', listColumn: 'OTHER HOLDBACKS', noun: 'Holdback', rowsOf: otherHoldbackRows, answerOf: otherHoldbackAnswer,
+                    onWrite: put => { put('DRAW FEE HOLDBACK', ''); put('OTHER HOLDBACK', ''); }, short: 'Other Holdbacks:', show: hardMoney, wide: true, extra: true, lock: lock('HAS OTHER HOLDBACKS') },
+            ];
+        }
+        function agentLoanParts(get, put) {
+            const loan = () => !hasNoLoan(get);
+            return [
+                loanTypePart(get, put),
+                { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
+                { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
+                loanTermPart(get, loan),
+                { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: () => loan() && get('LOAN INTEREST RATE') === '' },
+                ...dscrParts(get, true),
+                ...holdbackParts(get, true),
+            ];
+        }
+        // (the names of Agent Loan Input's questions)
+        const AGENT_LOAN_LABELS = ['Loan Type', 'Original Loan Amount', 'Original Loan Date', 'Loan Term', 'Estimated Interest Rate']
+            .concat(dscrParts(() => '', false).map(p => p.label), holdbackParts(() => '', false).map(p => p.label));
+        function clientLoanParts(get, put) {
             const type = () => get('LOAN TYPE');
             const loan = () => type() !== 'No Loan';
-            const hardMoney = () => type() === 'Hard Money';
             const penalty = () => loan() && get('PREPAYMENT PENALTY') === 'Yes';
             const penaltyType = () => get('PREPAYMENT PENALTY TYPE');
-            const hoa = () => get('HAS HOA') === 'Yes';
             return [
-                { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
+                loanTypePart(get, put),
                 { label: 'Current Principal Balance', column: 'LOAN PRINCIPAL BALANCE', kind: 'money', short: 'Balance', show: loan },
                 { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'date', short: 'on', show: loan },
                 { label: 'Loan Interest Rate', column: 'LOAN INTEREST RATE', kind: 'rate', show: loan },
-                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months', show: loan },
+                loanTermPart(get, loan),
+                ...dscrParts(get, false),
                 { label: 'Original Prepaid Mortgage Insurance', column: 'ORIGINAL PREPAID MORTGAGE INSURANCE', kind: 'money', short: 'Prepaid MI', show: () => ['FHA', 'VA', 'Other'].includes(type()) },
                 { label: 'Prepayment Penalty', column: 'PREPAYMENT PENALTY', kind: 'seg', options: ['Yes', 'No', 'Unknown'], short: 'Prepayment Penalty:', show: loan },
                 { label: 'Prepayment Penalty Type', column: 'PREPAYMENT PENALTY TYPE', kind: 'choice', icon: 'cash', options: ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'], short: 'Type:', show: penalty },
                 { label: 'Prepayment Penalty %', column: 'PREPAYMENT PENALTY %', kind: 'rate', short: 'Penalty', show: () => penalty() && ['Percent Of Loan Amount', 'Both'].includes(penaltyType()) },
                 { label: 'Prepayment Penalty $', column: 'PREPAYMENT PENALTY $', kind: 'money', short: 'Penalty', show: () => penalty() && ['Flat Dollar Amount', 'Both'].includes(penaltyType()) },
-                { label: 'Outstanding Construction Holdback', column: 'OUTSTANDING CONSTRUCTION HOLDBACK', kind: 'money', short: 'Construction Holdback', show: hardMoney },
-                { label: 'Outstanding Interest Reserve', column: 'OUTSTANDING INTEREST RESERVE', kind: 'money', short: 'Interest Reserve', show: hardMoney },
-                { label: 'Draw Fee Holdback', column: 'DRAW FEE HOLDBACK', kind: 'money', short: 'Draw Fee Holdback', show: hardMoney },
-                { label: 'Other Holdback', column: 'OTHER HOLDBACK', kind: 'money', short: 'Other Holdback', show: hardMoney },
+                ...holdbackParts(get, false),
+            ];
+        }
+        // The seller's HOA questions (Client HOA Input)
+        function clientHoaParts(get, put) {
+            const hoa = () => get('HAS HOA') === 'Yes';
+            return [
                 // HOA: dues the client gives are final; no HOA (or no master association) means $0, also final
                 { label: 'HOA', column: 'HAS HOA', kind: 'seg', options: ['Yes', 'No'], short: 'HOA:', then: v => {
                     if (v === 'Yes') { yesHoa(put, get); put('HOA PRIMARY MONTHLY DUES STATUS', 'Final'); } else noHoa(put, get);
@@ -4685,18 +5004,17 @@
                 { label: 'HOA Master Dues', column: 'HOA MASTER MONTHLY DUES', kind: 'money', short: 'Master Dues', show: () => hoa() && get('HAS MASTER ASSOCIATION') === 'Yes', then: () => put('HOA MASTER MONTHLY DUES STATUS', 'Final') },
             ];
         }
+        // Everything the seller is asked, in the order their Add Your Loan Details pop-up asks it
+        const clientInputParts = (get, put) => clientLoanParts(get, put).concat(clientHoaParts(get, put));
 
-        // Seller Net: the seller's loan as two line items, each edited all at once. Loan Type and Loan Term are in both.
+        // Seller Net: the seller's loan as two line items, each edited all at once (Agent Loan Input one question per line),
+        // and the seller's HOA answers as a third
         function loanPayoffFields(parent) {
-            const loan = () => !hasNoLoan(SETTINGS_IO.get);
-            groupField(parent, 'Agent Input', [
-                { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
-                { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
-                { label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'months', show: loan },
-                { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: () => loan() && SETTINGS_IO.get('LOAN INTEREST RATE') === '' },
-                { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES },
-            ]);
-            groupField(parent, 'Client Input', clientInputParts(SETTINGS_IO.get, SETTINGS_IO.put), { help: 'From a recent statement.' });
+            groupField(parent, 'Agent Loan Input', agentLoanParts(SETTINGS_IO.get, SETTINGS_IO.put), { lines: true,
+                help: 'Your estimate of the seller’s loan, until they add theirs. A DSCR loan’s interest only questions and a hard money loan’s holdbacks lock once the seller answers them.' });
+            groupField(parent, 'Client Loan Input', clientLoanParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO, help: 'The seller’s own answers, from a recent statement.' });
+            groupField(document.getElementById('client-hoa-fields'), 'Client HOA Input', clientHoaParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO,
+                help: 'The seller’s own HOA answers. Once they’re in, the HOA section’s HOA, Primary Dues and Master Dues are locked to them.' });
         }
 
         // Sellers: Seller Type under the sellers, like the Buyer Type: As Individual(s), or an LLC or trust that every
@@ -4834,7 +5152,7 @@
 
             loanPayoffFields(document.getElementById('loan-payoff-fields'));
 
-            // (The prepayment penalty is in Client Input)
+            // (The prepayment penalty is in Client Loan Input)
             const payoffs = document.getElementById('loan-fields');
             const payoffStart = payoffs.children.length;
             moneyField(payoffs, 'Recording Fee', 'RECORDING FEE', { status: 'RECORDING FEE STATUS' });
@@ -4848,7 +5166,7 @@
                 onWrite: () => { draft['OTHER LOAN PAYOFF FEES %'] = ''; draft['OTHER LOAN PAYOFF FEES $'] = ''; draft['OTHER LOAN PAYOFF FEES STATUS'] = ''; } });
             loanFeeFields = [...payoffs.children].slice(payoffStart);
 
-            // HOA yes / no (also in Client Input)
+            // HOA yes / no (also in Client HOA Input; locked once the client answers it)
             const hoa = document.getElementById('hoa-fields');
             const hoaStart = hoaQuestion(hoa);
             feeWithPayer(hoa, 'HOA Transfer Fee', 'HOA TRANSFER FEE', 'WHO PAYS TRANSFER FEE', { status: 'HOA TRANSFER FEE STATUS', required: true });
@@ -4964,6 +5282,8 @@
                 const error = field.querySelector('.field-error');
                 if (error) field.insertBefore(done, error); else field.append(done);
                 edit.addEventListener('click', () => {
+                    // (Seller Net: the client's answer, changed in Client HOA Input)
+                    if (field.clientLock && field.clientLock()) return;
                     // One setting open at a time: another one open is pointed to instead
                     const open = openEditable();
                     if (open && open !== field) { nudgeOpen(open); return; }
@@ -4987,6 +5307,7 @@
                 const tag = el('span', 'edited-tag', 'Edited');
                 row.insertBefore(tag, value);
                 row.insertBefore(el('span', 'missing-tag', 'Missing'), value);
+                if (field.clientLock) row.insertBefore(el('span', 'client-tag', LOCK_ICON + 'Client'), value);
                 editableFields.push({ field, value, saved: null });
             });
             refreshDisplays();
@@ -5008,10 +5329,13 @@
             editableFields.forEach(({ field }) => {
                 const locked = Boolean(open) && field !== open;
                 field.classList.toggle('is-locked', locked);
+                // Seller Net: an HOA setting the client has answered
+                const byClient = Boolean(field.clientLock && field.clientLock()) && field !== open;
+                field.classList.toggle('is-client-locked', byClient);
                 const pencil = field.querySelector(':scope > .view-row .edit-btn');
                 if (!pencil) return;
-                pencil.setAttribute('aria-disabled', String(locked));
-                pencil.title = locked ? 'Close the open setting first' : 'Edit';
+                pencil.setAttribute('aria-disabled', String(locked || byClient));
+                pencil.title = byClient ? 'The client answered this. Change it in Client HOA Input.' : locked ? 'Close the open setting first' : 'Edit';
             });
         }
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -5072,7 +5396,7 @@
                 const ltv = current('RETAIL LTV');
                 return ltv === '' ? '' : decimalToPercent(ltv) + '% · ' + wholeMoney.format(Math.round(num(current('PURCHASE PRICE')) * num(ltv)));
             }
-            // Agent Input / Client Input: "$600,000 · from May 13, 2023 · 360 months · FHA"
+            // Agent Loan Input / Client Loan Input: "$600,000 · from May 13, 2023 · 360 months · FHA"
             if (field.dataset.display === 'group') return field.groupDisplay();
             const picker = field.querySelector('.picker-btn .picker-main');
             // A placeholder like "No add-ons" is a real answer; "Choose..." means nothing is picked
@@ -5104,7 +5428,7 @@
             });
         }
         function refreshDisplays() {
-            // Closed settings show what's in the draft (Client Input can change the HOA dues)
+            // Closed settings show what's in the draft (Client HOA Input can change the HOA dues)
             editableFields.forEach(({ field }) => { if (field.syncInputs && !field.classList.contains('is-editing')) field.syncInputs(); });
             showHoaFields();
             showLoanFeeFields();

@@ -130,6 +130,14 @@ const PAGE_SETTING_FIELDS = {
   'PREPAYMENT PENALTY TYPE': ['Percent Of Loan Amount', 'Flat Dollar Amount', 'Both', 'Unknown'],
   'OUTSTANDING CONSTRUCTION HOLDBACK': 'money', 'OUTSTANDING INTEREST RESERVE': 'money',
   'DRAW FEE HOLDBACK': 'money', 'OTHER HOLDBACK': 'money',
+  // Hard Money: the lender's other holdbacks, Yes / No and then each one's name and amount (replacing DRAW FEE HOLDBACK and
+  // OTHER HOLDBACK above, still read on a page without a list)
+  'HAS OTHER HOLDBACKS': ['Yes', 'No'], 'OTHER HOLDBACKS': 'feeLines',
+  // DSCR: an interest only period; whether the loan comes due when it ends; if not, how long it lasts (in months)
+  'INTEREST ONLY PERIOD': ['Yes', 'No'], 'DUE AFTER INTEREST ONLY': ['Yes', 'No'], 'INTEREST ONLY MONTHS': 'int',
+  // Seller Net: the questions the seller has answered that the agent also asks (CLIENT_LOCK_FIELDS: the agent's copy is
+  // locked to the seller's answer), joined by " | "
+  'CLIENT ANSWERED': 'list',
   // Seller Net: whether each fee is an estimate or the final amount, and whether there's an HOA / master association
   'RECORDING FEE STATUS': ['Estimated', 'Final'], 'PAYOFF STATEMENT FEE STATUS': ['Estimated', 'Final'],
   'OTHER LOAN PAYOFF FEES STATUS': ['Estimated', 'Final'], 'HOA TRANSFER FEE STATUS': ['Estimated', 'Final'],
@@ -843,7 +851,7 @@ async function updatePageAccess_(id, account, body) {
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
 const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
-  'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE'].concat(CLIENT_INPUT_FIELDS);
+  'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE', 'CLIENT ANSWERED'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
 function sellerKey_(page) {
@@ -893,10 +901,16 @@ async function shareGlobalSettings_(siblings, fields, sellers) {
 // Seller Net "Client Input": what the seller fills in themselves (their loan and HOA). Anyone on the page (or an admin)
 // can save these, and only these. body: { pageId, fields: { COLUMN: value } } (each checked as in PAGE_SETTING_FIELDS)
 const CLIENT_INPUT_FIELDS = ['LOAN TYPE', 'LOAN PRINCIPAL BALANCE', 'PRINCIPAL LOAN BALANCE DATE', 'LOAN INTEREST RATE',
-  'LOAN TERM MONTHS', 'ORIGINAL PREPAID MORTGAGE INSURANCE', 'PREPAYMENT PENALTY', 'PREPAYMENT PENALTY TYPE',
+  'LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS',
+  'ORIGINAL PREPAID MORTGAGE INSURANCE', 'PREPAYMENT PENALTY', 'PREPAYMENT PENALTY TYPE',
   'PREPAYMENT PENALTY %', 'PREPAYMENT PENALTY $', 'OUTSTANDING CONSTRUCTION HOLDBACK', 'OUTSTANDING INTEREST RESERVE',
-  'DRAW FEE HOLDBACK', 'OTHER HOLDBACK', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS', 'HOA PRIMARY DUES INTERVAL',
+  'HAS OTHER HOLDBACKS', 'OTHER HOLDBACKS', 'DRAW FEE HOLDBACK', 'OTHER HOLDBACK',
+  'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA PRIMARY MONTHLY DUES STATUS', 'HOA PRIMARY DUES INTERVAL',
   'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS', 'HOA MASTER DUES INTERVAL'];
+// The seller's answers that lock the agent's copy (Agent Loan Input's DSCR and Hard Money questions, the HOA section's
+// HOA yes / no and dues): each one the seller saves (not blank) is added to CLIENT ANSWERED
+const CLIENT_LOCK_FIELDS = ['INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+  'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
 async function saveClientInput_(id, account, body) {
   const found = await findPage_(body.pageId);
   if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
@@ -910,6 +924,9 @@ async function saveClientInput_(id, account, body) {
     if (value === null) return { ok: false, error: 'invalid_value', field: column };
     fields[column] = value;
   }
+  const answered = String(found.row['CLIENT ANSWERED'] || '').split('|').map(s => s.trim()).filter(Boolean);
+  CLIENT_LOCK_FIELDS.forEach(c => { if (c in fields && fields[c] !== '' && !answered.includes(c)) answered.push(c); });
+  if (answered.join(' | ') !== String(found.row['CLIENT ANSWERED'] || '').trim()) fields['CLIENT ANSWERED'] = answered.join(' | ');
   if (Object.keys(fields).length) {
     // These are Global Settings, so every version of the page gets them
     const siblings = await otherVersions_(found);
