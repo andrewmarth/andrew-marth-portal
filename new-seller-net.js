@@ -125,6 +125,17 @@ const termText = (months, type) => {
 };
 const listText = names => (names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]);
 
+// How the sheet fits an on-screen keyboard. layoutHeight: the page's full height (window.innerHeight, which the keyboard
+// doesn't change); visibleHeight and offsetTop: the part of it showing (window.visualViewport) and how far down that part
+// is, once the browser has scrolled the page to show the box being typed in (as Chrome does when a box is tapped again
+// while the sheet is down at the bottom). → { up: a keyboard is showing (the visible part is over 80px shorter, more than
+// any browser toolbar; however far it's scrolled), lift: how far the sheet moves up to sit on it (what the keyboard covers
+// of the page's bottom, less what the scroll already brought into view) }
+export function keyboardFit(layoutHeight, visibleHeight, offsetTop) {
+    const up = layoutHeight - visibleHeight > 80;
+    return { up, lift: up ? Math.max(0, Math.round(layoutHeight - visibleHeight - offsetTop)) : 0 };
+}
+
 /**
  * Opens the form for one seller. client: { id, name }; sellers: the other SELLER accounts; accounts: everyone (for
  * collaborators); titleCompanies: [{ id, name }]; lookup(address) resolves to { facts, sources } (the propertyFacts API);
@@ -720,10 +731,8 @@ function build() {
     }
     function fitKeyboard() {
         if (!dialog.open || !vv) return;
-        const covered = phone.matches ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
-        // (under 80px is the browser's own toolbar, not a keyboard)
-        const up = covered > 80;
-        dialog.style.setProperty('--snw-kb', (up ? covered : 0) + 'px');
+        const { up, lift } = phone.matches ? keyboardFit(window.innerHeight, vv.height, vv.offsetTop) : { up: false, lift: 0 };
+        dialog.style.setProperty('--snw-kb', lift + 'px');
         dialog.style.setProperty('--snw-vh', Math.round(vv.height) + 'px');
         dialog.style.setProperty('--snw-bar', (up ? AUTOFILL_BAR : 0) + 'px');
         dialog.classList.toggle('is-keyboard', up);
