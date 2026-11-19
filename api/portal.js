@@ -155,7 +155,7 @@ const PAGE_SETTING_FIELDS = {
   'HAS OTHER LOAN PAYOFF FEES': ['Yes', 'No'], 'OTHER LOAN PAYOFF FEES': 'feeLines',
   'LISTING AGENT COMMISSION %': 'rate', 'LISTING AGENT COMMISSION $': 'money',
   // Seller Net: Commission Credit To Client, credited back to the seller out of the listing agent's split: a percent of
-  // the sale price (%) or a dollar amount ($)
+  // that split (%: 1 credits all of it) or a dollar amount ($)
   'COMMISSION CREDIT TYPE': ['%', '$'], 'COMMISSION CREDIT %': 'rate', 'COMMISSION CREDIT $': 'money',
   'LISTING STATUS': ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'],
   // Seller Net: who is selling (each seller's signer title comes from their own profile)
@@ -3704,8 +3704,9 @@ async function pageData_(id, account, pageId) {
     result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
     result.miSettings = await miSettingsRow_();
     result.versions = (await sellerNetVersions_(page)).filter(p => !isTrashed_(p) && (isAdmin || isOnPage_(p, id))).map(p => ({ page: p }));
-    // Admins: the Commission Split card's agent split (the most a Commission Credit To Client can be), null when not set
-    const agentSplit = isAdmin ? ((await commissionSplitRow_()) || {})['AGENT SPLIT'] : undefined;
+    // The Commission Split card's agent split (a Commission Credit To Client's % is a share of it, and it's the most the credit
+    // can be), null when not set. Everyone on the page gets it: their credit is figured from it.
+    const agentSplit = ((await commissionSplitRow_()) || {})['AGENT SPLIT'];
     result.agentSplit = agentSplit === undefined || agentSplit === '' || agentSplit === null ? null : Number(agentSplit);
   }
   return result;

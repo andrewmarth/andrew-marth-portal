@@ -1671,14 +1671,14 @@
         const sellerOtherFeeRows = get => feeLinesOf(get('SELLER OTHER FEES'));
         const sellerOtherAnswer = get => text(get('HAS SELLER OTHER FEES')) || (sellerOtherFeeRows(get).length ? 'Yes' : '');
         const sellerOtherFees = get => (sellerOtherAnswer(get) === 'Yes' ? sellerOtherFeeRows(get) : []);
-        // Seller Net: the Commission Credit To Client, a credit back to the seller out of the listing agent's split:
-        // COMMISSION CREDIT TYPE % (COMMISSION CREDIT %, of the sale price; blank is %) or $ (COMMISSION CREDIT $). At most the
-        // agent's split of the listing commission (agentSplit: the Commission Split card's, sent to admins; unknown: the whole
-        // commission). → { asked, max, amount (what's credited) }
+        // Seller Net: the Commission Credit To Client, a credit back to the seller out of the listing agent's split (max: the
+        // listing commission × agentSplit, the Commission Split card's; unknown: the whole commission): COMMISSION CREDIT TYPE
+        // % (COMMISSION CREDIT %, a share of that split: 100% credits all of it; blank is %) or $ (COMMISSION CREDIT $).
+        // → { asked, max, amount (what's credited) }
         function commissionCredit(get, price, agentSplit) {
             const listing = price * num(get('LISTING AGENT COMMISSION %')) + num(get('LISTING AGENT COMMISSION $'));
-            const asked = text(get('COMMISSION CREDIT TYPE')) === '$' ? num(get('COMMISSION CREDIT $')) : price * num(get('COMMISSION CREDIT %'));
             const max = agentSplit === null || agentSplit === undefined ? listing : listing * agentSplit;
+            const asked = text(get('COMMISSION CREDIT TYPE')) === '$' ? num(get('COMMISSION CREDIT $')) : max * num(get('COMMISSION CREDIT %'));
             return { asked, max, amount: Math.max(0, Math.min(asked, max)) };
         }
         // Seller Net: Other Loan Payoff Fees (with the loan payoff): HAS OTHER LOAN PAYOFF FEES (Yes / No) and OTHER LOAN
@@ -4492,7 +4492,7 @@
             parent.append(f.wrap);
             return f;
         }
-        // Seller Net, inside Listing Agent Commission: Commission Credit To Client, a % (of the sale price) / $ toggle and its
+        // Seller Net, inside Listing Agent Commission: Commission Credit To Client, a % (of the agent's split: 100% credits all of it) / $ toggle and its
         // box. It can't be more than the agent's split of the commission (validateSettings checks it).
         function commissionCreditField(f) {
             const block = el('div', 'credit-block');
@@ -4513,7 +4513,7 @@
                 mount.append(box.wrap);
             };
             // (switching keeps both amounts; only the one picked counts)
-            block.append(segToggle([['%', '% of Price'], ['$', 'Dollar Amount']], typeOf(), v => { fieldBad('COMMISSION CREDIT', ''); setDraft('COMMISSION CREDIT TYPE', v); draw(); }, 'Commission credit to client in'), mount, error);
+            block.append(segToggle([['%', '% of Agent Split'], ['$', 'Dollar Amount']], typeOf(), v => { fieldBad('COMMISSION CREDIT', ''); setDraft('COMMISSION CREDIT TYPE', v); draw(); }, 'Commission credit to client in'), mount, error);
             draw();
             f.body.append(block);
             // Its row: the commission, then the credit
@@ -4523,7 +4523,7 @@
                 if (current('LISTING AGENT COMMISSION %') !== '') parts.push(decimalToPercent(current('LISTING AGENT COMMISSION %')) + '%');
                 if (current('LISTING AGENT COMMISSION $') !== '') parts.push(wholeMoney.format(num(current('LISTING AGENT COMMISSION $'))));
                 const v = typeOf() === '%' ? current('COMMISSION CREDIT %') : current('COMMISSION CREDIT $');
-                if (num(v) > 0) parts.push((typeOf() === '%' ? decimalToPercent(v) + '%' : wholeMoney.format(num(v))) + ' credit to client');
+                if (num(v) > 0) parts.push(typeOf() === '%' ? decimalToPercent(v) + '% of agent split credited to client' : wholeMoney.format(num(v)) + ' credit to client');
                 return parts.join(' · ');
             };
         }
@@ -4619,12 +4619,13 @@
                 fieldBad('DOWN PAYMENT ASSISTANCE', over ? 'Can\'t be more than this program\'s ' + (dpaI.flat ? wholeMoney.format(dpaI.flatAmount) : percent(dpaI.ltvMax)) + ' maximum.' : '');
             }
 
-            // Seller Net: the commission credit to client is at most the agent's split of the listing commission
+            // Seller Net: the commission credit to client is at most the agent's split of the listing commission (100% of it)
             if (settingsBlocks.some(b => b.key === 'COMMISSION CREDIT') && fieldErrors['COMMISSION CREDIT'] !== 'Please enter a number.') {
                 const c = commissionCredit(x => col(page, x), num(col(page, 'PURCHASE PRICE')), data.agentSplit);
-                fieldBad('COMMISSION CREDIT', c.asked > c.max + 0.005 ? 'Can’t be more than ' + (data.agentSplit === null || data.agentSplit === undefined
-                    ? 'the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ').'
-                    : 'the agent’s ' + Math.round(data.agentSplit * 1e4) / 100 + '% split of the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ').') : '');
+                const whole = data.agentSplit === null || data.agentSplit === undefined
+                    ? 'the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ')'
+                    : 'the agent’s ' + Math.round(data.agentSplit * 1e4) / 100 + '% split of the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ')';
+                fieldBad('COMMISSION CREDIT', c.asked > c.max + 0.005 ? (current('COMMISSION CREDIT TYPE') === '$' ? 'Can’t be more than ' + whole + '.' : 'Can’t be more than 100% of ' + whole + '.') : '');
             }
 
             settingsBlocks.forEach(b => { b.error.textContent = fieldErrors[b.key] || ''; b.error.hidden = !fieldErrors[b.key]; });
@@ -5320,7 +5321,7 @@
             titleRateFields = [...misc.children].slice(titleStart);
             percentAndDollars(misc, 'Buyers Agent Commission', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.');
             commissionCreditField(percentAndDollars(misc, 'Listing Agent Commission', 'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $',
-                'A percent of the price and a flat amount. Enter 0 for none. The commission credit to client is credited back to the seller out of the agent’s split.'));
+                'A percent of the price and a flat amount. Enter 0 for none. The commission credit to client is credited back to the seller out of the agent’s split: as a percent of that split (100% credits all of it), or a dollar amount.'));
             // The seller's own other costs, one line each
             feeLinesField(misc, { label: 'Other Fees', question: 'Any other fees?', listColumn: 'SELLER OTHER FEES', answerColumn: 'HAS SELLER OTHER FEES',
                 rowsOf: sellerOtherFeeRows, answerOf: sellerOtherAnswer, payers: false, statuses: true, help: 'Any other costs the seller pays at closing.' });
