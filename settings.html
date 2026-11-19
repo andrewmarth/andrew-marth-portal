@@ -1546,6 +1546,9 @@
     <script type="module">
         import { firebaseConfig, isConfigured, PORTAL_API_URL, FIREBASE_SDK } from '/firebase-config.js';
         import { monthlyIncome, monthlyDebts, createIncomeEditor } from '/income-editor.js';
+        import { fitSheetToKeyboard } from '/keyboard-fit.js';
+        // Phones: every edit pop-up stays above the on-screen keyboard (the income pop-up's is set up as it opens)
+        document.querySelectorAll('dialog.edit-dialog').forEach(d => fitSheetToKeyboard(d));
         import { openLoanProductForm } from '/loan-products.js';
         import { PROFESSION_GROUPS, groupList } from '/dpa.js';
         import { MI_SETTINGS, miSettings } from '/mortgage-insurance.js';

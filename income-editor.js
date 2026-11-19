@@ -1,5 +1,6 @@
 // Income math and the "Your Income" edit pop-up, shared by settings.html and pages.html.
 // Fields match the income records: PRIMARY / SECONDARY / TERTIARY / QUATERNARY / QUINARY income levels plus monthly debt payments.
+import { fitSheetToKeyboard } from '/keyboard-fit.js';
 
 export const LEVELS = ['PRIMARY', 'SECONDARY', 'TERTIARY', 'QUATERNARY', 'QUINARY'];
 // Debt types: the Yes/No column (TRUE / FALSE), the monthly payment column, how many of each, and the text columns
@@ -324,8 +325,10 @@ export function ensureDialogStyles() {
 }
 
 // While a pop-up is open, phones would still scroll the page behind it (overflow: hidden isn't enough on iOS),
-// so the page is pinned where it is until the pop-up closes, then put back at the same spot
+// so the page is pinned where it is until the pop-up closes, then put back at the same spot. Every pop-up calls this as
+// it opens, so it also keeps the pop-up above the phone's on-screen keyboard (/keyboard-fit.js).
 export function lockPageScroll(dialog) {
+    fitSheetToKeyboard(dialog);
     const y = window.scrollY;
     const html = document.documentElement;
     const body = document.body;
