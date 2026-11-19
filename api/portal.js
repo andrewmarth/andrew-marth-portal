@@ -590,6 +590,9 @@ export async function handle(body, query) {
     if (body.action === 'createVersion') return await createVersion_(id, account, body);
     // pages.html (admins): change who can see the page
     if (body.action === 'updatePageAccess') return await updatePageAccess_(id, account, body);
+    // pages.html (admins): move the page (or all its versions) to the trash; index.html's Trash card: bring it back
+    if (body.action === 'trashPage') return await trashPage_(account, body);
+    if (body.action === 'restorePage') return await restorePage_(account, body);
     if (body.action === 'saveClientInput') return await saveClientInput_(id, account, body);
 
     // Settings page: a client's own details (professions / groups, VA loan used, last owned a home, homebuyer education,
@@ -937,6 +940,43 @@ async function saveClientInput_(id, account, body) {
     if (siblings.length) await shareGlobalSettings_(siblings, fields, null);
   }
   return { ok: true, page: (await findPage_(body.pageId)).row };
+}
+
+// --- Trash ---
+// A trashed page (TRASHED true, with the day in TRASHED DATE) isn't deleted: it's left out of every page list and version
+// dropdown and can't be opened (by anyone, admins included) until an admin restores it from the home page's Trash card.
+const isTrashed_ = p => p['TRASHED'] === true || /^true$/i.test(String(p['TRASHED'] ?? '').trim());
+// Every version of a page, itself included (trashed ones too): a Seller Net's are the same home and sellers
+// (sellerNetVersions_), a Buyer Breakdown's the same address, as its version dropdown lists them
+async function pageVersions_(page) {
+  const type = String(page['PAGE TYPE'] || '').trim().toLowerCase();
+  if (type === 'seller net') return sellerNetVersions_(page);
+  const key = addressKey_(page);
+  return (await rows('pages')).filter(p => String(p['PAGE ID'] || '').trim() && String(p['PAGE TYPE'] || '').trim().toLowerCase() === type && addressKey_(p) === key);
+}
+
+// Admins only: moves a page to the trash. body: { pageId, confirmPageId (the same page ID again, so a call meant for
+// another page can't trash this one), allVersions (every version of it, not just this one) }. → { ok, count }
+async function trashPage_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const found = await findPage_(body.pageId);
+  if (!found || isTrashed_(found.row)) return { ok: false, error: 'page_not_found' };
+  if (String(body.confirmPageId || '').trim().toUpperCase() !== String(found.row['PAGE ID']).trim().toUpperCase()) return { ok: false, error: 'not_confirmed' };
+  const targets = body.allVersions === true ? (await pageVersions_(found.row)).filter(p => !isTrashed_(p)) : [found.row];
+  const today = new Date();
+  for (const p of targets) await update('pages', p._id, { 'TRASHED': true, 'TRASHED DATE': new Date(today.getFullYear(), today.getMonth(), today.getDate()) });
+  return { ok: true, count: targets.length };
+}
+
+// Admins only: takes a page out of the trash (with allVersions, every trashed version of it), so it lists and opens again
+// for everyone on it. body: { pageId, allVersions }. → { ok, count }
+async function restorePage_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const found = await findPage_(body.pageId);
+  if (!found || !isTrashed_(found.row)) return { ok: false, error: 'page_not_found' };
+  const targets = body.allVersions === true ? (await pageVersions_(found.row)).filter(isTrashed_) : [found.row];
+  for (const p of targets) await update('pages', p._id, { 'TRASHED': false, 'TRASHED DATE': '' });
+  return { ok: true, count: targets.length };
 }
 
 // Admins only: a new PAGES document copied from this page, with the next free PAGE ID,
@@ -3622,7 +3662,8 @@ async function createProperty_(account, body) {
 async function pageData_(id, account, pageId) {
   if (!String(pageId || '').trim()) return { ok: false, error: 'missing_page' };
   const found = await findPage_(pageId);
-  if (!found || !canSeePage_(found.row, id, account)) return { ok: false, error: 'page_not_found' };
+  // (a trashed page can't be opened, by anyone, until it's restored)
+  if (!found || !canSeePage_(found.row, id, account) || isTrashed_(found.row)) return { ok: false, error: 'page_not_found' };
   const page = found.row;
   const isAdmin = isAdmin_(account);
 
@@ -3656,7 +3697,7 @@ async function pageData_(id, account, pageId) {
     result.loanProducts = await rebaseProducts_(await rows('loanProducts'));
     result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
     result.miSettings = await miSettingsRow_();
-    result.versions = (await sellerNetVersions_(page)).filter(p => isAdmin || isOnPage_(p, id)).map(p => ({ page: p }));
+    result.versions = (await sellerNetVersions_(page)).filter(p => !isTrashed_(p) && (isAdmin || isOnPage_(p, id))).map(p => ({ page: p }));
   }
   return result;
 }
@@ -3666,9 +3707,9 @@ async function pageData_(id, account, pageId) {
 // Newest pages come first.
 async function myPagesData_(id, account) {
   const allPages = await rows('pages');
-  // Newest first
+  // Newest first (trashed pages aren't listed: admins see them in the Trash card)
   const pagesOfType = type => allPages
-    .filter(p => String(p['PAGE ID'] || '').trim() && String(p['PAGE TYPE'] || '').trim().toLowerCase() === type)
+    .filter(p => String(p['PAGE ID'] || '').trim() && String(p['PAGE TYPE'] || '').trim().toLowerCase() === type && !isTrashed_(p))
     .slice().reverse();
   const pages = pagesOfType('buyer breakdown');
   const summary = p => ({
@@ -3731,6 +3772,19 @@ async function myPagesData_(id, account) {
     // "My Flippers": every FLIPPER BUYER account and every Flip page
     result.flippers = withRole('FLIPPER BUYER');
     result.flipperPages = pagesOfType('flip').map(withPeople);
+    // The Trash card: every trashed page (newest trash first), with who is on it, its type and version, when it was
+    // trashed, and its versions' group (pages trashed together restore together)
+    const dayText = v => (v instanceof Date ? (v.getMonth() + 1) + '/' + v.getDate() + '/' + v.getFullYear() : String(v || '').trim());
+    result.trashedPages = allPages.filter(p => String(p['PAGE ID'] || '').trim() && isTrashed_(p)).map(p => Object.assign(withPeople(p), {
+      type: String(p['PAGE TYPE'] || '').trim(),
+      versionTitle: String(p['VERSION TITLE'] || '').trim(),
+      trashedDate: dayText(p['TRASHED DATE']),
+      group: String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'seller net' ? versionKey_(p) : String(p['PAGE TYPE'] || '').trim().toLowerCase() + '#' + addressKey_(p),
+    })).reverse();
+    // (anyone on a trashed page, by name, for the Trash card's dropdown)
+    const onTrash = new Set(result.trashedPages.flatMap(p => p.people));
+    result.trashPeople = accounts.map(r => ({ id: phoneToId_(r['ACCOUNT ID']), name: fullName_(r) })).filter(a => a.id && onTrash.has(a.id))
+      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
     result.titleCompanies = (await titleCompanyList_()).map(c => ({ id: c.id, name: c.name }));
     // Links are extra: if they can't be read, the page lists still load
     try {
@@ -4212,6 +4266,7 @@ async function addBuyerBreakdownData_(result, page) {
   const versions = (await rows('pages')).filter(p => String(p['PAGE ID'] || '').trim()
     && String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'buyer breakdown'
     && addressKey_(p) === key
+    && !isTrashed_(p)
     && (result.isAdmin || isOnPage_(p, result.viewerId)));
   result.versions = [];
   for (const p of versions) result.versions.push(await versionData_(p));

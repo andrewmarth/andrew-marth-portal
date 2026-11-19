@@ -1123,17 +1123,24 @@
         .problem-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         /* Settings card (and the admin-only cards): brown with soft gold and rust glows (same as the home page's My Buyers card) */
-        :is(#loan-card, #home-card, #listing-card), #math-card, #buyer-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before,
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card) > *, #math-card > *, #buyer-card > * { position: relative; z-index: 1; }
-        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow { color: var(--gold); }
-        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2, #buyer-card h2 { color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card), #math-card, #buyer-card, #delete-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #delete-card::before,
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #delete-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #delete-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #delete-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card) > *, #math-card > *, #buyer-card > *, #delete-card > * { position: relative; z-index: 1; }
+        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow, #delete-card .card-eyebrow { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2, #buyer-card h2, #delete-card h2 { color: var(--cream); }
         :is(#loan-card, #home-card, #listing-card) .money-section-title, #math-card .money-section-title, #buyer-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         /* Seller Net's Buyer Side, on the same brown: lighter green and red, and the buyer's cash in a darker panel */
         #buyer-card .money-list li { border-bottom-color: rgba(233, 226, 216, 0.15); }
+        /* Delete This Page: a red button (on the card and in its confirmation) */
+        .btn.btn-danger { background: #b3392f; border-color: #7f241d; color: #fff; }
+        @media (hover: hover) { .btn.btn-danger:hover { background: #9c2f26; } }
+        #delete-card .access-actions { justify-content: flex-start; flex-wrap: wrap; }
+        @media (max-width: 600px) { #delete-card .access-actions .btn { width: 100%; } }
+        .delete-dialog .delete-text { margin: 4px 0 0 0; line-height: 1.5; }
+        .delete-dialog .delete-text strong { color: #b3392f; }
         #buyer-card .money-list .v.is-credit { color: #9fd8a9; }
         #buyer-card .money-list .v.is-debit { color: #f2b8a8; }
         #buyer-card .total-box { background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(233, 226, 216, 0.18); }
@@ -1473,6 +1480,18 @@
             <h2>Buyer Side</h2>
             <p class="math-intro" id="buyer-card-sub"></p>
             <div id="buyer-card-list"></div>
+        </section>
+
+        <!-- 8. Admins only, always last: moves this version (or every version) to the trash (asked twice), then back to the
+             home page. Nothing is deleted: the home page's Trash card restores it. -->
+        <section class="main-card reveal" id="delete-card" hidden>
+            <span class="card-eyebrow">Admin Only</span>
+            <h2>Move To Trash</h2>
+            <p class="math-intro" id="delete-card-sub">Hides this page from everyone on it and from every list. Nothing is deleted: restore it from the Trash card on the home page.</p>
+            <div class="access-actions">
+                <button type="button" class="btn btn-danger" id="trash-version-btn">Trash This Version</button>
+                <button type="button" class="btn btn-danger" id="trash-all-btn">Trash All Versions</button>
+            </div>
         </section>
     </main>
 
@@ -5671,6 +5690,100 @@
                 },
             };
         }
+
+        // --- Move To Trash (admins, the last card): this version, or every version, asked twice; then back to the home page.
+        // Nothing is deleted (trashPage marks it TRASHED): the home page's Trash card restores it.
+        let trashDialog = null;
+        const versionCount = () => (Array.isArray(data.versions) && data.versions.length) || 1;
+        function setupDeleteCard() {
+            const card = document.getElementById('delete-card');
+            card.hidden = !data.isAdmin;
+            if (!data.isAdmin) return;
+            const n = versionCount();
+            document.getElementById('delete-card-sub').textContent = 'Hides this ' + (isSellerNet() ? 'net sheet' : 'buyer breakdown')
+                + ' from everyone on it and from every list. Nothing is deleted: restore it from the Trash card on the home page.'
+                + (n > 1 ? ' It has ' + n + ' versions: trash just the one you’re viewing, or all of them.' : '');
+            document.getElementById('trash-all-btn').textContent = 'Trash All Versions' + (n > 1 ? ' (' + n + ')' : '');
+            const open = all => () => {
+                if (!trashDialog) trashDialog = buildTrashDialog();
+                trashDialog.open(all);
+            };
+            [['trash-version-btn', false], ['trash-all-btn', true]].forEach(([id, all]) => {
+                const btn = document.getElementById(id);
+                if (btn.dataset.ready) return;
+                btn.dataset.ready = '1';
+                btn.addEventListener('click', open(all));
+            });
+        }
+        function buildTrashDialog() {
+            ensureDialogStyles();
+            const dialog = document.createElement('dialog');
+            dialog.className = 'income-dialog delete-dialog';
+            dialog.setAttribute('aria-labelledby', 'delete-dialog-title');
+            dialog.innerHTML = '<form class="income-form" novalidate>'
+                + '<div class="dialog-head"><h2 id="delete-dialog-title"></h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE_ICON + '</button></div>'
+                + '<div class="dialog-scroll"><p class="delete-text"></p></div>'
+                + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
+                + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
+                + '<button type="submit" class="btn btn-danger" data-go><span class="btn-spinner" aria-hidden="true"></span><span data-go-text></span></button></div></div>'
+                + '</form>';
+            document.body.append(dialog);
+            const $ = sel => dialog.querySelector(sel);
+            const form = $('form');
+            const message = $('.form-message');
+            const goBtn = $('[data-go]');
+            let stage = 1;
+            let all = false;
+            let busy = false;
+            // "123 Main St (Counter Offer)": the page, by its address and version
+            const street = () => text(col(data.page, 'STREET ADDRESS')) || 'this page';
+            const pageName = () => { const v = text(col(data.page, 'VERSION TITLE')); return street() + (v ? ' (' + v + ')' : ''); };
+            // What's being trashed, in bold: this version, or the address with every version
+            const what = () => '<strong>' + escapeHtml(all ? street() : pageName()) + '</strong>' + (all && versionCount() > 1 ? ' and all ' + versionCount() + ' of its versions' : '');
+            function show(n) {
+                stage = n;
+                message.textContent = '';
+                $('#delete-dialog-title').textContent = n === 1 ? (all ? 'Trash All Versions?' : 'Trash This Version?') : 'Are You Sure?';
+                $('.delete-text').innerHTML = n === 1
+                    ? 'This moves ' + what() + ' to the trash: hidden from everyone on it and from every list.'
+                    : 'Once ' + what() + (all && versionCount() > 1 ? ' are' : ' is') + ' in the trash, no one can open ' + (all && versionCount() > 1 ? 'them' : 'it') + ' until an admin restores ' + (all && versionCount() > 1 ? 'them' : 'it') + ' from the home page’s Trash card.';
+                $('[data-go-text]').textContent = n === 1 ? 'Yes, Trash ' + (all && versionCount() > 1 ? 'Them' : 'It') : 'Move To Trash';
+            }
+            const close = () => { if (!busy) dialog.close(); };
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+            dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
+            dialog.addEventListener('cancel', e => { if (busy) e.preventDefault(); });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (busy) return;
+                // The first Yes only asks again
+                if (stage === 1) { show(2); return; }
+                busy = true;
+                goBtn.disabled = true;
+                goBtn.classList.add('is-loading');
+                try {
+                    const json = await api({ action: 'trashPage', pageId, confirmPageId: text(col(data.page, 'PAGE ID')) || pageId, allVersions: all });
+                    if (!json.ok) throw new Error(json.error || 'Request failed');
+                    // (replace: Back doesn't return to the trashed page)
+                    location.replace('/');
+                } catch (err) {
+                    console.error(err);
+                    message.textContent = 'We couldn’t move it to the trash. Please try again.';
+                    busy = false;
+                    goBtn.disabled = false;
+                    goBtn.classList.remove('is-loading');
+                }
+            });
+            return {
+                open(allVersions) {
+                    all = allVersions;
+                    show(1);
+                    dialog.showModal();
+                    lockPageScroll(dialog);
+                },
+            };
+        }
+
         // Copy the version being viewed into a new PAGES row, then load it (with the updated version list) and show it
         async function createVersion(title) {
             const made = await api({ action: 'createVersion', pageId, title });
@@ -5757,6 +5870,7 @@
             // ...and only admins see how they're worked out
             document.getElementById('math-intro').textContent = 'Step by step: the interest rate, every line of the escrow breakdown, the monthly payment, and the closing costs with which ones credits can pay. Includes any unsaved settings edits.';
             document.getElementById('math-card').hidden = !data.isAdmin;
+            setupDeleteCard();
             initReveal();
         }
 
@@ -5782,6 +5896,7 @@
             listingCard.hidden = !data.isAdmin;
             loanCard.hidden = !data.isAdmin;
             document.getElementById('math-card').hidden = !data.isAdmin;
+            setupDeleteCard();
             initReveal();
         }
 

@@ -470,6 +470,24 @@
             .page-link:hover { border-color: var(--navy); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--navy); }
             .page-link:hover .page-link-arrow svg { transform: translateX(3px); }
         }
+        /* Trash: a group per property (its address, then each trashed version with a Restore button) */
+        .trash-intro { margin: 4px 0 16px 0; opacity: 0.8; line-height: 1.5; }
+        .trash-groups { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; }
+        .trash-group { padding: 14px 16px; border-radius: 16px; background: #f7f4f0; border: 1px solid rgba(78, 81, 62, 0.15); color: var(--brown); }
+        .trash-head { display: flex; align-items: center; gap: 14px; }
+        .trash-head .page-link-icon { background: #8a8a80; }
+        .trash-versions { list-style: none; margin: 12px 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .trash-version { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--white); border: 1px solid rgba(78, 81, 62, 0.12); }
+        .trash-version-text { flex: 1; min-width: 0; font-size: 0.92rem; line-height: 1.35; }
+        .trash-version-text b { display: block; font-size: 0.98rem; overflow-wrap: anywhere; }
+        .trash-btn { flex: 0 0 auto; min-height: 40px; padding: 6px 16px; border: 2px solid var(--navy); border-radius: 999px; background: var(--white); color: var(--brown); font-family: inherit; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+        .trash-btn.is-all { margin-top: 10px; background: var(--olive); border-color: var(--olive); color: var(--cream); }
+        .trash-btn:disabled { opacity: 0.6; cursor: wait; }
+        @media (hover: hover) { .trash-btn:not(:disabled):hover { background: #f2ede6; } .trash-btn.is-all:not(:disabled):hover { background: #3f4232; } }
+        .trash-message { margin: 10px 4px 0 4px; font-size: 0.9rem; font-weight: bold; color: var(--rust); }
+        .trash-message:empty { display: none; }
+        @media (max-width: 600px) { .trash-version { flex-wrap: wrap; } .trash-version .trash-btn { width: 100%; } .trash-btn.is-all { width: 100%; } }
+
         /* "View Older": pages 21+ days old, tucked away at the bottom of the card */
         .older-pages { margin-top: 12px; }
         .older-pages .page-link { opacity: 0.85; }
@@ -913,6 +931,16 @@
             <span class="sr-only" id="flipper-picker-label">Flipper</span>
             <div id="flipper-picker"></div>
             <div id="flipper-page-list" class="buyer-page-list"></div>
+        </section>
+
+        <!-- 3c. Admins only: pages moved to the trash (from a page's Move To Trash card), by client, to restore -->
+        <section class="main-card glow-card reveal" id="trash-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Trash</h2>
+            <p class="trash-intro">Pages moved to the trash are hidden from everyone on them. Pick a client to see theirs, and restore any to bring it back.</p>
+            <span class="sr-only" id="trash-picker-label">Client</span>
+            <div id="trash-picker"></div>
+            <div id="trash-list" class="buyer-page-list"></div>
         </section>
 
         <!-- 3c. Admins only: send a document for e-signature -->
@@ -1456,6 +1484,64 @@
             });
         }
 
+        // --- Trash (admins): a client's trashed pages, a group per property, each version restorable (or all at once) ---
+        let selectedTrashId = null;
+        function renderTrash(people, trashedPages) {
+            const card = document.getElementById('trash-card');
+            const mount = document.getElementById('trash-picker');
+            const listEl = document.getElementById('trash-list');
+            card.hidden = false;
+            if (!trashedPages.length) {
+                mount.innerHTML = '';
+                listEl.innerHTML = '<p class="pages-empty">Nothing is in the trash.</p>';
+                return;
+            }
+            const typeName = t => (/^seller net$/i.test(t) ? 'Seller Net' : /^buyer breakdown$/i.test(t) ? 'Buyer Breakdown' : t || 'Page');
+            function draw(person) {
+                const mine = trashedPages.filter(p => (p.people || []).includes(person.id));
+                if (!mine.length) { listEl.innerHTML = '<p class="pages-empty">Nothing in the trash for ' + escapeHtml(person.name || formatPhone(person.id)) + '.</p>'; return; }
+                // One group per property (its versions), in trash order
+                const groups = [];
+                mine.forEach(p => { let g = groups.find(x => x.key === p.group); if (!g) groups.push(g = { key: p.group, pages: [] }); g.pages.push(p); });
+                listEl.innerHTML = '<ul class="trash-groups">' + groups.map(g => {
+                    const first = g.pages[0];
+                    const sub = [first.city, [first.state, first.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                    return '<li class="trash-group"><div class="trash-head"><span class="page-link-icon">' + HOUSE_ICON + '</span>'
+                        + '<span class="page-link-text"><span class="page-link-street">' + escapeHtml(first.street || first.id) + '</span>'
+                        + '<br><span class="page-link-sub">' + escapeHtml([typeName(first.type), sub].filter(Boolean).join(' · ')) + '</span></span></div>'
+                        + '<ul class="trash-versions">' + g.pages.map(p => '<li class="trash-version"><span class="trash-version-text"><b>' + escapeHtml(p.versionTitle || 'Page ' + p.id) + '</b>'
+                            + escapeHtml('Trashed' + (p.trashedDate ? ' ' + p.trashedDate : '')) + '</span>'
+                            + '<button type="button" class="trash-btn" data-restore="' + escapeHtml(p.id) + '">Restore</button></li>').join('') + '</ul>'
+                        + (g.pages.length > 1 ? '<button type="button" class="trash-btn is-all" data-restore="' + escapeHtml(first.id) + '" data-all>Restore All ' + g.pages.length + ' Versions</button>' : '')
+                        + '<p class="trash-message" role="alert"></p></li>';
+                }).join('') + '</ul>';
+                listEl.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', async () => {
+                    const group = btn.closest('.trash-group');
+                    const msg = group.querySelector('.trash-message');
+                    group.querySelectorAll('.trash-btn').forEach(b => { b.disabled = true; });
+                    msg.textContent = '';
+                    try {
+                        const json = await api({ action: 'restorePage', pageId: btn.dataset.restore, allVersions: btn.hasAttribute('data-all') });
+                        if (!json.ok) throw new Error(json.error || 'Request failed');
+                        // Reload every list: the restored page shows up in its card again, and leaves this one
+                        await loadPages(currentUser);
+                    } catch (err) {
+                        console.error(err);
+                        msg.textContent = 'We couldn’t restore it. Please try again.';
+                        group.querySelectorAll('.trash-btn').forEach(b => { b.disabled = false; });
+                    }
+                }));
+            }
+            mountClientPicker(mount, people, {
+                idPrefix: 'trash-picker', labelId: 'trash-picker-label', placeholder: 'Choose a client...', selectedId: selectedTrashId,
+                onPick(person) {
+                    if (!person) { listEl.innerHTML = ''; return; }
+                    selectedTrashId = person.id;
+                    draw(person);
+                },
+            });
+        }
+
         // --- My Flippers (admins): a FLIPPER BUYER account's Flip proformas ---
         let selectedFlipperId = null;
         function renderFlippers(flippers, flipperPages) {
@@ -1748,6 +1834,7 @@
                         renderBuyers(data.buyers, data.buyerPages || []);
                         renderSellers(data.sellers || [], data.sellerPages || []);
                         renderFlippers(data.flippers || [], data.flipperPages || []);
+                        renderTrash(data.trashPeople || [], data.trashedPages || []);
                         renderLinks(data.links);
                     }
                 }
