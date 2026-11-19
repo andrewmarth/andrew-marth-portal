@@ -72,6 +72,8 @@ const PAGE_SETTING_FIELDS = {
   'PRIOR POLICY DATE': 'date', 'PRIOR POLICY INSURER': 'id',
   // Seller Net: what the title company's other fees follow (their WHEN; see /title-fees.js feeApplies). FOREIGN SELLER
   // and HAS SEPTIC are Global Settings; HOLDBACK AMOUNT is dollars held back in escrow (0: none)
+  // SEWER SYSTEM (a Global Setting) replaces HAS SEPTIC, still read on a page without it: anything but Sewer gets the septic fee
+  'SEWER SYSTEM': ['Sewer', 'Septic', 'Alternate System'],
   'FOREIGN SELLER': 'bool', 'HAS SEPTIC': 'bool', '1031 EXCHANGE': 'bool', 'HOLDBACK AMOUNT': 'money', 'ELECTRONIC SERVICE': 'bool',
   // Seller Net: what the sellers also qualify as, for the title company's discounts (they replace CLIENT QUALIFIES AS
   // there, still read while they're blank): SELLER NON PROFIT (a Global Setting) and CORPORATE RELOCATION
@@ -862,7 +864,7 @@ async function updatePageAccess_(id, account, body) {
 // Versions of a Seller Net page are the pages with the same PAGE TYPE, the same home (addressKey_) and the same
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
-const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
+const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'SEWER SYSTEM', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
   'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE', 'DAILY INTEREST BASIS', 'CLIENT ANSWERED'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
@@ -3572,11 +3574,11 @@ async function createProperty_(account, body) {
     'RECORDING FEE': 0, 'RECORDING FEE STATUS': 'Estimated',
     'PAYOFF STATEMENT FEE': 0, 'PAYOFF STATEMENT FEE STATUS': 'Estimated',
     'HAS OTHER LOAN PAYOFF FEES': 'No',
-    // Both commissions 2.5% (+ $0); no septic, corporate relocation, 1031 exchange, holdback or other fees; the title
+    // Both commissions 2.5% (+ $0); a sewer; no corporate relocation, 1031 exchange, holdback or other fees; the title
     // company's electronic service
     'SELLER PAID BUYER COMMISSION %': 0.025, 'SELLER PAID BUYER COMMISSION $': 0,
     'LISTING AGENT COMMISSION %': 0.025, 'LISTING AGENT COMMISSION $': 0,
-    'HAS SEPTIC': false, 'CORPORATE RELOCATION': false, '1031 EXCHANGE': false, 'HOLDBACK AMOUNT': 0,
+    'SEWER SYSTEM': 'Sewer', 'CORPORATE RELOCATION': false, '1031 EXCHANGE': false, 'HOLDBACK AMOUNT': 0,
     'ELECTRONIC SERVICE': true, 'HAS SELLER OTHER FEES': 'No',
     // No HOA: its dues are $0 (final), as pages.html's HOA No does; the seller can still say there is one
     'HAS HOA': 'No', 'HAS MASTER ASSOCIATION': 'No',

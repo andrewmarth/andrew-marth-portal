@@ -1812,6 +1812,9 @@
         // What the title company's other fees follow (see feeApplies in /title-fees.js): either page's Escrow Duration (for
         // Accelerated Escrow; blank: not known yet), and a Seller Net's settings for the rest (a Buyer Breakdown doesn't
         // have them: those fees are picked in Other Fees That Apply there)
+        // SEWER SYSTEM: Sewer, Septic or Alternate System (anything but Sewer gets the title company's septic fee); a page
+        // saved before it has HAS SEPTIC (TRUE: Septic)
+        const sewerSystem = get => text(get('SEWER SYSTEM')) || (isTrue(get('HAS SEPTIC')) ? 'Septic' : 'Sewer');
         function feeConditions(page) {
             const days = text(col(page, 'ESCROW DURATION'));
             // (and in business days: the weekdays after the offer acceptance, or today without one, through the close of
@@ -1819,7 +1822,7 @@
             const start = parseDate(col(page, 'OFFER ACCEPTANCE DATE')) || new Date();
             const out = days === '' ? {} : { escrowDays: num(days), escrowBusinessDays: businessDaysAfter(start, num(days)) };
             if (!isSellerNet()) return out;
-            return { ...out, 'Foreign Seller': isTrue(col(page, 'FOREIGN SELLER')), 'Septic': isTrue(col(page, 'HAS SEPTIC')),
+            return { ...out, 'Foreign Seller': isTrue(col(page, 'FOREIGN SELLER')), 'Septic': sewerSystem(c => col(page, c)) !== 'Sewer',
                 '1031 Exchange': isTrue(col(page, '1031 EXCHANGE')), 'Holdback': num(col(page, 'HOLDBACK AMOUNT')) > 0, holdbackAmount: num(col(page, 'HOLDBACK AMOUNT')),
                 'Electronic Service': isTrue(col(page, 'ELECTRONIC SERVICE')) };
         }
@@ -5272,7 +5275,9 @@
             wholeField(home, 'Sqft', 'SQFT', { commas: true, suffix: 'sq ft' });
             moneyField(home, 'Yearly Taxes', 'YEARLY TAXES');
             const YES_NO = [['TRUE', 'Yes'], ['FALSE', 'No']];
-            toggleField(home, 'Septic', 'HAS SEPTIC', YES_NO, { help: 'A septic system instead of a sewer (for the title company’s septic transfer fee).' });
+            const sewer = fieldShell('Sewer', { help: 'Septic or an alternate system adds the title company’s septic fee.' });
+            sewer.body.append(segToggle(['Sewer', 'Septic', 'Alternate System'].map(v => [v, v]), sewerSystem(current), v => setDraft('SEWER SYSTEM', v), 'Sewer'));
+            home.append(sewer.wrap);
 
             const sale = document.getElementById('purchase-fields');
             moneyField(sale, 'Sale Price', 'PURCHASE PRICE');
