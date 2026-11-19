@@ -89,7 +89,9 @@ const CSS = `
     .snw-dialog.is-keyboard .dialog-head { padding-top: 14px; }
     .snw-dialog.is-keyboard .dialog-head h2 { font-size: 1.15rem; }
     .snw-dialog.is-keyboard .snw-progress { padding-bottom: 8px; }
-    .snw-dialog.is-keyboard .dialog-foot { padding-top: 8px; padding-bottom: 10px; }
+    /* (Android: room under the buttons for the browser's autofill bar, which sits on top of the keyboard but isn't
+       counted as covering the page: --snw-bar) */
+    .snw-dialog.is-keyboard .dialog-foot { padding-top: 8px; padding-bottom: calc(10px + var(--snw-bar, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { .snw-dialog .snw-step { animation: none; } .snw-dialog { transition: none; } }
 `;
@@ -703,6 +705,10 @@ function build() {
     // box being typed in is scrolled into view.
     const vv = window.visualViewport;
     const phone = window.matchMedia('(max-width: 600px)');
+    // Android browsers (Chrome, Firefox) show an autofill bar (saved addresses, cards, passwords) on top of the keyboard
+    // that the visible-area size doesn't count, so the buttons keep its height (48px) clear. On an iPhone, Safari's bar
+    // above the keyboard is counted, so nothing extra is needed.
+    const AUTOFILL_BAR = /Android/i.test(navigator.userAgent) ? 48 : 0;
     // Scrolls the questions so el is in view (a little room around it)
     function keepInView(el) {
         if (!el || !scroll.contains(el)) return;
@@ -719,6 +725,7 @@ function build() {
         const up = covered > 80;
         dialog.style.setProperty('--snw-kb', (up ? covered : 0) + 'px');
         dialog.style.setProperty('--snw-vh', Math.round(vv.height) + 'px');
+        dialog.style.setProperty('--snw-bar', (up ? AUTOFILL_BAR : 0) + 'px');
         dialog.classList.toggle('is-keyboard', up);
         if (up) requestAnimationFrame(() => keepInView(document.activeElement));
     }
