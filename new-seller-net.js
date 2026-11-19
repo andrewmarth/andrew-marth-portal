@@ -83,17 +83,14 @@ const CSS = `
     .snw-dialog .dialog-foot .form-actions .btn { width: auto; flex: 1; min-height: 50px; padding-top: 10px; padding-bottom: 10px; }
     .snw-dialog .dialog-foot .form-actions .btn-secondary { flex: 0 0 auto; padding-left: 22px; padding-right: 22px; }
     .snw-dialog .snw-spacer { display: none; }
-    /* While the on-screen keyboard is up: the sheet sits on top of it, sized to what's left of the screen */
-    .snw-dialog { translate: 0 calc(-1 * var(--snw-kb, 0px)); transition: translate 0.2s ease; }
+    /* While the on-screen keyboard is up: the sheet sits on top of it, sized to what's left of the screen. It moves and
+       resizes together, with the keyboard's own easing (fast, then settling), so it glides up alongside it; nothing
+       inside it changes size. */
+    .snw-dialog { translate: 0 calc(-1 * var(--snw-kb, 0px)); transition: translate 0.3s cubic-bezier(0.2, 0, 0, 1); }
+    .snw-dialog .income-form { transition: max-height 0.3s cubic-bezier(0.2, 0, 0, 1); }
     .snw-dialog.is-keyboard .income-form { max-height: calc(var(--snw-vh, 100dvh) - 10px); }
-    .snw-dialog.is-keyboard .dialog-head { padding-top: 14px; }
-    .snw-dialog.is-keyboard .dialog-head h2 { font-size: 1.15rem; }
-    .snw-dialog.is-keyboard .snw-progress { padding-bottom: 8px; }
-    /* (Android: room under the buttons for the browser's autofill bar, which sits on top of the keyboard but isn't
-       counted as covering the page: --snw-bar) */
-    .snw-dialog.is-keyboard .dialog-foot { padding-top: 8px; padding-bottom: calc(10px + var(--snw-bar, 0px)); }
 }
-@media (prefers-reduced-motion: reduce) { .snw-dialog .snw-step { animation: none; } .snw-dialog { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .snw-dialog .snw-step { animation: none; } .snw-dialog, .snw-dialog .income-form { transition: none; } }
 `;
 
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
@@ -712,37 +709,57 @@ function build() {
 
     // --- Phones: the on-screen keyboard ---
     // The sheet is pinned to the bottom of the screen, which the keyboard covers (it shrinks only the visible part of the
-    // page). So while it's up, the sheet moves up to sit on top of it (--snw-kb), sized to what's left (--snw-vh), and the
-    // box being typed in is scrolled into view.
+    // page; the browser's autofill bar on top of the keyboard is counted too). So while it's up, the sheet moves up to sit
+    // on top of it (--snw-kb), sized to what's left (--snw-vh), and the box being typed in is scrolled into view.
     const vv = window.visualViewport;
     const phone = window.matchMedia('(max-width: 600px)');
-    // Android browsers (Chrome, Firefox) show an autofill bar (saved addresses, cards, passwords) on top of the keyboard
-    // that the visible-area size doesn't count, so the buttons keep its height (48px) clear. On an iPhone, Safari's bar
-    // above the keyboard is counted, so nothing extra is needed.
-    const AUTOFILL_BAR = /Android/i.test(navigator.userAgent) ? 48 : 0;
-    // Scrolls the questions so el is in view (a little room around it)
-    function keepInView(el) {
+    const touch = window.matchMedia('(pointer: coarse)');
+    // The keyboard's height the last time it was up (0: not yet seen), and while the sheet has moved up ahead of the
+    // keyboard, the timer that settles it back if no keyboard comes
+    let lastKeyboard = 0;
+    let expecting = null;
+    // Scrolls the questions so el is in view (a little room around it); smooth: a gentle scroll instead of a jump
+    function keepInView(el, smooth) {
         if (!el || !scroll.contains(el)) return;
         const box = el.getBoundingClientRect();
         const area = scroll.getBoundingClientRect();
         const room = 16;
-        if (box.bottom > area.bottom - room) scroll.scrollTop += Math.min(box.bottom - area.bottom + room, box.top - area.top - room);
-        else if (box.top < area.top + room) scroll.scrollTop -= area.top + room - box.top;
+        const by = box.bottom > area.bottom - room ? Math.min(box.bottom - area.bottom + room, box.top - area.top - room)
+            : box.top < area.top + room ? -(area.top + room - box.top) : 0;
+        if (by) scroll.scrollBy({ top: by, behavior: smooth ? 'smooth' : 'auto' });
+    }
+    function setFit(up, lift, visible) {
+        dialog.style.setProperty('--snw-kb', lift + 'px');
+        dialog.style.setProperty('--snw-vh', Math.round(visible) + 'px');
+        dialog.classList.toggle('is-keyboard', up);
     }
     function fitKeyboard() {
         if (!dialog.open || !vv) return;
         const { up, lift } = phone.matches ? keyboardFit(window.innerHeight, vv.height, vv.offsetTop) : { up: false, lift: 0 };
-        dialog.style.setProperty('--snw-kb', lift + 'px');
-        dialog.style.setProperty('--snw-vh', Math.round(vv.height) + 'px');
-        dialog.style.setProperty('--snw-bar', (up ? AUTOFILL_BAR : 0) + 'px');
-        dialog.classList.toggle('is-keyboard', up);
-        if (up) requestAnimationFrame(() => keepInView(document.activeElement));
+        // (the sheet moved up ahead of the keyboard: a resize before the keyboard arrives doesn't drop it back down)
+        if (!up && expecting) return;
+        if (up) { lastKeyboard = Math.round(window.innerHeight - vv.height); clearTimeout(expecting); expecting = null; }
+        setFit(up, lift, vv.height);
+        // (once the sheet has settled)
+        if (up) setTimeout(() => keepInView(document.activeElement, true), 320);
     }
     if (vv) { vv.addEventListener('resize', fitKeyboard); vv.addEventListener('scroll', fitKeyboard); }
+    // A tap on a box (the keyboard opens): the sheet starts moving up right away, by the keyboard's last height (or, the
+    // first time, a typical keyboard's), so it rises with the keyboard instead of after it, and the browser doesn't have
+    // to scroll the page to show the box. The keyboard's real size, once it's up, corrects it; if none comes (a hardware
+    // keyboard), it settles back.
+    form.addEventListener('click', e => {
+        if (!vv || !dialog.open || !phone.matches || !touch.matches || dialog.classList.contains('is-keyboard')) return;
+        if (!e.target.matches('input[type="text"], textarea')) return;
+        const kb = lastKeyboard || Math.round(window.innerHeight * 0.4);
+        setFit(true, kb, window.innerHeight - kb);
+        clearTimeout(expecting);
+        expecting = setTimeout(() => { expecting = null; fitKeyboard(); }, 900);
+    });
     // A box tapped while the keyboard is already up (or as it comes up) comes into view
     form.addEventListener('focusin', e => {
         if (!e.target.matches('input:not([type="radio"]), select, textarea')) return;
-        [60, 320].forEach(ms => setTimeout(() => { if (document.activeElement === e.target && dialog.classList.contains('is-keyboard')) keepInView(e.target); }, ms));
+        setTimeout(() => { if (document.activeElement === e.target && dialog.classList.contains('is-keyboard')) keepInView(e.target, true); }, 320);
     });
     // The keyboard's Enter (Next) moves to the question's next box; from the last one, on to the next question
     form.addEventListener('keydown', e => {
@@ -825,7 +842,7 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
-    dialog.addEventListener('close', () => { dialog.classList.remove('is-keyboard'); dialog.style.removeProperty('--snw-kb'); });
+    dialog.addEventListener('close', () => { clearTimeout(expecting); expecting = null; dialog.classList.remove('is-keyboard'); dialog.style.removeProperty('--snw-kb'); });
 
     return {
         open(next) {
