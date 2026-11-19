@@ -1671,13 +1671,13 @@
         const sellerOtherFeeRows = get => feeLinesOf(get('SELLER OTHER FEES'));
         const sellerOtherAnswer = get => text(get('HAS SELLER OTHER FEES')) || (sellerOtherFeeRows(get).length ? 'Yes' : '');
         const sellerOtherFees = get => (sellerOtherAnswer(get) === 'Yes' ? sellerOtherFeeRows(get) : []);
-        // Seller Net: the Commission Credit To Client, a credit back to the seller out of the listing agent's split (max: the
-        // listing commission × agentSplit, the Commission Split card's; unknown: the whole commission): COMMISSION CREDIT TYPE
-        // % (COMMISSION CREDIT %, a share of that split: 100% credits all of it; blank is %) or $ (COMMISSION CREDIT $).
-        // → { asked, max, amount (what's credited) }
-        function commissionCredit(get, price, agentSplit) {
+        // Seller Net: the Commission Credit To Client, a credit back to the seller out of what the listing agent keeps (max:
+        // the listing commission × agentSplit, less the brokerage's flatFee, which comes out of the agent's split; both from
+        // the Commission Split card; no agentSplit: the whole commission): COMMISSION CREDIT TYPE % (COMMISSION CREDIT %, a
+        // share of that: 100% credits all of it; blank is %) or $ (COMMISSION CREDIT $). → { asked, max, amount (credited) }
+        function commissionCredit(get, price, agentSplit, flatFee) {
             const listing = price * num(get('LISTING AGENT COMMISSION %')) + num(get('LISTING AGENT COMMISSION $'));
-            const max = agentSplit === null || agentSplit === undefined ? listing : listing * agentSplit;
+            const max = Math.max(0, (agentSplit === null || agentSplit === undefined ? listing : listing * agentSplit) - (num(flatFee) || 0));
             const asked = text(get('COMMISSION CREDIT TYPE')) === '$' ? num(get('COMMISSION CREDIT $')) : max * num(get('COMMISSION CREDIT %'));
             return { asked, max, amount: Math.max(0, Math.min(asked, max)) };
         }
@@ -2468,7 +2468,7 @@
                 { section: 'Miscellaneous', label: 'Buyers Agent Commission', amount: -percentPlus('SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $', price) },
                 { section: 'Miscellaneous', label: 'Listing Agent Commission', amount: -percentPlus('LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $', price) },
                 // Credited back to the seller out of the listing agent's split
-                { section: 'Miscellaneous', label: 'Commission Credit To Client', amount: commissionCredit(c => col(page, c), price, data.agentSplit).amount },
+                { section: 'Miscellaneous', label: 'Commission Credit To Client', amount: commissionCredit(c => col(page, c), price, data.agentSplit, data.brokerageFlatFee).amount },
                 // The seller's Other Fees, one line each
                 ...sellerOtherFees(c => col(page, c)).map(f => ({ section: 'Miscellaneous', label: f.name, amount: -f.amount })),
             ].map(line => ({ ...line, amount: round2(line.amount) }));
@@ -4619,12 +4619,14 @@
                 fieldBad('DOWN PAYMENT ASSISTANCE', over ? 'Can\'t be more than this program\'s ' + (dpaI.flat ? wholeMoney.format(dpaI.flatAmount) : percent(dpaI.ltvMax)) + ' maximum.' : '');
             }
 
-            // Seller Net: the commission credit to client is at most the agent's split of the listing commission (100% of it)
+            // Seller Net: the commission credit to client is at most the agent's split of the listing commission less the
+            // brokerage's flat fee (100% of that)
             if (settingsBlocks.some(b => b.key === 'COMMISSION CREDIT') && fieldErrors['COMMISSION CREDIT'] !== 'Please enter a number.') {
-                const c = commissionCredit(x => col(page, x), num(col(page, 'PURCHASE PRICE')), data.agentSplit);
+                const c = commissionCredit(x => col(page, x), num(col(page, 'PURCHASE PRICE')), data.agentSplit, data.brokerageFlatFee);
+                const fee = num(data.brokerageFlatFee) > 0 ? ' less the ' + wholeMoney.format(num(data.brokerageFlatFee)) + ' flat fee' : '';
                 const whole = data.agentSplit === null || data.agentSplit === undefined
-                    ? 'the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ')'
-                    : 'the agent’s ' + Math.round(data.agentSplit * 1e4) / 100 + '% split of the listing commission (' + wholeMoney.format(Math.floor(c.max)) + ')';
+                    ? 'the listing commission' + fee + ' (' + wholeMoney.format(Math.floor(c.max)) + ')'
+                    : 'the agent’s ' + Math.round(data.agentSplit * 1e4) / 100 + '% split of the listing commission' + fee + ' (' + wholeMoney.format(Math.floor(c.max)) + ')';
                 fieldBad('COMMISSION CREDIT', c.asked > c.max + 0.005 ? (current('COMMISSION CREDIT TYPE') === '$' ? 'Can’t be more than ' + whole + '.' : 'Can’t be more than 100% of ' + whole + '.') : '');
             }
 

@@ -3704,10 +3704,13 @@ async function pageData_(id, account, pageId) {
     result.interestRate = (await rows('settings')).find(r => r._id === 'interestRate') || null;
     result.miSettings = await miSettingsRow_();
     result.versions = (await sellerNetVersions_(page)).filter(p => !isTrashed_(p) && (isAdmin || isOnPage_(p, id))).map(p => ({ page: p }));
-    // The Commission Split card's agent split (a Commission Credit To Client's % is a share of it, and it's the most the credit
-    // can be), null when not set. Everyone on the page gets it: their credit is figured from it.
-    const agentSplit = ((await commissionSplitRow_()) || {})['AGENT SPLIT'];
-    result.agentSplit = agentSplit === undefined || agentSplit === '' || agentSplit === null ? null : Number(agentSplit);
+    // The Commission Split card's agent split and brokerage flat fee (a Commission Credit To Client is at most the agent's
+    // split less the fee, and its % is a share of that), null when not set. Everyone on the page gets them: their credit is
+    // figured from them.
+    const split = (await commissionSplitRow_()) || {};
+    const known = v => (v === undefined || v === '' || v === null ? null : Number(v));
+    result.agentSplit = known(split['AGENT SPLIT']);
+    result.brokerageFlatFee = known(split['BROKERAGE FLAT FEE']);
   }
   return result;
 }
