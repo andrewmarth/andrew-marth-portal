@@ -1702,6 +1702,12 @@
         const CLIENT_LOCKS = ['LOAN TYPE', 'LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
             'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
         const clientAnswered = (get, column) => listOf(get('CLIENT ANSWERED')).includes(column);
+        // Agent Loan Input's copy of a seller's loan question is locked when CLIENT ANSWERED lists it, or once the seller's own
+        // loan details are in (their statement's balance) and it has an answer: answers from before a question could lock
+        // aren't listed, but they're the seller's all the same
+        const sellerLoanIn = get => text(get('LOAN PRINCIPAL BALANCE')) !== '';
+        const lockedToSeller = (get, column) => clientAnswered(get, column)
+            || (sellerLoanIn(get) && (column === 'HAS OTHER HOLDBACKS' ? otherHoldbackAnswer(get) !== '' : text(get(column)) !== ''));
         // Seller Net: the days a year of interest is split into for a day's interest (Remaining Interest): 360 for a DSCR or
         // Hard Money loan, 365 for the rest, unless the agent picked one (DAILY INTEREST BASIS: 365 / 360; blank: by type)
         const typeInterestBasis = type => (type === 'DSCR' || type === 'Hard Money' ? 360 : 365);
@@ -4954,22 +4960,22 @@
         // lockable: the agent's copy.
         function loanTypePart(get, put, lockable) {
             return { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES, rebuild: true,
-                lock: lockable ? () => clientAnswered(get, 'LOAN TYPE') : null,
+                lock: lockable ? () => lockedToSeller(get, 'LOAN TYPE') : null,
                 // (Hard Money terms are in months, the others in years: a term that isn't one of the new type's doesn't carry
                 // over, unless it's the seller's answer and this is the agent's copy)
                 then: (v, old) => {
                     const term = get('LOAN TERM MONTHS');
-                    if (lockable && clientAnswered(get, 'LOAN TERM MONTHS')) return;
+                    if (lockable && lockedToSeller(get, 'LOAN TERM MONTHS')) return;
                     if (term !== '' && termInMonths(v) !== termInMonths(old) && !loanTermPresets(v).some(([m]) => m === term)) put('LOAN TERM MONTHS', '');
                 } };
         }
         const loanTermPart = (get, show, lockable) => ({ label: 'Loan Term', column: 'LOAN TERM MONTHS', kind: 'term', type: () => get('LOAN TYPE'), show,
-            lock: lockable ? () => clientAnswered(get, 'LOAN TERM MONTHS') : null });
+            lock: lockable ? () => lockedToSeller(get, 'LOAN TERM MONTHS') : null });
         // extra: needed for the net sheet when it applies (sellerNetMissing)
         function dscrParts(get, lockable) {
             const dscr = () => get('LOAN TYPE') === 'DSCR';
             const period = () => dscr() && get('INTEREST ONLY PERIOD') === 'Yes';
-            const lock = column => (lockable ? () => clientAnswered(get, column) : null);
+            const lock = column => (lockable ? () => lockedToSeller(get, column) : null);
             return [
                 { label: 'Is there an interest only period?', column: 'INTEREST ONLY PERIOD', kind: 'seg', options: ['Yes', 'No'], short: 'Interest only period:', show: dscr, wide: true, extra: true, lock: lock('INTEREST ONLY PERIOD') },
                 { label: 'Does the loan become due after the interest only period?', column: 'DUE AFTER INTEREST ONLY', kind: 'seg', options: ['Yes', 'No'], short: 'Due after it:', show: period, wide: true, extra: true, lock: lock('DUE AFTER INTEREST ONLY') },
@@ -4978,7 +4984,7 @@
         }
         function holdbackParts(get, lockable) {
             const hardMoney = () => get('LOAN TYPE') === 'Hard Money';
-            const lock = column => (lockable ? () => clientAnswered(get, column) : null);
+            const lock = column => (lockable ? () => lockedToSeller(get, column) : null);
             return [
                 { label: 'Construction Holdback', column: 'OUTSTANDING CONSTRUCTION HOLDBACK', kind: 'money', short: 'Construction Holdback', show: hardMoney, extra: true, lock: lock('OUTSTANDING CONSTRUCTION HOLDBACK') },
                 { label: 'Interest Reserve', column: 'OUTSTANDING INTEREST RESERVE', kind: 'money', short: 'Interest Reserve', show: hardMoney, extra: true, lock: lock('OUTSTANDING INTEREST RESERVE') },
