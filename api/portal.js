@@ -580,6 +580,9 @@ export async function handle(body, query) {
     if (body.action === 'deleteLender') return await deleteLender_(account, body);
     if (body.action === 'saveLenderProduct') return await saveLenderProduct_(account, body);
     if (body.action === 'saveMiSettings') return await saveMiSettings_(account, body);
+    // settings.html's Commission Split card (admins)
+    if (body.action === 'commissionSplit') return await commissionSplit_(account);
+    if (body.action === 'saveCommissionSplit') return await saveCommissionSplit_(account, body);
     if (body.action === 'saveTitleCompany') return await saveTitleCompany_(account, body);
     if (body.action === 'deleteTitleCompany') return await deleteTitleCompany_(account, body);
     // Home page (admins): add a new property for a buyer
@@ -4153,6 +4156,64 @@ async function saveMiSettings_(account, body) {
   else await add('settings', clean, 'mortgageInsurance');
   return { ok: true, miSettings: await miSettingsRow_() };
 }
+// The commission split between the agent and the brokerage (settings commissionSplit): AGENT SPLIT and BROKERAGE SPLIT
+// (decimals that add up to 1: 0.8 is 80%), BROKERAGE FLAT FEE (dollars the brokerage also charges per transaction),
+// COMMISSION CAP (the most the brokerage takes from its split in a year, in dollars) and PAST TRANSACTIONS (JSON
+// [{ STREET, CITY, STATE, ZIP, GCI, DATE: YYYY-MM-DD }], newest first). null until it's saved. For use elsewhere later.
+async function commissionSplitRow_() {
+  return (await rows('settings')).find(r => r._id === 'commissionSplit') || null;
+}
+async function commissionSplit_(account) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  return { ok: true, commissionSplit: await commissionSplitRow_() };
+}
+// Admins: saves any of it; what isn't sent keeps what's saved (each setting and the transaction list save on their own).
+// body.values: { 'AGENT SPLIT': 0 to 1 (BROKERAGE SPLIT is the rest), 'BROKERAGE FLAT FEE': 0 to 1,000,000,
+// 'COMMISSION CAP': 0 to 10,000,000, 'PAST TRANSACTIONS': [{ STREET, CITY, STATE, ZIP, GCI (0 to 100,000,000), DATE
+// (YYYY-MM-DD, not in the future) }] (up to 500; the whole list) }
+async function saveCommissionSplit_(account, body) {
+  if (!isAdmin_(account)) return { ok: false, error: 'not_admin' };
+  const given = body.values || {};
+  const has = col => Object.prototype.hasOwnProperty.call(given, col);
+  const num = col => { const raw = String(given[col] ?? '').trim(); const n = Number(raw); return raw === '' || !isFinite(n) ? null : n; };
+  const clean = {};
+  if (has('AGENT SPLIT')) {
+    const agent = num('AGENT SPLIT');
+    if (agent === null || agent < 0 || agent > 1) return { ok: false, error: 'invalid_value', field: 'AGENT SPLIT' };
+    clean['AGENT SPLIT'] = Math.round(agent * 1e6) / 1e6;
+    clean['BROKERAGE SPLIT'] = Math.round((1 - clean['AGENT SPLIT']) * 1e6) / 1e6;
+  }
+  for (const [col, max] of [['BROKERAGE FLAT FEE', 1000000], ['COMMISSION CAP', 10000000]]) {
+    if (!has(col)) continue;
+    const n = num(col);
+    if (n === null || n < 0 || n > max) return { ok: false, error: 'invalid_value', field: col };
+    clean[col] = Math.round(n * 100) / 100;
+  }
+  if (has('PAST TRANSACTIONS')) {
+    const list = Array.isArray(given['PAST TRANSACTIONS']) ? given['PAST TRANSACTIONS'] : null;
+    if (!list || list.length > 500) return { ok: false, error: 'invalid_value', field: 'PAST TRANSACTIONS' };
+    const today = new Date();
+    const todayIso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    const transactions = [];
+    for (const t of list) {
+      const street = cleanText_(t && t.STREET, 120), city = cleanText_(t && t.CITY, 120), state = cleanText_(t && t.STATE, 20), zip = cleanText_(t && t.ZIP, 10);
+      const gci = Number(t && t.GCI);
+      const date = String((t && t.DATE) || '').trim();
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(date + 'T12:00:00') : null;
+      if (!street || !city || !state || !zip || !isFinite(gci) || gci < 0 || gci > 100000000 || !day || isNaN(day) || date > todayIso) {
+        return { ok: false, error: 'invalid_value', field: 'PAST TRANSACTIONS' };
+      }
+      transactions.push({ STREET: street, CITY: city, STATE: state, ZIP: zip, GCI: Math.round(gci * 100) / 100, DATE: date });
+    }
+    transactions.sort((a, b) => (a.DATE < b.DATE ? 1 : a.DATE > b.DATE ? -1 : 0));
+    clean['PAST TRANSACTIONS'] = JSON.stringify(transactions);
+  }
+  if (!Object.keys(clean).length) return { ok: false, error: 'nothing_to_save' };
+  if (await commissionSplitRow_()) await update('settings', 'commissionSplit', clean);
+  else await add('settings', clean, 'commissionSplit');
+  return { ok: true, commissionSplit: await commissionSplitRow_() };
+}
+
 // Adds a lender or renames one, and sets which lender accounts are linked to it. body: { id, oldName, name, accounts: [id] }.
 // A rename moves its loan products (LENDER NAME) and linked accounts (LENDER BANK) to the new name. An account linked
 // here leaves any other lender; one unlinked here has no lender until it's linked again.

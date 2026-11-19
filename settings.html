@@ -766,6 +766,56 @@
         .mi-input .cf-input { width: 96px; text-align: right; }
         .mi-unit { width: 64px; font-size: 0.9rem; opacity: 0.85; }
         .mi-set .cf-error { font-size: 0.9rem; font-weight: bold; color: #f2b8a8; }
+        /* Commission Split card: a row per setting (its value and Edit; open: its box, Save and Cancel), the past
+           transactions (a light card each), and this year's numbers */
+        .split-settings, .split-year { list-style: none; margin: 8px 0 0 0; padding: 0; }
+        .split-row, .split-year-row { display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 10px 0; border-bottom: 1px solid rgba(233, 226, 216, 0.18); }
+        .split-row-text { flex: 1; min-width: 0; }
+        .split-row-label { display: block; font-weight: bold; }
+        .split-row-text small { display: block; margin-top: 2px; font-size: 0.84rem; opacity: 0.75; }
+        .split-row-value { flex: 0 0 auto; font-weight: bold; color: var(--gold); text-align: right; }
+        .split-row-value.is-empty { color: inherit; opacity: 0.6; font-weight: normal; font-style: italic; }
+        .split-year-row .split-row-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.2rem; }
+        .split-row.is-editing { flex-wrap: wrap; }
+        .split-row.is-editing .split-row-text { flex: 1 0 100%; }
+        .split-row-edit { flex: 1 0 100%; display: grid; gap: 10px; }
+        .split-row-edit .mi-input .cf-input { width: 140px; text-align: right; }
+        .split-row-note { margin: 0; font-size: 0.88rem; opacity: 0.8; }
+        .split-row-actions, .split-txn-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .split-row-edit .cf-error, .split-load-error { font-size: 0.9rem; font-weight: bold; color: #f2b8a8; }
+        .split-row-edit .cf-error:empty, .split-load-error:empty, .split-txn-error:empty { display: none; }
+        .split-btn { flex: 0 0 auto; min-height: 40px; padding: 6px 18px; border: 2px solid rgba(233, 226, 216, 0.5); border-radius: 999px; background: transparent; color: var(--cream); font-family: inherit; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+        .split-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        @media (hover: hover) { .split-btn:not(:disabled):hover { border-color: var(--gold); color: var(--gold); } }
+        .split-btn.is-light { border-color: var(--navy); color: var(--brown); background: var(--white); }
+        .split-btn.is-light.is-danger { border-color: #b3392f; color: #b3392f; }
+        @media (hover: hover) { .split-btn.is-light:not(:disabled):hover { background: #f2ede6; color: var(--brown); border-color: var(--navy); } .split-btn.is-light.is-danger:not(:disabled):hover { color: #b3392f; border-color: #b3392f; } }
+        .split-dollar { font-weight: bold; opacity: 0.85; }
+        .split-section-title { margin: 26px 0 0 0; padding-top: 18px; border-top: 1px solid rgba(233, 226, 216, 0.25); }
+        .split-txns { display: grid; gap: 12px; margin-top: 12px; }
+        .split-empty { margin: 0; opacity: 0.7; font-style: italic; }
+        /* A transaction: the light entry card (dark text on it, inside the dark admin card) */
+        .split-txn { color: var(--brown); flex-wrap: wrap; }
+        .split-txn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 0.92rem; }
+        .split-txn-text b { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.08rem; overflow-wrap: anywhere; }
+        .split-txn-buttons { display: flex; gap: 8px; flex: 0 0 auto; }
+        .split-txn-confirm { flex: 1 0 100%; display: grid; gap: 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid rgba(78, 81, 62, 0.15); font-weight: bold; color: #b3392f; }
+        .split-txn .split-txn-head { grid-column: 1 / -1; font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
+        .split-txn .split-txn-actions { grid-column: 1 / -1; }
+        .split-txn .split-txn-error { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; font-weight: bold; color: #b3392f; }
+        .split-txn .money-in { position: relative; }
+        .split-txn .money-in::before { content: '$'; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
+        .split-txn .money-in .cf-input { padding-left: 30px; }
+        .slot-add-txn { margin-top: 12px; min-height: 42px; padding: 6px 18px; border: 2px dashed rgba(233, 226, 216, 0.45); border-radius: 999px; background: transparent; color: var(--gold); font-family: inherit; font-size: 0.92rem; font-weight: bold; cursor: pointer; }
+        .slot-add-txn:hover, .slot-add-txn:focus-visible { border-style: solid; border-color: var(--gold); outline: none; }
+        .slot-add-txn:disabled { opacity: 0.4; cursor: not-allowed; }
+        @media (max-width: 600px) {
+            .split-row, .split-year-row { flex-wrap: wrap; gap: 8px; }
+            .split-row-text { flex: 1 0 100%; }
+            .split-year-row .split-row-value { text-align: left; }
+            .split-txn-buttons { flex: 1 0 100%; }
+            .split-txn-buttons .split-btn, .split-txn-actions .btn { flex: 1; }
+        }
         @media (max-width: 600px) {
             .mi-row { flex-wrap: wrap; gap: 8px; }
             .mi-row label { flex: 1 0 100%; }
@@ -1242,6 +1292,23 @@
                 </div>
             </form>
         </section>
+
+        <!-- Admins only: how commissions split between the agent and the brokerage (the brokerage gets the rest), the
+             brokerage's flat fee and yearly cap, past transactions, and this year's progress toward the cap
+             (settings commissionSplit). Each setting and each transaction is edited and saved on its own. -->
+        <section class="main-card glow-card reveal" id="split-card" hidden>
+            <span class="card-eyebrow">Admin</span>
+            <h2>Commission Split</h2>
+            <p class="mp-intro">How each commission splits between the agent and the brokerage, the brokerage’s flat fee and cap, and the sales that count toward the cap.</p>
+            <ul class="split-settings" id="split-settings"></ul>
+            <h3 class="cf-group-title split-section-title">Past Transactions</h3>
+            <p class="mp-intro">Each sale’s address, gross commission income (GCI) and closing date.</p>
+            <div class="property-dialog split-txns" id="split-txns"></div>
+            <button type="button" class="slot-add-txn" id="split-add-txn">+ Add Transaction</button>
+            <h3 class="cf-group-title split-section-title" id="split-year-title">This Year</h3>
+            <ul class="split-year" id="split-year"></ul>
+            <p class="cf-error split-load-error" id="split-error" role="alert"></p>
+        </section>
     </main>
 
     <!-- Add / edit a title company pop-up (admins) -->
@@ -1647,7 +1714,7 @@
                     showProfile(data.row);
                     showIncome(data.income);
                     // Admins also get the Edit Clients card
-                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadRate(user); loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); await loadClients(user); }
+                    if (String(findValue(data.row, 'admin')).trim().toUpperCase() === 'TRUE') { loadRate(user); loadUsage(user); loadMarketing(user); loadTitleCompanies(user); loadLenders(user); loadCommissionSplit(user); await loadClients(user); }
                     // Income & Debt (and the details loan programs ask about) are only for buyers
                     const isBuyer = String(findValue(data.row, 'buyer')).trim().toUpperCase() === 'TRUE';
                     document.getElementById('income-row').hidden = !isBuyer;
@@ -4322,6 +4389,274 @@
                 miSaveBtn.classList.remove('is-loading');
             }
         });
+
+        // --- Commission Split (admins; settings commissionSplit) ---
+        // Settings: Agent Split (the brokerage gets the rest), Brokerage Flat Fee and Commission Cap, each shown with an Edit
+        // button that opens its box with Save and Cancel, saved on its own. Past Transactions: a card per sale (its address,
+        // GCI and closing date) with Edit and Remove (asked first); a new or edited one is saved on its own too. This Year: what
+        // the brokerage has been paid this calendar year and what's left until the cap. Only the brokerage's split counts
+        // toward the cap (not the flat fee), and the cap starts over each January 1.
+        const splitCard = document.getElementById('split-card');
+        const splitSettingsEl = document.getElementById('split-settings');
+        const splitTxns = document.getElementById('split-txns');
+        const splitYearEl = document.getElementById('split-year');
+        const splitError = document.getElementById('split-error');
+        const splitAddBtn = document.getElementById('split-add-txn');
+        let splitUser = null;
+        let splitRow = null;      // what's saved (null until the first save)
+        let splitEditing = null;  // the open setting's key
+        let txnEditing = null;    // the open transaction: its index in the saved list, or 'new'
+        let txnRemoving = null;   // the transaction asking "Remove it?"
+        let txnCount = 0;
+        const SPLIT_SETTINGS = [
+            { key: 'agent', col: 'AGENT SPLIT', label: 'Agent Split', help: 'The agent’s share of each commission. The brokerage gets the rest.', unit: '%', max: 100 },
+            { key: 'fee', col: 'BROKERAGE FLAT FEE', label: 'Brokerage Flat Fee', help: 'Charged by the brokerage on each sale, on top of its split. It doesn’t count toward the cap.', unit: 'per sale', dollars: true, max: 1000000 },
+            { key: 'cap', col: 'COMMISSION CAP', label: 'Commission Cap', help: 'The most the brokerage’s split comes to in a calendar year. $0 for no cap.', unit: 'a year', dollars: true, max: 10000000 },
+        ];
+        const has = (row, col) => Boolean(row) && row[col] !== '' && row[col] !== null && row[col] !== undefined;
+        // (to the cent first: 20% comes out as 0.19999..., so its math leaves stray fractions)
+        const usd = n => { const c = Math.round(Number(n) * 100) / 100; return c.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: c % 1 ? 2 : 0, maximumFractionDigits: 2 }); };
+        const pctOf = d => String(Number((Number(d) * 100).toFixed(4)));
+        const savedTxns = () => { try { const l = JSON.parse((splitRow && splitRow['PAST TRANSACTIONS']) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } };
+        const txnDate = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+        // Saves some of the settings (the rest keep what's saved), then shows what was saved
+        async function saveSplit(values) {
+            const data = await callApi(splitUser, { action: 'saveCommissionSplit', values });
+            if (!data.ok) throw new Error(data.error);
+            splitRow = data.commissionSplit || null;
+        }
+
+        // --- The settings: a row each (its value and Edit; open: a box with Save and Cancel) ---
+        function settingText(s) {
+            if (!has(splitRow, s.col)) return 'Not set';
+            if (s.key === 'agent') return pctOf(splitRow['AGENT SPLIT']) + '% · brokerage ' + pctOf(1 - Number(splitRow['AGENT SPLIT'])) + '%';
+            if (s.key === 'cap' && !Number(splitRow['COMMISSION CAP'])) return 'No cap';
+            return usd(splitRow[s.col]) + ' ' + s.unit;
+        }
+        function drawSettings() {
+            splitSettingsEl.innerHTML = SPLIT_SETTINGS.map(s => {
+                const open = splitEditing === s.key;
+                const v = has(splitRow, s.col) ? (s.dollars ? String(Number(splitRow[s.col])) : pctOf(splitRow[s.col])) : '';
+                return '<li class="split-row' + (open ? ' is-editing' : '') + '" data-setting="' + s.key + '">'
+                    + '<div class="split-row-text"><span class="split-row-label" id="split-' + s.key + '-label">' + escapeHtml(s.label) + '</span><small>' + escapeHtml(s.help) + '</small></div>'
+                    + (open
+                        ? '<form class="split-row-edit" novalidate><div class="mi-input">' + (s.dollars ? '<span class="split-dollar">$</span>' : '')
+                            + '<input class="cf-input" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-labelledby="split-' + s.key + '-label" value="' + escapeHtml(v) + '">'
+                            + '<span class="mi-unit">' + escapeHtml(s.unit) + '</span></div>'
+                            + (s.key === 'agent' ? '<p class="split-row-note" data-other></p>' : '')
+                            + '<div class="split-row-actions"><button type="button" class="split-btn" data-cancel>Cancel</button>'
+                            + '<button type="submit" class="btn split-save"><span class="btn-spinner" aria-hidden="true"></span>Save</button></div>'
+                            + '<p class="cf-error" role="alert"></p></form>'
+                        : '<span class="split-row-value' + (has(splitRow, s.col) ? '' : ' is-empty') + '">' + escapeHtml(settingText(s)) + '</span>'
+                            + '<button type="button" class="split-btn" data-edit' + (splitEditing ? ' disabled' : '') + ' aria-label="Edit ' + escapeHtml(s.label) + '">Edit</button>')
+                    + '</li>';
+            }).join('');
+            const form = splitSettingsEl.querySelector('.split-row-edit');
+            if (!form) return;
+            const s = SPLIT_SETTINGS.find(x => x.key === splitEditing);
+            const input = form.querySelector('input');
+            const err = form.querySelector('.cf-error');
+            const other = form.querySelector('[data-other]');
+            // (Agent Split: what the brokerage gets, as it's typed)
+            const showOther = () => { if (!other) return; const n = Number(input.value); other.textContent = input.value.trim() === '' || !isFinite(n) || n > 100 ? '' : 'The brokerage gets ' + Number((100 - n).toFixed(4)) + '%.'; };
+            showOther();
+            input.addEventListener('input', () => { input.value = input.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'); input.classList.remove('is-invalid'); err.textContent = ''; showOther(); });
+            form.querySelector('[data-cancel]').addEventListener('click', () => { splitEditing = null; drawSettings(); });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                const n = Number(input.value);
+                if (input.value.trim() === '' || !isFinite(n) || n < 0 || n > s.max) {
+                    input.classList.add('is-invalid');
+                    input.focus();
+                    err.textContent = s.key === 'agent' ? 'Please enter a percent from 0 to 100.' : s.key === 'cap' ? 'Please enter the cap ($0 for no cap).' : 'Please enter the flat fee ($0 for none).';
+                    return;
+                }
+                const btn = form.querySelector('.split-save');
+                btn.disabled = true;
+                btn.classList.add('is-loading');
+                try {
+                    await saveSplit({ [s.col]: s.dollars ? n : Number((n / 100).toFixed(6)) });
+                    splitEditing = null;
+                    drawSettings();
+                    drawYear();
+                } catch (error) {
+                    console.error(error);
+                    err.textContent = 'We couldn’t save that. Please try again.';
+                    btn.disabled = false;
+                    btn.classList.remove('is-loading');
+                }
+            });
+            input.focus();
+        }
+        splitSettingsEl.addEventListener('click', e => {
+            const edit = e.target.closest('[data-edit]');
+            if (!edit || splitEditing) return;
+            splitEditing = edit.closest('[data-setting]').dataset.setting;
+            drawSettings();
+        });
+
+        // --- Past transactions: a card each (newest first). Saved: its address, GCI and date with Edit and Remove; open (new
+        // or Edit): the address (Google's suggestions, or typed in by hand, as in Real Estate Owned), GCI and date with Save
+        // and Cancel. Remove asks first. One is open at a time. ---
+        function txnFormHtml(t, id) {
+            const p = { STREET: t.STREET || '', CITY: t.CITY || '', STATE: t.STATE || '', ZIP: t.ZIP || '' };
+            return '<div class="reo-field reo-wide"><span class="reo-label" id="' + id + '-addr">Address</span>'
+                + '<div data-address-search><input class="cf-input" data-k="search" type="text" placeholder="Start typing the address" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-labelledby="' + id + '-addr" value="' + escapeHtml(p.STREET) + '">'
+                + '<div class="addr-suggestions" role="listbox"></div>'
+                + '<p class="addr-selected"' + (p.STREET ? '' : ' hidden') + '>' + REO_CHECK + '<span>' + escapeHtml(cityLine(p)) + '</span></p></div>'
+                + '<div class="addr-manual" hidden>'
+                + ['street', 'city', 'state', 'zip'].map(k => '<label class="reo-field' + (k === 'street' ? ' reo-wide' : '') + '"><span>' + { street: 'Street Address', city: 'City', state: 'State', zip: 'Zip' }[k] + '</span>'
+                    + '<input class="cf-input" data-k="' + k + '" type="text" autocomplete="off"' + (k === 'zip' ? ' inputmode="numeric" maxlength="10"' : k === 'state' ? ' maxlength="20"' : '') + '></label>').join('')
+                + '</div><button type="button" class="addr-toggle" data-addr-toggle>Can’t find it? Enter the address manually</button></div>'
+                + '<label class="reo-field"><span>GCI</span><div class="money-in"><input class="cf-input" data-k="gci" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="'
+                + escapeHtml(t.GCI === undefined || t.GCI === '' ? '' : String(Number(t.GCI))) + '"></div></label>'
+                + '<label class="reo-field"><span>Closing Date</span><input class="cf-input" type="date" data-k="date" max="' + todayIso() + '" value="' + escapeHtml(t.DATE || '') + '"></label>'
+                + '<div class="split-txn-actions"><button type="button" class="btn btn-secondary" data-txn-cancel>Cancel</button>'
+                + '<button type="submit" class="btn" data-txn-save><span class="btn-spinner" aria-hidden="true"></span>Save</button></div>'
+                + '<p class="cf-error split-txn-error" role="alert"></p>';
+        }
+        function drawTxns() {
+            const list = savedTxns();
+            splitTxns.innerHTML = '';
+            const cards = list.map((t, i) => ({ t, i })).concat(txnEditing === 'new' ? [{ t: {}, i: 'new' }] : []);
+            if (!cards.length) splitTxns.innerHTML = '<p class="split-empty">No past transactions yet.</p>';
+            cards.forEach(({ t, i }) => {
+                const open = txnEditing === i;
+                const el = document.createElement(open ? 'form' : 'div');
+                el.className = 'llc-entry split-txn' + (open ? ' reo-form is-editing' : '');
+                if (open) {
+                    el.noValidate = true;
+                    el.innerHTML = '<div class="split-txn-head">' + (i === 'new' ? 'New Transaction' : 'Edit Transaction') + '</div>' + txnFormHtml(t, 'txn-' + (++txnCount));
+                    splitTxns.append(el);
+                    wireTxnForm(el, i);
+                    return;
+                }
+                const removing = txnRemoving === i;
+                el.innerHTML = '<div class="split-txn-text"><b>' + escapeHtml(t.STREET) + '</b><span>' + escapeHtml(cityLine(t)) + '</span>'
+                    + '<span>GCI ' + escapeHtml(usd(t.GCI)) + ' · Closed ' + escapeHtml(txnDate(t.DATE)) + '</span></div>'
+                    + (removing
+                        ? '<div class="split-txn-confirm"><span>Remove this transaction? This can’t be undone.</span>'
+                            + '<div class="split-txn-actions"><button type="button" class="btn btn-secondary" data-txn-keep>Cancel</button>'
+                            + '<button type="button" class="btn btn-danger" data-txn-remove-yes><span class="btn-spinner" aria-hidden="true"></span>Yes, Remove</button></div>'
+                            + '<p class="cf-error split-txn-error" role="alert"></p></div>'
+                        : '<div class="split-txn-buttons"><button type="button" class="split-btn is-light" data-txn-edit' + (txnEditing !== null || txnRemoving !== null ? ' disabled' : '') + '>Edit</button>'
+                            + '<button type="button" class="split-btn is-light is-danger" data-txn-remove' + (txnEditing !== null || txnRemoving !== null ? ' disabled' : '') + '>Remove</button></div>');
+                el.dataset.i = i;
+                splitTxns.append(el);
+            });
+            splitAddBtn.disabled = txnEditing !== null || txnRemoving !== null;
+        }
+        // An open transaction: its address, then Save (the whole list, with this one added or changed) or Cancel
+        function wireTxnForm(form, i) {
+            const addr = attachAddress(form, savedTxns()[i] || {});
+            const gciBox = form.querySelector('[data-k="gci"]');
+            const dateBox = form.querySelector('[data-k="date"]');
+            const err = form.querySelector('.split-txn-error');
+            gciBox.addEventListener('input', () => { gciBox.value = gciBox.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'); });
+            form.addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('is-invalid'); err.textContent = ''; });
+            form.querySelector('[data-txn-cancel]').addEventListener('click', () => { txnEditing = null; drawTxns(); });
+            form.addEventListener('submit', async e => {
+                e.preventDefault();
+                const bad = (el, text) => { el.classList.add('is-invalid'); el.focus(); err.textContent = text; };
+                const a = addr.value();
+                if (!a || !a.street || !a.city || !a.state || !a.zip) {
+                    const el = addr.manual() ? (['street', 'city', 'state', 'zip'].map(k => addr.parts[k]).find(x => !x.value.trim()) || addr.parts.street) : addr.search;
+                    return bad(el, addr.manual() ? 'Please fill in the full address.' : 'Please choose the address from the suggestions, or enter it manually.');
+                }
+                const gci = Number(gciBox.value);
+                if (gciBox.value.trim() === '' || !isFinite(gci) || gci < 0) return bad(gciBox, 'Please enter the GCI.');
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateBox.value) || dateBox.value > todayIso()) return bad(dateBox, 'Please enter the closing date (today or earlier).');
+                const t = { STREET: a.street, CITY: a.city, STATE: a.state, ZIP: a.zip, GCI: gci, DATE: dateBox.value };
+                const list = savedTxns();
+                if (i === 'new') list.push(t); else list[i] = t;
+                const btn = form.querySelector('[data-txn-save]');
+                btn.disabled = true;
+                btn.classList.add('is-loading');
+                try {
+                    await saveSplit({ 'PAST TRANSACTIONS': list });
+                    txnEditing = null;
+                    drawTxns();
+                    drawYear();
+                } catch (error) {
+                    console.error(error);
+                    err.textContent = 'We couldn’t save the transaction. Please try again.';
+                    btn.disabled = false;
+                    btn.classList.remove('is-loading');
+                }
+            });
+            (addr.search.value ? gciBox : addr.search).focus();
+        }
+        splitTxns.addEventListener('click', async e => {
+            const card = e.target.closest('.split-txn');
+            if (!card || card.tagName === 'FORM') return;
+            const i = Number(card.dataset.i);
+            if (e.target.closest('[data-txn-edit]')) { txnEditing = i; drawTxns(); return; }
+            if (e.target.closest('[data-txn-remove]')) { txnRemoving = i; drawTxns(); return; }
+            if (e.target.closest('[data-txn-keep]')) { txnRemoving = null; drawTxns(); return; }
+            const yes = e.target.closest('[data-txn-remove-yes]');
+            if (!yes) return;
+            yes.disabled = true;
+            yes.classList.add('is-loading');
+            try {
+                await saveSplit({ 'PAST TRANSACTIONS': savedTxns().filter((t, n) => n !== i) });
+                txnRemoving = null;
+                drawTxns();
+                drawYear();
+            } catch (error) {
+                console.error(error);
+                card.querySelector('.split-txn-error').textContent = 'We couldn’t remove it. Please try again.';
+                yes.disabled = false;
+                yes.classList.remove('is-loading');
+            }
+        });
+        splitAddBtn.addEventListener('click', () => { if (txnEditing === null && txnRemoving === null) { txnEditing = 'new'; drawTxns(); } });
+
+        // --- This year: this calendar year's sales, oldest first. Each pays the brokerage its split of the GCI until the cap
+        // is reached (the cap starts over each January 1), plus the flat fee (which doesn't count toward the cap). ---
+        function yearProgress(row, year) {
+            const brokerage = has(row, 'AGENT SPLIT') ? 1 - Number(row['AGENT SPLIT']) : null;
+            const fee = has(row, 'BROKERAGE FLAT FEE') ? Number(row['BROKERAGE FLAT FEE']) : 0;
+            const cap = has(row, 'COMMISSION CAP') ? Number(row['COMMISSION CAP']) : 0;
+            const sales = savedTxns().filter(t => String(t.DATE).slice(0, 4) === String(year)).sort((a, b) => (a.DATE < b.DATE ? -1 : 1));
+            let split = 0;
+            sales.forEach(t => { const owed = Number(t.GCI) * (brokerage || 0); split += cap > 0 ? Math.max(0, Math.min(owed, cap - split)) : owed; });
+            const remaining = cap > 0 ? Math.max(0, cap - split) : null;
+            return { brokerage, fee, cap, sales: sales.length, gci: sales.reduce((s, t) => s + Number(t.GCI), 0), split, fees: fee * sales.length,
+                remaining, gciToCap: remaining === null || !brokerage ? null : remaining / brokerage };
+        }
+        function drawYear() {
+            const year = new Date().getFullYear();
+            document.getElementById('split-year-title').textContent = year + ' Performance';
+            const p = yearProgress(splitRow, year);
+            if (p.brokerage === null) { splitYearEl.innerHTML = '<li class="split-year-row"><span class="split-row-text"><small>Set the agent split to see this year’s numbers.</small></span></li>'; return; }
+            const row = (label, value, note) => '<li class="split-year-row"><div class="split-row-text"><span class="split-row-label">' + escapeHtml(label) + '</span>'
+                + (note ? '<small>' + escapeHtml(note) + '</small>' : '') + '</div><span class="split-row-value">' + escapeHtml(value) + '</span></li>';
+            const salesText = p.sales + (p.sales === 1 ? ' sale' : ' sales') + ' this year, ' + usd(p.gci) + ' GCI';
+            splitYearEl.innerHTML = row('Paid To The Brokerage', usd(p.split + p.fees),
+                    usd(p.split) + ' brokerage split + ' + usd(p.fees) + ' in flat fees, from ' + salesText)
+                + (p.cap > 0
+                    ? row('Remaining Until The Cap', p.remaining ? usd(p.remaining) : 'Cap reached', 'Of the ' + usd(p.cap) + ' cap: only the brokerage split counts toward it, and it starts over each January 1.')
+                        + row('GCI Until The Cap', p.remaining ? usd(p.gciToCap) : 'Cap reached', 'More GCI this year before the cap is reached, at the brokerage’s ' + pctOf(p.brokerage) + '% split.')
+                    : row('Remaining Until The Cap', 'No cap', 'Set a commission cap to track it.'));
+        }
+
+        async function loadCommissionSplit(user) {
+            splitUser = user;
+            splitCard.hidden = false;
+            // (the address suggestions' look)
+            ensurePickerStyles();
+            try {
+                const data = await callApi(user, { action: 'commissionSplit' });
+                if (!data.ok) throw new Error(data.error);
+                splitRow = data.commissionSplit || null;
+                drawSettings();
+                drawTxns();
+                drawYear();
+            } catch (err) {
+                console.error(err);
+                splitError.textContent = 'We couldn’t load the commission split. Please refresh to try again.';
+            }
+        }
 
         // --- New client: every question open at once ---
         const digitsOnly = v => String(v || '').replace(/\D/g, '');
