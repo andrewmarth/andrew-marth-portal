@@ -1699,9 +1699,13 @@
         // one (in their Add Your Loan Details pop-up, or Client Loan / HOA Input), it's listed in CLIENT ANSWERED and the
         // agent's copy is locked: Agent Loan Input's Loan Term and DSCR and Hard Money questions, and the HOA section's HOA
         // yes / no and dues.
-        const CLIENT_LOCKS = ['LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+        const CLIENT_LOCKS = ['LOAN TYPE', 'LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
             'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
         const clientAnswered = (get, column) => listOf(get('CLIENT ANSWERED')).includes(column);
+        // Seller Net: the days a year of interest is split into for a day's interest (Remaining Interest): 360 for a DSCR or
+        // Hard Money loan, 365 for the rest, unless the agent picked one (DAILY INTEREST BASIS: 365 / 360; blank: by type)
+        const typeInterestBasis = type => (type === 'DSCR' || type === 'Hard Money' ? 360 : 365);
+        const interestBasis = get => Number(text(get('DAILY INTEREST BASIS'))) || typeInterestBasis(text(get('LOAN TYPE')));
         // HOA dues: each association's amount per payment (HOA PRIMARY / MASTER MONTHLY DUES: the column names are from when
         // they were always monthly) and how often it's paid (HOA PRIMARY / MASTER DUES INTERVAL; blank: Monthly). The HOA is
         // taken to bill on the calendar: quarters from January, April, July and October, halves from January and July, years
@@ -2345,10 +2349,13 @@
             // Until the seller enters their balance and rate, the balance is an estimate (from the original loan and the agent's rate)
             const estimatedBalance = !noLoan && (!loan.details.known || loan.details.estimatedRate);
             // Remaining Interest: interest is paid a month behind, so the payoff adds this month's so far: the 1st through
-            // closing day (both included), on the balance then (a day's interest: the balance × the yearly rate ÷ 365)
+            // closing day (both included), on the balance then (a day's interest: the balance × the yearly rate ÷ the Daily
+            // Interest Calculation's days: 360 or 365)
             const interestDays = closing && !noLoan && principal ? closing.getDate() : 0;
-            const dailyInterest = noLoan ? 0 : principal * (loan.details.rate || 0) / 365;
-            const remainingInterest = { days: interestDays, daily: dailyInterest, amount: dailyInterest * interestDays };
+            const basis = interestBasis(c => col(page, c));
+            const dailyInterest = noLoan ? 0 : principal * (loan.details.rate || 0) / basis;
+            const remainingInterest = { days: interestDays, daily: dailyInterest, amount: dailyInterest * interestDays, basis,
+                basisPicked: text(col(page, 'DAILY INTEREST BASIS')) !== '' };
             const interestNote = interestDays ? (interestDays === 1 ? fmtMonthDay(closing) : fmtMonthDay(new Date(closing.getFullYear(), closing.getMonth(), 1)) + ' – ' + fmtMonthDay(closing))
                 + ' (' + interestDays + (interestDays === 1 ? ' day' : ' days') + ')' : '';
             // Hard Money: what the lender is still holding back (for construction, interest payments or anything else) is
@@ -2636,7 +2643,8 @@
                 : !closing ? [warn(noClosing), resultRow('Remaining Interest', lineAmount('Remaining Interest'))]
                 : [
                     step('Principal Balance', cents(m.principal), 'At closing, from above'),
-                    step('Daily Interest', cents(ri.daily), cents(m.principal) + ' × ' + pct(L.rate) + ' ÷ 365 days'),
+                    step('Daily Interest Calculation', ri.basis + ' days', ri.basisPicked ? 'Picked in Agent Loan Input' : 'By the loan type: 360 for a DSCR or hard money loan, 365 for the rest'),
+                    step('Daily Interest', cents(ri.daily), cents(m.principal) + ' × ' + pct(L.rate) + ' ÷ ' + ri.basis + ' days'),
                     step('Days Of Interest', String(ri.days), shortDate(new Date(closing.getFullYear(), closing.getMonth(), 1)) + ' through ' + shortDate(closing) + ', closing day included'),
                     resultRow('Remaining Interest', lineAmount('Remaining Interest'), cents(ri.daily) + ' × ' + ri.days + ' days: interest is paid a month behind, so the payoff includes this month’s so far'),
                 ];
@@ -4662,7 +4670,7 @@
                     return list.length ? list.map(x => x.name + ' ' + wholeMoney.format(Math.round(x.amount))).join(', ') : 'Yes';
                 }
                 const v = io.get(p.column);
-                if (v === '') return p.blank || '';
+                if (v === '') return (typeof p.blank === 'function' ? p.blank() : p.blank) || '';
                 if (p.kind === 'multi') { const l = listOf(v); return p.names ? l.join(', ') : l.length ? l.length + ' ' + (l.length === 1 ? p.one || 'item' : p.many || 'items') : ''; }
                 if (p.items) return (itemsOf(p).find(i => i.value === v) || {}).main || v;
                 if (p.kind === 'money') return money(p.column);
@@ -4672,6 +4680,8 @@
                 if (p.kind === 'term') return termText(v, p.type());
                 return v;
             };
+            // (a locked part with a lockedValue shows that instead: the seller's own answer when it's a different setting)
+            const shownValue = p => (p.lockedValue && p.lock && p.lock() ? p.lockedValue() : valueOf(p));
             const visibility = () => { parts.forEach(p => { if (p.cell) p.cell.hidden = !shown(p); }); };
             // An answer in one group can show or hide a box in another (the seller's rate hides the agent's estimate)
             groupVisibility.push(visibility);
@@ -4700,7 +4710,7 @@
                     // Seller Net: the client has answered it, so it's theirs (changed in Client Loan Input)
                     if (p.lock && p.lock()) {
                         cell.classList.add('is-client-locked');
-                        cell.append(el('div', 'sub-locked', '<span class="sub-locked-value">' + escapeHtml(valueOf(p) || 'Answered') + '</span>'
+                        cell.append(el('div', 'sub-locked', '<span class="sub-locked-value">' + escapeHtml(shownValue(p) || 'Answered') + '</span>'
                             + '<span class="sub-locked-note">' + LOCK_ICON + 'The client’s answer: change it in Client Loan Input</span>'));
                         grid.append(cell);
                         return;
@@ -4792,7 +4802,7 @@
             build();
             // Opening it again picks up anything changed in another group
             f.wrap.groupSync = build;
-            f.wrap.groupDisplay = () => parts.filter(shown).map(p => { const v = valueOf(p); return v ? (p.short ? p.short + ' ' + v : v) : ''; }).filter(Boolean).join(' · ');
+            f.wrap.groupDisplay = () => parts.filter(shown).map(p => { const v = shownValue(p); return v ? (p.short ? p.short + ' ' + v : v) : ''; }).filter(Boolean).join(' · ');
             return { wrap: f.wrap, invalid: () => bad.size > 0 };
         }
 
@@ -4944,6 +4954,7 @@
         // lockable: the agent's copy.
         function loanTypePart(get, put, lockable) {
             return { label: 'Loan Type', column: 'LOAN TYPE', kind: 'choice', options: LOAN_TYPES, rebuild: true,
+                lock: lockable ? () => clientAnswered(get, 'LOAN TYPE') : null,
                 // (Hard Money terms are in months, the others in years: a term that isn't one of the new type's doesn't carry
                 // over, unless it's the seller's answer and this is the agent's copy)
                 then: (v, old) => {
@@ -4983,9 +4994,16 @@
                 { label: 'Original Loan Amount', column: 'ORIGINAL LOAN AMOUNT', kind: 'money', show: loan },
                 { label: 'Original Loan Date', column: 'ORIGINAL LOAN DATE', kind: 'date', short: 'from', show: loan },
                 loanTermPart(get, loan, true),
-                { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: () => loan() && get('LOAN INTEREST RATE') === '' },
+                // (once the seller's rate is in, it's used instead: this shows it, locked)
+                { label: 'Estimated Interest Rate', column: 'ESTIMATED INTEREST RATE', kind: 'rate', short: 'Est. Rate', show: loan,
+                    lock: () => get('LOAN INTEREST RATE') !== '', lockedValue: () => decimalToPercent(get('LOAN INTEREST RATE')) + '% (the seller’s rate)' },
                 ...dscrParts(get, true),
                 ...holdbackParts(get, true),
+                // The agent's alone (never locked): how a day's interest is figured for Remaining Interest. Blank follows the
+                // loan type (redrawn when it changes); 365 or 360 overrides it.
+                { label: 'Daily Interest Calculation', column: 'DAILY INTEREST BASIS', kind: 'seg', short: 'Daily interest:', show: loan,
+                    items: () => [{ value: '', main: 'Auto (' + typeInterestBasis(get('LOAN TYPE')) + ')' }, { value: '365', main: '365 Days' }, { value: '360', main: '360 Days' }],
+                    blank: () => typeInterestBasis(get('LOAN TYPE')) + ' days (by loan type)' },
             ];
         }
         // (the names of Agent Loan Input's questions)
@@ -5036,7 +5054,7 @@
         // and the seller's HOA answers as a third
         function loanPayoffFields(parent) {
             groupField(parent, 'Agent Loan Input', agentLoanParts(SETTINGS_IO.get, SETTINGS_IO.put), { lines: true,
-                help: 'Your estimate of the seller’s loan, until they add theirs. The Loan Term, a DSCR loan’s interest only questions and a hard money loan’s holdbacks lock once the seller answers them.' });
+                help: 'Your estimate of the seller’s loan, until they add theirs. Everything here but the original loan amount and date and the daily interest calculation locks once the seller answers it (their interest rate replaces the estimate). Daily Interest Calculation: the days a year’s interest is split into for Remaining Interest; Auto is 360 for a DSCR or hard money loan, 365 for the rest.' });
             groupField(parent, 'Client Loan Input', clientLoanParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO, help: 'The seller’s own answers, from a recent statement.' });
             groupField(document.getElementById('client-hoa-fields'), 'Client HOA Input', clientHoaParts(CLIENT_IO.get, CLIENT_IO.put), { io: CLIENT_IO,
                 help: 'The seller’s own HOA answers. Once they’re in, the HOA section’s HOA, Primary Dues and Master Dues are locked to them.' });

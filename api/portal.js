@@ -135,6 +135,9 @@ const PAGE_SETTING_FIELDS = {
   'HAS OTHER HOLDBACKS': ['Yes', 'No'], 'OTHER HOLDBACKS': 'feeLines',
   // DSCR: an interest only period; whether the loan comes due when it ends; if not, how long it lasts (in months)
   'INTEREST ONLY PERIOD': ['Yes', 'No'], 'DUE AFTER INTEREST ONLY': ['Yes', 'No'], 'INTEREST ONLY MONTHS': 'int',
+  // Seller Net: the days a year's interest is split into for a day's interest (Remaining Interest); blank: by the loan type
+  // (360 for DSCR and Hard Money, 365 for the rest)
+  'DAILY INTEREST BASIS': ['365', '360'],
   // Seller Net: the questions the seller has answered that the agent also asks (CLIENT_LOCK_FIELDS: the agent's copy is
   // locked to the seller's answer), joined by " | "
   'CLIENT ANSWERED': 'list',
@@ -851,7 +854,7 @@ async function updatePageAccess_(id, account, body) {
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
 const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
-  'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE', 'CLIENT ANSWERED'].concat(CLIENT_INPUT_FIELDS);
+  'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE', 'DAILY INTEREST BASIS', 'CLIENT ANSWERED'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
 function sellerKey_(page) {
@@ -909,7 +912,7 @@ const CLIENT_INPUT_FIELDS = ['LOAN TYPE', 'LOAN PRINCIPAL BALANCE', 'PRINCIPAL L
   'HAS MASTER ASSOCIATION', 'HOA MASTER MONTHLY DUES', 'HOA MASTER MONTHLY DUES STATUS', 'HOA MASTER DUES INTERVAL'];
 // The seller's answers that lock the agent's copy (Agent Loan Input's Loan Term and DSCR and Hard Money questions, the HOA
 // section's HOA yes / no and dues): each one the seller saves (not blank) is added to CLIENT ANSWERED
-const CLIENT_LOCK_FIELDS = ['LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
+const CLIENT_LOCK_FIELDS = ['LOAN TYPE', 'LOAN TERM MONTHS', 'INTEREST ONLY PERIOD', 'DUE AFTER INTEREST ONLY', 'INTEREST ONLY MONTHS', 'OUTSTANDING CONSTRUCTION HOLDBACK',
   'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS', 'HAS HOA', 'HOA PRIMARY MONTHLY DUES', 'HOA MASTER MONTHLY DUES'];
 async function saveClientInput_(id, account, body) {
   const found = await findPage_(body.pageId);
