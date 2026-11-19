@@ -1,15 +1,29 @@
 // "New Property" for the home page's My Sellers card (admins): a new Seller Net sheet, one question at a time.
-// Asks everything the net sheet needs except the seller's own questions (Client Input: their loan balance and rate,
-// the HOA, ...), which they answer on the page. Once the address is chosen, beds, baths, sqft, yearly taxes (and the
-// property type / year built, when known) are looked up from the property APIs and filled in, to check or change.
-// Uses the income editor's pop-up styles: a card on wide screens, a swipe-up sheet on phones.
+// Asks who's selling, the address, the property's details (one question: looked up from the property APIs once the
+// address is chosen, to check or change), the sale price, the seller's loan (Agent Loan Input's questions, so they're all
+// filled in) and the title company. Everything else starts at the API's defaults (createProperty_), changed on the page;
+// the seller's own questions (Client Loan / HOA Input) they answer on the page.
+// Uses the income editor's pop-up styles: a card on wide screens, a swipe-up sheet on phones, which (on phones) stays
+// above the on-screen keyboard and keeps the box being typed in in view.
 import { ensureDialogStyles, lockPageScroll } from '/income-editor.js';
 import { ensurePickerStyles, multiPicker, loadPlaces } from '/new-property.js';
 
 const MAX_OTHERS = 5; // six people on a page: the seller plus five more
 const PROPERTY_TYPES = ['Single Family', 'Townhome', 'Condo', 'Manufactured'];
-// The page's loan types (pages.html LOAN_TYPES). No Loan skips the loan amount and every payoff fee.
+// The page's loan types (pages.html LOAN_TYPES). No Loan skips every loan question.
 const LOAN_TYPES = ['Conventional', 'FHA', 'VA', 'DSCR', 'Hard Money', 'Jumbo', 'Other', 'No Loan'];
+// Loan Term (as pages.html's): the loan type's usual terms ([months, name]), or Other, typed in years (Hard Money: months)
+const termInMonths = type => type === 'Hard Money';
+const loanTermPresets = type => (type === 'Hard Money' ? [6, 9, 12, 18, 24].map(m => [String(m), m + ' Months'])
+    : type === 'DSCR' ? [['360', '30 Years'], ['480', '40 Years']] : [['360', '30 Years'], ['180', '15 Years']]);
+// The property details the lookup fills in (the bundled question's boxes, after the property type)
+const FACTS = [
+    { key: 'beds', label: 'Bedrooms', format: 'int', placeholder: '3', name: 'number of bedrooms' },
+    { key: 'baths', label: 'Bathrooms', format: 'decimal', placeholder: '2', name: 'number of bathrooms', help: 'Half baths count as .5 (2.5 for two full and one half).' },
+    { key: 'sqft', label: 'Square Feet', format: 'int', commas: true, placeholder: '1,800', name: 'square feet' },
+    { key: 'yearBuilt', label: 'Year Built', format: 'year', placeholder: '1995', name: 'year built' },
+    { key: 'taxes', label: 'Yearly Property Taxes', format: 'money', placeholder: '2,400', name: 'yearly taxes' },
+];
 
 const CSS = `
 .snw-dialog .snw-progress { display: flex; align-items: center; gap: 12px; padding: 0 28px 14px 28px; }
@@ -25,22 +39,28 @@ const CSS = `
 .snw-dialog .snw-question { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.45rem; line-height: 1.2; color: var(--navy); }
 .snw-dialog .snw-help { margin: 8px 0 0 0; font-size: 0.92rem; opacity: 0.72; }
 .snw-dialog .snw-unit { margin-top: 14px; max-width: 220px; }
-.snw-dialog .snw-term-other { max-width: 220px; }
-.snw-dialog .snw-term-other[hidden] { display: none; }
+.snw-dialog .snw-other { max-width: 260px; }
+.snw-dialog .snw-other[hidden] { display: none; }
 .snw-dialog .snw-body { margin-top: 18px; display: grid; gap: 14px; }
-.snw-dialog .snw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+/* One box per line, never side by side */
+.snw-dialog .snw-facts { display: grid; gap: 16px; }
+.snw-dialog .snw-facts .field-help { margin: 6px 0 0 8px; }
 .snw-dialog .field input[type="date"] { font-family: inherit; font-size: 1rem; color: var(--brown); }
 .snw-dialog .suffix-wrap { position: relative; }
-.snw-dialog .suffix-wrap input { padding-right: 64px; }
+.snw-dialog .suffix-wrap input { padding-right: 84px; }
 .snw-dialog .suffix-wrap span { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-weight: bold; color: var(--olive); pointer-events: none; }
 .snw-dialog .type-picker.snw-choice { grid-template-columns: repeat(var(--n, 2), 1fr); margin: 0; border-radius: 22px; }
 .snw-dialog .type-picker.snw-choice label { display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 0; border-radius: 18px; text-align: center; font-size: 0.95rem; }
 /* The property APIs' answer */
 .snw-dialog .snw-found { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 14px; font-size: 0.88rem; font-weight: bold; background: #eef3e6; color: var(--olive); }
+.snw-dialog .snw-found + .snw-found { margin-top: 8px; }
 .snw-dialog .snw-found.is-pending { background: #f4efe8; color: var(--brown); font-weight: normal; }
 .snw-dialog .snw-found.is-missing { background: #fdf6e9; color: var(--brown); font-weight: normal; border: 1px dashed rgba(192, 144, 80, 0.7); }
 .snw-dialog .snw-found svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
 .snw-dialog .snw-spin { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; border-radius: 50%; border: 3px solid rgba(78, 81, 62, 0.2); border-top-color: var(--olive); animation: spin 0.8s linear infinite; }
+/* Other holdbacks: a card per holdback (its name, then its amount) */
+.snw-dialog .snw-lines { display: grid; gap: 14px; }
+.snw-dialog .snw-line { display: grid; gap: 12px; padding: 14px; border-radius: 16px; background: #fbf9f6; border: 1px solid rgba(78, 81, 62, 0.15); }
 /* Review */
 .snw-dialog .snw-review { list-style: none; display: grid; gap: 0; margin: 0; padding: 0; }
 .snw-dialog .snw-review li { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 4px; border-bottom: 1px solid rgba(78, 81, 62, 0.12); }
@@ -49,21 +69,37 @@ const CSS = `
 .snw-dialog .snw-review button { flex: 0 0 auto; padding: 4px 2px; border: none; background: none; cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: bold; color: var(--rust); text-decoration: underline; text-underline-offset: 3px; }
 .snw-dialog .snw-review .snw-review-head { min-height: 0; padding: 16px 4px 4px 4px; border: none; font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--rust); }
 .snw-dialog .snw-review .snw-review-head:first-child { padding-top: 0; }
+.snw-dialog .snw-defaults { margin: 18px 0 0 0; padding: 12px 14px; border-radius: 14px; background: #f4efe8; font-size: 0.88rem; line-height: 1.45; }
 .snw-dialog .dialog-foot .form-actions { justify-content: space-between; }
 .snw-dialog .dialog-foot .form-actions .btn[hidden] { display: none; }
 .snw-dialog .snw-spacer { flex: 1; }
 @media (max-width: 600px) {
-    .snw-dialog .snw-row { grid-template-columns: 1fr; }
     .snw-dialog .snw-question { font-size: 1.25rem; }
     .snw-dialog .type-picker.snw-choice { grid-template-columns: 1fr 1fr; }
+    .snw-dialog .snw-progress { padding: 0 20px 12px 20px; }
+    .snw-dialog .dialog-scroll { min-height: 0; padding-top: 18px; padding-bottom: 18px; }
+    /* Back and Next side by side, so the footer takes one row (more room above the keyboard) */
+    .snw-dialog .dialog-foot .form-actions { flex-direction: row; gap: 10px; margin-top: 0; }
+    .snw-dialog .dialog-foot .form-actions .btn { width: auto; flex: 1; min-height: 50px; padding-top: 10px; padding-bottom: 10px; }
+    .snw-dialog .dialog-foot .form-actions .btn-secondary { flex: 0 0 auto; padding-left: 22px; padding-right: 22px; }
+    .snw-dialog .snw-spacer { display: none; }
+    /* While the on-screen keyboard is up: the sheet sits on top of it, sized to what's left of the screen */
+    .snw-dialog { translate: 0 calc(-1 * var(--snw-kb, 0px)); transition: translate 0.2s ease; }
+    .snw-dialog.is-keyboard .income-form { max-height: calc(var(--snw-vh, 100dvh) - 10px); }
+    .snw-dialog.is-keyboard .dialog-head { padding-top: 14px; }
+    .snw-dialog.is-keyboard .dialog-head h2 { font-size: 1.15rem; }
+    .snw-dialog.is-keyboard .snw-progress { padding-bottom: 8px; }
+    .snw-dialog.is-keyboard .dialog-foot { padding-top: 8px; padding-bottom: 10px; }
 }
-@media (prefers-reduced-motion: reduce) { .snw-dialog .snw-step { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .snw-dialog .snw-step { animation: none; } .snw-dialog { transition: none; } }
 `;
 
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 const PIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
 const INFO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+const PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const formatPhone = id => (id.length === 10 ? '(' + id.slice(0, 3) + ') ' + id.slice(3, 6) + '-' + id.slice(6) : id);
@@ -77,11 +113,20 @@ const rateOf = typed => { const s = String(typed).replace(/[%\s,]/g, ''); return
 const isoDay = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const mdy = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? Number(m[2]) + '/' + Number(m[3]) + '/' + m[1] : ''; };
 const niceDate = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+// A term in months for the review: "30 years", "2.5 years", "12 months"
+const termText = (months, type) => {
+    const m = Number(months);
+    if (!m) return '';
+    if (termInMonths(type) || m < 12) return m + (m === 1 ? ' month' : ' months');
+    const y = Math.round(m / 12 * 100) / 100;
+    return y + (y === 1 ? ' year' : ' years');
+};
+const listText = names => (names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]);
 
 /**
  * Opens the form for one seller. client: { id, name }; sellers: the other SELLER accounts; accounts: everyone (for
- * collaborators); lookup(address) resolves to { facts, sources } (the propertyFacts API); submit(answers) resolves once
- * the page is saved (or throws).
+ * collaborators); titleCompanies: [{ id, name }]; lookup(address) resolves to { facts, sources } (the propertyFacts API);
+ * submit(answers) resolves once the page is saved (or throws).
  */
 let built = null;
 export function openNewSellerNetForm(ctx) {
@@ -123,40 +168,41 @@ function build() {
     let lookup = null;   // { key, state: 'pending' | 'done' | 'failed', facts, sources }
     let index = 0;
     let fromReview = false;
-    let current = null;  // the shown step's { read() -> error text or '' }
+    let current = null;  // the shown step's { read() -> error text or '', refill?() }
     let saving = false;
 
     // No Loan: nothing to pay off
     const hasLoan = () => a.loanType !== 'No Loan';
+    const isDscr = () => a.loanType === 'DSCR';
+    const isHardMoney = () => a.loanType === 'Hard Money';
+    const ioPeriod = () => isDscr() && a.ioPeriod === 'Yes';
 
-    // --- The questions, in order. show(): asked only when it returns true. ---
+    // --- The questions, in order. show(): asked only when it returns true. answered(): it has an answer (for going back
+    // to the review after a change: a question that change opened and still needs one comes first). ---
+    const has = key => () => a[key] !== undefined && a[key] !== '';
     const STEPS = [
         { id: 'sellers', group: 'People', title: 'Who else is selling?', help: 'Anyone else on the title. Leave it empty if it’s just the seller.', kind: 'people', which: 'sellers' },
         { id: 'collaborators', group: 'People', title: 'Anyone else who should see this sheet?', help: 'Collaborators can view the page but aren’t selling. Up to six people in all.', kind: 'people', which: 'collaborators' },
         { id: 'address', group: 'Property', title: 'What’s the property address?', help: 'Add the unit number for a condo, townhome or apartment.', kind: 'address' },
-        { id: 'type', group: 'Property', title: 'What kind of property is it?', kind: 'choice', key: 'propertyType', options: PROPERTY_TYPES, fact: 'propertyType' },
-        { id: 'beds', group: 'Property', title: 'How many bedrooms?', kind: 'number', key: 'beds', format: 'int', fact: 'beds', placeholder: '3' },
-        { id: 'baths', group: 'Property', title: 'How many bathrooms?', help: 'Half baths count as .5 (2.5 for two full and one half).', kind: 'number', key: 'baths', format: 'decimal', fact: 'baths', placeholder: '2' },
-        { id: 'sqft', group: 'Property', title: 'How many square feet?', kind: 'number', key: 'sqft', format: 'int', commas: true, fact: 'sqft', placeholder: '1,800' },
-        { id: 'year', group: 'Property', title: 'What year was it built?', kind: 'number', key: 'yearBuilt', format: 'year', fact: 'yearBuilt', placeholder: '1995' },
-        { id: 'taxes', group: 'Property', title: 'What are the yearly property taxes?', kind: 'number', key: 'taxes', format: 'money', fact: 'taxes', placeholder: '2,400' },
-        { id: 'price', group: 'Sale', title: 'What’s the expected sale price?', kind: 'number', key: 'price', format: 'money', placeholder: '450,000' },
-        { id: 'credit', group: 'Sale', title: 'Any seller credit to the buyer?', help: 'A percent of the sale price. Enter 0 for none.', kind: 'number', key: 'credit', format: 'percent' },
-        { id: 'acceptance', group: 'Sale', title: 'When will the offer be accepted?', help: 'An estimate is fine.', kind: 'date', key: 'acceptance' },
-        { id: 'escrow', group: 'Sale', title: 'How long is escrow?', kind: 'number', key: 'escrowDays', format: 'int', suffix: 'days', placeholder: '30' },
-        { id: 'loanType', group: 'Loan Payoff', title: 'What kind of loan does the seller have?', help: 'Choose No Loan if the home is paid off.', kind: 'choice', key: 'loanType', options: LOAN_TYPES },
-        { id: 'loanAmount', group: 'Loan Payoff', title: 'What was the original loan amount?', help: 'The seller’s mortgage when it was taken out.', kind: 'number', key: 'loanAmount', format: 'money', placeholder: '360,000', show: hasLoan },
-        { id: 'loanDate', group: 'Loan Payoff', title: 'When was the loan taken out?', kind: 'date', key: 'loanDate', show: () => hasLoan() && Number(a.loanAmount) > 0 },
-        { id: 'loanTerm', group: 'Loan Payoff', title: 'What was the original loan term?', kind: 'term', key: 'loanTermYears', show: () => hasLoan() && Number(a.loanAmount) > 0 },
-        { id: 'loanRate', group: 'Loan Payoff', title: 'What’s the estimated interest rate?', help: 'Used to estimate the loan balance until the seller enters their actual rate.', kind: 'number', key: 'estRate', format: 'percent', placeholder: '6.5', show: () => hasLoan() && Number(a.loanAmount) > 0 },
-        { id: 'recording', group: 'Loan Payoff', title: 'Recording fee?', help: 'To record the loan’s release. Enter 0 for none.', kind: 'fee', key: 'recording', show: hasLoan },
-        { id: 'payoffStatement', group: 'Loan Payoff', title: 'Payoff statement fee?', help: 'The lender’s fee for the payoff statement. Enter 0 for none.', kind: 'fee', key: 'payoffStatement', show: hasLoan },
-        { id: 'otherPayoff', group: 'Loan Payoff', title: 'Any other loan payoff fees?', help: 'A percent of the loan balance and a flat amount. Enter 0 for none.', kind: 'split', key: 'otherPayoff', status: true, show: hasLoan },
+        { id: 'facts', group: 'Property', title: 'Check the property details', help: 'Looked up from the property APIs. Change anything that’s wrong.', kind: 'facts',
+            answered: () => Boolean(a.propertyType) && FACTS.every(f => has(f.key)()) },
+        { id: 'price', group: 'Sale', title: 'What’s the expected sale price?', kind: 'number', key: 'price', format: 'money', placeholder: '450,000', answered: has('price') },
+        // The seller's loan: Agent Loan Input's questions
+        { id: 'loanType', group: 'Loan Payoff', title: 'What kind of loan does the seller have?', help: 'Choose No Loan if the home is paid off.', kind: 'choice', key: 'loanType', options: LOAN_TYPES, answered: has('loanType') },
+        { id: 'loanAmount', group: 'Loan Payoff', title: 'What was the original loan amount?', help: 'The seller’s mortgage when it was taken out.', kind: 'number', key: 'loanAmount', format: 'money', placeholder: '360,000', show: hasLoan, answered: has('loanAmount') },
+        { id: 'loanDate', group: 'Loan Payoff', title: 'When was the loan taken out?', kind: 'date', key: 'loanDate', show: hasLoan, answered: has('loanDate') },
+        { id: 'loanTerm', group: 'Loan Payoff', title: 'What was the original loan term?', kind: 'term', key: 'loanTermMonths', show: hasLoan, answered: has('loanTermMonths') },
+        { id: 'loanRate', group: 'Loan Payoff', title: 'What’s the estimated interest rate?', help: 'Used to estimate the loan balance until the seller enters their actual rate.', kind: 'number', key: 'estRate', format: 'percent', placeholder: '6.5', show: hasLoan, answered: has('estRate') },
+        { id: 'ioPeriod', group: 'Loan Payoff', title: 'Is there an interest only period?', kind: 'choice', key: 'ioPeriod', options: ['Yes', 'No'], show: isDscr, answered: has('ioPeriod') },
+        { id: 'dueAfter', group: 'Loan Payoff', title: 'Does the loan become due after the interest only period?', kind: 'choice', key: 'dueAfter', options: ['Yes', 'No'], show: ioPeriod, answered: has('dueAfter') },
+        { id: 'ioYears', group: 'Loan Payoff', title: 'How long is the interest only period?', kind: 'number', key: 'ioYears', format: 'decimal', suffix: 'years', placeholder: '10',
+            show: () => ioPeriod() && a.dueAfter === 'No', answered: has('ioYears') },
+        { id: 'construction', group: 'Loan Payoff', title: 'How much is the lender holding back for construction?', help: 'What’s left of the construction holdback, credited back at closing. Enter 0 for none.', kind: 'number', key: 'construction', format: 'money', placeholder: '0', show: isHardMoney, answered: has('construction') },
+        { id: 'reserve', group: 'Loan Payoff', title: 'How much is in the interest reserve?', help: 'Money the lender is holding for interest payments, credited back at closing. Enter 0 for none.', kind: 'number', key: 'reserve', format: 'money', placeholder: '0', show: isHardMoney, answered: has('reserve') },
+        { id: 'holdbacks', group: 'Loan Payoff', title: 'Any other holdbacks?', help: 'Anything else the lender is holding back, each with its amount.', kind: 'holdbacks', show: isHardMoney, answered: has('hasOtherHoldbacks') },
         // (its choices are the title companies in Settings, filled in when the form opens)
-        { id: 'titleCompany', group: 'Costs', title: 'Which title company?', help: 'Its filed rates price the escrow fee, recording and owner’s title policy. You can change it on the page.', kind: 'choice', key: 'titleCompanyName', options: [] },
-        { id: 'buyersAgent', group: 'Costs', title: 'Buyer’s agent commission?', help: 'Paid by the seller. A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'buyersAgent' },
-        { id: 'listingAgent', group: 'Costs', title: 'Listing agent commission?', help: 'A percent of the price and a flat amount. Enter 0 for none.', kind: 'split', key: 'listingAgent' },
-        { id: 'review', group: 'Review', title: 'Look it over', help: 'Everything else (the seller’s loan balance and actual rate, the HOA) the seller fills in on the page.', kind: 'review' },
+        { id: 'titleCompany', group: 'Costs', title: 'Which title company?', help: 'Its filed rates price the escrow fee, recording and owner’s title policy. You can change it on the page.', kind: 'choice', key: 'titleCompanyName', options: [], answered: has('titleCompanyName') },
+        { id: 'review', group: 'Review', title: 'Look it over', kind: 'review' },
     ];
     const shown = () => STEPS.filter(s => !s.show || s.show());
 
@@ -165,9 +211,10 @@ function build() {
     const cleanUnit = v => String(v || '').trim().replace(/^(#|(unit|apt|apartment|ste|suite|no\.?|number)\b)\s*#?\s*/i, '').replace(/\s+/g, '').toUpperCase();
     const UNIT_AT_END = /^(.*?\S)\s*,?\s*((?:#|\b(?:unit|apt|apartment|ste|suite)\b\.?)\s*#?\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i;
     const field = (label, inner, id) => '<div class="field">' + (label ? '<label' + (id ? ' for="' + id + '"' : '') + '>' + esc(label) + '</label>' : '') + inner + '</div>';
+    // (enterkeyhint: the phone keyboard's Enter key says Next, and moves on: to the next box, or the next question)
     const input = (id, { format, placeholder = '', value = '', suffix } = {}) => {
-        const mode = format === 'decimal' || format === 'percent' ? 'decimal' : 'numeric';
-        const box = '<input id="' + id + '" type="text" inputmode="' + mode + '" autocomplete="off" placeholder="' + esc(placeholder) + '" value="' + esc(value) + '"' + (format === 'money' ? ' class="money"' : '') + '>';
+        const mode = format === 'decimal' || format === 'percent' ? 'decimal' : format === 'text' ? 'text' : 'numeric';
+        const box = '<input id="' + id + '" type="text" inputmode="' + mode + '" enterkeyhint="next" autocomplete="off" placeholder="' + esc(placeholder) + '" value="' + esc(value) + '"' + (format === 'money' ? ' class="money"' : '') + '>';
         if (format === 'money') return '<div class="money-wrap">' + box + '</div>';
         if (format === 'percent' || suffix) return '<div class="suffix-wrap">' + box + '<span>' + (format === 'percent' ? '%' : esc(suffix)) + '</span></div>';
         return box;
@@ -178,29 +225,39 @@ function build() {
         else if (format === 'int' || format === 'year') el.value = digits(el.value).slice(0, format === 'year' ? 4 : 9);
         else el.value = el.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1');
     });
-    const choice = (name, options, value) => '<div class="type-picker snw-choice" style="--n:' + Math.min(options.length, 4) + '" role="radiogroup">'
-        + options.map((o, i) => '<input type="radio" name="' + name + '" id="' + name + '-' + i + '" value="' + esc(o) + '"' + (o === value ? ' checked' : '') + '><label for="' + name + '-' + i + '">' + esc(o) + '</label>').join('') + '</div>';
+    const choice = (name, options, value, labels) => '<div class="type-picker snw-choice" style="--n:' + Math.min(options.length, 4) + '" role="radiogroup">'
+        + options.map((o, i) => '<input type="radio" name="' + name + '" id="' + name + '-' + i + '" value="' + esc(o) + '"' + (o === value ? ' checked' : '') + '><label for="' + name + '-' + i + '">' + esc(labels ? labels[i] : o) + '</label>').join('') + '</div>';
     const picked = name => { const r = form.querySelector('input[name="' + name + '"]:checked'); return r ? r.value : ''; };
-    const statusChoice = (name, value) => field('Estimated or final?', choice(name, ['Estimated', 'Final'], value));
+    // A typed number by its format, or { error }
+    function readNumber(raw, format, name) {
+        const t = String(raw).trim();
+        if (t === '') return { error: 'Please enter the ' + name + (format === 'money' ? ' (0 counts).' : '.') };
+        if (format === 'percent') { const v = rateOf(t); return v === '' || v > 1 ? { error: 'Please enter a percent between 0 and 100.' } : { v }; }
+        if (format === 'decimal') { const v = Number(t); return !isFinite(v) || v < 0 || v > 50 ? { error: 'Please enter a number like 2 or 2.5.' } : { v: Math.round(v * 100) / 100 }; }
+        const v = Number(digits(t));
+        if (format === 'year') { const last = new Date().getFullYear() + 1; if (v < 1850 || v > last) return { error: 'Please enter a year between 1850 and ' + last + '.' }; }
+        return { v };
+    }
 
-    // What the property APIs said about this fact
-    function foundNote(step) {
-        if (!step.fact) return '';
+    // What the property APIs said, for the bundled property details
+    function factsNote() {
         if (!lookup || lookup.state === 'pending') return '<div class="snw-found is-pending"><span class="snw-spin" aria-hidden="true"></span><span>Looking this home up in the property APIs…</span></div>';
-        const v = lookup.facts && lookup.facts[step.fact];
-        if (lookup.state === 'done' && v !== '' && v !== undefined && !touched[step.key]) {
-            return '<div class="snw-found">' + CHECK_ICON + '<span>Found ' + esc((lookup.sources || []).length ? 'on ' + lookup.sources.map(s => s.replace(/\s*\(RapidAPI\)$/, '')).join(' and ') : 'automatically') + '. Change it if it’s wrong.</span></div>';
-        }
-        if (touched[step.key]) return '';
-        return '<div class="snw-found is-missing">' + INFO_ICON + '<span>' + (lookup.state === 'failed' ? 'The property lookup didn’t work this time' : 'The property APIs didn’t have this') + '. Please enter it.</span></div>';
+        if (lookup.state === 'failed') return '<div class="snw-found is-missing">' + INFO_ICON + '<span>The property lookup didn’t work this time. Please enter the details.</span></div>';
+        const f = lookup.facts || {};
+        const gap = k => f[k] === '' || f[k] === undefined || f[k] === null;
+        const missing = [{ key: 'propertyType', name: 'property type' }].concat(FACTS).filter(x => gap(x.key) && !touched[x.key]).map(x => x.name);
+        const found = ['propertyType'].concat(FACTS.map(x => x.key)).some(k => !gap(k));
+        const sources = (lookup.sources || []).map(s => s.replace(/\s*\(RapidAPI\)$/, ''));
+        return (found ? '<div class="snw-found">' + CHECK_ICON + '<span>Found ' + esc(sources.length ? 'on ' + listText(sources) : 'automatically') + '. Change anything that’s wrong.</span></div>' : '')
+            + (missing.length ? '<div class="snw-found is-missing">' + INFO_ICON + '<span>The property APIs didn’t have the ' + esc(listText(missing)) + '. Please enter ' + (missing.length === 1 ? 'it' : 'them') + '.</span></div>' : '');
     }
 
     // Fills in what the lookup found, unless it was typed in by hand
     function applyLookup() {
         if (!lookup || lookup.state !== 'done') return;
         const f = lookup.facts || {};
-        [['propertyType', 'propertyType'], ['beds', 'beds'], ['baths', 'baths'], ['sqft', 'sqft'], ['yearBuilt', 'yearBuilt'], ['taxes', 'taxes']].forEach(([key, fact]) => {
-            if (!touched[key] && f[fact] !== '' && f[fact] !== undefined && f[fact] !== null) a[key] = key === 'propertyType' ? f[fact] : String(Math.round(Number(f[fact]) * (key === 'baths' ? 100 : 1)) / (key === 'baths' ? 100 : 1));
+        ['propertyType'].concat(FACTS.map(x => x.key)).forEach(key => {
+            if (!touched[key] && f[key] !== '' && f[key] !== undefined && f[key] !== null) a[key] = key === 'propertyType' ? f[key] : String(Math.round(Number(f[key]) * (key === 'baths' ? 100 : 1)) / (key === 'baths' ? 100 : 1));
         });
     }
     function startLookup() {
@@ -210,7 +267,7 @@ function build() {
         // A new address: what the last one found no longer applies
         if (lookup && lookup.state === 'done') {
             const f = lookup.facts || {};
-            ['propertyType', 'beds', 'baths', 'sqft', 'yearBuilt', 'taxes'].forEach(k => { if (!touched[k] && f[k] !== '' && f[k] !== undefined) a[k] = ''; });
+            ['propertyType'].concat(FACTS.map(x => x.key)).forEach(k => { if (!touched[k] && f[k] !== '' && f[k] !== undefined) a[k] = ''; });
         }
         const mine = lookup = { key, state: 'pending', facts: null, sources: [] };
         Promise.resolve(ctx.lookup(addr)).then(res => {
@@ -223,9 +280,9 @@ function build() {
             console.error('Property lookup failed:', err);
             if (lookup === mine) mine.state = 'failed';
         }).finally(() => {
-            // Redraw the shown question if it's one the lookup answers (and nothing's been typed into it)
-            const step = STEPS[index];
-            if (lookup === mine && dialog.open && step && step.fact && !touched[step.key]) draw(0);
+            // The property details question, if it's showing: fill in its boxes (nothing typed is replaced, and the box
+            // being typed in keeps its place)
+            if (lookup === mine && dialog.open && STEPS[index].kind === 'facts' && current && current.refill) current.refill();
         });
     }
 
@@ -256,12 +313,12 @@ function build() {
                 + '<div class="addr-suggestions" id="snw-address-list" role="listbox"></div>'
                 + '<p class="addr-selected"' + (ad.city ? '' : ' hidden') + '>' + CHECK_ICON + '<span>' + esc([ad.city, ((ad.state || '') + ' ' + (ad.zip || '')).trim()].filter(Boolean).join(', ')) + '</span></p></div>'
                 + '<div class="addr-manual" hidden>'
-                    + '<div class="field span-2" style="grid-column: 1 / -1"><label for="snw-street">Street Address</label><input id="snw-street" type="text" autocomplete="off" placeholder="123 Main St"></div>'
-                    + field('City', '<input id="snw-city" type="text" autocomplete="off" placeholder="Phoenix">', 'snw-city')
-                    + field('State', '<input id="snw-state" type="text" autocomplete="off" maxlength="20" placeholder="AZ">', 'snw-state')
-                    + field('Zip', '<input id="snw-zip" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="85251">', 'snw-zip')
+                    + '<div class="field span-2" style="grid-column: 1 / -1"><label for="snw-street">Street Address</label><input id="snw-street" type="text" enterkeyhint="next" autocomplete="off" placeholder="123 Main St"></div>'
+                    + field('City', '<input id="snw-city" type="text" enterkeyhint="next" autocomplete="off" placeholder="Phoenix">', 'snw-city')
+                    + field('State', '<input id="snw-state" type="text" enterkeyhint="next" autocomplete="off" maxlength="20" placeholder="AZ">', 'snw-state')
+                    + field('Zip', '<input id="snw-zip" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" maxlength="10" placeholder="85251">', 'snw-zip')
                 + '</div>'
-                + '<div class="snw-unit">' + field('Unit (optional)', '<input id="snw-unit" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="e.g. 204" value="' + esc(ad.unit || '') + '">', 'snw-unit') + '</div>'
+                + '<div class="snw-unit">' + field('Unit (optional)', '<input id="snw-unit" type="text" enterkeyhint="next" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="e.g. 204" value="' + esc(ad.unit || '') + '">', 'snw-unit') + '</div>'
                 + '<button type="button" class="addr-toggle">Can’t find it? Enter the address manually</button>';
             const unitBox = body.querySelector('#snw-unit');
             const search = body.querySelector('#snw-address');
@@ -296,6 +353,8 @@ function build() {
                 });
                 list.classList.add('is-open');
                 search.setAttribute('aria-expanded', 'true');
+                // (on a phone, the suggestions can open under the keyboard)
+                keepInView(list);
             };
             const fetchList = async text => {
                 const id = ++req;
@@ -386,33 +445,85 @@ function build() {
                 },
             };
         },
-        choice(step, body) {
-            body.innerHTML = foundNote(step) + choice('snw-' + step.id, step.options, a[step.key]);
-            body.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => { touched[step.key] = true; }));
-            return { read() { const v = picked('snw-' + step.id); if (!v) return 'Please choose one.'; a[step.key] = v; return ''; } };
+        // The property's type, bedrooms, bathrooms, square feet, year built and yearly taxes, one per line, filled in from
+        // the property lookup (which may still be running when this shows)
+        facts(step, body) {
+            const shownValue = f => (f.format === 'money' || f.commas ? commas(a[f.key]) : (a[f.key] ?? ''));
+            body.innerHTML = '<div data-note>' + factsNote() + '</div><div class="snw-facts">'
+                + field('Property Type', choice('snw-type', PROPERTY_TYPES, a.propertyType))
+                + FACTS.map(f => field(f.label, input('snw-' + f.key, { format: f.format, placeholder: f.placeholder, value: shownValue(f) })
+                    + (f.help ? '<p class="field-help">' + esc(f.help) + '</p>' : ''), 'snw-' + f.key)).join('')
+                + '</div>';
+            const boxes = {};
+            FACTS.forEach(f => {
+                const el = body.querySelector('#snw-' + f.key);
+                boxes[f.key] = el;
+                liveFormat(el, f.format, f.commas);
+                el.addEventListener('input', () => { touched[f.key] = true; });
+            });
+            body.querySelectorAll('input[name="snw-type"]').forEach(r => r.addEventListener('change', () => { touched.propertyType = true; }));
+            return {
+                // The lookup finished: its note, and its answers in the boxes nothing's been typed in
+                refill() {
+                    body.querySelector('[data-note]').innerHTML = factsNote();
+                    FACTS.forEach(f => { if (!touched[f.key] && boxes[f.key].value.trim() === '' && a[f.key]) boxes[f.key].value = shownValue(f); });
+                    if (!touched.propertyType && a.propertyType && !picked('snw-type')) {
+                        const r = [...body.querySelectorAll('input[name="snw-type"]')].find(x => x.value === a.propertyType);
+                        if (r) r.checked = true;
+                    }
+                },
+                read() {
+                    const type = picked('snw-type');
+                    let problem = type ? '' : 'Please choose the property type.';
+                    const values = {};
+                    FACTS.forEach(f => {
+                        const { v, error } = readNumber(boxes[f.key].value, f.format, f.name);
+                        const bad = error || (f.key === 'sqft' && !(v > 0) ? 'Please enter the square feet.' : '');
+                        if (bad) { boxes[f.key].classList.add('is-invalid'); problem = problem || bad; } else values[f.key] = String(v);
+                    });
+                    if (problem) {
+                        const first = body.querySelector('.is-invalid');
+                        if (first) first.focus({ preventScroll: true });
+                        if (first) keepInView(first);
+                        return problem;
+                    }
+                    a.propertyType = type;
+                    Object.assign(a, values);
+                    return '';
+                },
+            };
         },
-        number(step, body) {
-            const shownValue = step.format === 'percent' ? pctOf(a[step.key]) : (step.format === 'money' || step.commas) ? commas(a[step.key]) : (a[step.key] ?? '');
-            body.innerHTML = foundNote(step) + field('', input('snw-in', { format: step.format, placeholder: step.placeholder || (step.format === 'percent' ? '0' : ''), value: shownValue, suffix: step.suffix }));
-            const el = body.querySelector('#snw-in');
-            el.setAttribute('aria-label', step.title);
-            liveFormat(el, step.format, step.commas);
-            el.addEventListener('input', () => { touched[step.key] = true; });
+        choice(step, body) {
+            body.innerHTML = choice('snw-' + step.id, step.options, a[step.key]);
             return {
                 read() {
-                    const raw = el.value.trim();
-                    const bad = text => { el.classList.add('is-invalid'); return text; };
-                    if (raw === '' && step.key === 'price') return bad('Please enter the sale price.');
-                    if (raw === '') return bad('Please enter a number' + (step.format === 'percent' || step.format === 'money' ? ' (0 counts).' : '.'));
-                    let v;
-                    if (step.format === 'percent') { v = rateOf(raw); if (v === '' || v > 1) return bad('Please enter a percent between 0 and 100.'); }
-                    else if (step.format === 'decimal') { v = Number(raw); if (!isFinite(v) || v < 0 || v > 50) return bad('Please enter a number like 2 or 2.5.'); v = Math.round(v * 100) / 100; }
-                    else {
-                        v = Number(digits(raw));
-                        if (step.format === 'year') { const last = new Date().getFullYear() + 1; if (v < 1850 || v > last) return bad('Please enter a year between 1850 and ' + last + '.'); }
-                        if (step.key === 'price' && !(v > 0)) return bad('Please enter the sale price.');
-                        if (step.key === 'escrowDays' && !(v > 0)) return bad('Please enter the number of days.');
+                    const v = picked('snw-' + step.id);
+                    if (!v) return 'Please choose one.';
+                    // A new loan type: a term that's in months for one and years for the other (Hard Money) doesn't carry over
+                    if (step.key === 'loanType' && a.loanType !== v) {
+                        const t = a.loanTermMonths;
+                        if (t && termInMonths(v) !== termInMonths(a.loanType) && !loanTermPresets(v).some(([m]) => m === t)) a.loanTermMonths = '';
                     }
+                    a[step.key] = v;
+                    return '';
+                },
+            };
+        },
+        number(step, body) {
+            const shownValue = step.format === 'percent' ? pctOf(a[step.key]) : step.format === 'money' ? commas(a[step.key]) : (a[step.key] ?? '');
+            body.innerHTML = field('', input('snw-in', { format: step.format, placeholder: step.placeholder || (step.format === 'percent' ? '0' : ''), value: shownValue, suffix: step.suffix }));
+            const el = body.querySelector('#snw-in');
+            el.setAttribute('aria-label', step.title);
+            liveFormat(el, step.format);
+            return {
+                read() {
+                    const bad = text => { el.classList.add('is-invalid'); return text; };
+                    const names = { price: 'sale price', loanAmount: 'original loan amount', estRate: 'interest rate', ioYears: 'number of years' };
+                    const { v, error } = readNumber(el.value, step.format, names[step.key] || 'amount');
+                    if (error) return bad(error);
+                    if (step.key === 'price' && !(v > 0)) return bad('Please enter the sale price.');
+                    if (step.key === 'loanAmount' && !(v > 0)) return bad('Please enter the original loan amount (or go back and choose No Loan).');
+                    if (step.key === 'ioYears' && !(v > 0)) return bad('Please enter the number of years.');
                     a[step.key] = String(v);
                     return '';
                 },
@@ -424,68 +535,87 @@ function build() {
             el.setAttribute('aria-label', step.title);
             return { read() { if (!/^\d{4}-\d{2}-\d{2}$/.test(el.value)) { el.classList.add('is-invalid'); return 'Please choose a date.'; } a[step.key] = el.value; return ''; } };
         },
+        // Loan Term: the loan type's usual terms, or Other with a box (years; Hard Money: months). Saved in months.
         term(step, body) {
-            const years = a[step.key];
-            const preset = years === '30' || years === '15' ? years : years ? 'other' : '';
-            body.innerHTML = field('', '<select id="snw-term" aria-label="Original loan term"><option value="">Choose…</option>'
-                    + '<option value="30"' + (preset === '30' ? ' selected' : '') + '>30 years</option>'
-                    + '<option value="15"' + (preset === '15' ? ' selected' : '') + '>15 years</option>'
-                    + '<option value="other"' + (preset === 'other' ? ' selected' : '') + '>Other</option></select>')
-                + '<div class="snw-term-other"' + (preset === 'other' ? '' : ' hidden') + '>'
-                + field('Loan term', input('snw-term-years', { format: 'int', placeholder: '20', value: preset === 'other' ? years : '', suffix: 'years' }), 'snw-term-years') + '</div>';
-            const select = body.querySelector('#snw-term');
-            const other = body.querySelector('.snw-term-other');
-            const box = body.querySelector('#snw-term-years');
-            liveFormat(box, 'int');
-            select.addEventListener('change', () => {
-                select.classList.remove('is-invalid');
-                other.hidden = select.value !== 'other';
+            const type = a.loanType;
+            const presets = loanTermPresets(type);
+            const inMonths = termInMonths(type);
+            const v = a[step.key] || '';
+            const preset = presets.some(([m]) => m === v) ? v : v ? 'other' : '';
+            const yearsOf = m => String(Math.round(Number(m) / 12 * 100) / 100);
+            body.innerHTML = choice('snw-term', presets.map(([m]) => m).concat(['other']), preset, presets.map(([, n]) => n).concat(['Other']))
+                + '<div class="snw-other"' + (preset === 'other' ? '' : ' hidden') + '>'
+                + field(inMonths ? 'Months' : 'Years', input('snw-term-n', { format: inMonths ? 'int' : 'decimal', placeholder: inMonths ? '12' : '20', value: preset === 'other' ? (inMonths ? v : yearsOf(v)) : '', suffix: inMonths ? 'months' : 'years' }), 'snw-term-n') + '</div>';
+            const other = body.querySelector('.snw-other');
+            const box = body.querySelector('#snw-term-n');
+            liveFormat(box, inMonths ? 'int' : 'decimal');
+            body.querySelectorAll('input[name="snw-term"]').forEach(r => r.addEventListener('change', () => {
+                other.hidden = picked('snw-term') !== 'other';
                 if (!other.hidden) box.focus();
-            });
+            }));
             return {
                 read() {
-                    if (!select.value) { select.classList.add('is-invalid'); return 'Please choose the loan term.'; }
-                    if (select.value !== 'other') { a[step.key] = select.value; return ''; }
-                    const v = Number(digits(box.value));
-                    if (!(v >= 1 && v <= 50)) { box.classList.add('is-invalid'); return 'Please enter the loan term in years (1 to 50).'; }
-                    a[step.key] = String(v);
+                    const p = picked('snw-term');
+                    if (!p) return 'Please choose the loan term.';
+                    if (p !== 'other') { a[step.key] = p; return ''; }
+                    const n = Number(box.value.trim());
+                    const months = inMonths ? Math.round(n) : Math.round(n * 12);
+                    if (box.value.trim() === '' || !isFinite(n) || !(months >= 1 && months <= 600)) {
+                        box.classList.add('is-invalid');
+                        return inMonths ? 'Please enter the loan term in months.' : 'Please enter the loan term in years (up to 50).';
+                    }
+                    a[step.key] = String(months);
                     return '';
                 },
             };
         },
-        fee(step, body) {
-            const v = a[step.key] || {};
-            body.innerHTML = field('Amount', input('snw-in', { format: 'money', placeholder: '0', value: commas(v.amount) }), 'snw-in') + statusChoice('snw-' + step.id + '-status', v.status);
-            const el = body.querySelector('#snw-in');
-            liveFormat(el, 'money');
+        // Hard Money's other holdbacks: Yes / No, then with Yes a card per holdback (its name, then its amount)
+        holdbacks(step, body) {
+            let answer = a.hasOtherHoldbacks || '';
+            let rows = (a.otherHoldbacks || []).map(r => ({ ...r }));
+            const blank = () => ({ name: '', amount: '' });
+            function draw(focusAt) {
+                body.innerHTML = choice('snw-hb', ['Yes', 'No'], answer)
+                    + (answer === 'Yes' ? '<div class="snw-lines">' + rows.map((r, i) => '<div class="snw-line" data-i="' + i + '">'
+                        + '<div class="ie-entry-head"><span>Holdback ' + (i + 1) + '</span>'
+                        + (rows.length > 1 ? '<button type="button" class="ie-remove" data-remove="' + i + '" aria-label="Remove holdback ' + (i + 1) + '">' + TRASH_ICON + 'Remove</button>' : '') + '</div>'
+                        + field('Name', input('snw-hb-name-' + i, { format: 'text', placeholder: 'Draw fee holdback', value: r.name }), 'snw-hb-name-' + i)
+                        + field('Amount', input('snw-hb-amt-' + i, { format: 'money', placeholder: '0', value: commas(r.amount) }), 'snw-hb-amt-' + i)
+                        + '</div>').join('')
+                        + '<button type="button" class="ie-add-entry" data-add>' + PLUS_ICON + 'Add another holdback</button></div>' : '');
+                body.querySelectorAll('input[name="snw-hb"]').forEach(r => r.addEventListener('change', () => {
+                    answer = r.value;
+                    if (answer === 'Yes' && !rows.length) rows.push(blank());
+                    draw(answer === 'Yes' ? 0 : null);
+                }));
+                rows.forEach((r, i) => {
+                    const name = body.querySelector('#snw-hb-name-' + i);
+                    const amt = body.querySelector('#snw-hb-amt-' + i);
+                    name.maxLength = 100;
+                    name.setAttribute('autocapitalize', 'words');
+                    name.addEventListener('input', () => { r.name = name.value; });
+                    liveFormat(amt, 'money');
+                    amt.addEventListener('input', () => { r.amount = digits(amt.value); });
+                });
+                body.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => { rows.splice(Number(b.dataset.remove), 1); draw(); }));
+                const add = body.querySelector('[data-add]');
+                if (add) add.addEventListener('click', () => { rows.push(blank()); draw(rows.length - 1); });
+                if (focusAt !== null && focusAt !== undefined) { const el = body.querySelector('#snw-hb-name-' + focusAt); if (el) setTimeout(() => { el.focus({ preventScroll: true }); keepInView(el.closest('.snw-line')); }, 30); }
+            }
+            draw();
             return {
                 read() {
-                    if (el.value.trim() === '') { el.classList.add('is-invalid'); return 'Please enter the amount (0 counts).'; }
-                    const status = picked('snw-' + step.id + '-status');
-                    if (!status) return 'Please choose Estimated or Final.';
-                    a[step.key] = { amount: digits(el.value), status };
-                    return '';
-                },
-            };
-        },
-        split(step, body) {
-            const v = a[step.key] || {};
-            body.innerHTML = '<div class="snw-row">' + field('Percent', input('snw-pct', { format: 'percent', placeholder: '0', value: pctOf(v.rate) }), 'snw-pct')
-                + field('Flat Amount', input('snw-amt', { format: 'money', placeholder: '0', value: commas(v.amount) }), 'snw-amt') + '</div>'
-                + (step.status ? statusChoice('snw-' + step.id + '-status', v.status) : '');
-            const pct = body.querySelector('#snw-pct');
-            const amt = body.querySelector('#snw-amt');
-            liveFormat(pct, 'percent');
-            liveFormat(amt, 'money');
-            return {
-                read() {
-                    if (pct.value.trim() === '') { pct.classList.add('is-invalid'); return 'Please enter the percent (0 counts).'; }
-                    const rate = rateOf(pct.value);
-                    if (rate === '' || rate > 1) { pct.classList.add('is-invalid'); return 'Please enter a percent between 0 and 100.'; }
-                    if (amt.value.trim() === '') { amt.classList.add('is-invalid'); return 'Please enter the flat amount (0 counts).'; }
-                    const status = step.status ? picked('snw-' + step.id + '-status') : '';
-                    if (step.status && !status) return 'Please choose Estimated or Final.';
-                    a[step.key] = { rate, amount: digits(amt.value), status };
+                    if (!answer) return 'Please choose Yes or No.';
+                    if (answer === 'Yes') {
+                        const kept = rows.filter(r => r.name.trim() || r.amount !== '');
+                        const unnamed = rows.findIndex(r => !r.name.trim() && r.amount !== '');
+                        if (unnamed >= 0) { body.querySelector('#snw-hb-name-' + unnamed).classList.add('is-invalid'); return 'Please name each holdback.'; }
+                        if (!kept.length) { const el = body.querySelector('#snw-hb-name-0'); if (el) el.classList.add('is-invalid'); return 'Please add each holdback and its amount, or choose No.'; }
+                        const noAmount = rows.findIndex(r => r.name.trim() && r.amount === '');
+                        if (noAmount >= 0) { body.querySelector('#snw-hb-amt-' + noAmount).classList.add('is-invalid'); return 'Please enter each holdback’s amount.'; }
+                        a.otherHoldbacks = kept.map(r => ({ name: r.name.trim(), amount: r.amount }));
+                    } else a.otherHoldbacks = [];
+                    a.hasOtherHoldbacks = answer;
                     return '';
                 },
             };
@@ -494,40 +624,41 @@ function build() {
             const ppl = ids => (ids || []).map(id => { const p = ctx.accounts.find(x => x.id === id) || ctx.sellers.find(x => x.id === id); return p ? nameOf(p) : formatPhone(id); }).join(', ');
             const pct = r => (r === '' || r === undefined ? '' : pctOf(r) + '%');
             const ad = a.address || {};
-            const split = v => v ? [pct(v.rate), money(v.amount)].join(' + ') + (v.status ? ' (' + v.status + ')' : '') : '';
-            const fee = v => v ? money(v.amount) + ' (' + v.status + ')' : '';
+            const ioText = a.ioPeriod !== 'Yes' ? 'No' : a.dueAfter === 'Yes' ? 'Yes, then the loan comes due' : 'Yes, ' + a.ioYears + (Number(a.ioYears) === 1 ? ' year' : ' years');
             const rows = [
                 ['People'],
                 ['Sellers', [nameOf(ctx.client), ppl(a.sellers)].filter(Boolean).join(', '), 'sellers'],
                 ['Collaborators', ppl(a.collaborators) || 'None', 'collaborators'],
                 ['Property'],
                 ['Address', [ad.street, ad.city, ((ad.state || '') + ' ' + (ad.zip || '')).trim()].filter(Boolean).join(', '), 'address'],
-                ['Property Type', a.propertyType, 'type'],
-                ['Beds / Baths', a.beds + ' / ' + a.baths, 'beds'],
-                ['Square Feet', commas(a.sqft), 'sqft'],
-                ['Year Built', a.yearBuilt, 'year'],
-                ['Yearly Taxes', money(a.taxes), 'taxes'],
+                ['Details', [a.propertyType, a.beds + ' bd', a.baths + ' ba', commas(a.sqft) + ' sq ft', 'built ' + a.yearBuilt].join(' · '), 'facts'],
+                ['Yearly Taxes', money(a.taxes), 'facts'],
                 ['Sale'],
                 ['Sale Price', money(a.price), 'price'],
-                ['Seller Credit', pct(a.credit), 'credit'],
-                ['Offer Accepted', niceDate(a.acceptance), 'acceptance'],
-                ['Escrow', a.escrowDays + ' days', 'escrow'],
                 ['Loan Payoff'],
                 ['Loan Type', a.loanType, 'loanType'],
                 ...(hasLoan() ? [
-                    ['Original Loan', Number(a.loanAmount) > 0 ? money(a.loanAmount) + ', ' + niceDate(a.loanDate) : money(0), 'loanAmount'],
-                    ...(Number(a.loanAmount) > 0 ? [['Loan Term', a.loanTermYears ? a.loanTermYears + ' years' : '', 'loanTerm'], ['Estimated Rate', pct(a.estRate), 'loanRate']] : []),
-                    ['Recording Fee', fee(a.recording), 'recording'],
-                    ['Payoff Statement Fee', fee(a.payoffStatement), 'payoffStatement'],
-                    ['Other Payoff Fees', split(a.otherPayoff), 'otherPayoff'],
+                    ['Original Loan', money(a.loanAmount), 'loanAmount'],
+                    ['Loan Date', niceDate(a.loanDate), 'loanDate'],
+                    ['Loan Term', termText(a.loanTermMonths, a.loanType), 'loanTerm'],
+                    ['Estimated Rate', pct(a.estRate), 'loanRate'],
+                ] : []),
+                ...(isDscr() ? [['Interest Only', ioText, 'ioPeriod']] : []),
+                ...(isHardMoney() ? [
+                    ['Construction Holdback', money(a.construction), 'construction'],
+                    ['Interest Reserve', money(a.reserve), 'reserve'],
+                    ['Other Holdbacks', a.hasOtherHoldbacks === 'Yes' ? (a.otherHoldbacks || []).map(h => h.name + ' ' + money(h.amount)).join(', ') : 'None', 'holdbacks'],
                 ] : []),
                 ['Costs'],
                 ['Title Company', a.titleCompanyName, 'titleCompany'],
-                ['Buyer’s Agent', split(a.buyersAgent), 'buyersAgent'],
-                ['Listing Agent', split(a.listingAgent), 'listingAgent'],
             ];
+            const accepted = new Date();
+            accepted.setDate(accepted.getDate() + 60);
             body.innerHTML = '<ul class="snw-review">' + rows.map(r => r.length === 1 ? '<li class="snw-review-head">' + esc(r[0]) + '</li>'
-                : '<li><span class="k">' + esc(r[0]) + '</span><span class="v">' + esc(r[1]) + '</span><button type="button" data-go="' + r[2] + '" aria-label="Change ' + esc(r[0]) + '">Change</button></li>').join('') + '</ul>';
+                : '<li><span class="k">' + esc(r[0]) + '</span><span class="v">' + esc(r[1]) + '</span><button type="button" data-go="' + r[2] + '" aria-label="Change ' + esc(r[0]) + '">Change</button></li>').join('') + '</ul>'
+                + '<p class="snw-defaults">Everything else starts at the usual defaults, which you can change on the page: no seller credit, the offer accepted '
+                + esc(niceDate(isoDay(accepted))) + ' with a 30-day escrow, $0 payoff fees, 2.5% commissions, no HOA, and a conventional buyer loan at 80% of the price. '
+                + 'The seller adds their own loan and HOA details on the page.</p>';
             body.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
                 fromReview = true;
                 index = STEPS.findIndex(s => s.id === b.dataset.go);
@@ -553,7 +684,9 @@ function build() {
         backBtn.textContent = fromReview && step.kind !== 'review' ? 'Back To Review' : 'Back';
         $('[data-next-text]').textContent = step.kind === 'review' ? 'Create Seller Net Sheet' : fromReview ? 'Save' : 'Next';
         scroll.scrollTop = 0;
-        const first = scroll.querySelector('input:not([type="radio"]), .mp-btn');
+        // The one box a question asks for is ready to type in. (Not the property details: they're filled in from the
+        // lookup, and opening the keyboard over them would hide them.)
+        const first = step.kind === 'facts' ? null : scroll.querySelector('input:not([type="radio"]):not([type="date"]), .mp-btn');
         if (first && direction !== 0) setTimeout(() => first.focus({ preventScroll: true }), 30);
     }
     const move = by => {
@@ -563,6 +696,45 @@ function build() {
         index = STEPS.indexOf(next);
         draw(by);
     };
+
+    // --- Phones: the on-screen keyboard ---
+    // The sheet is pinned to the bottom of the screen, which the keyboard covers (it shrinks only the visible part of the
+    // page). So while it's up, the sheet moves up to sit on top of it (--snw-kb), sized to what's left (--snw-vh), and the
+    // box being typed in is scrolled into view.
+    const vv = window.visualViewport;
+    const phone = window.matchMedia('(max-width: 600px)');
+    // Scrolls the questions so el is in view (a little room around it)
+    function keepInView(el) {
+        if (!el || !scroll.contains(el)) return;
+        const box = el.getBoundingClientRect();
+        const area = scroll.getBoundingClientRect();
+        const room = 16;
+        if (box.bottom > area.bottom - room) scroll.scrollTop += Math.min(box.bottom - area.bottom + room, box.top - area.top - room);
+        else if (box.top < area.top + room) scroll.scrollTop -= area.top + room - box.top;
+    }
+    function fitKeyboard() {
+        if (!dialog.open || !vv) return;
+        const covered = phone.matches ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+        // (under 80px is the browser's own toolbar, not a keyboard)
+        const up = covered > 80;
+        dialog.style.setProperty('--snw-kb', (up ? covered : 0) + 'px');
+        dialog.style.setProperty('--snw-vh', Math.round(vv.height) + 'px');
+        dialog.classList.toggle('is-keyboard', up);
+        if (up) requestAnimationFrame(() => keepInView(document.activeElement));
+    }
+    if (vv) { vv.addEventListener('resize', fitKeyboard); vv.addEventListener('scroll', fitKeyboard); }
+    // A box tapped while the keyboard is already up (or as it comes up) comes into view
+    form.addEventListener('focusin', e => {
+        if (!e.target.matches('input:not([type="radio"]), select, textarea')) return;
+        [60, 320].forEach(ms => setTimeout(() => { if (document.activeElement === e.target && dialog.classList.contains('is-keyboard')) keepInView(e.target); }, ms));
+    });
+    // The keyboard's Enter (Next) moves to the question's next box; from the last one, on to the next question
+    form.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' || e.defaultPrevented || !e.target.matches('input[type="text"]')) return;
+        const boxes = [...scroll.querySelectorAll('input[type="text"]')].filter(b => b.offsetParent);
+        const i = boxes.indexOf(e.target);
+        if (i >= 0 && i < boxes.length - 1) { e.preventDefault(); boxes[i + 1].focus({ preventScroll: true }); keepInView(boxes[i + 1]); }
+    });
 
     form.addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('is-invalid'); message.textContent = ''; });
     form.addEventListener('change', () => { message.textContent = ''; });
@@ -579,11 +751,10 @@ function build() {
         const problem = current.read();
         if (problem) { message.textContent = problem; return; }
         if (step.kind !== 'review') {
-            // Back to the review after a change (unless it opened a question that still needs an answer, like the loan date)
+            // Back to the review after a change (unless it opened a question that still needs an answer, like a DSCR loan's
+            // interest only questions after changing the loan type)
             if (fromReview) {
-                const list = shown();
-                const ANSWER = { loanAmount: 'loanAmount', loanDate: 'loanDate', loanTerm: 'loanTermYears', loanRate: 'estRate', recording: 'recording', payoffStatement: 'payoffStatement', otherPayoff: 'otherPayoff' };
-                const unanswered = list.find(s => ANSWER[s.id] && (a[ANSWER[s.id]] === undefined || a[ANSWER[s.id]] === ''));
+                const unanswered = shown().find(s => s.answered && !s.answered());
                 index = unanswered ? STEPS.indexOf(unanswered) : STEPS.findIndex(s => s.kind === 'review');
                 draw(1);
             } else move(1);
@@ -594,25 +765,25 @@ function build() {
 
     async function save() {
         const ad = a.address;
-        const noLoanDate = !(Number(a.loanAmount) > 0);
         const fields = {
             'BEDS': a.beds, 'BATHS': a.baths, 'SQFT': a.sqft, 'YEAR BUILT': a.yearBuilt, 'YEARLY TAXES': a.taxes,
-            'SELLER CREDIT': a.credit,
-            'OFFER ACCEPTANCE DATE': mdy(a.acceptance), 'ESCROW DURATION': a.escrowDays,
             'LOAN TYPE': a.loanType,
-            // No Loan: none of the loan payoff answers
+            // Agent Loan Input (No Loan: none of it)
             ...(hasLoan() ? {
-                // A $0 loan: the date and term don't matter, but the sheet wants them
-                'ORIGINAL LOAN AMOUNT': a.loanAmount, 'ORIGINAL LOAN DATE': mdy(noLoanDate ? isoDay(new Date()) : a.loanDate),
-                'LOAN TERM MONTHS': noLoanDate ? 360 : Number(a.loanTermYears) * 12,
-                'ESTIMATED INTEREST RATE': noLoanDate ? 0 : a.estRate,
-                'RECORDING FEE': a.recording.amount, 'RECORDING FEE STATUS': a.recording.status,
-                'PAYOFF STATEMENT FEE': a.payoffStatement.amount, 'PAYOFF STATEMENT FEE STATUS': a.payoffStatement.status,
-                'OTHER LOAN PAYOFF FEES %': a.otherPayoff.rate, 'OTHER LOAN PAYOFF FEES $': a.otherPayoff.amount, 'OTHER LOAN PAYOFF FEES STATUS': a.otherPayoff.status,
+                'ORIGINAL LOAN AMOUNT': a.loanAmount, 'ORIGINAL LOAN DATE': mdy(a.loanDate),
+                'LOAN TERM MONTHS': a.loanTermMonths, 'ESTIMATED INTEREST RATE': a.estRate,
+            } : {}),
+            ...(isDscr() ? {
+                'INTEREST ONLY PERIOD': a.ioPeriod,
+                ...(a.ioPeriod === 'Yes' ? { 'DUE AFTER INTEREST ONLY': a.dueAfter } : {}),
+                ...(a.ioPeriod === 'Yes' && a.dueAfter === 'No' ? { 'INTEREST ONLY MONTHS': String(Math.round(Number(a.ioYears) * 12)) } : {}),
+            } : {}),
+            ...(isHardMoney() ? {
+                'OUTSTANDING CONSTRUCTION HOLDBACK': a.construction, 'OUTSTANDING INTEREST RESERVE': a.reserve,
+                'HAS OTHER HOLDBACKS': a.hasOtherHoldbacks,
+                ...(a.hasOtherHoldbacks === 'Yes' ? { 'OTHER HOLDBACKS': JSON.stringify((a.otherHoldbacks || []).map(h => ({ NAME: h.name, AMOUNT: Number(h.amount || 0) }))) } : {}),
             } : {}),
             'TITLE COMPANY': ((ctx.titleCompanies || []).find(c => c.name === a.titleCompanyName) || {}).id || '',
-            'SELLER PAID BUYER COMMISSION %': a.buyersAgent.rate, 'SELLER PAID BUYER COMMISSION $': a.buyersAgent.amount,
-            'LISTING AGENT COMMISSION %': a.listingAgent.rate, 'LISTING AGENT COMMISSION $': a.listingAgent.amount,
         };
         saving = true;
         nextBtn.disabled = backBtn.disabled = true;
@@ -638,19 +809,13 @@ function build() {
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
     dialog.addEventListener('click', e => { if (e.target === dialog) close(); });
     dialog.addEventListener('cancel', e => { if (saving) e.preventDefault(); });
+    dialog.addEventListener('close', () => { dialog.classList.remove('is-keyboard'); dialog.style.removeProperty('--snw-kb'); });
 
     return {
         open(next) {
             ctx = next;
             STEPS.find(s => s.id === 'titleCompany').options = (ctx.titleCompanies || []).map(c => c.name);
-            // Standard starting answers (each is still asked)
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            a = {
-                sellers: [], collaborators: [], credit: '0', acceptance: isoDay(tomorrow), escrowDays: '30',
-                titleCompanyName: ((ctx.titleCompanies || [])[0] || {}).name || '',
-                buyersAgent: { rate: 0.025, amount: '0' }, listingAgent: { rate: 0.025, amount: '0' },
-            };
+            a = { sellers: [], collaborators: [], titleCompanyName: ((ctx.titleCompanies || [])[0] || {}).name || '' };
             touched = {};
             lookup = null;
             index = 0;
@@ -659,6 +824,7 @@ function build() {
             draw(1);
             dialog.showModal();
             lockPageScroll(dialog);
+            fitKeyboard();
         },
     };
 }

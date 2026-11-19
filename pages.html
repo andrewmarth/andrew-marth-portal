@@ -1812,9 +1812,21 @@
         const expectedBuyerAlso = get => [...new Set(listOf(get('BUYER ALSO QUALIFIES AS')).concat(legacyBuyerTags(get).filter(t => PAGE_QUALIFIERS.includes(t))))];
         // (an old page's other tags, like Investor, still count until its buyer settings are saved again)
         const expectedBuyerTags = get => [...new Set(expectedBuyerGroups(get).concat(expectedBuyerAlso(get), legacyBuyerTags(get)))];
-        // Seller Net: the buyer's loan product from the Buyer Inputs (null when the buyer pays cash, or none is picked)
-        const sellerNetBuyerProduct = page => (text(col(page, 'BUYER FINANCING')) === 'Cash' ? null
-            : (data.loanProducts || []).find(p => text(col(p, 'LOAN PRODUCT NAME')) === text(col(page, 'BUYER LOAN PRODUCT'))) || null);
+        // Seller Net: the buyer's loan product from the Buyer Inputs (null when the buyer pays cash). When the one saved is
+        // gone (deleted or renamed in Settings) or none is saved, a Conventional product stands in (else the first one that
+        // isn't down payment assistance), so the buyer's side still prices.
+        function sellerNetBuyerProduct(page) {
+            if (text(col(page, 'BUYER FINANCING')) === 'Cash') return null;
+            const firsts = (data.loanProducts || []).filter(p => !isDpaProduct(p) && text(col(p, 'LOAN PRODUCT NAME')));
+            const saved = text(col(page, 'BUYER LOAN PRODUCT'));
+            return firsts.find(p => text(col(p, 'LOAN PRODUCT NAME')) === saved)
+                || firsts.find(p => text(col(p, 'PRODUCT TYPE')).toLowerCase() === 'conventional') || firsts[0] || null;
+        }
+        // (the saved product, when it's no longer in Settings)
+        const missingBuyerProduct = page => {
+            const saved = text(col(page, 'BUYER LOAN PRODUCT'));
+            return saved && text(col(page, 'BUYER FINANCING')) !== 'Cash' && !(data.loanProducts || []).some(p => text(col(p, 'LOAN PRODUCT NAME')) === saved) ? saved : '';
+        };
         // One side's share as escrow breakdown lines (side: 'buyer' or 'seller'); the lender's endorsements are one line
         const TITLE_LABELS = { escrow: 'Escrow Fee', recording: 'Recording Service Fee', owner: 'Owner’s Title Policy', loanPolicy: 'Lender’s Title Policy', fincen: 'FinCEN Report' };
         function titleLines(sale, side, extra = {}) {
@@ -5216,14 +5228,18 @@
             // Loan Product, or Cash (BUYER FINANCING Cash; the product stays picked for switching back). The product's type
             // (fixed, adjustable or VA) also decides the title fees: there's no Buyer's Financing to pick anymore.
             const CASH_CHOICE = '__cash__';
-            const productField = fieldShell('Loan Product', { help: 'Cash: the buyer pays cash, with no loan. A loan product’s rate type (fixed, adjustable or VA) also prices the title fees.' });
+            // (a product that's no longer in Settings: the one standing in for it shows as picked, with a note)
+            const gone = missingBuyerProduct(data.page);
+            const standIn = current('BUYER FINANCING') === 'Cash' ? null : sellerNetBuyerProduct({ ...data.page, ...draft });
+            const productField = fieldShell('Loan Product', { help: 'Cash: the buyer pays cash, with no loan. A loan product’s rate type (fixed, adjustable or VA) also prices the title fees.'
+                + (gone ? ' The product saved here (' + escapeHtml(gone) + ') is no longer in Settings, so ' + (standIn ? escapeHtml(text(col(standIn, 'LOAN PRODUCT NAME'))) : 'another product') + ' is used until you pick one.' : '') });
             const productMount = el('div');
             productField.body.append(productMount);
             buyerIn.append(productField.wrap);
             makePicker({ mount: productMount, labelId: productField.labelId, placeholder: 'Choose...',
                 items: [{ value: CASH_CHOICE, main: 'Cash', secondary: 'No loan', icon: 'cash' }].concat((data.loanProducts || []).filter(p => !isDpaProduct(p)).map(p => ({
                     value: text(col(p, 'LOAN PRODUCT NAME')), main: text(col(p, 'LOAN PRODUCT NAME')), secondary: text(col(p, 'LENDER NAME')), icon: 'bank' }))),
-                selected: [current('BUYER FINANCING') === 'Cash' ? CASH_CHOICE : current('BUYER LOAN PRODUCT')],
+                selected: [current('BUYER FINANCING') === 'Cash' ? CASH_CHOICE : standIn ? text(col(standIn, 'LOAN PRODUCT NAME')) : ''],
                 onChange: v => {
                     if (v === CASH_CHOICE) { setDraft('BUYER FINANCING', 'Cash'); return; }
                     // (an old page's Fixed Rate / Adjustable Rate / VA Loan answer is cleared: the product decides)

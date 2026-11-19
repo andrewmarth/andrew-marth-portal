@@ -3401,16 +3401,39 @@ async function propertyFacts_(account, body) {
   return { ok: true, facts, sources };
 }
 
-// Seller Net: everything the net sheet needs that isn't the seller's own (Client Input) or asked above (address, type,
-// sale price), sent by the New Seller Net form as body.fields and checked as in PAGE_SETTING_FIELDS. All are required.
-// (The HOA fees are only needed once the seller says there's an HOA, so they're filled in later from Settings.)
-// LOAN TYPE "No Loan": the loan payoff answers (SELLER_NET_LOAN_FIELDS) aren't asked, and aren't saved.
-const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'ESTIMATED INTEREST RATE',
-  'RECORDING FEE', 'RECORDING FEE STATUS', 'PAYOFF STATEMENT FEE', 'PAYOFF STATEMENT FEE STATUS',
-  'OTHER LOAN PAYOFF FEES %', 'OTHER LOAN PAYOFF FEES $', 'OTHER LOAN PAYOFF FEES STATUS'];
-const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'SELLER CREDIT',
-  'OFFER ACCEPTANCE DATE', 'ESCROW DURATION', 'LOAN TYPE'].concat(SELLER_NET_LOAN_FIELDS, ['TITLE COMPANY', 'SELLER PAID BUYER COMMISSION %', 'SELLER PAID BUYER COMMISSION $',
-  'LISTING AGENT COMMISSION %', 'LISTING AGENT COMMISSION $']);
+// Seller Net: what the New Seller Net form asks besides the address, property type and sale price, sent as body.fields
+// and checked as in PAGE_SETTING_FIELDS. All are required: the property's details, the loan type and, with a loan, Agent
+// Loan Input's questions (SELLER_NET_LOAN_FIELDS, plus a DSCR loan's interest only questions or a Hard Money loan's
+// holdbacks), and the title company. Everything else starts at createProperty_'s defaults, changed later from Settings.
+const SELLER_NET_LOAN_FIELDS = ['ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'ESTIMATED INTEREST RATE'];
+const SELLER_NET_CREATE_FIELDS = ['BEDS', 'BATHS', 'SQFT', 'YEAR BUILT', 'YEARLY TAXES', 'LOAN TYPE', 'TITLE COMPANY'];
+// The columns asked for these answers (by the loan type and the answers that follow from it)
+function sellerNetAsked_(fields) {
+  const v = c => cleanSetting_(PAGE_SETTING_FIELDS[c], fields[c]);
+  const type = v('LOAN TYPE');
+  if (!type || type === 'No Loan') return SELLER_NET_CREATE_FIELDS;
+  const cols = SELLER_NET_CREATE_FIELDS.concat(SELLER_NET_LOAN_FIELDS);
+  if (type === 'DSCR') {
+    cols.push('INTEREST ONLY PERIOD');
+    if (v('INTEREST ONLY PERIOD') === 'Yes') {
+      cols.push('DUE AFTER INTEREST ONLY');
+      if (v('DUE AFTER INTEREST ONLY') === 'No') cols.push('INTEREST ONLY MONTHS');
+    }
+  }
+  if (type === 'Hard Money') {
+    cols.push('OUTSTANDING CONSTRUCTION HOLDBACK', 'OUTSTANDING INTEREST RESERVE', 'HAS OTHER HOLDBACKS');
+    if (v('HAS OTHER HOLDBACKS') === 'Yes') cols.push('OTHER HOLDBACKS');
+  }
+  return cols;
+}
+// Seller Net's expected buyer: a Conventional loan product (else the first one that isn't down payment assistance).
+// pages.html falls back the same way when the product saved on a page is later deleted.
+async function sellerNetBuyerProductName_() {
+  const type = p => String(p['PRODUCT TYPE'] || '').trim().toLowerCase();
+  const firsts = (await rows('loanProducts')).filter(p => String(p['LOAN PRODUCT NAME'] || '').trim() && type(p) !== 'down payment assistance');
+  const pick = firsts.find(p => type(p) === 'conventional') || firsts[0];
+  return pick ? String(pick['LOAN PRODUCT NAME']).trim() : '';
+}
 
 // Admins only: a new Buyer Breakdown page for a buyer (or, with pageType "Seller Net", a Seller Net page for a seller),
 // from the home page's New Property form.
@@ -3464,14 +3487,16 @@ async function createProperty_(account, body) {
   // Seller Net from the New Seller Net form: every required answer, checked
   const asked = {};
   if (isSellerNet && body.fields) {
-    const noLoan = cleanSetting_(PAGE_SETTING_FIELDS['LOAN TYPE'], body.fields['LOAN TYPE']) === 'No Loan';
-    for (const column of SELLER_NET_CREATE_FIELDS) {
-      if (noLoan && SELLER_NET_LOAN_FIELDS.includes(column)) continue;
+    const slug = column => column.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    for (const column of sellerNetAsked_(body.fields)) {
       const v = cleanSetting_(PAGE_SETTING_FIELDS[column], body.fields[column]);
-      if (v === null) return { ok: false, error: 'invalid_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };
-      if (v === '') return { ok: false, error: 'missing_' + column.toLowerCase().replace(/[^a-z0-9]+/g, '_') };
+      if (v === null) return { ok: false, error: 'invalid_' + slug(column) };
+      if (v === '') return { ok: false, error: 'missing_' + slug(column) };
       asked[column] = v;
     }
+    // (a term and an interest only period are months over 0; Yes to other holdbacks needs at least one)
+    for (const column of ['LOAN TERM MONTHS', 'INTEREST ONLY MONTHS']) if (column in asked && !(asked[column] > 0)) return { ok: false, error: 'invalid_' + slug(column) };
+    if (asked['HAS OTHER HOLDBACKS'] === 'Yes' && !JSON.parse(asked['OTHER HOLDBACKS']).length) return { ok: false, error: 'missing_other_holdbacks' };
   }
 
   // Seller Net: the sale, the HOA, and the seller's costs (the loan payoff is filled in later from Settings)
@@ -3488,35 +3513,43 @@ async function createProperty_(account, body) {
     'YEAR BUILT': whole(body.yearBuilt),
     'YEARLY TAXES': whole(body.yearlyTaxes),
     'PURCHASE PRICE': price,
-    'HOA TRANSFER FEE': whole(hoa.transfer),
-    'HOA CAP FEE': whole(hoa.cap),
-    'HOA DISCLOSURE FEE': whole(hoa.disclosure),
-    'HOA OTHER FEE': whole(hoa.other),
-    'HOA PRIMARY MONTHLY DUES': whole(hoa.primary),
-    'HOA MASTER MONTHLY DUES': whole(hoa.master),
-    // Placeholders: the seller pays every HOA fee, and both commissions start at 2.5%; escrow and title come from the
-    // title company the form asks for, with the buyer's loan type from the buyer's loan product below
+    // Defaults for everything the form doesn't ask (each one changed later in Settings). The sale: no seller credit, the
+    // offer accepted 60 days from today, a 30-day escrow, a standard sale.
     'SELLER CREDIT': 0,
+    'OFFER ACCEPTANCE DATE': dayOnly(today, 60),
+    'ESCROW DURATION': 30,
     'SALE TYPE': 'Standard',
-    // Buyer Inputs (the buyer's side): the first loan product, 80% loan, the Buyer Breakdown's insurance placeholder
-    'BUYER LOAN PRODUCT': String(((await rows('loanProducts'))[0] || {})['LOAN PRODUCT NAME'] || '').trim(),
-    'RETAIL LTV': 0.8,
-    'HOMEOWNERS INSURANCE RATE': 0.0035,
-    'LENDER POINTS PURCHASED': 0,
-    'EARNEST MONEY DEPOSIT': 0,
-    'GIFT FUNDS': 0,
-    'BUYERS AGENT COMMISSION %': 0,
-    'BUYERS AGENT COMMISSION $': 0,
+    // The payoff fees: $0 recording and payoff statement fees (estimated), no other loan payoff fees
+    'RECORDING FEE': 0, 'RECORDING FEE STATUS': 'Estimated',
+    'PAYOFF STATEMENT FEE': 0, 'PAYOFF STATEMENT FEE STATUS': 'Estimated',
+    'HAS OTHER LOAN PAYOFF FEES': 'No',
+    // Both commissions 2.5% (+ $0); no septic, corporate relocation, 1031 exchange, holdback or other fees; the title
+    // company's electronic service
+    'SELLER PAID BUYER COMMISSION %': 0.025, 'SELLER PAID BUYER COMMISSION $': 0,
+    'LISTING AGENT COMMISSION %': 0.025, 'LISTING AGENT COMMISSION $': 0,
+    'HAS SEPTIC': false, 'CORPORATE RELOCATION': false, '1031 EXCHANGE': false, 'HOLDBACK AMOUNT': 0,
+    'ELECTRONIC SERVICE': true, 'HAS SELLER OTHER FEES': 'No',
+    // No HOA: its dues are $0 (final), as pages.html's HOA No does; the seller can still say there is one
+    'HAS HOA': 'No', 'HAS MASTER ASSOCIATION': 'No',
+    'HOA PRIMARY MONTHLY DUES': 0, 'HOA PRIMARY MONTHLY DUES STATUS': 'Final',
+    'HOA MASTER MONTHLY DUES': 0, 'HOA MASTER MONTHLY DUES STATUS': 'Final',
+    // (whoever pays an HOA fee, should there turn out to be one: the seller)
     'WHO PAYS TRANSFER FEE': 'Seller',
     'WHO PAYS CAP FEE': 'Seller',
     'WHO PAYS DISCLOSURE FEE': 'Seller',
     'WHO PAYS OTHER FEE': 'Seller',
-    'OFFER ACCEPTANCE DATE': dayOnly(today, 1),
-    'ESCROW DURATION': 30,
-    'SELLER PAID BUYER COMMISSION %': 0.025,
-    'SELLER PAID BUYER COMMISSION $': 0,
-    'LISTING AGENT COMMISSION %': 0.025,
-    'LISTING AGENT COMMISSION $': 0,
+    // Buyer Inputs (the buyer's side): a Conventional loan product at 80% of the price, no points, a 700 credit score,
+    // insurance at 0.35% a year, 1% earnest money (to the nearest $100), no gift funds or buyer-paid commission. The
+    // lender fees, professions & groups, what they also qualify as, and the census designation start blank.
+    'BUYER LOAN PRODUCT': await sellerNetBuyerProductName_(),
+    'RETAIL LTV': 0.8,
+    'LENDER POINTS PURCHASED': 0,
+    'BUYER CREDIT SCORE': 700,
+    'HOMEOWNERS INSURANCE RATE': 0.0035,
+    'EARNEST MONEY DEPOSIT': Math.round(price * 0.01 / 100) * 100,
+    'GIFT FUNDS': 0,
+    'BUYERS AGENT COMMISSION %': 0,
+    'BUYERS AGENT COMMISSION $': 0,
     'VERSION TITLE': 'Initial Version',
     'VERSION DATE': dayOnly(today, 0),
     ...asked,
