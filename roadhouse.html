@@ -270,6 +270,10 @@
         .step-icon svg { width: 21px; height: 21px; }
         .step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
         .step-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+        .step-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+        /* Complete: marks a step that isn't due yet done early */
+        .step-early { min-height: 32px; padding: 2px 12px; border: 2px solid rgba(14, 42, 59, 0.35); border-radius: 999px; background: var(--white); color: var(--brown); font-family: inherit; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: border-color 0.2s ease, background-color 0.2s ease; }
+        @media (hover: hover) { .step-early:hover { border-color: var(--navy); background: #f2ede6; } }
         .step-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.2rem; font-weight: 800; line-height: 1.2; }
         .step-time { flex: 0 0 auto; font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.25rem; font-weight: 800; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
         .step-where { margin-top: 3px; font-weight: bold; overflow-wrap: anywhere; }
@@ -302,8 +306,8 @@
         .step-done-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
         .step-done { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; font-weight: bold; color: var(--olive); }
         .step-done svg { width: 16px; height: 16px; }
-        /* Undo: moves a completed step back to the list */
-        .step-undo {
+        /* Undo: moves a completed step back to the list (and the Show Times menu's Edit) */
+        .step-undo, .rh-edit {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -319,8 +323,8 @@
             cursor: pointer;
             transition: background-color 0.2s ease, border-color 0.2s ease;
         }
-        .step-undo svg { width: 15px; height: 15px; }
-        @media (hover: hover) { .step-undo:hover { border-color: var(--navy); background: #f2ede6; } }
+        .step-undo svg, .rh-edit svg { width: 15px; height: 15px; }
+        @media (hover: hover) { .step-undo:hover, .rh-edit:hover { border-color: var(--navy); background: #f2ede6; } }
         .steps-clear { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 16px; background: #f7f4f0; font-weight: bold; color: var(--olive); }
         .steps-clear svg { width: 18px; height: 18px; }
         .completed { margin-top: 28px; }
@@ -369,6 +373,19 @@
         .rh-row input:focus-visible + span { outline: 3px solid var(--gold); outline-offset: 2px; }
         @media (hover: hover) { .rh-row span:hover { transform: translateY(-2px); } }
         .rh-dialog .ie-add-entry { width: 100%; margin-top: 14px; }
+        /* Each showing (and last call) is saved on its own, then shown locked with an Edit button */
+        .rh-head-actions { display: flex; align-items: center; gap: 6px; }
+        .rh-dialog .rh-edit { min-height: 34px; padding: 4px 14px 4px 11px; letter-spacing: 0; text-transform: none; }
+        .rh-sum { display: flex; flex-direction: column; gap: 2px; margin-top: -8px; }
+        .rh-sum-main { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.15rem; font-weight: 800; line-height: 1.25; }
+        .rh-sum-sub { opacity: 0.8; }
+        .rh-sum-tag { align-self: flex-start; margin-top: 6px; padding: 3px 12px; border-radius: 999px; background: var(--olive); color: var(--cream); font-size: 0.82rem; font-weight: bold; }
+        .rh-check { display: flex; align-items: center; gap: 10px; margin-top: -4px; font-weight: bold; cursor: pointer; }
+        .rh-check input { flex: 0 0 auto; width: 22px; height: 22px; accent-color: var(--olive); }
+        .rh-entry-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+        .rh-entry-actions .btn { min-height: 44px; padding: 10px 20px; }
+        .rh-confirm { font-weight: bold; }
+        .rh-none { padding: 12px 14px; border-radius: 14px; border: 1px dashed rgba(78, 81, 62, 0.35); font-size: 0.9rem; opacity: 0.8; }
 
         /* "Has everyone been greeted?" (centered card on desktop, slides up from the bottom on phones) */
         .confirm-dialog {
@@ -424,6 +441,8 @@
             .step-time { font-size: 1.1rem; }
             .step-btn { align-self: stretch; }
             .rh-entry { padding: 14px 12px; }
+            .rh-entry-actions { flex-direction: column-reverse; }
+            .rh-entry-actions .btn { width: 100%; }
             .confirm-dialog {
                 width: 100%;
                 max-width: none;
@@ -533,44 +552,66 @@
             return Date.parse(day + 'T00:00:00Z') + AZ_OFFSET + (h * 60 + m) * MIN + (h < DAY_START_HOUR ? 864e5 : 0);
         }
         const clock = ms => new Date(ms).toLocaleTimeString('en-US', { timeZone: 'America/Phoenix', hour: 'numeric', minute: '2-digit' });
-        const minutes = ms => { const n = Math.max(1, Math.ceil(ms / MIN)); return n + (n === 1 ? ' minute' : ' minutes'); };
+        // "5 minutes", "1 hour", "2 hours 5 minutes" (at least a minute)
+        function duration(ms) {
+            const n = Math.max(1, Math.ceil(ms / MIN));
+            const part = (v, word) => v + ' ' + word + (v === 1 ? '' : 's');
+            return n < 60 ? part(n, 'minute') : part(Math.floor(n / 60), 'hour') + (n % 60 ? ' ' + part(n % 60, 'minute') : '');
+        }
         const pad = n => String(n).padStart(2, '0');
 
         // The rows in each auditorium (there is no row I in 10)
         const ROWS = { 1: 'ABCDEF', 2: 'ABCDEFG', 3: 'ABCDEF', 4: 'ABCDE', 5: 'ABCDEF', 6: 'ABCDE', 7: 'ABCD', 8: 'ABCDEF', 9: 'ABCDEF', 10: 'ABCDEFGHJ', 11: 'ABCDE', 12: 'AB', 13: 'AB', 14: 'AB' };
-        const MAX_SHOWS = 20;
+        // Showings and restroom checks, together
+        const MAX_ITEMS = 30;
 
         const icon = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
         const CHECK = icon('<path d="M20 6 9 17l-5-5"/>');
-        const MOON = icon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
+        const BELL = icon('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>');
+        const EDIT = icon('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>');
         const PLUS = icon('<path d="M12 5v14"/><path d="M5 12h14"/>');
         const UNDO = icon('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>');
         const CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const FILM = icon('<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>');
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-        // The three steps of each showing. at: the time shown; turns: when the box turns green, yellow and red.
-        // Before it turns green the box is gray and says how long until its time.
-        const STEPS = [
-            { key: 'open', name: 'Theater Open', icon: icon('<path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.56v16.16a1 1 0 0 1-1.24.97L5 20V5.56a2 2 0 0 1 1.52-1.94l4-1A2 2 0 0 1 13 4.56Z"/>'),
-                at: s => s.startMs - 30 * MIN, turns: s => [s.startMs - 30 * MIN, s.startMs + 15 * MIN, s.startMs + 30 * MIN],
-                waiting: ms => 'Theater opens in ' + minutes(ms), button: 'Everyone has been greeted', warn: 'Theater has gone dark',
-                confirm: 'Has everyone been greeted?' },
-            { key: 'drop', name: 'Drop', icon: icon('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>'),
-                at: s => s.endMs - 30 * MIN, turns: s => [s.endMs - 40 * MIN, s.endMs - 30 * MIN, s.endMs - 20 * MIN],
-                waiting: ms => 'Drop in ' + minutes(ms), button: 'Theater has been dropped', confirm: 'Has the theater been dropped?' },
-            { key: 'pickup', name: 'Pick Up', icon: icon('<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>'),
-                at: s => s.endMs + 5 * MIN, turns: s => [s.endMs + 5 * MIN, s.endMs + 10 * MIN, s.endMs + 20 * MIN],
-                waiting: ms => 'Pickup checks in ' + minutes(ms), button: 'Checks have been picked up', confirm: 'Have the checks been picked up?' },
-        ];
+        // Each showing's three steps, and a restroom check's one. at: the time shown; turns: when the box turns green,
+        // yellow and red (NEVER: it doesn't). Before it turns green the box is gray and says how long until its time.
+        // autoDone: when it's done on its own. note: a line under it while it isn't done.
+        const NEVER = Infinity;
+        // A showing that ends after last call drops at last call (green then, yellow 10 minutes later, red 20), and its
+        // Theater Open says to tell the guests about it
+        const pastLastCall = s => state.lastCallMs !== null && s.endMs > state.lastCallMs;
+        const OPEN = { key: 'open', name: 'Theater Open', icon: icon('<path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.56v16.16a1 1 0 0 1-1.24.97L5 20V5.56a2 2 0 0 1 1.52-1.94l4-1A2 2 0 0 1 13 4.56Z"/>'),
+            // green from 30 minutes before the start until the theater goes dark (15 minutes after), then done on its own
+            at: s => s.startMs - 30 * MIN, turns: s => [s.startMs - 30 * MIN, NEVER, NEVER], autoDone: s => s.startMs + 15 * MIN,
+            note: s => (pastLastCall(s) ? 'Tell guests about last call at ' + clock(state.lastCallMs) : ''),
+            waiting: ms => 'Theater opens in ' + duration(ms), button: 'Everyone has been greeted', confirm: 'Has everyone been greeted?' };
+        const DROP = { key: 'drop', name: 'Drop', icon: icon('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>'),
+            at: s => (pastLastCall(s) ? state.lastCallMs : s.endMs - 30 * MIN),
+            turns: s => (pastLastCall(s) ? [0, 10, 20].map(n => state.lastCallMs + n * MIN) : [s.endMs - 40 * MIN, s.endMs - 30 * MIN, s.endMs - 20 * MIN]),
+            waiting: ms => 'Drop in ' + duration(ms), button: 'Theater has been dropped', confirm: 'Has the theater been dropped?' };
+        const PICKUP = { key: 'pickup', name: 'Pick Up', icon: icon('<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>'),
+            at: s => s.endMs + 5 * MIN, turns: s => [s.endMs + 5 * MIN, s.endMs + 10 * MIN, s.endMs + 20 * MIN],
+            waiting: ms => 'Pickup checks in ' + duration(ms), button: 'Checks have been picked up', confirm: 'Have the checks been picked up?' };
+        // The last showing of the night's Pick Up (the same step): green from its time on, never yellow or red
+        const RESET = { ...PICKUP, name: 'Reset Theater', icon: icon('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'),
+            turns: s => [s.endMs + 5 * MIN, NEVER, NEVER],
+            waiting: ms => 'Reset theater in ' + duration(ms), button: 'Theater has been reset', confirm: 'Has the theater been reset?' };
+        const RESTROOM = { key: 'check', name: 'Restroom Check', icon: icon('<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>'),
+            at: s => s.atMs, turns: s => [0, 10, 20].map(n => s.atMs + n * MIN),
+            waiting: ms => 'Restroom check in ' + duration(ms), button: 'Restrooms have been checked', confirm: 'Have the restrooms been checked?' };
+        const stepsOf = s => (s.kind === 'restroom' ? [RESTROOM] : [OPEN, DROP, s.last ? RESET : PICKUP]);
         const STATE_TEXT = { gray: 'Coming up', green: 'Now', yellow: 'Running late', red: 'Late', done: 'Completed' };
-        const whereOf = s => 'Auditorium ' + s.auditorium + ' · ' + (s.rows.length === 1 ? 'Row ' : 'Rows ') + s.rows.join(', ');
+        const whereOf = s => (s.kind === 'restroom' ? 'Restrooms' : 'Auditorium ' + s.auditorium + ' · ' + (s.rows.length === 1 ? 'Row ' : 'Rows ') + s.rows.join(', '));
 
         const showsEl = document.getElementById('shows');
         const nowEl = document.getElementById('now-line');
         const editBtn = document.getElementById('edit-shows');
         const signOutBtn = document.getElementById('sign-out');
-        // Today's list: { day, shows: [{ id, auditorium, start, end, rows, done: { open, drop, pickup }, startMs, endMs }] }
+        // Today's list: { day, lastCall ("HH:MM" or blank), lastCallMs (null: none), shows: [{ id, kind: 'show', auditorium,
+        // start, end, rows, last, done: { open, drop, pickup }, startMs, endMs } or { id, kind: 'restroom', time,
+        // done: { check }, atMs }] }
         let state = null;
         let currentUser = null;
 
@@ -583,9 +624,10 @@
             }).then(r => r.json());
         }
         const ERRORS = {
-            invalid_shows: 'Please add at least one showing (20 at most).',
-            invalid_auditorium: 'Please enter an auditorium from 1 to 14 for each showing.',
-            invalid_time: 'Please pick the start and end time for each showing.',
+            invalid_shows: 'You can add up to 30 showings and restroom checks.',
+            invalid_auditorium: 'Please enter an auditorium from 1 to 14.',
+            invalid_time: 'Please pick the time.',
+            invalid_last_call: 'Please pick the whole last call time, or leave it blank.',
             end_before_start: 'The end time has to be after the start time.',
             invalid_rows: 'Please pick at least one row for each showing.',
             shows_cleared: 'Today’s show times were cleared at 6 AM. Refresh the page.',
@@ -595,28 +637,34 @@
         const errorText = json => ERRORS[json && json.error] || 'Something went wrong. Please try again.';
 
         function apply(json) {
-            state = { day: json.day, shows: (json.shows || []).map(s => ({ ...s, startMs: moment(json.day, s.start), endMs: moment(json.day, s.end) })) };
+            const day = json.day;
+            state = { day, lastCall: json.lastCall || '', lastCallMs: json.lastCall ? moment(day, json.lastCall) : null,
+                shows: (json.shows || []).map(s => (s.kind === 'restroom' ? { ...s, atMs: moment(day, s.time) }
+                    : { ...s, startMs: moment(day, s.start), endMs: moment(day, s.end) })) };
         }
 
         // --- The card ---
-        function stepHtml({ s, step, at, done }, now) {
+        // done: when it was done (ms; 0: not yet); auto: done on its own (nothing to undo)
+        function stepHtml({ s, step, at, done, auto }, now) {
             const [green, yellow, red] = step.turns(s);
             const color = done ? 'done' : now < green ? 'gray' : now < yellow ? 'green' : now < red ? 'yellow' : 'red';
-            let more = '';
-            if (done) {
-                more = '<div class="step-done-row"><p class="step-done">' + CHECK + 'Done at ' + clock(Date.parse(done)) + '</p>'
-                    + '<button type="button" class="step-undo" data-show="' + escapeHtml(s.id) + '" data-step="' + step.key + '" aria-label="Undo ' + escapeHtml(step.name + ', ' + whereOf(s)) + '">' + UNDO + 'Undo</button></div>';
+            const data = ' data-show="' + escapeHtml(s.id) + '" data-step="' + step.key + '"';
+            const label = escapeHtml(step.name + ', ' + whereOf(s));
+            const note = !done && step.note ? step.note(s) : '';
+            let more = note ? '<p class="step-warn">' + BELL + escapeHtml(note) + '</p>' : '';
+            if (auto) more += '<div class="step-done-row"><p class="step-done">' + CHECK + 'Completed automatically at ' + clock(done) + '</p></div>';
+            else if (done) {
+                more += '<div class="step-done-row"><p class="step-done">' + CHECK + 'Done at ' + clock(done) + '</p>'
+                    + '<button type="button" class="step-undo"' + data + ' aria-label="Undo ' + label + '">' + UNDO + 'Undo</button></div>';
             }
-            else if (color === 'gray') more = '<p class="step-wait">' + step.waiting(at - now) + '</p>';
-            else {
-                if (step.warn && (color === 'yellow' || color === 'red')) more += '<p class="step-warn">' + MOON + step.warn + '</p>';
-                more += '<button type="button" class="step-btn" data-show="' + escapeHtml(s.id) + '" data-step="' + step.key + '">' + CHECK + step.button + '</button>';
-            }
+            else if (color === 'gray') more += '<p class="step-wait">' + step.waiting(at - now) + '</p>';
+            else more += '<button type="button" class="step-btn"' + data + '>' + CHECK + step.button + '</button>';
             return '<li class="step is-' + color + '"><span class="step-icon">' + step.icon + '</span><div class="step-body">'
-                + '<div class="step-top"><span class="step-name">' + step.name + '<span class="sr-only">, ' + STATE_TEXT[color] + '</span></span>'
+                + '<div class="step-top"><span class="step-title"><span class="step-name">' + step.name + '<span class="sr-only">, ' + STATE_TEXT[color] + '</span></span>'
+                + (color === 'gray' ? '<button type="button" class="step-early"' + data + ' aria-label="Complete ' + label + ' early">Complete</button>' : '') + '</span>'
                 + '<span class="step-time">' + clock(at) + '</span></div>'
                 + '<span class="step-where">' + escapeHtml(whereOf(s)) + '</span>'
-                + '<span class="step-show">Movie ' + clock(s.startMs) + ' – ' + clock(s.endMs) + '</span>'
+                + (s.kind === 'restroom' ? '' : '<span class="step-show">Movie ' + clock(s.startMs) + ' – ' + clock(s.endMs) + '</span>')
                 + more + '</div></li>';
         }
         let lastHtml = '';
@@ -633,8 +681,12 @@
                     + '<button type="button" class="btn" data-add>' + PLUS + 'Add Show Times</button></div>';
             } else {
                 const items = [];
-                state.shows.forEach(s => STEPS.forEach((step, n) => items.push({ s, step, n, at: step.at(s), done: s.done[step.key] })));
-                const order = (a, b) => (a.at - b.at) || (a.s.auditorium - b.s.auditorium) || (a.n - b.n);
+                state.shows.forEach(s => stepsOf(s).forEach((step, n) => {
+                    const saved = s.done[step.key];
+                    const auto = !saved && step.autoDone && now >= step.autoDone(s);
+                    items.push({ s, step, n, at: step.at(s), done: saved ? Date.parse(saved) : auto ? step.autoDone(s) : 0, auto });
+                }));
+                const order = (a, b) => (a.at - b.at) || ((a.s.auditorium || 0) - (b.s.auditorium || 0)) || (a.n - b.n);
                 const active = items.filter(i => !i.done).sort(order);
                 const done = items.filter(i => i.done).sort(order);
                 html = (active.length ? '<ul class="steps">' + active.map(i => stepHtml(i, now)).join('') + '</ul>'
@@ -653,7 +705,7 @@
         }
         showsEl.addEventListener('click', e => {
             if (e.target.closest('[data-add]')) openMenu();
-            const b = e.target.closest('.step-btn');
+            const b = e.target.closest('.step-btn, .step-early');
             if (b) openConfirm(b.dataset.show, b.dataset.step, false);
             const u = e.target.closest('.step-undo');
             if (u) openConfirm(u.dataset.show, u.dataset.step, true);
@@ -668,8 +720,8 @@
         let pending = null;
         function openConfirm(showId, key, undo) {
             const s = state && state.shows.find(x => x.id === showId);
-            const step = STEPS.find(x => x.key === key);
-            if (!s || !step) return;
+            const step = s && stepsOf(s).find(x => x.key === key);
+            if (!step) return;
             pending = { showId, key, undo };
             document.getElementById('step-confirm-title').textContent = undo ? 'Undo ' + step.name + '?' : step.confirm;
             document.getElementById('step-confirm-text').textContent = whereOf(s) + '. '
@@ -703,7 +755,9 @@
         // (the close event comes a moment later, so it's skipped when the box has already been opened again)
         confirmBox.addEventListener('close', () => { if (!confirmBox.open) pending = null; });
 
-        // --- The Show Times menu: each showing's auditorium, start and end time, and rows; at least one, 20 at most ---
+        // --- The Show Times menu: last call at the top, then each showing (auditorium, start and end time, rows, and
+        // whether it's the last of the night) and restroom check (a time). Each one is saved on its own (the whole saved
+        // list goes to the API with that one change) and then shown locked behind its Edit button. ---
         let menu = null;
         function openMenu() {
             if (!state) return;
@@ -719,29 +773,44 @@
                 + '<div class="dialog-head"><h2 id="rh-menu-title">Show Times</h2><button type="button" class="close-btn" data-close aria-label="Close">' + CLOSE + '</button></div>'
                 + '<p class="muted">Each theater you’re working today. They’re cleared at 6 AM.</p>'
                 + '<div class="dialog-scroll"><div class="rh-entries" data-entries></div>'
-                + '<button type="button" class="ie-add-entry" data-add-entry>' + PLUS + 'Add Another Showing</button></div>'
+                + '<button type="button" class="ie-add-entry" data-add-entry="show">' + PLUS + 'Add Another Showing</button>'
+                + '<button type="button" class="ie-add-entry" data-add-entry="restroom">' + PLUS + 'Add Restroom Check</button></div>'
                 + '<div class="dialog-foot"><p class="form-message" role="alert"></p>'
-                + '<div class="form-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button>'
-                + '<button type="submit" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save Show Times</button></div></div>'
+                + '<div class="form-actions"><button type="button" class="btn" data-close>Done</button></div></div>'
                 + '</form>';
             document.body.append(dialog);
             const $ = sel => dialog.querySelector(sel);
+            const scroller = $('.dialog-scroll');
             const list = $('[data-entries]');
             const message = $('.form-message');
-            const saveBtn = $('[data-save]');
-            const addBtn = $('[data-add-entry]');
+            const addBtns = dialog.querySelectorAll('[data-add-entry]');
+            // Last call, then each showing / restroom check: { id, kind ('lastCall', 'show' or 'restroom'), saved (the
+            // saved values in the form's shape; null: not saved yet), draft (the form's values), editing, removing }
             let entries = [];
+            let busy = false;
 
             const blankTime = () => ({ h: '', m: '', ap: 'PM' });
-            const blankEntry = () => ({ id: '', aud: '', start: blankTime(), end: blankTime(), rows: [] });
+            const blankDraft = kind => (kind === 'show' ? { aud: '', start: blankTime(), end: blankTime(), rows: [], last: false } : { time: blankTime() });
+            const copy = v => JSON.parse(JSON.stringify(v));
             const audOf = v => (/^\d{1,2}$/.test(String(v)) && ROWS[Number(v)] ? Number(v) : 0);
             // "HH:MM" (24-hour) from the picker, or null until hour, minute and AM/PM are all picked
             const timeOf = t => (t.h && t.m !== '' && t.ap ? pad((Number(t.h) % 12) + (t.ap === 'PM' ? 12 : 0)) + ':' + t.m : null);
             const pickerOf = hhmm => { const [h, m] = hhmm.split(':').map(Number); return { h: String((h % 12) || 12), m: pad(m), ap: h >= 12 ? 'PM' : 'AM' }; };
+            const clockOf = t => clock(moment(showDay(), timeOf(t)));
+            const formOf = s => (s.kind === 'restroom' ? { time: pickerOf(s.time) }
+                : { aud: String(s.auditorium), start: pickerOf(s.start), end: pickerOf(s.end), rows: [...s.rows], last: s.last });
+            const lastCallEntry = () => {
+                const saved = { time: state.lastCall ? pickerOf(state.lastCall) : blankTime() };
+                return { id: '', kind: 'lastCall', saved, draft: copy(saved), editing: false };
+            };
+            // What the API takes for one saved (or being saved) entry
+            const apiOf = (e, d) => (e.kind === 'restroom' ? { id: e.id, kind: 'restroom', time: timeOf(d.time) }
+                : { id: e.id, auditorium: audOf(d.aud), start: timeOf(d.start), end: timeOf(d.end), rows: d.rows, last: d.last });
+            const changed = e => e.editing && JSON.stringify(e.draft) !== JSON.stringify(e.saved || blankDraft(e.kind));
 
-            const timeHtml = (k, which, t) => {
+            const timeHtml = (k, which, label, t) => {
                 const id = 'rh-' + which + '-' + k;
-                return '<div class="field"><span class="rh-label" id="' + id + '">' + (which === 'start' ? 'Start Time' : 'End Time') + '</span>'
+                return '<div class="field"><span class="rh-label" id="' + id + '">' + label + '</span>'
                     + '<div class="rh-time" data-time="' + which + '" role="group" aria-labelledby="' + id + '">'
                     + '<select class="rh-h" aria-label="Hour"><option value="">Hour</option>'
                     + Array.from({ length: 12 }, (_, i) => String(i + 1)).map(h => '<option' + (h === t.h ? ' selected' : '') + '>' + h + '</option>').join('') + '</select>'
@@ -751,145 +820,221 @@
                     + '<span class="rh-ampm">' + ['AM', 'PM'].map(ap => '<button type="button" data-ap="' + ap + '" aria-pressed="' + (t.ap === ap) + '">' + ap + '</button>').join('') + '</span>'
                     + '</div></div>';
             };
-            const rowsHtml = e => {
-                const n = audOf(e.aud);
+            const rowsHtml = d => {
+                const n = audOf(d.aud);
                 if (!n) return '<p class="rh-rows-empty">Enter the auditorium to see its rows.</p>';
-                return ROWS[n].split('').map(r => '<label class="rh-row"><input type="checkbox" value="' + r + '"' + (e.rows.includes(r) ? ' checked' : '') + '>'
+                return ROWS[n].split('').map(r => '<label class="rh-row"><input type="checkbox" value="' + r + '"' + (d.rows.includes(r) ? ' checked' : '') + '>'
                     + '<span>' + CHECK + r + '</span></label>').join('');
             };
+            function entryHtml(e, k) {
+                const title = e.kind === 'lastCall' ? 'When is last call?' : e.kind === 'restroom' ? 'Restroom Check'
+                    : 'Showing ' + entries.slice(0, k + 1).filter(x => x.kind === 'show').length;
+                const what = e.kind === 'restroom' ? 'restroom check' : 'showing';
+                let head = '';
+                if (!e.editing && !e.removing) {
+                    head = '<span class="rh-head-actions"><button type="button" class="rh-edit" data-edit aria-label="Edit ' + escapeHtml(title) + '">' + EDIT + 'Edit</button>'
+                        + (e.kind === 'lastCall' ? '' : '<button type="button" class="ie-remove" data-remove aria-label="Remove ' + escapeHtml(title) + '">' + CLOSE + 'Remove</button>') + '</span>';
+                } else if (e.editing && !e.saved) head = '<button type="button" class="ie-remove" data-remove aria-label="Remove ' + escapeHtml(title) + '">' + CLOSE + 'Remove</button>';
+                let body;
+                if (e.removing) {
+                    body = '<p class="rh-confirm">Remove this ' + what + '? Anything marked done for it is cleared too.</p>'
+                        + '<p class="rh-error" data-entry-error role="alert"></p>'
+                        + '<div class="rh-entry-actions"><button type="button" class="btn btn-secondary" data-keep>Keep It</button>'
+                        + '<button type="button" class="btn" data-remove-yes><span class="btn-spinner" aria-hidden="true"></span>Remove</button></div>';
+                } else if (!e.editing) {
+                    const d = e.saved;
+                    body = '<div class="rh-sum">' + (e.kind === 'lastCall' ? (timeOf(d.time) ? '<p class="rh-sum-main">' + clockOf(d.time) + '</p>' : '<p class="rh-sum-sub">Not set</p>')
+                        : e.kind === 'restroom' ? '<p class="rh-sum-main">' + clockOf(d.time) + '</p>'
+                        : '<p class="rh-sum-main">Auditorium ' + escapeHtml(d.aud) + '</p><p class="rh-sum-sub">' + clockOf(d.start) + ' – ' + clockOf(d.end)
+                            + ' · ' + (d.rows.length === 1 ? 'Row ' : 'Rows ') + d.rows.join(', ') + '</p>' + (d.last ? '<p class="rh-sum-tag">Last showing of the night</p>' : '')) + '</div>';
+                } else {
+                    const d = e.draft;
+                    if (e.kind === 'lastCall') {
+                        body = timeHtml(k, 'time', 'Last Call', d.time)
+                            + '<p class="rh-hint">Showings that end after it drop at last call. Leave it blank if there’s none.</p>';
+                    } else if (e.kind === 'restroom') body = timeHtml(k, 'time', 'Time', d.time);
+                    else {
+                        body = '<div class="field"><label for="rh-aud-' + k + '">Auditorium</label>'
+                            + '<input id="rh-aud-' + k + '" class="rh-aud" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="1–14" value="' + escapeHtml(d.aud) + '">'
+                            + '<p class="rh-error rh-aud-error" role="alert"></p></div>'
+                            + timeHtml(k, 'start', 'Start Time', d.start) + timeHtml(k, 'end', 'End Time', d.end)
+                            + '<div><span class="rh-label" id="rh-rows-' + k + '">Rows</span><p class="rh-hint">Select all that apply.</p>'
+                            + '<div class="rh-rows" role="group" aria-labelledby="rh-rows-' + k + '">' + rowsHtml(d) + '</div></div>'
+                            + '<label class="rh-check"><input type="checkbox" class="rh-last"' + (d.last ? ' checked' : '') + '>This is the last showing of the night</label>';
+                    }
+                    body += '<p class="rh-error" data-entry-error role="alert"></p>'
+                        + '<div class="rh-entry-actions">' + (e.saved ? '<button type="button" class="btn btn-secondary" data-cancel>Cancel</button>' : '')
+                        + '<button type="button" class="btn" data-save><span class="btn-spinner" aria-hidden="true"></span>Save '
+                        + (e.kind === 'lastCall' ? 'Last Call' : e.kind === 'restroom' ? 'Restroom Check' : 'Showing') + '</button></div>';
+                }
+                return '<fieldset class="rh-entry" data-k="' + k + '"><legend class="sr-only">' + escapeHtml(title) + '</legend>'
+                    + '<div class="rh-entry-head"><span>' + escapeHtml(title) + '</span>' + head + '</div>' + body + '</fieldset>';
+            }
             function draw() {
-                list.innerHTML = entries.map((e, k) => '<fieldset class="rh-entry" data-k="' + k + '">'
-                    + '<legend class="sr-only">Showing ' + (k + 1) + '</legend>'
-                    + '<div class="rh-entry-head"><span>Showing ' + (k + 1) + '</span>'
-                    + '<button type="button" class="ie-remove" data-remove' + (entries.length === 1 ? ' hidden' : '') + '>' + CLOSE + 'Remove</button></div>'
-                    + '<div class="field"><label for="rh-aud-' + k + '">Auditorium</label>'
-                    + '<input id="rh-aud-' + k + '" class="rh-aud" type="text" inputmode="numeric" maxlength="2" autocomplete="off" placeholder="1–14" value="' + escapeHtml(e.aud) + '">'
-                    + '<p class="rh-error" role="alert"></p></div>'
-                    + timeHtml(k, 'start', e.start) + timeHtml(k, 'end', e.end)
-                    + '<div><span class="rh-label" id="rh-rows-' + k + '">Rows</span><p class="rh-hint">Select all that apply.</p>'
-                    + '<div class="rh-rows" role="group" aria-labelledby="rh-rows-' + k + '">' + rowsHtml(e) + '</div></div>'
-                    + '</fieldset>').join('');
-                addBtn.hidden = entries.length >= MAX_SHOWS;
+                list.innerHTML = entries.map(entryHtml).join('');
+                addBtns.forEach(b => { b.hidden = entries.length - 1 >= MAX_ITEMS; });
             }
             const entryOf = el => { const box = el.closest('[data-k]'); return box ? { box, e: entries[Number(box.dataset.k)] } : {}; };
+            const boxOf = e => list.querySelector('[data-k="' + entries.indexOf(e) + '"]');
             const clearInvalid = box => box.querySelectorAll('.is-invalid').forEach(x => x.classList.remove('is-invalid'));
 
-            list.addEventListener('input', ev => {
+            scroller.addEventListener('input', ev => {
                 const { box, e } = entryOf(ev.target);
-                if (!e) return;
+                if (!e || !ev.target.matches('.rh-aud')) return;
                 clearInvalid(box);
-                message.textContent = '';
-                if (ev.target.matches('.rh-aud')) {
-                    // Digits only; the rows follow the auditorium (rows it doesn't have are let go)
-                    ev.target.value = ev.target.value.replace(/\D/g, '').slice(0, 2);
-                    e.aud = ev.target.value;
-                    const n = audOf(e.aud);
-                    if (n) e.rows = e.rows.filter(r => ROWS[n].includes(r));
-                    box.querySelector('.rh-error').textContent = e.aud && !n ? 'Auditoriums are 1 to 14.' : '';
-                    box.querySelector('.rh-rows').innerHTML = rowsHtml(e);
-                }
+                // Digits only; the rows follow the auditorium (rows it doesn't have are let go)
+                ev.target.value = ev.target.value.replace(/\D/g, '').slice(0, 2);
+                e.draft.aud = ev.target.value;
+                const n = audOf(e.draft.aud);
+                if (n) e.draft.rows = e.draft.rows.filter(r => ROWS[n].includes(r));
+                box.querySelector('.rh-aud-error').textContent = e.draft.aud && !n ? 'Auditoriums are 1 to 14.' : '';
+                box.querySelector('.rh-rows').innerHTML = rowsHtml(e.draft);
             });
-            list.addEventListener('change', ev => {
+            scroller.addEventListener('change', ev => {
                 const { box, e } = entryOf(ev.target);
                 if (!e) return;
                 clearInvalid(box);
-                message.textContent = '';
                 const t = ev.target.closest('[data-time]');
-                if (t && ev.target.matches('.rh-h')) e[t.dataset.time].h = ev.target.value;
-                if (t && ev.target.matches('.rh-m')) e[t.dataset.time].m = ev.target.value;
+                if (t && ev.target.matches('.rh-h')) e.draft[t.dataset.time].h = ev.target.value;
+                if (t && ev.target.matches('.rh-m')) e.draft[t.dataset.time].m = ev.target.value;
+                if (ev.target.matches('.rh-last')) e.draft.last = ev.target.checked;
                 if (ev.target.matches('.rh-row input')) {
-                    const all = ROWS[audOf(e.aud)] || '';
-                    e.rows = [...box.querySelectorAll('.rh-row input:checked')].map(x => x.value).sort((a, b) => all.indexOf(a) - all.indexOf(b));
+                    const all = ROWS[audOf(e.draft.aud)] || '';
+                    e.draft.rows = [...box.querySelectorAll('.rh-row input:checked')].map(x => x.value).sort((a, b) => all.indexOf(a) - all.indexOf(b));
                 }
             });
-            list.addEventListener('click', ev => {
+            scroller.addEventListener('click', ev => {
+                const add = ev.target.closest('[data-add-entry]');
+                if (add) {
+                    if (entries.length - 1 >= MAX_ITEMS) return;
+                    const kind = add.dataset.addEntry;
+                    entries.push({ id: '', kind, saved: null, draft: blankDraft(kind), editing: true });
+                    message.textContent = '';
+                    draw();
+                    const box = list.lastElementChild;
+                    box.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                    box.querySelector('input, select').focus({ preventScroll: true });
+                    return;
+                }
                 const { box, e } = entryOf(ev.target);
-                if (!e) return;
+                if (!e || busy) return;
                 const ap = ev.target.closest('[data-ap]');
                 if (ap) {
                     const t = ap.closest('[data-time]');
-                    e[t.dataset.time].ap = ap.dataset.ap;
+                    e.draft[t.dataset.time].ap = ap.dataset.ap;
                     t.querySelectorAll('[data-ap]').forEach(b => b.setAttribute('aria-pressed', String(b === ap)));
                     clearInvalid(box);
-                    message.textContent = '';
                 }
-                if (ev.target.closest('[data-remove]') && entries.length > 1) {
-                    entries.splice(Number(box.dataset.k), 1);
+                if (ev.target.closest('[data-edit]')) {
+                    Object.assign(e, { editing: true, draft: copy(e.saved) });
+                    draw();
+                    boxOf(e).querySelector('input, select').focus();
+                }
+                if (ev.target.closest('[data-cancel]')) {
+                    Object.assign(e, { editing: false, draft: copy(e.saved) });
+                    draw();
+                }
+                if (ev.target.closest('[data-remove]')) {
+                    // (one that was never saved just goes; a saved one asks first)
+                    if (e.saved) e.removing = true;
+                    else entries.splice(entries.indexOf(e), 1);
                     message.textContent = '';
                     draw();
                 }
-            });
-            addBtn.addEventListener('click', () => {
-                if (entries.length >= MAX_SHOWS) return;
-                entries.push(blankEntry());
-                message.textContent = '';
-                draw();
-                const box = list.querySelector('[data-k="' + (entries.length - 1) + '"]');
-                box.scrollIntoView({ block: 'start', behavior: 'smooth' });
-                box.querySelector('.rh-aud').focus({ preventScroll: true });
-            });
-            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => dialog.close()));
-
-            // The first thing missing: [the element to point at, what to say]
-            function problem() {
-                const day = showDay();
-                for (let k = 0; k < entries.length; k++) {
-                    const e = entries[k];
-                    const box = list.querySelector('[data-k="' + k + '"]');
-                    const which = entries.length > 1 ? ' for showing ' + (k + 1) : '';
-                    if (!audOf(e.aud)) return [box.querySelector('.rh-aud'), 'Please enter an auditorium from 1 to 14' + which + '.'];
-                    for (const t of ['start', 'end']) {
-                        if (!timeOf(e[t])) {
-                            const p = box.querySelector('[data-time="' + t + '"]');
-                            return [p.querySelector(e[t].h ? '.rh-m' : '.rh-h'), 'Please pick the ' + t + ' time' + which + '.'];
-                        }
+                if (ev.target.closest('[data-keep]')) { e.removing = false; draw(); }
+                if (ev.target.closest('[data-remove-yes]')) save(e, ev.target.closest('.btn'), true);
+                if (ev.target.closest('[data-save]')) {
+                    const p = problem(e, box);
+                    if (p) {
+                        box.querySelector('[data-entry-error]').textContent = p[1];
+                        p[0].classList.add('is-invalid');
+                        p[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        (p[0].matches('.rh-rows') ? p[0].querySelector('input') : p[0]).focus({ preventScroll: true });
+                        return;
                     }
-                    if (moment(day, timeOf(e.end)) <= moment(day, timeOf(e.start))) return [box.querySelector('[data-time="end"] .rh-h'), 'The end time has to be after the start time' + which + '.'];
-                    if (!e.rows.length) return [box.querySelector('.rh-rows'), 'Please pick at least one row' + which + '.'];
+                    save(e, ev.target.closest('.btn'), false);
                 }
+            });
+
+            // What's missing from one entry: [the element to point at, what to say], or null
+            function problem(e, box) {
+                box.querySelector('[data-entry-error]').textContent = '';
+                clearInvalid(box);
+                const d = e.draft;
+                const timeProblem = (t, what) => {
+                    if (timeOf(d[t])) return null;
+                    const p = box.querySelector('[data-time="' + t + '"]');
+                    return [p.querySelector(d[t].h ? '.rh-m' : '.rh-h'), 'Please pick the ' + what + '.'];
+                };
+                if (e.kind === 'lastCall') return d.time.h || d.time.m ? timeProblem('time', 'whole time, or clear the hour and minute for no last call') : null;
+                if (e.kind === 'restroom') return timeProblem('time', 'time');
+                if (!audOf(d.aud)) return [box.querySelector('.rh-aud'), 'Please enter an auditorium from 1 to 14.'];
+                const t = timeProblem('start', 'start time') || timeProblem('end', 'end time');
+                if (t) return t;
+                const day = showDay();
+                if (moment(day, timeOf(d.end)) <= moment(day, timeOf(d.start))) return [box.querySelector('[data-time="end"] .rh-h'), 'The end time has to be after the start time.'];
+                if (!d.rows.length) return [box.querySelector('.rh-rows'), 'Please pick at least one row.'];
                 return null;
             }
-            $('form').addEventListener('submit', async ev => {
-                ev.preventDefault();
-                message.textContent = '';
-                list.querySelectorAll('.is-invalid').forEach(x => x.classList.remove('is-invalid'));
-                const p = problem();
-                if (p) {
-                    message.textContent = p[1];
-                    p[0].classList.add('is-invalid');
-                    p[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-                    (p[0].matches('.rh-rows') ? p[0].querySelector('input') : p[0]).focus({ preventScroll: true });
-                    return;
-                }
-                saveBtn.disabled = true;
-                saveBtn.classList.add('is-loading');
+            // Saves one entry's change (or removes it): the saved list goes to the API with only that change
+            async function save(target, btn, remove) {
+                const sent = entries.filter(e => e.kind !== 'lastCall' && (e === target ? !remove : e.saved));
+                const lastCall = entries.find(e => e.kind === 'lastCall');
+                const payload = {
+                    action: 'saveRoadhouseShows',
+                    lastCall: timeOf((target === lastCall ? target.draft : lastCall.saved).time) || '',
+                    shows: sent.map(e => apiOf(e, e === target ? e.draft : e.saved)),
+                };
+                const error = boxOf(target).querySelector('[data-entry-error]');
+                busy = true;
+                btn.disabled = true;
+                btn.classList.add('is-loading');
                 try {
-                    const json = await api({ action: 'saveRoadhouseShows', shows: entries.map(e => ({ id: e.id, auditorium: audOf(e.aud), start: timeOf(e.start), end: timeOf(e.end), rows: e.rows })) });
+                    const json = await api(payload);
                     if (!json.ok) throw json;
                     apply(json);
-                    dialog.close();
+                    // The API sends the list back in the same order, with each new one's ID
+                    sent.forEach((e, i) => { e.id = json.shows[i].id; e.saved = formOf(json.shows[i]); });
+                    if (remove) entries.splice(entries.indexOf(target), 1);
+                    else if (target === lastCall) target.saved = { time: json.lastCall ? pickerOf(json.lastCall) : blankTime() };
+                    Object.assign(target, { editing: false, removing: false, draft: copy(target.saved || {}) });
+                    message.textContent = '';
+                    draw();
                     render();
                 } catch (err) {
                     console.error(err);
-                    message.textContent = errorText(err);
+                    if (error) error.textContent = errorText(err);
+                    btn.disabled = false;
+                    btn.classList.remove('is-loading');
                 } finally {
-                    saveBtn.disabled = false;
-                    saveBtn.classList.remove('is-loading');
+                    busy = false;
                 }
-            });
+            }
+
+            // Closing with a change that isn't saved: say so (and point at it) instead
+            function close(ev) {
+                const open = entries.find(changed);
+                if (!open) { dialog.close(); return; }
+                if (ev) ev.preventDefault();
+                message.textContent = 'Save or cancel your changes first.';
+                boxOf(open).scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+            dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => close()));
+            dialog.addEventListener('cancel', ev => { if (entries.some(changed)) close(ev); });
+            $('form').addEventListener('submit', ev => ev.preventDefault());
 
             return {
                 open() {
                     const editing = state.shows.length > 0;
-                    entries = editing
-                        ? state.shows.map(s => ({ id: s.id, aud: String(s.auditorium), start: pickerOf(s.start), end: pickerOf(s.end), rows: [...s.rows] }))
-                        : [blankEntry()];
+                    entries = [lastCallEntry()].concat(state.shows.map(s => ({ id: s.id, kind: s.kind, saved: formOf(s), draft: formOf(s), editing: false })));
+                    if (!editing) entries.push({ id: '', kind: 'show', saved: null, draft: blankDraft('show'), editing: true });
                     $('#rh-menu-title').textContent = editing ? 'Edit Show Times' : 'Add Show Times';
                     message.textContent = '';
+                    busy = false;
                     draw();
                     dialog.showModal();
                     lockPageScroll(dialog);
-                    $('.dialog-scroll').scrollTop = 0;
+                    scroller.scrollTop = 0;
                     if (!editing) list.querySelector('.rh-aud').focus();
                 },
             };
@@ -906,7 +1051,7 @@
         function tick() {
             if (!state) return;
             if (showDay() !== state.day) {
-                state = { day: showDay(), shows: [] };
+                state = { day: showDay(), lastCall: '', lastCallMs: null, shows: [] };
                 document.querySelectorAll('.rh-dialog[open], .confirm-dialog[open]').forEach(d => d.close());
                 refresh();
             }
