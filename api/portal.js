@@ -557,8 +557,8 @@ export async function handle(body, query) {
     if (body.action === 'markTransactionPaid') return await settleTransaction_(id, account, body, true);
     if (body.action === 'moveTransaction') return await settleTransaction_(id, account, body, false);
     if (body.action === 'updateBalance') return await updateBalance_(id, account, body);
-    // roadhouse.html: today's show times and their steps (CUM accounts only; erased at 6 AM Arizona time)
-    if (['roadhouseShows', 'saveRoadhouseShows', 'completeRoadhouseStep', 'undoRoadhouseStep'].includes(body.action) && !hasRole_(account, 'CUM')) return { ok: false, error: 'not_allowed' };
+    // roadhouse.html and roadhouseservers.com: today's show times and their steps (any account, each its own list;
+    // erased at 6 AM Arizona time)
     if (body.action === 'roadhouseShows') return await roadhouseShows(id);
     if (body.action === 'saveRoadhouseShows') return await saveRoadhouseShows(id, body);
     if (body.action === 'completeRoadhouseStep') return await completeRoadhouseStep(id, body);
@@ -2528,10 +2528,12 @@ async function signup_(id, found, body) {
   const firstName = cleanText_(body.firstName, 50);
   const lastName = cleanText_(body.lastName, 50);
   if (!firstName || !lastName) return { ok: false, error: 'invalid_name' };
-  const email = String(body.email || '').trim().toLowerCase().slice(0, 120);
-  if (!/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
-  const goals = (Array.isArray(body.goals) ? body.goals : []).filter(g => SIGNUP_GOALS.indexOf(g) >= 0);
-  if (!goals.length) return { ok: false, error: 'invalid_goals' };
+  // roadhouseservers.com's sign-up (nameOnly): just the name, so no email or goals and every role off
+  const nameOnly = body.nameOnly === true;
+  const email = nameOnly ? '' : String(body.email || '').trim().toLowerCase().slice(0, 120);
+  if (!nameOnly && !/^[^\s@=+]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { ok: false, error: 'invalid_email' };
+  const goals = nameOnly ? [] : (Array.isArray(body.goals) ? body.goals : []).filter(g => SIGNUP_GOALS.indexOf(g) >= 0);
+  if (!nameOnly && !goals.length) return { ok: false, error: 'invalid_goals' };
   const has = g => goals.indexOf(g) >= 0;
   // Roles only count when "Other" was chosen (that's the only time the question is asked)
   const roles = has('other') ? (Array.isArray(body.roles) ? body.roles : []).filter(r => r in SIGNUP_ROLES) : [];
