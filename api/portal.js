@@ -563,6 +563,9 @@ export async function handle(body, query) {
     if (body.action === 'saveRoadhouseShows') return await saveRoadhouseShows(id, body);
     if (body.action === 'completeRoadhouseStep') return await completeRoadhouseStep(id, body);
     if (body.action === 'undoRoadhouseStep') return await undoRoadhouseStep(id, body);
+    // roadhouseservers.com's Admin page (ROADHOUSE ADMIN accounts): the ROADHOUSE accounts and their roles
+    if (body.action === 'roadhouseUsers') return await roadhouseUsers_(account);
+    if (body.action === 'saveRoadhouseRoles') return await saveRoadhouseRoles_(account, body);
     // flip-portal.html: wholesale properties with map positions (admins and FLIPPER BUYER accounts)
     if (body.action === 'wholesaleProperties') return await wholesaleProperties_(account);
     if (body.action === 'wholesalePhotos') return await wholesalePhotos_(account, body);
@@ -632,6 +635,33 @@ async function findAccount_(id) {
   if (!id) return null;
   const r = (await rows('accounts')).find(a => phoneToId_(a['ACCOUNT ID'] || a._id) === id);
   return r ? { row: r, docId: r._id } : null;
+}
+
+// roadhouseservers.com's Admin page: the roles a ROADHOUSE ADMIN gives the ROADHOUSE accounts there
+const ROADHOUSE_ROLES = ['SERVER', 'SERVER LEAD', 'MANAGER'];
+// → { ok, users: [{ id, name, preferred, roles: { SERVER, SERVER LEAD, MANAGER: true / false } }] }, by name
+async function roadhouseUsers_(account) {
+  if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
+  const users = (await rows('accounts'))
+    .filter(r => hasRole_(r, 'ROADHOUSE') && phoneToId_(r['ACCOUNT ID'] || r._id).length === 10)
+    .map(r => ({ id: phoneToId_(r['ACCOUNT ID'] || r._id), name: fullName_(r), preferred: String(r['PREFERRED NAME'] || '').trim(),
+      roles: Object.fromEntries(ROADHOUSE_ROLES.map(c => [c, hasRole_(r, c)])) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, users };
+}
+// body: { userId (a ROADHOUSE account), roles: { SERVER, SERVER LEAD, MANAGER: true / false } (all three) } → the list again
+async function saveRoadhouseRoles_(account, body) {
+  if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
+  const found = await findAccount_(phoneToId_(body.userId));
+  if (!found || !hasRole_(found.row, 'ROADHOUSE')) return { ok: false, error: 'not_found' };
+  const roles = body.roles || {};
+  const values = {};
+  for (const c of ROADHOUSE_ROLES) {
+    if (typeof roles[c] !== 'boolean') return { ok: false, error: 'invalid_roles' };
+    values[c] = roles[c];
+  }
+  await update('accounts', found.docId, values);
+  return roadhouseUsers_(account);
 }
 
 // This account's INCOME row, or null
@@ -2561,6 +2591,11 @@ async function signup_(id, found, body) {
     'WHOLESALER': roles.indexOf('wholesaler') >= 0,
     'ADMIN': false,
     'CUM': false,
+    // roadhouseservers.com: its sign-ups are ROADHOUSE; SERVER, SERVER LEAD and MANAGER come from its Admin page
+    'ROADHOUSE': nameOnly,
+    'SERVER': false,
+    'SERVER LEAD': false,
+    'MANAGER': false,
   };
 
   // The document ID is the phone number, so a double tap can't add two accounts
