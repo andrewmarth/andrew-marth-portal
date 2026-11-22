@@ -6,6 +6,7 @@ import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from '
 import { db } from './lib/store.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
+import { roadhouseSchedule, saveRoadhouseSchedule, roadhouseAssignments, completeRoadhouseAssignment, undoRoadhouseAssignment } from './lib/roadhouse-schedule.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL, RATE_BASES, rateBaseOfType, historyKey } from './lib/mnd-rate.js';
 
@@ -566,6 +567,14 @@ export async function handle(body, query) {
     // roadhouseservers.com's Admin page (ROADHOUSE ADMIN accounts): the ROADHOUSE accounts and their roles
     if (body.action === 'roadhouseUsers') return await roadhouseUsers_(account);
     if (body.action === 'saveRoadhouseRoles') return await saveRoadhouseRoles_(account, body);
+    // roadhouseservers.com: the theater's shared schedule. Server leads build it (Lead Dashboard); every account sees and
+    // checks off only its own rows and restroom checks (Server Dashboard)
+    if (['roadhouseSchedule', 'saveRoadhouseSchedule'].includes(body.action) && !hasRole_(account, 'SERVER LEAD')) return { ok: false, error: 'not_allowed' };
+    if (body.action === 'roadhouseSchedule') return await roadhouseSchedule(await roadhouseServers_());
+    if (body.action === 'saveRoadhouseSchedule') return await saveRoadhouseSchedule(id, body, await roadhouseServers_());
+    if (body.action === 'roadhouseAssignments') return await roadhouseAssignments(id);
+    if (body.action === 'completeRoadhouseAssignment') return await completeRoadhouseAssignment(id, body);
+    if (body.action === 'undoRoadhouseAssignment') return await undoRoadhouseAssignment(id, body);
     // flip-portal.html: wholesale properties with map positions (admins and FLIPPER BUYER accounts)
     if (body.action === 'wholesaleProperties') return await wholesaleProperties_(account);
     if (body.action === 'wholesalePhotos') return await wholesalePhotos_(account, body);
@@ -648,6 +657,15 @@ async function roadhouseUsers_(account) {
       roles: Object.fromEntries(ROADHOUSE_ROLES.map(c => [c, hasRole_(r, c)])) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { ok: true, users };
+}
+// The servers a server lead can assign rows to (SERVER accounts): [{ id, name }], by name. Leads see only the name (the
+// name they go by, then their last name); the ID is what an assignment saves.
+async function roadhouseServers_() {
+  return (await rows('accounts'))
+    .filter(r => hasRole_(r, 'SERVER') && phoneToId_(r['ACCOUNT ID'] || r._id).length === 10)
+    .map(r => ({ id: phoneToId_(r['ACCOUNT ID'] || r._id),
+      name: [String(r['PREFERRED NAME'] || r['FIRST NAME'] || '').trim(), String(r['LAST NAME'] || '').trim()].filter(Boolean).join(' ') || 'No name' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 // body: { userId (a ROADHOUSE account), roles: { SERVER, SERVER LEAD, MANAGER: true / false } (all three) } → the list again
 async function saveRoadhouseRoles_(account, body) {
