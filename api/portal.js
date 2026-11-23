@@ -6,7 +6,7 @@ import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from '
 import { db } from './lib/store.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
-import { roadhouseSchedule, saveRoadhouseSchedule, roadhouseAssignments, completeRoadhouseAssignment, undoRoadhouseAssignment } from './lib/roadhouse-schedule.js';
+import { roadhouseSchedule, saveRoadhouseShowtime, saveRoadhouseSchedule, roadhouseAssignments, completeRoadhouseAssignment, undoRoadhouseAssignment } from './lib/roadhouse-schedule.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { fetchMndIndex, easternDate, rateCheckStep, rateSchedule, easternTextToDate, MND_MAIN_PRODUCT, MND_INDEX_URL, RATE_BASES, rateBaseOfType, historyKey } from './lib/mnd-rate.js';
 
@@ -567,10 +567,14 @@ export async function handle(body, query) {
     // roadhouseservers.com's Admin page (ROADHOUSE ADMIN accounts): the ROADHOUSE accounts and their roles
     if (body.action === 'roadhouseUsers') return await roadhouseUsers_(account);
     if (body.action === 'saveRoadhouseRoles') return await saveRoadhouseRoles_(account, body);
-    // roadhouseservers.com: the theater's shared schedule. Server leads build it (Lead Dashboard); every account sees and
-    // checks off only its own rows and restroom checks (Server Dashboard)
-    if (['roadhouseSchedule', 'saveRoadhouseSchedule'].includes(body.action) && !hasRole_(account, 'SERVER LEAD')) return { ok: false, error: 'not_allowed' };
-    if (body.action === 'roadhouseSchedule') return await roadhouseSchedule(await roadhouseServers_());
+    // roadhouseservers.com: the theater's shared schedule. Managers enter the showtimes (Showtime Dashboard), server leads
+    // assign the rows and restroom checks (Lead Dashboard); every account sees and checks off only its own rows and
+    // restroom checks today (Server Dashboard)
+    if (body.action === 'roadhouseSchedule' && !hasRole_(account, 'MANAGER') && !hasRole_(account, 'SERVER LEAD')) return { ok: false, error: 'not_allowed' };
+    if (body.action === 'saveRoadhouseShowtime' && !hasRole_(account, 'MANAGER')) return { ok: false, error: 'not_allowed' };
+    if (body.action === 'saveRoadhouseSchedule' && !hasRole_(account, 'SERVER LEAD')) return { ok: false, error: 'not_allowed' };
+    if (body.action === 'roadhouseSchedule') return await roadhouseSchedule(body, await roadhouseServers_());
+    if (body.action === 'saveRoadhouseShowtime') return await saveRoadhouseShowtime(id, body, await roadhouseServers_());
     if (body.action === 'saveRoadhouseSchedule') return await saveRoadhouseSchedule(id, body, await roadhouseServers_());
     if (body.action === 'roadhouseAssignments') return await roadhouseAssignments(id);
     if (body.action === 'completeRoadhouseAssignment') return await completeRoadhouseAssignment(id, body);
