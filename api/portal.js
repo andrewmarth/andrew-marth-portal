@@ -567,6 +567,7 @@ export async function handle(body, query) {
     // roadhouseservers.com's Admin page (ROADHOUSE ADMIN accounts): the ROADHOUSE accounts and their roles
     if (body.action === 'roadhouseUsers') return await roadhouseUsers_(account);
     if (body.action === 'saveRoadhouseRoles') return await saveRoadhouseRoles_(account, body);
+    if (body.action === 'addRoadhouseUser') return await addRoadhouseUser_(account, body);
     // roadhouseservers.com: the theater's shared schedule. Managers enter the showtimes (Showtime Dashboard), server leads
     // assign the rows and restroom checks (Lead Dashboard); every account sees and checks off only its own rows and
     // restroom checks today (Server Dashboard)
@@ -680,16 +681,42 @@ async function saveRoadhouseRoles_(account, body) {
   if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
   const found = await findAccount_(phoneToId_(body.userId));
   if (!found || !hasRole_(found.row, 'ROADHOUSE')) return { ok: false, error: 'not_found' };
+  const { values, error } = roadhouseUserValues_(body);
+  if (error) return { ok: false, error };
+  await update('accounts', found.docId, values);
+  return roadhouseUsers_(account);
+}
+// The Admin page's names and roles for one user: { values } (account fields) or { error }
+function roadhouseUserValues_(body) {
   const firstName = cleanText_(body.firstName, 50);
   const lastName = cleanText_(body.lastName, 50);
-  if (!firstName || !lastName) return { ok: false, error: 'invalid_name' };
+  if (!firstName || !lastName) return { error: 'invalid_name' };
   const roles = body.roles || {};
   const values = { 'FIRST NAME': firstName, 'LAST NAME': lastName, 'PREFERRED NAME': cleanText_(body.preferredName, 50) };
   for (const c of ROADHOUSE_ROLES) {
-    if (typeof roles[c] !== 'boolean') return { ok: false, error: 'invalid_roles' };
+    if (typeof roles[c] !== 'boolean') return { error: 'invalid_roles' };
     values[c] = roles[c];
   }
-  await update('accounts', found.docId, values);
+  return { values };
+}
+// The Admin page's Add New User: body: { phone (their mobile number, how they'll sign in), firstName, lastName,
+// preferredName, roles (as above) } → a new ROADHOUSE account (every other role off), then the list again. A number that
+// already has an account (a portal client, say) is refused rather than changed.
+async function addRoadhouseUser_(account, body) {
+  if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
+  const id = phoneToId_(body.phone);
+  if (id.length !== 10) return { ok: false, error: 'invalid_phone' };
+  const { values, error } = roadhouseUserValues_(body);
+  if (error) return { ok: false, error };
+  if (await findAccount_(id)) return { ok: false, error: 'exists' };
+  const roleOff = ['BUYER', 'SELLER', 'PREFLIPPER', 'FLIPPER BUYER', 'FLIPPER SELLER', 'LANDLORD', 'LENDER', 'WHOLESALER', 'ADMIN', 'CUM', 'ROADHOUSE ADMIN'];
+  try {
+    // (the document ID is the phone number, so a double tap can't add two accounts)
+    await add('accounts', { 'ACCOUNT ID': id, ...values, ...Object.fromEntries(roleOff.map(r => [r, false])), 'ROADHOUSE': true }, id);
+  } catch (err) {
+    if (err.code === 6) return { ok: false, error: 'exists' }; // ALREADY_EXISTS
+    throw err;
+  }
   return roadhouseUsers_(account);
 }
 
