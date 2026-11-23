@@ -3088,7 +3088,7 @@
         const CLIENT_QUESTIONS = {
             'LOAN TYPE': ['What kind of loan do you have?', 'It’s on your mortgage statement or closing papers.'],
             'LOAN PRINCIPAL BALANCE': ['What’s your current principal balance?', 'From your most recent mortgage statement.'],
-            'PRINCIPAL LOAN BALANCE DATE': ['What date is that balance from?', 'The date on that statement.'],
+            'PRINCIPAL LOAN BALANCE DATE': ['What month is that balance from?', 'The month of that statement.'],
             'LOAN INTEREST RATE': ['What’s your interest rate?', ''],
             'LOAN TERM MONTHS': ['How long is your loan?', ''],
             'INTEREST ONLY PERIOD': ['Is there an interest only period?', 'A stretch at the start of the loan when you only pay the interest.'],
@@ -3198,7 +3198,10 @@
                 const [question, hint] = CLIENT_QUESTIONS[p.column] || [p.label, ''];
                 const v = get(p.column);
                 let body = '';
-                if (p.kind === 'choice' || p.kind === 'seg') {
+                if (p.items) {
+                    // A dropdown (drawn below)
+                    body = '<div data-items></div>';
+                } else if (p.kind === 'choice' || p.kind === 'seg') {
                     body = '<div class="tf-choices is-stacked">' + p.options.map(o => choiceHtml(o, o, ANSWER_ICONS[o] || ICONS[p.icon || 'bank'], v === o)).join('') + '</div>';
                 } else if (p.kind === 'term') {
                     // The loan type's usual terms, or Other: years (Hard Money: months)
@@ -3236,6 +3239,7 @@
                     if (direction !== 0) shown = picked ? new Date(picked.getFullYear(), picked.getMonth(), 1) : new Date(today().getFullYear(), today().getMonth(), 1);
                     drawCalendar(p);
                 }
+                if (p.items) makePicker({ mount: mount.querySelector('[data-items]'), labelId: 'cl-question', items: p.items(), selected: [v], onChange: value => tapped(p, value) });
                 const linesBox = mount.querySelector('[data-lines]');
                 if (linesBox) {
                     linesBad = '';
@@ -4052,6 +4056,19 @@
         };
         const toSheetDate = iso => { const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? (+m[2]) + '/' + (+m[3]) + '/' + m[1] : ''; };
         const toInputDate = v => { const d = parseDate(v); return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : ''; };
+        // The Principal Balance Date's choices: the 1st of each of the last 6 months, newest first. Saved as that date (3/1/2026),
+        // so it never goes stale; a saved date outside them (an older month, or a day from before) is added as its own choice.
+        function balanceMonths(saved) {
+            const now = new Date();
+            const monthName = d => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const items = [0, 1, 2, 3, 4, 5].map(back => {
+                const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+                return { value: toSheetDate(toInputDate(d)), main: back === 0 ? 'This Month' : back === 1 ? 'Last Month' : monthName(d), icon: 'calendar' };
+            });
+            const d = parseDate(saved);
+            if (d && !items.some(i => i.value === saved)) items.push({ value: saved, main: d.getDate() === 1 ? monthName(d) : fmtDate(d), icon: 'calendar' });
+            return items;
+        }
 
         function setDraft(column, value) {
             draft[column] = value;
@@ -5107,7 +5124,7 @@
             return [
                 loanTypePart(get, put),
                 { label: 'Current Principal Balance', column: 'LOAN PRINCIPAL BALANCE', kind: 'money', short: 'Balance', show: loan },
-                { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'date', short: 'on', show: loan },
+                { label: 'Principal Balance Date', column: 'PRINCIPAL LOAN BALANCE DATE', kind: 'choice', items: () => balanceMonths(get('PRINCIPAL LOAN BALANCE DATE')), short: 'from', show: loan },
                 { label: 'Loan Interest Rate', column: 'LOAN INTEREST RATE', kind: 'rate', show: loan },
                 loanTermPart(get, loan),
                 ...dscrParts(get, false),
