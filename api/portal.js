@@ -576,6 +576,8 @@ export async function handle(body, query) {
     if (body.action === 'roadhouseSchedule') return await roadhouseSchedule(body, await roadhouseServers_());
     if (body.action === 'saveRoadhouseShowtime') return await saveRoadhouseShowtime(id, body, await roadhouseServers_());
     if (body.action === 'saveRoadhouseSchedule') return await saveRoadhouseSchedule(id, body, await roadhouseServers_());
+    // (the Server Dashboard is for SERVER accounts)
+    if (['roadhouseAssignments', 'completeRoadhouseAssignment', 'undoRoadhouseAssignment'].includes(body.action) && !hasRole_(account, 'SERVER')) return { ok: false, error: 'not_allowed' };
     if (body.action === 'roadhouseAssignments') return await roadhouseAssignments(id);
     if (body.action === 'completeRoadhouseAssignment') return await completeRoadhouseAssignment(id, body);
     if (body.action === 'undoRoadhouseAssignment') return await undoRoadhouseAssignment(id, body);
@@ -652,12 +654,13 @@ async function findAccount_(id) {
 
 // roadhouseservers.com's Admin page: the roles a ROADHOUSE ADMIN gives the ROADHOUSE accounts there
 const ROADHOUSE_ROLES = ['SERVER', 'SERVER LEAD', 'MANAGER'];
-// → { ok, users: [{ id, name, preferred, roles: { SERVER, SERVER LEAD, MANAGER: true / false } }] }, by name
+// → { ok, users: [{ id, name, firstName, lastName, preferred, roles: { SERVER, SERVER LEAD, MANAGER: true / false } }] }, by name
 async function roadhouseUsers_(account) {
   if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
   const users = (await rows('accounts'))
     .filter(r => hasRole_(r, 'ROADHOUSE') && phoneToId_(r['ACCOUNT ID'] || r._id).length === 10)
     .map(r => ({ id: phoneToId_(r['ACCOUNT ID'] || r._id), name: fullName_(r), preferred: String(r['PREFERRED NAME'] || '').trim(),
+      firstName: String(r['FIRST NAME'] || '').trim(), lastName: String(r['LAST NAME'] || '').trim(),
       roles: Object.fromEntries(ROADHOUSE_ROLES.map(c => [c, hasRole_(r, c)])) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return { ok: true, users };
@@ -671,13 +674,17 @@ async function roadhouseServers_() {
       name: [String(r['PREFERRED NAME'] || r['FIRST NAME'] || '').trim(), String(r['LAST NAME'] || '').trim()].filter(Boolean).join(' ') || 'No name' }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
-// body: { userId (a ROADHOUSE account), roles: { SERVER, SERVER LEAD, MANAGER: true / false } (all three) } → the list again
+// body: { userId (a ROADHOUSE account), firstName, lastName (both required), preferredName (blank: none), roles: { SERVER,
+// SERVER LEAD, MANAGER: true / false } (all three) } → the list again
 async function saveRoadhouseRoles_(account, body) {
   if (!hasRole_(account, 'ROADHOUSE ADMIN')) return { ok: false, error: 'not_allowed' };
   const found = await findAccount_(phoneToId_(body.userId));
   if (!found || !hasRole_(found.row, 'ROADHOUSE')) return { ok: false, error: 'not_found' };
+  const firstName = cleanText_(body.firstName, 50);
+  const lastName = cleanText_(body.lastName, 50);
+  if (!firstName || !lastName) return { ok: false, error: 'invalid_name' };
   const roles = body.roles || {};
-  const values = {};
+  const values = { 'FIRST NAME': firstName, 'LAST NAME': lastName, 'PREFERRED NAME': cleanText_(body.preferredName, 50) };
   for (const c of ROADHOUSE_ROLES) {
     if (typeof roles[c] !== 'boolean') return { ok: false, error: 'invalid_roles' };
     values[c] = roles[c];
