@@ -576,7 +576,8 @@ export async function handle(body, query) {
     if (body.action === 'saveRoadhouseSchedule' && !hasRole_(account, 'SERVER LEAD')) return { ok: false, error: 'not_allowed' };
     if (body.action === 'roadhouseSchedule') return await roadhouseSchedule(body, await roadhouseServers_());
     if (body.action === 'saveRoadhouseShowtime') return await saveRoadhouseShowtime(id, body, await roadhouseServers_());
-    if (body.action === 'saveRoadhouseSchedule') return await saveRoadhouseSchedule(id, body, await roadhouseServers_());
+    if (body.action === 'saveRoadhouseSchedule') return await saveRoadhouseSchedule(id, body, await roadhouseServers_(), Date.now(),
+      [String(account['PREFERRED NAME'] || account['FIRST NAME'] || '').trim(), String(account['LAST NAME'] || '').trim()].filter(Boolean).join(' '));
     // (the Server Dashboard is for SERVER accounts)
     if (['roadhouseAssignments', 'completeRoadhouseAssignment', 'undoRoadhouseAssignment'].includes(body.action) && !hasRole_(account, 'SERVER')) return { ok: false, error: 'not_allowed' };
     if (body.action === 'roadhouseAssignments') return await roadhouseAssignments(id);

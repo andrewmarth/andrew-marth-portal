@@ -6,7 +6,8 @@
 //
 // Saved on roadhouseSchedule/<DAY> (YYYY-MM-DD, Arizona time; a day runs 6 AM to 6 AM, see roadhouse-shows.js): LAST CALL
 // ("HH:MM", 24-hour; blank: none), SHOWS ([{ ID, AUDITORIUM, START, END, LAST SHOWING, ASSIGNMENTS: [{ SERVER (account
-// ID), ROWS: ['A', ...], OPEN DONE, DROP DONE, PICKUP DONE (ISO times, blank until done) }] }, or a restroom check
+// ID), ROWS: ['A', ...], OPEN DONE, DROP DONE, PICKUP DONE (ISO times, blank until done) }], LOG: the lead's floorplan
+// changes, newest first, the last 20 ([{ AT, BY (the lead's name), ROWS: [{ ROW, FROM, TO (server names; blank: Unassigned) }] }]) }, or a restroom check
 // { ID, KIND: 'restroom', TIME, SERVER, CHECK DONE }]), UPDATED AT and UPDATED BY (the account that last changed it).
 // Days are kept (a past day is just never shown again).
 import { db } from './store.js';
@@ -15,6 +16,7 @@ import { ROADHOUSE_ROWS, showDay, showMoment } from './roadhouse-shows.js';
 
 const ASSIGNMENT_STEPS = { open: 'OPEN DONE', drop: 'DROP DONE', pickup: 'PICKUP DONE' };
 const MAX_ITEMS = 40;
+const LOG_MAX = 20;   // a showing's floorplan changes kept
 const DAYS_AHEAD = 4;
 const ref_ = day => db.collection('roadhouseSchedule').doc(day);
 const time_ = v => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || '')) ? String(v) : null);
@@ -38,7 +40,8 @@ function fullView_(day, d, servers, now) {
     shows: ((d && d.SHOWS) || []).map(s => (isRestroom_(s)
       ? { id: s.ID, kind: 'restroom', time: s.TIME, server: s.SERVER, done: { check: s['CHECK DONE'] || '' } }
       : { id: s.ID, kind: 'show', auditorium: s.AUDITORIUM, start: s.START, end: s.END, last: s['LAST SHOWING'] === true,
-        assignments: (s.ASSIGNMENTS || []).map(a => ({ server: a.SERVER, rows: a.ROWS || [], done: doneOf_(a, ASSIGNMENT_STEPS) })) })),
+        assignments: (s.ASSIGNMENTS || []).map(a => ({ server: a.SERVER, rows: a.ROWS || [], done: doneOf_(a, ASSIGNMENT_STEPS) })),
+        log: (s.LOG || []).map(l => ({ at: l.AT, by: l.BY, rows: (l.ROWS || []).map(c => ({ row: c.ROW, from: c.FROM, to: c.TO })) })) })),
   };
 }
 
@@ -134,7 +137,7 @@ export async function saveRoadhouseShowtime(who, body, servers, now = Date.now()
 //     auditorium, each row to one server at most; a server who keeps their place keeps the steps they've done)
 //   { item: { id (blank: new), kind: 'restroom', time, server } }
 //   { removeId } (a restroom check)
-export async function saveRoadhouseSchedule(who, body, servers, now = Date.now()) {
+export async function saveRoadhouseSchedule(who, body, servers, now = Date.now(), whoName = '') {
   const day = dayOf_(body.day, now);
   if (!day) return { ok: false, error: 'invalid_day' };
   const known = new Set(servers.map(s => s.id));
@@ -159,7 +162,14 @@ export async function saveRoadhouseSchedule(who, body, servers, now = Date.now()
         const was = (shows[at].ASSIGNMENTS || []).find(x => x.SERVER === server);
         assignments.push({ SERVER: server, ROWS: rows, ...Object.fromEntries(Object.values(ASSIGNMENT_STEPS).map(f => [f, was ? was[f] || '' : ''])) });
       }
-      shows[at] = { ...shows[at], ASSIGNMENTS: assignments };
+      // The change log: each row whose server changed (names as they are now), newest first, the last LOG_MAX kept
+      const nameOf = id => (id ? (servers.find(s => s.id === id) || {}).name || 'Removed server' : '');
+      const serverOf = (list, r) => (list.find(x => (x.ROWS || []).includes(r)) || {}).SERVER || '';
+      const rowChanges = allowed.split('').map(r => ({ ROW: r, FROM: nameOf(serverOf(shows[at].ASSIGNMENTS || [], r)), TO: nameOf(serverOf(assignments, r)) }))
+        .filter(c => c.FROM !== c.TO);
+      const log = shows[at].LOG || [];
+      shows[at] = { ...shows[at], ASSIGNMENTS: assignments,
+        LOG: rowChanges.length ? [{ AT: new Date(now).toISOString(), BY: whoName || '', ROWS: rowChanges }].concat(log).slice(0, LOG_MAX) : log };
       return null;
     });
   }
