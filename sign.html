@@ -516,26 +516,22 @@
             .edit-dialog[open], .edit-dialog[open]::backdrop { animation: none; }
         }
 
-        /* --- Signing --- */
-        .sign-card { padding-left: 14px; padding-right: 14px; }
-        .sign-card .card-eyebrow, .sign-card h2 { margin-left: 10px; margin-right: 10px; }
-        .sign-frame-wrap { position: relative; margin-top: 14px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(78, 81, 62, 0.18); background: #f7f4f0; }
-        .sign-frame { display: block; width: 100%; height: max(640px, calc(100vh - 150px)); border: 0; background: var(--white); }
-        .sign-frame-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; pointer-events: none; transition: opacity 0.3s ease; }
-        .sign-frame-wrap.is-ready .sign-frame-loading { opacity: 0; }
-        .spinner { display: block; width: 30px; height: 30px; margin: 6px auto 10px auto; border-radius: 50%; border: 3px solid rgba(78, 81, 62, 0.2); border-top-color: var(--olive); animation: spin 0.8s linear infinite; }
+        /* --- Signing: MarthSign's screen fills the window. It draws this page's header and hero at its own top, so
+           the hero, the header and the document all scroll as one page. --- */
+        .sign-frame-wrap { position: fixed; inset: 0; z-index: 50; background: var(--cream); }
+        .sign-frame { display: block; width: 100%; height: 100%; border: 0; }
+        body.is-signing { overflow: hidden; }
+        body.is-signing > header, body.is-signing > main, body.is-signing > footer { display: none; }
+        /* Consent: can't be closed, only agreed to */
+        .consent-text { font-size: 0.95rem; opacity: 0.85; margin: 10px 0 6px 0; }
+        .consent-text a { color: var(--rust); }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .status-text { text-align: center; font-style: italic; opacity: 0.75; }
         .done-card { text-align: center; }
         .done-card svg { width: 58px; height: 58px; color: var(--olive); margin-bottom: 8px; }
         .done-card p { margin: 6px 0 18px; opacity: 0.8; }
         .done-card .btn { border: 2px solid var(--navy); }
         .done-card .btn.is-waiting { opacity: 0.6; pointer-events: none; }
         [hidden] { display: none !important; }
-        @media (max-width: 600px) {
-            .sign-card { padding-left: 6px; padding-right: 6px; }
-            .sign-frame { height: max(560px, calc(100vh - 110px)); }
-        }
     </style>
 </head>
 <body class="is-checking">
@@ -574,15 +570,23 @@
         </div>
     </header>
 
-    <main>
-        <section class="main-card sign-card reveal" id="sign-card" hidden>
-            <span class="card-eyebrow">Your Signature</span>
-            <h2 id="sign-heading">Document</h2>
-            <div class="sign-frame-wrap" id="frame-wrap">
-                <div class="sign-frame-loading"><span class="spinner" aria-hidden="true"></span><p class="status-text">Opening the document...</p></div>
-            </div>
-        </section>
+    <div class="sign-frame-wrap" id="frame-wrap" hidden></div>
 
+    <!-- Shown each time a document opens for signing; signing waits until it's agreed to -->
+    <dialog class="edit-dialog" id="consent" aria-labelledby="consent-title">
+        <div class="dialog-inner">
+            <div class="dialog-head"><h2 id="consent-title">Electronic Signature</h2></div>
+            <p class="consent-text">
+                By proceeding with your electronic signature, you acknowledge and consent that it will be used to sign the given
+                document and holds the same legal validity as a handwritten signature. By completing the electronic signing
+                process, you affirm your understanding and acceptance of these conditions.
+            </p>
+            <p class="consent-text">Read the full <a id="disclosure-link" href="https://sign.andrewmarth.com/articles/signature-disclosure" target="_blank" rel="noopener">signature disclosure</a>.</p>
+            <div class="form-actions"><button type="button" class="btn" id="consent-agree">I Agree</button></div>
+        </div>
+    </dialog>
+
+    <main>
         <section class="main-card done-card" id="done-card" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
             <h2 id="done-title">All signed!</h2>
@@ -617,30 +621,44 @@
         }
 
         function showDone(title, text) {
-            $('#sign-card').hidden = true;
+            document.body.classList.remove('is-signing');
+            $('#frame-wrap').hidden = true;
+            $('#frame-wrap').replaceChildren();
             $('#done-title').textContent = title;
             $('#done-text').textContent = text;
             $('#done-card').hidden = false;
         }
 
-        // Documenso's signing screen, embedded; it tells this page when the signer finishes
+        // MarthSign's signing screen, filling the window; it tells this page when it's ready and when the signer
+        // finishes. Resolves once it's ready, so the loading screen stays up until then.
+        let frameReady = () => {};
         function showSigning(task) {
             $('#doc-title').textContent = task.title || 'Sign Document';
-            $('#sign-heading').textContent = task.title || 'Document';
             const frame = document.createElement('iframe');
             frame.className = 'sign-frame';
             frame.title = 'Sign ' + (task.title || 'document');
             frame.allow = 'clipboard-write';
             frame.src = task.signUrl;
-            frame.addEventListener('load', () => $('#frame-wrap').classList.add('is-ready'));
             $('#frame-wrap').append(frame);
-            $('#sign-card').hidden = false;
+            $('#frame-wrap').hidden = false;
+            document.body.classList.add('is-signing');
+            return new Promise(resolve => { frameReady = resolve; });
         }
+
+        // Consent comes first: the pop-up can't be closed (Escape included) until it's agreed to
+        const consent = $('#consent');
+        let consented = false;
+        consent.addEventListener('cancel', e => e.preventDefault());
+        consent.addEventListener('close', () => { if (!consented) consent.showModal(); });
+        $('#consent-agree').addEventListener('click', () => { consented = true; consent.close(); });
 
         window.addEventListener('message', async e => {
             if (e.origin !== SIGN_ORIGIN || finished) return;
             const action = String((e.data && (e.data.action || e.data.type)) || '');
-            if (action === 'document-ready') $('#frame-wrap').classList.add('is-ready');
+            if (action === 'document-ready') frameReady();
+            // The Back and Sign Out buttons in MarthSign's copy of the header
+            if (action === 'marthsign-back') location.href = '/';
+            if (action === 'marthsign-sign-out') $('#sign-out').click();
             if (action !== 'document-completed' && action !== 'document-rejected') return;
             finished = true;
             // Remembered in this browser first, so the home page hides the task even before the API has caught up
@@ -684,7 +702,7 @@
                 if (task.signingStatus === 'SIGNED') { showDone('Already signed', 'You’ve already signed this document. Thank you!'); return; }
                 if (task.signingStatus === 'REJECTED') { showDone('Declined', 'You declined to sign this document.'); return; }
                 if (task.documentStatus && task.documentStatus !== 'PENDING') { showDone('Not available', 'This document is no longer waiting for signatures.'); return; }
-                showSigning(task);
+                await showSigning(task);
             } catch (err) {
                 console.error(err);
                 showDone('Something went wrong', 'We couldn’t open this document. Please refresh to try again.');
@@ -714,6 +732,7 @@
                 Promise.race([load(user), timeLimit]).then(() => {
                     document.body.classList.remove('is-checking');
                     initReveal();
+                    if (document.body.classList.contains('is-signing')) consent.showModal();
                 });
             });
             const signOutBtn = document.getElementById('sign-out');

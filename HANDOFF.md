@@ -70,7 +70,7 @@ Earlier milestones:
 
 ## House rules
 
-- Tests must never change live data. Never submit real forms to live Zapier. Documenso must never send email.
+- Tests must never change live data. Never submit real forms to live Zapier. MarthSign must never send email.
 - Andrew does these himself in the console:
   - secret writes
   - IAM grants

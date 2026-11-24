@@ -67,4 +67,4 @@ requests don't hand out the same ID) and `filingClaims` (signed documents alread
   and it reaches Google Drive as tiffany@andrewmarth.com, where the signed PDFs and wholesale photos are.
 - The wholesale function runs as `wholesale-deal-extractor@bamboo-research-511821-j2.iam.gserviceaccount.com`
   (Cloud Datastore User on this project).
-- Secrets (Documenso API token, Maps geocoding key) are in Secret Manager in the Website APIs project.
+- Secrets (MarthSign API token, Maps geocoding key) are in Secret Manager in the Website APIs project.

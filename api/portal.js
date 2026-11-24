@@ -479,8 +479,8 @@ const INTERVALS = ['Weekly', 'Monthly', 'Quarterly', 'Annually', 'Bi-Annually'];
 // One request (body: the parsed JSON; query: the URL's parameters). Returns the reply object.
 export async function handle(body, query) {
   try {
-    // Documenso's webhook (a document has been completed); its URL carries the secret
-    if (query && query.documensoWebhook) return await documensoWebhook_(String(query.documensoWebhook));
+    // MarthSign's webhook (a document has been completed); its URL carries the secret
+    if (query && query.marthsignWebhook) return await marthsignWebhook_(String(query.marthsignWebhook));
     // Website sign-up form: whether a phone number already has an account, asked before a code is texted (yes/no only)
     if (body.action === 'accountExists') {
       const checkId = phoneToId_(body.phone);
@@ -3027,27 +3027,27 @@ async function adminCreateClient_(account, body) {
   return { ok: true, client: { id, name: [saved['FIRST NAME'], saved['LAST NAME']].filter(String).join(' '), values: saved } };
 }
 
-// --- E-signatures (Documenso at sign.andrewmarth.com) ---
-// The API key is DOCUMENSO_API_TOKEN (from Secret Manager). Documents are sent with Documenso's emails off: each signer
+// --- E-signatures (MarthSign at sign.andrewmarth.com) ---
+// The API key is MARTHSIGN_API_TOKEN (from Secret Manager). Documents are sent with MarthSign's emails off: each signer
 // gets a Signature task (see addTasks_) and signs inside the portal. Each signer of each document is one document in
 // the signatures collection. Once everyone has signed, each signed PDF and the certificate are saved to the
 // SIGNED_FOLDER_ID Drive folder and each PDF gets a document in the documents collection (its CATEGORY says which log).
-// That happens the moment the last signer finishes: Documenso's DOCUMENT_COMPLETED webhook calls this API.
-const DOCUMENSO_URL = 'https://sign.andrewmarth.com';
+// That happens the moment the last signer finishes: MarthSign's DOCUMENT_COMPLETED webhook calls this API.
+const MARTHSIGN_URL = 'https://sign.andrewmarth.com';
 const SIGNED_FOLDER_ID = '1KdVqHpueNlMt2lOjl-tNLc2UvpwOsctw';
 const SIGNATURE_FIELD_TYPES = ['SIGNATURE', 'INITIALS', 'NAME', 'DATE', 'TEXT'];
-// Every Documenso email switched off (distribution NONE covers the signers; these cover the owner)
-const DOCUMENSO_NO_EMAIL = {
+// Every MarthSign email switched off (distribution NONE covers the signers; these cover the owner)
+const MARTHSIGN_NO_EMAIL = {
   recipientSigningRequest: false, recipientRemoved: false, recipientSigned: false, documentPending: false,
   documentCompleted: false, documentDeleted: false, ownerDocumentCompleted: false, ownerRecipientExpired: false,
   ownerDocumentCreated: false,
 };
 
-// One call to Documenso's API. body: an object (sent as JSON) or, with isForm, a { name: string | Blob | [Blob, ...] }
+// One call to MarthSign's API. body: an object (sent as JSON) or, with isForm, a { name: string | Blob | [Blob, ...] }
 // form for uploads. asFile: return the response's bytes (downloads) instead of parsed JSON.
-async function documenso_(method, path, body, isForm, asFile) {
-  const token = process.env.DOCUMENSO_API_TOKEN;
-  if (!token) throw new Error('DOCUMENSO_API_TOKEN is not set');
+async function marthsign_(method, path, body, isForm, asFile) {
+  const token = process.env.MARTHSIGN_API_TOKEN;
+  if (!token) throw new Error('MARTHSIGN_API_TOKEN is not set');
   const options = { method: method.toUpperCase(), headers: { Authorization: token } };
   if (body !== undefined) {
     if (isForm) {
@@ -3064,8 +3064,8 @@ async function documenso_(method, path, body, isForm, asFile) {
       options.body = JSON.stringify(body);
     }
   }
-  const res = await fetch(DOCUMENSO_URL + '/api/v2' + path, options);
-  if (!res.ok) throw new Error('Documenso ' + method + ' ' + path + ' failed (' + res.status + '): ' + (await res.text()).slice(0, 300));
+  const res = await fetch(MARTHSIGN_URL + '/api/v2' + path, options);
+  if (!res.ok) throw new Error('MarthSign ' + method + ' ' + path + ' failed (' + res.status + '): ' + (await res.text()).slice(0, 300));
   if (asFile) return Buffer.from(await res.arrayBuffer());
   const text = await res.text();
   return text ? JSON.parse(text) : {};
@@ -3123,8 +3123,8 @@ async function adminSendForSignature_(account, body) {
     if (!r || seen[accountId]) return { ok: false, error: 'bad_signers' };
     seen[accountId] = true;
     const name = fullName_(r) || accountId;
-    // Signing happens only in the portal, so Documenso never gets a client's real email: every signer has an address
-    // on clients.andrewmarth.com, which doesn't exist and can't receive mail (Documenso's emails are switched off too)
+    // Signing happens only in the portal, so MarthSign never gets a client's real email: every signer has an address
+    // on clients.andrewmarth.com, which doesn't exist and can't receive mail (MarthSign's emails are switched off too)
     const email = accountId + '@clients.andrewmarth.com';
     const fields = (Array.isArray(signers[i].fields) ? signers[i].fields : []).map(f => {
       const type = String(f.type || '').toUpperCase();
@@ -3142,12 +3142,12 @@ async function adminSendForSignature_(account, body) {
 
   const meta = {
     distributionMethod: 'NONE',
-    emailSettings: DOCUMENSO_NO_EMAIL,
+    emailSettings: MARTHSIGN_NO_EMAIL,
     timezone: 'America/Phoenix',
-    dateFormat: 'MM/dd/yyyy', // Date fields show just the date signed (Documenso's default adds the time)
+    dateFormat: 'MM/dd/yyyy', // Date fields show just the date signed (MarthSign's default adds the time)
     typedSignatureEnabled: true, drawSignatureEnabled: true, uploadSignatureEnabled: false,
   };
-  const created = await documenso_('post', '/envelope/create', {
+  const created = await marthsign_('post', '/envelope/create', {
     payload: JSON.stringify({
       type: 'DOCUMENT',
       title,
@@ -3156,7 +3156,7 @@ async function adminSendForSignature_(account, body) {
     }),
     files,
   }, true);
-  const sent = await documenso_('post', '/envelope/distribute', { envelopeId: created.id, meta: { distributionMethod: 'NONE', emailSettings: DOCUMENSO_NO_EMAIL } });
+  const sent = await marthsign_('post', '/envelope/distribute', { envelopeId: created.id, meta: { distributionMethod: 'NONE', emailSettings: MARTHSIGN_NO_EMAIL } });
 
   const sentBy = fullName_(account);
   const now = new Date();
@@ -3178,10 +3178,10 @@ async function adminSendForSignature_(account, body) {
 
 const dayOf_ = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-// Brings one envelope's signers up to date with Documenso (who has signed, and whether it's finished).
-// skipFiling: leave a finished document for Documenso's webhook to file (so the signing page isn't kept waiting).
+// Brings one envelope's signers up to date with MarthSign (who has signed, and whether it's finished).
+// skipFiling: leave a finished document for MarthSign's webhook to file (so the signing page isn't kept waiting).
 async function refreshEnvelope_(data, envelopeId, skipFiling) {
-  const env = await documenso_('get', '/envelope/' + encodeURIComponent(envelopeId));
+  const env = await marthsign_('get', '/envelope/' + encodeURIComponent(envelopeId));
   const byToken = {};
   (env.recipients || []).forEach(r => { byToken[r.token] = r; });
   for (const r of data.filter(x => x['ENVELOPE ID'] === envelopeId)) {
@@ -3207,7 +3207,7 @@ async function refreshEnvelope_(data, envelopeId, skipFiling) {
 }
 
 // A finished document: its signed PDFs and certificate go to the Drive folder, and it gets a documents entry.
-// Claimed first (a filingClaims document only one request can create): Documenso gives up on a webhook call after
+// Claimed first (a filingClaims document only one request can create): MarthSign gives up on a webhook call after
 // ~12 seconds and retries while the first one is still filing.
 async function logSignedEnvelope_(env) {
   const fresh = await signatureRows_();
@@ -3237,19 +3237,19 @@ async function fileSignedEnvelope_(env, signers) {
   const prefix = '[' + new Date(env.completedAt || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).replace(/-/g, '.') + '] ';
   const docFiles = [];
   for (const item of items) {
-    const pdf = await documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
+    const pdf = await marthsign_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
     const name = items.length > 1 ? title + ' - ' + String(item.title || '').replace(/\.pdf$/i, '') : title;
     docFiles.push(await createDriveFile(SIGNED_FOLDER_ID, prefix + name + '.pdf', 'application/pdf', pdf));
   }
   let certFile = null;
   try {
-    const cert = await documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
+    const cert = await marthsign_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
     certFile = await createDriveFile(SIGNED_FOLDER_ID, prefix + title + ' - Signing Certificate.pdf', 'application/pdf', cert);
   } catch (err) { console.error(err); }
   // Where each signer signed from, in signer order
   const ipByEmail = {};
   try {
-    ((await documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/audit-log?perPage=100')).data || []).forEach(e => {
+    ((await marthsign_('get', '/envelope/' + encodeURIComponent(env.id) + '/audit-log?perPage=100')).data || []).forEach(e => {
       if (e.type === 'DOCUMENT_RECIPIENT_COMPLETED' && e.email && e.ipAddress) ipByEmail[String(e.email).toLowerCase()] = e.ipAddress;
     });
   } catch (err) { console.error(err); }
@@ -3259,7 +3259,7 @@ async function fileSignedEnvelope_(env, signers) {
     'STREET ADDRESS': first['STREET ADDRESS'], 'CITY': first['CITY'], 'STATE': first['STATE'], 'ZIP': first['ZIP'],
     'EXECUTED': true,
     'IP ADDRESS': signers.map(r => ipByEmail[String(r['EMAIL']).toLowerCase()] || '').filter(String).join(', '),
-    'DOCUMENSO FILE ID': env.id,
+    'MARTHSIGN FILE ID': env.id,
     'CERTIFICATE DRIVE FILE ID': certFile ? certFile.id : '', 'CERTIFICATE VIEW LINK': certFile ? certFile.url : '',
     'CERTIFICATE DOWNLOAD LINK': certFile ? download(certFile) : '',
   };
@@ -3273,9 +3273,9 @@ async function fileSignedEnvelope_(env, signers) {
   for (const r of signers) await update('signatures', r.docId, { 'LOGGED': docFiles.length ? docFiles[0].id : 'no files' });
 }
 
-// Documenso says a document is finished: bring every open document up to date, filing the finished ones
-async function documensoWebhook_(secret) {
-  const expected = process.env.DOCUMENSO_WEBHOOK_SECRET;
+// MarthSign says a document is finished: bring every open document up to date, filing the finished ones
+async function marthsignWebhook_(secret) {
+  const expected = process.env.MARTHSIGN_WEBHOOK_SECRET;
   if (!expected || secret !== expected) return { ok: false, error: 'unauthorized' };
   await checkSignatures();
   return { ok: true };
@@ -3306,12 +3306,12 @@ async function signingTask_(id, body) {
     token: r['RECIPIENT TOKEN'],
     signingStatus: r['SIGNING STATUS'],
     documentStatus: r['DOCUMENT STATUS'],
-    signUrl: DOCUMENSO_URL + '/embed/sign/' + encodeURIComponent(r['RECIPIENT TOKEN']),
+    signUrl: MARTHSIGN_URL + '/embed/sign/' + encodeURIComponent(r['RECIPIENT TOKEN']),
   };
 }
 
 // The signing page, the moment a signer finishes: if that was the last signature, the document is filed right away
-// (signed PDFs and certificate to Drive, plus its documents entry). Documenso can take a few seconds after the last
+// (signed PDFs and certificate to Drive, plus its documents entry). MarthSign can take a few seconds after the last
 // signature to finish the document, so while every signer is done but it isn't COMPLETED yet, this waits (~25s at most).
 // Signing only happens in the portal, so this files every document as soon as it's finished.
 async function fileSigned_(id, body) {
