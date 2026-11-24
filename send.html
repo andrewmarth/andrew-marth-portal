@@ -596,7 +596,17 @@
         .fp-top { top: 0; transform: translateY(-50%); }
         .fp-id { bottom: 0; transform: translateY(50%); }
         .fp-sign { margin-top: calc(-1 * var(--pt)); font: calc(15 * var(--pt)) / 1 Caveat, cursive; }
-        .fp-ini { font: calc(10 * var(--pt)) / 1 Arial, sans-serif; }
+        .fp-ini { font: calc(14 * var(--pt)) / 1 Caveat, cursive; }
+        .fp-check { margin: auto; font: italic bold calc(9 * var(--pt)) / 1 Arial, sans-serif; }
+        /* Optional (not required) fields: a dashed outline */
+        .field.is-optional { border-style: dashed; outline-style: dashed; }
+        /* A text box's lines, numbered once it has more than one */
+        .field-num { position: absolute; top: 50%; left: -22px; transform: translateY(-50%); font-size: 12px; font-weight: bold; line-height: 1; color: var(--signer); pointer-events: none; }
+        /* Required or not: the menu a signature, initials or checkbox field opens when it's tapped */
+        .field-menu { position: absolute; z-index: 5; width: max-content; max-width: 240px; padding: 10px 14px; border: 2px solid var(--navy); border-radius: 14px; background: var(--white); box-shadow: 3px 3px 0 var(--navy); color: var(--brown); font-size: 0.9rem; cursor: default; }
+        .field-menu label { display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; }
+        .field-menu input { width: 18px; height: 18px; margin: 0; accent-color: var(--olive); cursor: pointer; }
+        .field-menu .fm-note { display: block; margin-top: 4px; font-size: 0.8rem; opacity: 0.75; }
         .field.is-initials .fp-label { left: calc(2.5 * var(--pt)); font-size: calc(4 * var(--pt)); }
         /* Text fields: drag the right edge to resize (width only); + adds a line below for text that runs over */
         .field-grow { position: absolute; top: -2px; bottom: -2px; right: -7px; z-index: 1; width: 12px; display: none; cursor: ew-resize; touch-action: none; }
@@ -888,7 +898,10 @@
             { type: 'NAME', label: 'Name', w: 22, h: 2 },
             { type: 'DATE', label: 'Date', w: 12, h: 2 },
             { type: 'TEXT', label: 'Text', w: 22, h: 2 },
+            { type: 'CHECKBOX', label: 'Checkbox', w: 1.8, h: 1.4 },
         ];
+        // Fields the sender can make optional (tap one for its menu); every other field is filled in or optional anyway
+        const CAN_BE_OPTIONAL = ['SIGNATURE', 'INITIALS', 'CHECKBOX'];
         let currentUser = null;
         let clients = [];
         let signers = [];          // [{ id, name, sub, color }]
@@ -1259,6 +1272,7 @@
                     + (f.type === 'SIGNATURE' ? '<span class="fp-sign">Sign Here</span><span class="fp-label fp-id">XXXXXXXXXXXXXXXX</span>' : '<span class="fp-ini">INI</span>')
                     + '</div></div>';
             }
+            if (f.type === 'CHECKBOX') return '<div class="fp"><span class="fp-check">X</span></div>';
             const text = f.type === 'NAME' ? s.name : f.type === 'DATE' ? today : 'User input text here';
             return '<div class="fp"><span class="fp-text">' + escapeHtml(text) + '</span></div>';
         }
@@ -1269,7 +1283,10 @@
             const pagePt = page ? Number(page.dataset.pt) : 612;
             return Math.max(1, Math.floor((f.w / 100 * pagePt - 12) / 4.8));
         }
-        const fieldTitle = f => typeOf(f.type).label + ' · ' + signerOf(f.signerId).name + (f.type === 'TEXT' ? ' · up to ' + textLimit(f) + ' characters' : '');
+        const fieldTitle = f => typeOf(f.type).label + ' · ' + signerOf(f.signerId).name
+            + (f.type === 'TEXT' ? ' · up to ' + textLimit(f) + ' characters' : '') + (f.required === false ? ' · optional' : '');
+        // A text box's lines (the + adds one): the fields with its group, in order. A line's number is its place here.
+        const linesOf = f => fields.filter(x => x.type === 'TEXT' && x.group === f.group).sort((a, b) => a.line - b.line);
         function drawFields() {
             document.querySelectorAll('.page .field').forEach(el => el.remove());
             fields.forEach(f => {
@@ -1277,13 +1294,17 @@
                 if (!page) return;
                 const s = signerOf(f.signerId);
                 const el = document.createElement('div');
-                el.className = 'field' + ({ SIGNATURE: ' is-framed', INITIALS: ' is-framed is-initials', TEXT: ' is-text' }[f.type] || '') + (f.key === selectedField ? ' is-selected' : '');
+                el.className = 'field' + ({ SIGNATURE: ' is-framed', INITIALS: ' is-framed is-initials', TEXT: ' is-text' }[f.type] || '')
+                    + (f.required === false ? ' is-optional' : '') + (f.key === selectedField ? ' is-selected' : '');
+                const lines = f.type === 'TEXT' ? linesOf(f) : [];
                 el.title = fieldTitle(f);
                 el.dataset.key = f.key;
                 el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f;--signer:' + s.color;
                 el.innerHTML = fieldPreview(f, s)
                     + '<button type="button" class="field-del" aria-label="Remove field">×</button>'
-                    + (f.type === 'TEXT' ? '<span class="field-grow" aria-hidden="true"></span><button type="button" class="field-add-line" aria-label="Add a line below">+</button>' : '');
+                    + (f.type === 'TEXT' ? '<span class="field-grow" aria-hidden="true"></span>' : '')
+                    + (lines.length > 1 ? '<span class="field-num" aria-hidden="true">' + (lines.indexOf(f) + 1) + '</span>' : '')
+                    + (lines.length && lines[lines.length - 1] === f ? '<button type="button" class="field-add-line" aria-label="Add a line below">+</button>' : '');
                 page.append(el);
             });
             renderSignerCounts();
@@ -1302,8 +1323,11 @@
             const addLine = e.target.closest('.field-add-line');
             if (addLine) {
                 const f = fields.find(x => String(x.key) === addLine.parentElement.dataset.key);
-                fields.push({ ...f, key: ++fieldKey, y: Math.min(100 - f.h, f.y + f.h) });
+                const last = linesOf(f).pop();
+                if (last.y + 2 * last.h > 100) { setMessage('There’s no room for another line below on this page.'); return; }
+                fields.push({ ...last, key: ++fieldKey, line: last.line + 1, y: last.y + last.h });
                 selectedField = fieldKey;
+                setMessage('');
                 drawFields();
                 return;
             }
@@ -1314,18 +1338,45 @@
                 drawFields();
                 return;
             }
-            if (e.target.closest('.field')) return;
+            if (e.target.closest('.field, .field-menu')) return;
             const page = e.target.closest('.page');
             if (!page || !activeSigner) return;
             const r = page.getBoundingClientRect();
             const t = typeOf(activeType);
             const x = Math.min(100 - t.w, Math.max(0, (e.clientX - r.left) / r.width * 100 - t.w / 2));
             const y = Math.min(100 - t.h, Math.max(0, (e.clientY - r.top) / r.height * 100 - t.h / 2));
-            fields.push({ key: ++fieldKey, signerId: activeSigner, type: t.type, doc: Number(page.dataset.doc), page: Number(page.dataset.page), x, y, w: t.w, h: t.h });
+            fields.push({
+                key: ++fieldKey, signerId: activeSigner, type: t.type, doc: Number(page.dataset.doc), page: Number(page.dataset.page), x, y, w: t.w, h: t.h,
+                // A text field is the first line of its own box; signatures, initials and checkboxes start required
+                ...(t.type === 'TEXT' ? { group: fieldKey, line: 1 } : {}),
+                ...(CAN_BE_OPTIONAL.includes(t.type) ? { required: true } : {}),
+            });
             selectedField = fieldKey;
             setMessage('');
             drawFields();
         });
+        // The Required menu, under its field (one at a time; a press anywhere else closes it)
+        function openFieldMenu(f) {
+            closeFieldMenu();
+            const page = document.querySelector('.page[data-doc="' + f.doc + '"][data-page="' + f.page + '"]');
+            if (!page) return;
+            const menu = document.createElement('div');
+            menu.className = 'field-menu';
+            menu.style.left = f.x + '%';
+            menu.style.top = 'calc(' + (f.y + f.h) + '% + 10px)';
+            const what = { SIGNATURE: 'sign here', INITIALS: 'initial here', CHECKBOX: 'check this box' }[f.type];
+            const note = () => f.required === false ? 'The signer can leave this blank.' : 'The signer must ' + what + ' before finishing.';
+            menu.innerHTML = '<label><input type="checkbox"' + (f.required === false ? '' : ' checked') + '> Required</label><span class="fm-note"></span>';
+            menu.querySelector('.fm-note').textContent = note();
+            menu.querySelector('input').addEventListener('change', e => {
+                f.required = e.target.checked;
+                menu.querySelector('.fm-note').textContent = note();
+                drawFields();
+            });
+            page.append(menu);
+        }
+        const closeFieldMenu = () => document.querySelectorAll('.field-menu').forEach(m => m.remove());
+        document.addEventListener('pointerdown', e => { if (!e.target.closest('.field-menu')) closeFieldMenu(); });
         // Move, or with a text field's right edge, resize its width. Touching a field selects it, which shows its ×.
         $('#pages').addEventListener('pointerdown', e => {
             const el = e.target.closest('.field');
@@ -1351,7 +1402,11 @@
                 f.y = Math.min(100 - f.h, Math.max(0, start.fy + dy));
                 el.style.left = f.x + '%'; el.style.top = f.y + '%';
             };
-            const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+            const up = ev => {
+                el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+                const tapped = ev.type === 'pointerup' && Math.abs(ev.clientX - start.x) < 4 && Math.abs(ev.clientY - start.y) < 4;
+                if (tapped && !resizing && CAN_BE_OPTIONAL.includes(f.type)) openFieldMenu(f);
+            };
             el.addEventListener('pointermove', move);
             el.addEventListener('pointerup', up);
             el.addEventListener('pointercancel', up);
@@ -1479,7 +1534,8 @@
                         accountId: s.id,
                         fields: fields.filter(f => f.signerId === s.id).map(f => ({
                             type: f.type, doc: pdfs.findIndex(p => p.key === f.doc), page: f.page, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h),
-                            ...(f.type === 'TEXT' ? { chars: textLimit(f) } : {}),
+                            ...(f.type === 'TEXT' ? { chars: textLimit(f), lineGroup: 'g' + f.group, lineIndex: linesOf(f).indexOf(f) + 1 } : {}),
+                            ...(CAN_BE_OPTIONAL.includes(f.type) ? { required: f.required !== false } : {}),
                         })),
                     })),
                 });

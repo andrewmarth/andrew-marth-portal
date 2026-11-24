@@ -416,6 +416,54 @@ index d4cddf1..a823389 100644
    const { envelope, recipient } = useRequiredEnvelopeSigningContext();
  
    const embedSigningContext = useEmbedSigningContext();
+diff --git a/apps/remix/app/components/general/envelope-signing/envelope-signer-page-renderer.tsx b/apps/remix/app/components/general/envelope-signing/envelope-signer-page-renderer.tsx
+index 4c76a5a..564f206 100644
+--- a/apps/remix/app/components/general/envelope-signing/envelope-signer-page-renderer.tsx
++++ b/apps/remix/app/components/general/envelope-signing/envelope-signer-page-renderer.tsx
+@@ -38,6 +38,8 @@ import { handleInitialsFieldClick } from '~/utils/field-signing/initial-field';
+ import { handleNameFieldClick } from '~/utils/field-signing/name-field';
+ import { handleNumberFieldClick } from '~/utils/field-signing/number-field';
+ import { handleSignatureFieldClick } from '~/utils/field-signing/signature-field';
++import { fillTextLines } from '~/utils/field-signing/text-lines';
++import { getTextLines } from '@documenso/lib/utils/marthsign-text-lines';
+ import { handleTextFieldClick } from '~/utils/field-signing/text-field';
+ 
+ import { useRequiredDocumentSigningAuthContext } from '../document-signing/document-signing-auth-provider';
+@@ -78,6 +80,9 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
+   const fullName = useRef(fullNameState);
+   const email = useRef(emailState);
+   const signature = useRef(signatureState);
++  // MarthSign: the latest fields, for click handlers attached on an earlier render (a text box's other lines)
++  const latestRecipientFields = useRef(recipientFields);
++  latestRecipientFields.current = recipientFields;
+ 
+   useEffect(() => {
+     fullName.current = fullNameState;
+@@ -281,6 +286,24 @@ export const EnvelopeSignerPageRenderer = ({ pageData }: { pageData: PageRenderD
+          * TEXT FIELD.
+          */
+         .with({ type: FieldType.TEXT }, (field) => {
++          // MarthSign: a text box of several lines is filled as one (utils/field-signing/text-lines.ts)
++          const lines = getTextLines(field, latestRecipientFields.current);
++
++          if (lines.length > 1) {
++            void fillTextLines({
++              lines,
++              signField: async (fieldId, payload) => signField(fieldId, payload),
++              onTooLong: () =>
++                toast({
++                  title: 'Too long',
++                  description: "That doesn't fit in its lines. Please shorten it.",
++                  variant: 'destructive',
++                }),
++            });
++
++            return;
++          }
++
+           void handleTextFieldClick({ field, text: null })
+             .then(async (payload) => {
+               if (payload) {
 diff --git a/apps/remix/app/routes/_share+/share.$slug.tsx b/apps/remix/app/routes/_share+/share.$slug.tsx
 index 4e8029f..229a8a5 100644
 --- a/apps/remix/app/routes/_share+/share.$slug.tsx
@@ -487,6 +535,67 @@ index 57890e5..791cace 100644
  
    if (!signatureToInsert) {
      signatureToInsert = await SignFieldSignatureDialog.call({
+diff --git a/apps/remix/app/utils/field-signing/text-lines.ts b/apps/remix/app/utils/field-signing/text-lines.ts
+new file mode 100644
+index 0000000..39c453f
+--- /dev/null
++++ b/apps/remix/app/utils/field-signing/text-lines.ts
+@@ -0,0 +1,55 @@
++import { lineLimit, wrapWords } from '@documenso/lib/utils/marthsign-text-lines';
++import type { TSignEnvelopeFieldValue } from '@documenso/trpc/server/envelope-router/sign-envelope-field.types';
++import { FieldType } from '@prisma/client';
++
++import { SignFieldTextDialog } from '~/components/dialogs/sign-field-text-dialog';
++
++type Line = { id: number; inserted: boolean; fieldMeta?: unknown };
++
++/**
++ * MarthSign: fills a text box of several lines (see @documenso/lib/utils/marthsign-text-lines). The signer types
++ * once; the text runs across the lines in whole words. Clicking a filled box clears all its lines.
++ */
++export const fillTextLines = async (options: {
++  lines: Line[];
++  signField: (fieldId: number, payload: Extract<TSignEnvelopeFieldValue, { type: typeof FieldType.TEXT }>) => Promise<unknown>;
++  onTooLong: () => void;
++}) => {
++  const { lines, signField, onTooLong } = options;
++
++  if (lines.some((line) => line.inserted)) {
++    for (const line of lines.filter((l) => l.inserted)) {
++      await signField(line.id, { type: FieldType.TEXT, value: null });
++    }
++
++    return;
++  }
++
++  const limits = lines.map(lineLimit);
++
++  const text = await SignFieldTextDialog.call({
++    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
++    fieldMeta: {
++      ...(lines[0].fieldMeta as object),
++      characterLimit: limits.reduce((sum, limit) => sum + limit, 0) + lines.length - 1,
++    } as Parameters<typeof SignFieldTextDialog.call>[0]['fieldMeta'],
++  });
++
++  if (!text) {
++    return;
++  }
++
++  const parts = wrapWords(text, limits);
++
++  if (!parts) {
++    onTooLong();
++
++    return;
++  }
++
++  for (let i = 0; i < lines.length; i++) {
++    if (parts[i]) {
++      await signField(lines[i].id, { type: FieldType.TEXT, value: parts[i] });
++    }
++  }
++};
 diff --git a/apps/remix/app/utils/meta.ts b/apps/remix/app/utils/meta.ts
 index 6c059b9..03eaecd 100644
 --- a/apps/remix/app/utils/meta.ts
@@ -9212,7 +9321,7 @@ index 0000000..1c775db
 +  }
 +};
 diff --git a/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts b/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
-index ee337c1..2f71f0f 100644
+index ee337c1..31b5653 100644
 --- a/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
 +++ b/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
 @@ -6,6 +6,7 @@ import type { Canvas } from '@documenso/skia-canvas';
@@ -9223,21 +9332,26 @@ index ee337c1..2f71f0f 100644
  import { ensureFontLibrary } from './helpers';
  
  type InsertFieldInPDFV2Options = {
-@@ -20,9 +21,12 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
+@@ -20,9 +21,16 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
    let stage: Konva.Stage | null = new Konva.Stage({ width: pageWidth, height: pageHeight });
    let layer: Konva.Layer | null = new Konva.Layer();
  
+-  // Render the fields onto the layer.
 +  // MarthSign: Arial for the text fields, before any text is measured
 +  ensureArial();
 +
-   // Render the fields onto the layer.
++  // Render the fields onto the layer. (MarthSign: only the signed ones; an optional field left blank prints nothing)
    for (const field of fields) {
 -    renderField({
++    if (!field.inserted) {
++      continue;
++    }
++
 +    const rendered = renderField({
        scale: 1,
        field: {
          renderId: field.id.toString(),
-@@ -38,6 +42,9 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
+@@ -38,6 +46,9 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
        pageHeight,
        mode: 'export',
      });
@@ -9306,6 +9420,20 @@ index 9fa2a73..ea693c2 100644
    });
  
    const qrSize = qrToken ? 72 : 0;
+diff --git a/packages/lib/types/field-meta.ts b/packages/lib/types/field-meta.ts
+index bb65bf7..0605d4c 100644
+--- a/packages/lib/types/field-meta.ts
++++ b/packages/lib/types/field-meta.ts
+@@ -113,6 +113,9 @@ export type TDateFieldMeta = z.infer<typeof ZDateFieldMeta>;
+ export const ZTextFieldMeta = ZBaseFieldMeta.extend({
+   type: z.literal('text'),
+   text: z.string().optional(),
++  // MarthSign: lines of one text box (the send page's +): the same lineGroup, numbered from 1 by lineIndex
++  lineGroup: z.string().max(40).optional(),
++  lineIndex: z.number().int().min(1).optional(),
+   characterLimit: z.coerce.number({ invalid_type_error: 'Value must be a number' }).min(0).optional(),
+   textAlign: ZFieldTextAlignSchema.optional(),
+   lineHeight: ZFieldMetaLineHeight.nullish(),
 diff --git a/packages/lib/universal/field-renderer/field-generic-items.ts b/packages/lib/universal/field-renderer/field-generic-items.ts
 index d37d023..3ecd793 100644
 --- a/packages/lib/universal/field-renderer/field-generic-items.ts
@@ -9321,18 +9449,23 @@ index d37d023..3ecd793 100644
  
 diff --git a/packages/lib/universal/field-renderer/marthsign-field-look.ts b/packages/lib/universal/field-renderer/marthsign-field-look.ts
 new file mode 100644
-index 0000000..5e16aa8
+index 0000000..4a5551b
 --- /dev/null
 +++ b/packages/lib/universal/field-renderer/marthsign-field-look.ts
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,264 @@
 +import Konva from 'konva';
++
++import { getSignatureFontFamily } from '../../constants/pdf';
 +
 +/**
 + * MarthSign: how fields look on the signing screen and in the signed PDF (the same in both):
-+ * - blue ink on everything the signer puts in; name, email, date, text and number fields are Arial bold italic
++ * - blue ink on everything the signer puts in; name, email, date, text and number fields are Arial bold italic;
++ *   initials are handwritten, like the signature
 + * - a rounded frame around each signature and initials field, with "Signed by:" notched into its top border and,
 + *   on signatures only, the envelope ID notched into its bottom border (like DocuSign's). The frame is the box:
-+ *   the field's own box isn't drawn for them, nor for name and date fields, which are just their text.
++ *   the field's own box isn't drawn for them, nor for name and date fields, which are just their text. On the
++ *   signing screen a frame still waiting to be signed is thicker and in the field's "to do" color.
++ * - a checkbox is its box (the "to do" color) until it's checked, then just a blue "X"
 + */
 +export const INK_COLOR = '#00208e';
 +
@@ -9344,12 +9477,22 @@ index 0000000..5e16aa8
 +// "envelope_kdhsmrtuvwxyzabc" -> "KDHSMRTUVWXYZABC" (the ID's letters are all lowercase, so it reads back exactly)
 +export const envelopeIdLabel = (envelopeId: string) => envelopeId.replace(/^envelope_/, '').toUpperCase();
 +
-+const styleText = (fieldGroup: Konva.Group, fieldType: string) => {
++// The largest a handwritten text can be in a box: as wide as fits, up to 75% of its height
++export const fitHandwriting = (text: string, fieldWidth: number, fieldHeight: number) => {
++  const probe = new Konva.Text({ text, fontSize: 100, fontFamily: getSignatureFontFamily(text) });
++  const widthPerPoint = probe.width() / 100;
++  probe.destroy();
++
++  return Math.max(6, Math.min(fieldHeight * 0.75, (fieldWidth * 0.94) / (widthPerPoint || 1)));
++};
++
++const contentTexts = (fieldGroup: Konva.Group) =>
++  fieldGroup.find('Text').filter((node) => !node.hasName('ms-frame')) as Konva.Text[];
++
++const styleText = (fieldGroup: Konva.Group, fieldType: string, fieldWidth: number, fieldHeight: number) => {
 +  const isTextField = TEXT_FIELD_TYPES.includes(fieldType);
 +
-+  for (const node of fieldGroup.find('Text')) {
-+    const text = node as Konva.Text;
-+
++  for (const text of contentTexts(fieldGroup)) {
 +    text.fill(INK_COLOR);
 +
 +    if (isTextField) {
@@ -9358,11 +9501,36 @@ index 0000000..5e16aa8
 +      // (no variant: Konva would add "normal" after "bold", and the PDF's canvas then drops the italic)
 +      text.fontVariant('');
 +    }
++
++    // Initials are handwritten, filling their box like a signature
++    if (fieldType === 'INITIALS' && text.text()) {
++      text.setAttrs({
++        x: 0,
++        y: 0,
++        width: fieldWidth,
++        height: fieldHeight,
++        align: 'center',
++        verticalAlign: 'middle',
++        wrap: 'none',
++        fontFamily: getSignatureFontFamily(text.text()),
++        fontStyle: 'normal',
++        fontSize: fitHandwriting(text.text(), fieldWidth, fieldHeight),
++      });
++    }
 +  }
 +};
 +
 +// The frame, in the field's own coordinates (0, 0 is its top-left corner)
-+const addFrame = (fieldGroup: Konva.Group, fieldType: string, envelopeId: string, fieldW: number, h: number) => {
++const addFrame = (options: {
++  fieldGroup: Konva.Group;
++  fieldType: string;
++  envelopeId: string;
++  fieldW: number;
++  h: number;
++  color: string;
++  strokeWidth: number;
++}) => {
++  const { fieldGroup, fieldType, envelopeId, fieldW, h, color, strokeWidth } = options;
 +  const radius = Math.min(6, h / 4, fieldW / 4);
 +  const pad = radius + 2;
 +
@@ -9386,7 +9554,7 @@ index 0000000..5e16aa8
 +      y: labelY - fontSize / 2,
 +      fontSize,
 +      fontFamily: LABEL_FONT,
-+      fill: FRAME_COLOR,
++      fill: color,
 +    });
 +  const topLabel = label(top, 0);
 +  const bottomLabel = bottom ? label(bottom, h) : null;
@@ -9398,8 +9566,8 @@ index 0000000..5e16aa8
 +  const frame = new Konva.Shape({
 +    name: 'ms-frame',
 +    listening: false,
-+    stroke: FRAME_COLOR,
-+    strokeWidth: 1,
++    stroke: color,
++    strokeWidth,
 +    strokeScaleEnabled: false,
 +    sceneFunc: (ctx, shape) => {
 +      ctx.beginPath();
@@ -9438,16 +9606,75 @@ index 0000000..5e16aa8
 +  }
 +};
 +
++// A checkbox: its own box until checked, then a blue "X". (Documenso's drawn checkboxes are hidden; clicking
++// anywhere on the field toggles its one option.)
++const lookCheckbox = (options: {
++  fieldGroup: Konva.Group;
++  isChecked: boolean;
++  fieldWidth: number;
++  fieldHeight: number;
++}) => {
++  const { fieldGroup, isChecked, fieldWidth, fieldHeight } = options;
++  const rect = fieldGroup.findOne('.field-rect') as Konva.Rect | undefined;
++
++  fieldGroup.getChildren().forEach((node) => {
++    if (node !== rect && !node.hasName('loading-spinner-group')) {
++      node.visible(false);
++      node.listening(false);
++    }
++  });
++
++  if (rect) {
++    rect.setAttr('internalCheckboxIndex', 0);
++
++    if (isChecked) {
++      rect.setAttrs({ strokeEnabled: false, fill: 'rgba(255, 255, 255, 0.01)' });
++    }
++  }
++
++  if (isChecked) {
++    fieldGroup.add(
++      new Konva.Text({
++        name: 'ms-frame',
++        listening: false,
++        text: 'X',
++        x: 0,
++        y: 0,
++        width: fieldWidth,
++        height: fieldHeight,
++        align: 'center',
++        verticalAlign: 'middle',
++        fontFamily: 'Arial, "Noto Sans", sans-serif',
++        fontStyle: 'italic bold',
++        fontVariant: '',
++        fontSize: Math.max(6, fieldHeight * 0.8),
++        fill: INK_COLOR,
++      }),
++    );
++  }
++};
++
++const checkedIndices = (customText: string) => {
++  try {
++    const parsed = JSON.parse(customText || '[]');
++
++    return Array.isArray(parsed) ? parsed : [];
++  } catch {
++    return [];
++  }
++};
++
 +export const applyMarthSignLook = (options: {
 +  fieldGroup: Konva.Group | undefined;
 +  fieldType: string;
 +  inserted: boolean;
++  customText: string;
 +  envelopeId: string;
 +  fieldWidth: number;
 +  fieldHeight: number;
 +  mode: 'sign' | 'export';
 +}) => {
-+  const { fieldGroup, fieldType, inserted, envelopeId, fieldWidth, fieldHeight, mode } = options;
++  const { fieldGroup, fieldType, inserted, customText, envelopeId, fieldWidth, fieldHeight, mode } = options;
 +
 +  if (!fieldGroup) {
 +    return;
@@ -9455,7 +9682,17 @@ index 0000000..5e16aa8
 +
 +  fieldGroup.find('.ms-frame').forEach((node) => node.destroy());
 +
-+  styleText(fieldGroup, fieldType);
++  if (fieldType === 'CHECKBOX') {
++    lookCheckbox({ fieldGroup, isChecked: inserted && checkedIndices(customText).includes(0), fieldWidth, fieldHeight });
++
++    return;
++  }
++
++  styleText(fieldGroup, fieldType, fieldWidth, fieldHeight);
++
++  // The field's "to do" color (its box's border), before the box is hidden
++  const rect = fieldGroup.findOne('.field-rect') as Konva.Rect | undefined;
++  const pendingColor = (rect && typeof rect.stroke() === 'string' && (rect.stroke() as string)) || FRAME_COLOR;
 +
 +  if (UNBOXED_FIELD_TYPES.includes(fieldType)) {
 +    // The box stays (it's what's clicked) but isn't seen
@@ -9464,13 +9701,24 @@ index 0000000..5e16aa8
 +    });
 +  }
 +
-+  // On the signing screen every signature and initials field has its frame; in the PDF, the signed ones
++  // On the signing screen every signature and initials field has its frame (thicker, in the "to do" color, until
++  // it's signed); in the PDF, the signed ones
 +  if ((fieldType === 'SIGNATURE' || fieldType === 'INITIALS') && (mode === 'sign' || inserted)) {
-+    addFrame(fieldGroup, fieldType, envelopeId, fieldWidth, fieldHeight);
++    const isPending = mode === 'sign' && !inserted;
++
++    addFrame({
++      fieldGroup,
++      fieldType,
++      envelopeId,
++      fieldW: fieldWidth,
++      h: fieldHeight,
++      color: isPending ? pendingColor : FRAME_COLOR,
++      strokeWidth: isPending ? 2 : 1,
++    });
 +  }
 +};
 diff --git a/packages/lib/universal/field-renderer/render-field.ts b/packages/lib/universal/field-renderer/render-field.ts
-index 46b82bb..1fb0b57 100644
+index 46b82bb..3691772 100644
 --- a/packages/lib/universal/field-renderer/render-field.ts
 +++ b/packages/lib/universal/field-renderer/render-field.ts
 @@ -5,6 +5,8 @@ import { match } from 'ts-pattern';
@@ -9491,7 +9739,7 @@ index 46b82bb..1fb0b57 100644
      .with(FieldType.INITIALS, FieldType.NAME, FieldType.EMAIL, FieldType.DATE, FieldType.TEXT, FieldType.NUMBER, () =>
        renderGenericTextFieldElement(field, options),
      )
-@@ -69,4 +71,21 @@ export const renderField = ({
+@@ -69,4 +71,22 @@ export const renderField = ({
        throw new Error('Free signature fields are not supported');
      })
      .exhaustive();
@@ -9504,6 +9752,7 @@ index 46b82bb..1fb0b57 100644
 +      fieldGroup: (rendered as { fieldGroup?: Konva.Group }).fieldGroup,
 +      fieldType: field.type,
 +      inserted: field.inserted,
++      customText: field.customText ?? '',
 +      envelopeId: String((field as { envelopeId?: unknown }).envelopeId ?? ''),
 +      fieldWidth,
 +      fieldHeight,
@@ -9594,10 +9843,10 @@ index eb3d94c..778380b 100644
      overflowMode: resolveFieldOverflowMode(fieldMeta),
      isLabel,
 diff --git a/packages/lib/utils/advanced-fields-helpers.ts b/packages/lib/utils/advanced-fields-helpers.ts
-index ae75098..d85edb5 100644
+index ae75098..5dd650c 100644
 --- a/packages/lib/utils/advanced-fields-helpers.ts
 +++ b/packages/lib/utils/advanced-fields-helpers.ts
-@@ -16,6 +16,12 @@ export const ADVANCED_FIELD_TYPES_WITH_OPTIONAL_SETTING: FieldType[] = [
+@@ -16,6 +16,17 @@ export const ADVANCED_FIELD_TYPES_WITH_OPTIONAL_SETTING: FieldType[] = [
   * Whether a field is required to be inserted.
   */
  export const isRequiredField = (field: Field) => {
@@ -9607,9 +9856,78 @@ index ae75098..d85edb5 100644
 +    return false;
 +  }
 +
++  // MarthSign: a signature or initials field is required unless the sender made it optional
++  if (field.type === FieldType.SIGNATURE || field.type === FieldType.INITIALS) {
++    return (field.fieldMeta as { required?: boolean } | null)?.required !== false;
++  }
++
    // All fields without the optional metadata are assumed to be required.
    if (!ADVANCED_FIELD_TYPES_WITH_OPTIONAL_SETTING.includes(field.type)) {
      return true;
+diff --git a/packages/lib/utils/marthsign-text-lines.ts b/packages/lib/utils/marthsign-text-lines.ts
+new file mode 100644
+index 0000000..c78f052
+--- /dev/null
++++ b/packages/lib/utils/marthsign-text-lines.ts
+@@ -0,0 +1,58 @@
++/**
++ * MarthSign: a text box the sender gave more than one line (the send page's +). Its lines are separate text fields
++ * with the same lineGroup in their fieldMeta, numbered by lineIndex; the signer types once and the text runs from
++ * line to line, whole words only.
++ */
++type LineMeta = { lineGroup?: string; lineIndex?: number; characterLimit?: number };
++
++const lineMeta = (field: { fieldMeta?: unknown }) => (field.fieldMeta ?? {}) as LineMeta;
++
++export const lineLimit = (field: { fieldMeta?: unknown }) => lineMeta(field).characterLimit || 1000;
++
++// The field's lines in order (just the field itself if it has no others)
++export const getTextLines = <T extends { type: string; fieldMeta?: unknown }>(field: T, fields: T[]): T[] => {
++  const group = lineMeta(field).lineGroup;
++
++  if (!group) {
++    return [field];
++  }
++
++  return fields
++    .filter((other) => other.type === 'TEXT' && lineMeta(other).lineGroup === group)
++    .sort((a, b) => (lineMeta(a).lineIndex ?? 0) - (lineMeta(b).lineIndex ?? 0));
++};
++
++/**
++ * Splits text across lines of the given character limits, moving whole words to the next line when they don't
++ * fit. Only a word longer than a whole line is split. Returns null if the text needs more lines than there are.
++ */
++export const wrapWords = (text: string, limits: number[]): string[] | null => {
++  const lines = limits.map(() => '');
++  let line = 0;
++
++  for (const word of text.trim().split(/\s+/).filter(Boolean)) {
++    let rest = word;
++
++    while (rest) {
++      if (line >= limits.length) {
++        return null;
++      }
++
++      const candidate = lines[line] ? `${lines[line]} ${rest}` : rest;
++
++      if (candidate.length <= limits[line]) {
++        lines[line] = candidate;
++        rest = '';
++      } else if (!lines[line]) {
++        // A word longer than a whole line: as much as fits here, the rest on the next
++        lines[line] = rest.slice(0, limits[line]);
++        rest = rest.slice(limits[line]);
++        line++;
++      } else {
++        line++;
++      }
++    }
++  }
++
++  return lines;
++};
 diff --git a/packages/tailwind-config/index.cjs b/packages/tailwind-config/index.cjs
 index 2b7703f..31e4780 100644
 --- a/packages/tailwind-config/index.cjs

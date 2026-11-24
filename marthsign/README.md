@@ -19,6 +19,12 @@ What `marthsign.patch` changes:
   shared with the PDF): signatures and initials in their frame ("Sign Here" / "INI" until signed); name and date
   fields are just their text, filled in already, never clicked or counted (the server records them when the signer
   completes); text fields take no more characters than their width fits (the send page sets the limit).
+  A frame waiting to be signed is thicker and in the "to do" color; initials are handwritten like the signature.
+- **Text boxes of several lines** (the send page's +): the lines share a `lineGroup` in their fieldMeta (a key the
+  patch adds to the text field schema), numbered by `lineIndex`. The signer types once and the text runs from line
+  to line in whole words (`packages/lib/utils/marthsign-text-lines.ts`).
+- **Checkboxes:** one box, its "to do" box until checked, then a blue "X". Signatures, initials and checkboxes are
+  required unless the sender made them optional (`fieldMeta.required: false`); a field left blank prints nothing.
 - **Signed PDFs:** a rounded frame around each signed signature and initials field, with "Signed by:" notched into
   its top border and, on signatures only, the envelope ID (`envelope_abc…` without the prefix, in capitals) notched
   into its bottom border. Every other field is plain text. The frame is the portal's olive. Signed ink is blue

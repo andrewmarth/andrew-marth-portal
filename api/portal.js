@@ -3035,7 +3035,7 @@ async function adminCreateClient_(account, body) {
 // That happens the moment the last signer finishes: MarthSign's DOCUMENT_COMPLETED webhook calls this API.
 const MARTHSIGN_URL = 'https://sign.andrewmarth.com';
 const SIGNED_FOLDER_ID = '1KdVqHpueNlMt2lOjl-tNLc2UvpwOsctw';
-const SIGNATURE_FIELD_TYPES = ['SIGNATURE', 'INITIALS', 'NAME', 'DATE', 'TEXT'];
+const SIGNATURE_FIELD_TYPES = ['SIGNATURE', 'INITIALS', 'NAME', 'DATE', 'TEXT', 'CHECKBOX'];
 // Every MarthSign email switched off (distribution NONE covers the signers; these cover the owner)
 const MARTHSIGN_NO_EMAIL = {
   recipientSigningRequest: false, recipientRemoved: false, recipientSigned: false, documentPending: false,
@@ -3081,6 +3081,26 @@ async function signatureRows_() {
     Object.keys(r).forEach(k => { out[k.trim().toUpperCase()] = String(r[k]).trim(); });
     return out;
   });
+}
+
+// A field's settings in MarthSign, from the send page:
+// - signatures, initials and checkboxes are required unless the sender made them optional (required: false)
+// - a checkbox is one box, unchecked to start
+// - a text field holds as many characters as its width fits (the send page works it out); the lines of one text
+//   box (its + button) share a group and are numbered from 1, so the signer's text runs from line to line
+function signatureFieldMeta_(type, f) {
+  const required = f.required !== false;
+  if (type === 'SIGNATURE') return { fieldMeta: { type: 'signature', required } };
+  if (type === 'INITIALS') return { fieldMeta: { type: 'initials', required } };
+  if (type === 'CHECKBOX') return { fieldMeta: { type: 'checkbox', required, values: [{ id: 1, checked: false, value: '' }], direction: 'vertical' } };
+  if (type !== 'TEXT') return {};
+  const meta = { type: 'text' };
+  const chars = Math.round(Number(f.chars));
+  if (chars >= 1 && chars <= 500) meta.characterLimit = chars;
+  const group = String(f.lineGroup || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+  const index = Math.round(Number(f.lineIndex));
+  if (group && index >= 1) Object.assign(meta, { lineGroup: group, lineIndex: index });
+  return { fieldMeta: meta };
 }
 
 // Admins: send PDFs for signature, all in one envelope. body: { title, category, street, city, state, zip (Property only),
@@ -3133,10 +3153,7 @@ async function adminSendForSignature_(account, body) {
       const page = Math.round(Number(f.page));
       const x = num(f.x, 0, 100), y = num(f.y, 0, 100), w = num(f.w, 1, 100), h = num(f.h, 1, 100);
       if (!(doc >= 0 && doc < files.length) || !(page >= 1) || x === null || y === null || w === null || h === null) return null;
-      // A text field holds as many characters as its width fits (the send page works it out; the signer sees a counter)
-      const chars = Math.round(Number(f.chars));
-      const fieldMeta = type === 'TEXT' && chars >= 1 && chars <= 500 ? { fieldMeta: { type: 'text', characterLimit: chars } } : {};
-      return { type, identifier: doc, page, positionX: x, positionY: y, width: w, height: h, ...fieldMeta };
+      return { type, identifier: doc, page, positionX: x, positionY: y, width: w, height: h, ...signatureFieldMeta_(type, f) };
     });
     if (!fields.length || fields.some(f => !f)) return { ok: false, error: 'bad_fields' };
     if (!fields.some(f => f.type === 'SIGNATURE' || f.type === 'INITIALS')) return { ok: false, error: 'needs_signature' };
