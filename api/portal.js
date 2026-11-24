@@ -3233,16 +3233,18 @@ async function fileSignedEnvelope_(env, signers) {
   const first = signers[0];
   const title = first['TITLE'] || env.title || 'Document';
   const items = (env.envelopeItems || []).slice().sort((a, b) => a.order - b.order);
+  // Named "[2026.11.23] Title": the day it was finished, in Arizona
+  const prefix = '[' + new Date(env.completedAt || Date.now()).toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).replace(/-/g, '.') + '] ';
   const docFiles = [];
   for (const item of items) {
     const pdf = await documenso_('get', '/envelope/item/' + encodeURIComponent(item.id) + '/download?version=signed', undefined, false, true);
     const name = items.length > 1 ? title + ' - ' + String(item.title || '').replace(/\.pdf$/i, '') : title;
-    docFiles.push(await createDriveFile(SIGNED_FOLDER_ID, name + ' - Signed.pdf', 'application/pdf', pdf));
+    docFiles.push(await createDriveFile(SIGNED_FOLDER_ID, prefix + name + '.pdf', 'application/pdf', pdf));
   }
   let certFile = null;
   try {
     const cert = await documenso_('get', '/envelope/' + encodeURIComponent(env.id) + '/certificate/download', undefined, false, true);
-    certFile = await createDriveFile(SIGNED_FOLDER_ID, title + ' - Certificate.pdf', 'application/pdf', cert);
+    certFile = await createDriveFile(SIGNED_FOLDER_ID, prefix + title + ' - Signing Certificate.pdf', 'application/pdf', cert);
   } catch (err) { console.error(err); }
   // Where each signer signed from, in signer order
   const ipByEmail = {};
