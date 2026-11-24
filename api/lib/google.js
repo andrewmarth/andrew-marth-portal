@@ -103,6 +103,13 @@ export async function createDriveFile(folderId, name, mimeType, bytes) {
   return { id: json.id, url: json.webViewLink || 'https://drive.google.com/file/d/' + json.id + '/view' };
 }
 
+// Changes a file's metadata, e.g. { name } to rename it or { trashed: true } to move it to the Drive user's trash
+export async function updateDriveFile(id, metadata) {
+  await drive(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata),
+  });
+}
+
 // --- Geocoder (wholesale map) ---
 // { status: 'OK', lat, lng } | { status: 'ZERO_RESULTS' } | { status: <error> }
 export async function geocode(address) {

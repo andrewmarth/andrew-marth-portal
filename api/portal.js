@@ -2,7 +2,7 @@
 //
 // The data lives in Firestore (see firestore/LAYOUT.md). Rows come from lib/store.js as { COLUMN: text }.
 import { rows, row as getRow, columns, update, add, remove, withLock, forgetRows } from './lib/store.js';
-import { verifyPhone, folderFiles, driveImage, createDriveFile, geocode } from './lib/google.js';
+import { verifyPhone, folderFiles, driveImage, createDriveFile, updateDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
@@ -597,6 +597,11 @@ export async function handle(body, query) {
     if (body.action === 'saveMarketingPoint') return await saveMarketingPoint_(account, body);
     if (body.action === 'deleteMarketingPoint') return await deleteMarketingPoint_(account, body);
     if (body.action === 'marketingPointImage') return await marketingPointImage_(account, body);
+    // pages.html: a Seller Net's admin Listing Photos card (photos in Drive, linked to the home's address)
+    if (body.action === 'listingPhotos') return await listingPhotos_(account, body);
+    if (body.action === 'uploadListingPhoto') return await uploadListingPhoto_(account, body);
+    if (body.action === 'saveListingPhotos') return await saveListingPhotos_(account, body);
+    if (body.action === 'listingPhotoImage') return await listingPhotoImage_(account, body);
     // settings.html: the admin Title Companies card (each company's filed escrow and title fees)
     if (body.action === 'titleCompanies') return await titleCompanies_(account);
     // settings.html: the admin Lenders card (each lender, its linked lender accounts and its loan products)
@@ -2421,6 +2426,109 @@ async function marketingPointImage_(account, body) {
   const imageId = String(body.imageId || '');
   if (!imageId || !(await marketingPointList_()).some(p => p.imageId === imageId)) return { ok: false, error: 'not_found' };
   return wholesaleImage_(imageId, Math.min(1600, Math.max(200, Number(body.width) || 640)));
+}
+
+// --- Listing Photos (pages.html, a Seller Net's admin card) ---
+// One listingPhotos document per photo, linked to the home by its ADDRESS KEY (addressKey_: street, city and zip), so
+// every version of a net sheet shows the same photos. The photo is in the Listing Photos Drive folder, named
+// "[2026.11.24] Listing Photo (Front).jpg": the day it was uploaded (Arizona; UPLOAD DATE, kept as "2026.11.24") and its
+// PHOTO NAME. ORDER is its place, 1 first.
+const LISTING_PHOTOS_FOLDER_ID = process.env.LISTING_PHOTOS_FOLDER_ID || '1Z4PRK8FDbLXMJNUQ-Iyf056X0hJjL-UX';
+// (as base64 in the request, 20 MB stays under Cloud Run's 32 MB limit)
+const LISTING_PHOTO_MAX = 20 * 1024 * 1024;
+
+const listingPhotoFileName_ = (date, name, ext) => '[' + date + '] Listing Photo (' + name + ').' + ext;
+// A photo's name, without characters Drive or the file name's brackets would trip on
+const listingPhotoName_ = value => cleanText_(value, 60).replace(/[\\/:*?"<>|()[\]]+/g, '').replace(/\s+/g, ' ').trim();
+
+// The Seller Net page an admin's call is about and its address key ({ error } if it isn't one or has no address)
+async function listingPhotosPage_(account, body) {
+  if (!isAdmin_(account)) return { error: 'not_admin' };
+  const found = await findPage_(body.pageId);
+  if (!found || String(found.row['PAGE TYPE'] || '').trim().toLowerCase() !== 'seller net') return { error: 'page_not_found' };
+  const key = addressKey_(found.row);
+  if (!key.replace(/\|/g, '')) return { error: 'missing_address' };
+  return { page: found.row, key };
+}
+async function listingPhotoRows_(key) {
+  return (await rows('listingPhotos')).filter(r => r['ADDRESS KEY'] === key)
+    .sort((a, b) => (Number(a['ORDER']) || 0) - (Number(b['ORDER']) || 0) || a._order - b._order);
+}
+const listingPhotoOut_ = r => ({ id: r._id, name: r['PHOTO NAME'], fileName: r['FILE NAME'], uploaded: r['UPLOAD DATE'] });
+
+// → { ok, photos: [{ id, name, fileName, uploaded }] } in order
+async function listingPhotos_(account, body) {
+  const at = await listingPhotosPage_(account, body);
+  if (at.error) return { ok: false, error: at.error };
+  return { ok: true, photos: (await listingPhotoRows_(at.key)).map(listingPhotoOut_) };
+}
+
+// One new photo, after the others. body: { pageId, name, image: { type, data (base64) } } → { ok, photo }
+async function uploadListingPhoto_(account, body) {
+  const at = await listingPhotosPage_(account, body);
+  if (at.error) return { ok: false, error: at.error };
+  const name = listingPhotoName_(body.name);
+  if (!name) return { ok: false, error: 'missing_name' };
+  const image = body.image || {};
+  const type = String(image.type || '').toLowerCase();
+  const ext = MARKETING_IMAGE_TYPES[type];
+  if (!ext) return { ok: false, error: 'invalid_image' };
+  const bytes = Buffer.from(String(image.data || ''), 'base64');
+  if (!bytes.length || bytes.length > LISTING_PHOTO_MAX) return { ok: false, error: 'image_too_big' };
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' }).replace(/-/g, '.');
+  const fileName = listingPhotoFileName_(date, name, ext);
+  const file = await createDriveFile(LISTING_PHOTOS_FOLDER_ID, fileName, type, bytes);
+  const last = (await listingPhotoRows_(at.key)).reduce((max, r) => Math.max(max, Number(r['ORDER']) || 0), 0);
+  const fields = {
+    'ADDRESS KEY': at.key, 'STREET ADDRESS': at.page['STREET ADDRESS'], 'CITY': at.page['CITY'], 'ZIP': at.page['ZIP'],
+    'PHOTO NAME': name, 'FILE NAME': fileName, 'DRIVE FILE ID': file.id, 'ORDER': last + 1, 'UPLOAD DATE': date,
+  };
+  const id = (await add('listingPhotos', fields)).id;
+  return { ok: true, photo: listingPhotoOut_(Object.defineProperty(fields, '_id', { value: id })) };
+}
+
+// Renames, reorders and removes. body: { pageId, photos: [{ id, name }] in their new order, remove: [ids] }. Every photo
+// of the home must be in one list or the other (so a card that's out of date can't drop a photo it never saw). A removed
+// photo goes to the Drive user's trash. → { ok, photos }
+async function saveListingPhotos_(account, body) {
+  const at = await listingPhotosPage_(account, body);
+  if (at.error) return { ok: false, error: at.error };
+  const current = await listingPhotoRows_(at.key);
+  const byId = new Map(current.map(r => [r._id, r]));
+  const photos = Array.isArray(body.photos) ? body.photos : [];
+  const ids = photos.map(p => String((p && p.id) || ''));
+  const removeIds = (Array.isArray(body.remove) ? body.remove : []).map(String);
+  const all = ids.concat(removeIds);
+  if (new Set(all).size !== all.length || all.length !== current.length || !all.every(id => byId.has(id))) return { ok: false, error: 'photos_changed' };
+  const names = photos.map(p => listingPhotoName_(p.name));
+  if (names.some(n => !n)) return { ok: false, error: 'missing_name' };
+
+  for (const id of removeIds) {
+    // (a file already gone from Drive is just dropped from the list)
+    await updateDriveFile(byId.get(id)['DRIVE FILE ID'], { trashed: true }).catch(err => { if (!/-> 404/.test(err.message)) throw err; });
+    await remove('listingPhotos', id);
+  }
+  for (let i = 0; i < ids.length; i++) {
+    const r = byId.get(ids[i]);
+    const fields = {};
+    if (Number(r['ORDER']) !== i + 1) fields['ORDER'] = i + 1;
+    if (names[i] !== r['PHOTO NAME']) {
+      const fileName = listingPhotoFileName_(r['UPLOAD DATE'], names[i], String(r['FILE NAME']).split('.').pop());
+      await updateDriveFile(r['DRIVE FILE ID'], { name: fileName });
+      Object.assign(fields, { 'PHOTO NAME': names[i], 'FILE NAME': fileName });
+    }
+    if (Object.keys(fields).length) await update('listingPhotos', r._id, fields);
+  }
+  return { ok: true, photos: (await listingPhotoRows_(at.key)).map(listingPhotoOut_) };
+}
+
+// One of the home's photos, resized to width. body: { pageId, id, width }
+async function listingPhotoImage_(account, body) {
+  const at = await listingPhotosPage_(account, body);
+  if (at.error) return { ok: false, error: at.error };
+  const photo = (await listingPhotoRows_(at.key)).find(r => r._id === String(body.id || ''));
+  if (!photo) return { ok: false, error: 'not_found' };
+  return wholesaleImage_(photo['DRIVE FILE ID'], Math.min(1600, Math.max(200, Number(body.width) || 1200)));
 }
 
 function canSeeWholesale_(account) {

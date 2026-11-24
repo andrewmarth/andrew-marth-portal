@@ -755,6 +755,17 @@
   "IMAGE DRIVE FILE ID",
   "IMAGE NAME"
  ],
+ "listingPhotos": [
+  "ADDRESS KEY",
+  "STREET ADDRESS",
+  "CITY",
+  "ZIP",
+  "PHOTO NAME",
+  "FILE NAME",
+  "DRIVE FILE ID",
+  "ORDER",
+  "UPLOAD DATE"
+ ],
  "links": [
   "TITLE",
   "DESCRIPTION",

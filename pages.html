@@ -1126,14 +1126,14 @@
         .problem-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         /* Settings card (and the admin-only cards): brown with soft gold and rust glows (same as the home page's My Buyers card) */
-        :is(#loan-card, #home-card, #listing-card), #math-card, #buyer-card, #delete-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #delete-card::before,
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #delete-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #delete-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #delete-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card) > *, #math-card > *, #buyer-card > *, #delete-card > * { position: relative; z-index: 1; }
-        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow, #delete-card .card-eyebrow { color: var(--gold); }
-        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2, #buyer-card h2, #delete-card h2 { color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card), #math-card, #buyer-card, #photos-card, #delete-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before,
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card) > *, #math-card > *, #buyer-card > *, #photos-card > *, #delete-card > * { position: relative; z-index: 1; }
+        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow, #photos-card .card-eyebrow, #delete-card .card-eyebrow { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2, #buyer-card h2, #photos-card h2, #delete-card h2 { color: var(--cream); }
         :is(#loan-card, #home-card, #listing-card) .money-section-title, #math-card .money-section-title, #buyer-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         /* Seller Net's Buyer Side, on the same brown: lighter green and red, and the buyer's cash in a darker panel */
         #buyer-card .money-list li { border-bottom-color: rgba(233, 226, 216, 0.15); }
@@ -1142,6 +1142,45 @@
         @media (hover: hover) { .btn.btn-danger:hover { background: #9c2f26; } }
         #delete-card .access-actions { justify-content: flex-start; flex-wrap: wrap; }
         @media (max-width: 600px) { #delete-card .access-actions .btn { width: 100%; } }
+        /* Listing Photos (admins): the home's photos as a carousel, or the list to name, order and add them */
+        .lp-carousel { position: relative; aspect-ratio: 3 / 2; border-radius: 18px; overflow: hidden; background: rgba(0, 0, 0, 0.28); }
+        .lp-carousel img { display: block; width: 100%; height: 100%; object-fit: contain; }
+        .lp-nav { position: absolute; top: 50%; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; transform: translateY(-50%); border: 2px solid var(--navy); border-radius: 50%; background: rgba(233, 226, 216, 0.92); color: var(--navy); cursor: pointer; }
+        .lp-nav svg { width: 20px; height: 20px; }
+        .lp-prev { left: 12px; }
+        .lp-next { right: 12px; }
+        .lp-caption { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-weight: bold; }
+        .lp-count { flex: 0 0 auto; font-weight: normal; opacity: 0.7; }
+        .lp-thumbs { display: flex; gap: 8px; margin-top: 12px; padding-bottom: 4px; overflow-x: auto; }
+        .lp-thumbs button { flex: 0 0 auto; width: 72px; height: 54px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, 0.28); opacity: 0.6; cursor: pointer; }
+        .lp-thumbs button.is-current { border-color: var(--gold); opacity: 1; }
+        .lp-thumbs img, .lp-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .lp-list { display: grid; gap: 10px; margin: 0 0 14px 0; padding: 0; list-style: none; }
+        .lp-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px; border: 1px solid rgba(233, 226, 216, 0.18); border-radius: 14px; background: rgba(233, 226, 216, 0.06); }
+        .lp-thumb-wrap { position: relative; width: 72px; height: 54px; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, 0.28); }
+        .lp-num { position: absolute; top: 3px; left: 3px; min-width: 20px; padding: 2px 5px; border-radius: 999px; background: var(--navy); color: var(--cream); font-size: 0.72rem; font-weight: bold; text-align: center; }
+        .lp-name { width: 100%; min-height: 42px; padding: 8px 16px; border: 2px solid var(--navy); border-radius: 999px; background: #f7f4f0; font: inherit; color: var(--brown); }
+        .lp-name.is-invalid { border-color: #e0604f; box-shadow: 0 0 0 2px rgba(224, 96, 79, 0.45); }
+        .lp-moves { display: flex; gap: 6px; }
+        .lp-moves button { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 2px solid rgba(233, 226, 216, 0.45); border-radius: 50%; background: transparent; color: var(--cream); cursor: pointer; }
+        .lp-moves button svg { width: 18px; height: 18px; }
+        .lp-moves button:disabled { opacity: 0.3; cursor: default; }
+        .lp-moves [data-lp-remove] { border-color: rgba(242, 184, 168, 0.6); color: #f2b8a8; }
+        .lp-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 150px; padding: 20px; border: 2px dashed rgba(233, 226, 216, 0.5); border-radius: 18px; text-align: center; cursor: pointer; }
+        .lp-drop.is-small { min-height: 64px; }
+        .lp-drop:focus-within { outline: 2px solid var(--gold); outline-offset: 2px; }
+        @media (hover: hover) { .lp-drop:hover { border-color: var(--gold); background: rgba(192, 144, 80, 0.1); } }
+        .lp-drop svg { width: 30px; height: 30px; color: var(--gold); }
+        .lp-drop.is-small svg { display: none; }
+        .lp-drop-text { font-weight: bold; }
+        .lp-drop-sub { font-size: 0.82rem; opacity: 0.7; }
+        .btn.lp-cancel { background: transparent; border-color: rgba(233, 226, 216, 0.45); }
+        #photos-card .access-message.is-error { color: #f2b8a8; }
+        #photos-card [hidden] { display: none; }
+        @media (max-width: 600px) {
+            .lp-row { grid-template-columns: 72px minmax(0, 1fr); }
+            .lp-moves { grid-column: 1 / -1; justify-content: flex-end; }
+        }
         .delete-dialog .delete-text { margin: 4px 0 0 0; line-height: 1.5; }
         .delete-dialog .delete-text strong { color: #b3392f; }
         #buyer-card .money-list .v.is-credit { color: #9fd8a9; }
@@ -1483,6 +1522,44 @@
             <h2>Buyer Side</h2>
             <p class="math-intro" id="buyer-card-sub"></p>
             <div id="buyer-card-list"></div>
+        </section>
+
+        <!-- Seller Net, admins only, while the home is Prelisting, Listed or Under Contract: its listing photos (in Drive,
+             linked to the address, so the same on every version), as a carousel, or a list to name, order and add them -->
+        <section class="main-card reveal" id="photos-card" hidden>
+            <span class="card-eyebrow">Admin Only</span>
+            <h2>Listing Photos</h2>
+            <p class="card-intro">The same on every version of this net sheet. Saved in this order to Google Drive.</p>
+            <p id="lp-loading" role="status">Loading photos…</p>
+            <div id="lp-view" hidden>
+                <div class="lp-carousel">
+                    <img id="lp-image" alt="">
+                    <button type="button" class="lp-nav lp-prev" id="lp-prev" aria-label="Previous photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                    <button type="button" class="lp-nav lp-next" id="lp-next" aria-label="Next photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                </div>
+                <div class="lp-caption"><span id="lp-name"></span><span class="lp-count" id="lp-count"></span></div>
+                <div class="lp-thumbs" id="lp-thumbs"></div>
+                <div class="access-actions">
+                    <button type="button" class="btn" id="lp-edit">Edit Photos</button>
+                </div>
+            </div>
+            <div id="lp-editor" hidden>
+                <ol class="lp-list" id="lp-list"></ol>
+                <label class="lp-drop" id="lp-drop">
+                    <input type="file" class="sr-only" id="lp-file" accept="image/*,.heic,.heif" multiple>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
+                    <span class="lp-drop-text" id="lp-drop-text">Choose photos</span>
+                    <span class="lp-drop-sub">JPG, PNG or HEIC, up to 20 MB each</span>
+                </label>
+                <div class="access-actions">
+                    <p class="access-message" id="lp-message" role="status"></p>
+                    <button type="button" class="btn lp-cancel" id="lp-cancel">Cancel</button>
+                    <button type="button" class="btn" id="lp-save">
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        <span id="lp-save-text">Upload Photos</span>
+                    </button>
+                </div>
+            </div>
         </section>
 
         <!-- 8. Admins only, always last: moves this version (or every version) to the trash (asked twice), then back to the
@@ -3462,6 +3539,7 @@
                 renderEscrow(result);
                 renderNetWaiting(page);
                 if (data.isAdmin) renderMath(page, result);
+                setupPhotosCard();
                 return;
             }
             const product = data.loanProducts[loanIndex] || {};
@@ -5985,6 +6063,213 @@
             setupDeleteCard();
             initReveal();
         }
+
+        // --- Listing Photos (Seller Net, admins, while the home is Prelisting, Listed or Under Contract) ---
+        // The home's photos (the API links them to its address) as a carousel with Edit Photos, or, with none yet, the list
+        // to add them to: each photo named ("[date] Listing Photo (Name)" in Drive) and put in order. Uploading sends the new
+        // photos one at a time, then the order, names and removals together.
+        const photosCard = document.getElementById('photos-card');
+        const PHOTO_STATUSES = ['Prelisting', 'Listed', 'Under Contract'];
+        const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+        const PHOTO_MAX = 20 * 1024 * 1024;
+        const lp = id => document.getElementById('lp-' + id);
+        let lpKey = '';        // the address the photos were loaded for
+        let lpPhotos = [];     // the saved photos, in order: [{ id, name, fileName }]
+        let lpItems = [];      // the editor's list: { id } for a saved photo or { file } for a new one, with its name
+        let lpRemoved = [];    // saved photos taken out in the editor
+        let lpIndex = 0;       // the carousel's photo
+        let lpBusy = false;
+        const lpImages = {};   // "id|width" -> a promise of the photo as a data URL
+
+        function setupPhotosCard() {
+            const show = data.isAdmin && PHOTO_STATUSES.includes(text(col(data.page, 'LISTING STATUS')));
+            photosCard.hidden = !show;
+            const key = ['STREET ADDRESS', 'CITY', 'ZIP'].map(c => text(col(data.page, c)).toLowerCase()).join('|');
+            if (show && key !== lpKey && !lpBusy) { lpKey = key; loadPhotos(); }
+        }
+        async function loadPhotos() {
+            lp('view').hidden = true;
+            lp('editor').hidden = true;
+            lp('loading').hidden = false;
+            lp('loading').textContent = 'Loading photos…';
+            try {
+                const json = await api({ action: 'listingPhotos', pageId });
+                if (!json.ok) throw new Error(json.error);
+                lpPhotos = json.photos;
+                if (lpPhotos.length) showPhotos(0); else editPhotos();
+            } catch (err) {
+                console.error(err);
+                lp('loading').textContent = 'The photos couldn’t be loaded. Refresh the page to try again.';
+            }
+        }
+        const photoSrc = (id, width) => {
+            const k = id + '|' + width;
+            lpImages[k] = lpImages[k] || api({ action: 'listingPhotoImage', pageId, id, width })
+                .then(json => { if (!json.ok) throw new Error(json.error); return 'data:' + json.type + ';base64,' + json.data; })
+                .catch(err => { delete lpImages[k]; throw err; });
+            return lpImages[k];
+        };
+
+        // The carousel
+        function showPhotos(index) {
+            lp('loading').hidden = true;
+            lp('editor').hidden = true;
+            lp('view').hidden = false;
+            lp('thumbs').innerHTML = '';
+            lpPhotos.forEach((p, i) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.setAttribute('aria-label', 'Photo ' + (i + 1) + ': ' + p.name);
+                b.innerHTML = '<img alt="">';
+                b.addEventListener('click', () => showPhoto(i));
+                photoSrc(p.id, 200).then(src => { b.firstChild.src = src; }).catch(() => {});
+                lp('thumbs').append(b);
+            });
+            lp('prev').hidden = lp('next').hidden = lpPhotos.length < 2;
+            showPhoto(index);
+        }
+        function showPhoto(index) {
+            lpIndex = (index + lpPhotos.length) % lpPhotos.length;
+            const p = lpPhotos[lpIndex];
+            lp('name').textContent = p.name;
+            lp('count').textContent = (lpIndex + 1) + ' of ' + lpPhotos.length;
+            [...lp('thumbs').children].forEach((b, i) => b.classList.toggle('is-current', i === lpIndex));
+            const img = lp('image');
+            img.removeAttribute('src');
+            img.alt = p.name;
+            photoSrc(p.id, 1600).then(src => { if (lpPhotos[lpIndex] === p) img.src = src; })
+                .catch(() => { if (lpPhotos[lpIndex] === p) img.alt = 'This photo couldn’t be loaded.'; });
+        }
+        lp('prev').addEventListener('click', () => showPhoto(lpIndex - 1));
+        lp('next').addEventListener('click', () => showPhoto(lpIndex + 1));
+
+        // The editor
+        const lpMessage = (msg, kind) => { lp('message').textContent = msg; lp('message').className = 'access-message' + (msg ? ' is-' + kind : ''); };
+        const photoType = file => (file.type || '').toLowerCase() || (/\.hei[cf]$/i.test(file.name) ? 'image/heic' : '');
+        const forgetPreviews = () => lpItems.forEach(item => { if (item.src) URL.revokeObjectURL(item.src); });
+        function editPhotos() {
+            lpItems = lpPhotos.map(p => ({ id: p.id, name: p.name }));
+            lpRemoved = [];
+            lp('loading').hidden = true;
+            lp('view').hidden = true;
+            lp('editor').hidden = false;
+            lpMessage('', '');
+            renderPhotoList();
+        }
+        const ICON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>';
+        const ICON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+        const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+        function renderPhotoList() {
+            const list = lp('list');
+            list.innerHTML = '';
+            lpItems.forEach((item, i) => {
+                const li = document.createElement('li');
+                li.className = 'lp-row';
+                li.innerHTML = '<span class="lp-thumb-wrap"><img class="lp-thumb" alt=""><span class="lp-num">' + (i + 1) + '</span></span>'
+                    + '<input class="lp-name" type="text" maxlength="60" placeholder="Name it, e.g. Front">'
+                    + '<span class="lp-moves">'
+                    + '<button type="button" data-lp-move="-1" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>' + ICON_UP + '</button>'
+                    + '<button type="button" data-lp-move="1" aria-label="Move down"' + (i === lpItems.length - 1 ? ' disabled' : '') + '>' + ICON_DOWN + '</button>'
+                    + '<button type="button" data-lp-remove aria-label="Remove photo">' + ICON_X + '</button></span>';
+                const input = li.querySelector('.lp-name');
+                input.value = item.name;
+                input.setAttribute('aria-label', 'Photo ' + (i + 1) + ' name');
+                input.addEventListener('input', () => { item.name = input.value; input.classList.remove('is-invalid'); lpMessage('', ''); });
+                const img = li.querySelector('img');
+                if (item.file) img.src = item.src = item.src || URL.createObjectURL(item.file);
+                else photoSrc(item.id, 200).then(src => { img.src = src; }).catch(() => {});
+                li.querySelectorAll('[data-lp-move]').forEach(b => b.addEventListener('click', () => {
+                    const to = i + Number(b.dataset.lpMove);
+                    [lpItems[i], lpItems[to]] = [lpItems[to], lpItems[i]];
+                    renderPhotoList();
+                    // Keep the focus on the moved photo's same arrow (its other one once it reaches the end of the list)
+                    const [up, down] = lp('list').children[to].querySelectorAll('[data-lp-move]');
+                    const same = b.dataset.lpMove === '-1' ? up : down;
+                    (same.disabled ? (same === up ? down : up) : same).focus();
+                }));
+                li.querySelector('[data-lp-remove]').addEventListener('click', () => {
+                    if (item.id) lpRemoved.push(item.id);
+                    if (item.src) URL.revokeObjectURL(item.src);
+                    lpItems.splice(i, 1);
+                    renderPhotoList();
+                });
+                list.append(li);
+            });
+            lp('drop-text').textContent = lpItems.length ? 'Add more photos' : 'Choose photos';
+            lp('drop').classList.toggle('is-small', lpItems.length > 0);
+            lp('cancel').hidden = !lpPhotos.length;
+            lp('save-text').textContent = !lpPhotos.length || lpItems.some(item => !item.id) ? 'Upload Photos' : 'Save Photos';
+            lp('save').disabled = lpBusy || (!lpItems.length && !lpRemoved.length);
+        }
+        lp('edit').addEventListener('click', editPhotos);
+        lp('file').addEventListener('change', () => {
+            const files = [...lp('file').files];
+            lp('file').value = '';
+            const ok = files.filter(f => PHOTO_TYPES.includes(photoType(f)) && f.size <= PHOTO_MAX);
+            const first = lpItems.length;
+            ok.forEach(file => lpItems.push({ file, name: '' }));
+            renderPhotoList();
+            const skipped = files.length - ok.length;
+            lpMessage(!skipped ? '' : skipped === 1 ? 'Skipped a file that wasn’t a photo or was over 20 MB.' : 'Skipped ' + skipped + ' files that weren’t photos or were over 20 MB.', 'error');
+            const input = lp('list').children[first] && lp('list').children[first].querySelector('.lp-name');
+            if (input) input.focus();
+        });
+        lp('cancel').addEventListener('click', () => {
+            if (lpBusy) return;
+            forgetPreviews();
+            showPhotos(lpIndex);
+        });
+        const readBase64 = file => new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(',')[1]);
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(file);
+        });
+        lp('save').addEventListener('click', async () => {
+            if (lpBusy) return;
+            const blank = lpItems.findIndex(item => !item.name.trim());
+            if (blank >= 0) {
+                const input = lp('list').children[blank].querySelector('.lp-name');
+                input.classList.add('is-invalid');
+                input.focus();
+                lpMessage('Name every photo before saving.', 'error');
+                return;
+            }
+            lpBusy = true;
+            lp('save').disabled = true;
+            lp('save').classList.add('is-loading');
+            try {
+                const fresh = lpItems.filter(item => !item.id);
+                for (let n = 0; n < fresh.length; n++) {
+                    lpMessage('Uploading photo ' + (n + 1) + ' of ' + fresh.length + '…', 'success');
+                    const item = fresh[n];
+                    const json = await api({ action: 'uploadListingPhoto', pageId, name: item.name, image: { type: photoType(item.file), data: await readBase64(item.file) } });
+                    if (!json.ok) throw new Error(json.error);
+                    // Saved now: it stays saved (and in the list) even if a later step fails
+                    item.id = json.photo.id;
+                    lpPhotos.push(json.photo);
+                }
+                lpMessage('Saving…', 'success');
+                const json = await api({ action: 'saveListingPhotos', pageId, photos: lpItems.map(item => ({ id: item.id, name: item.name })), remove: lpRemoved });
+                if (!json.ok) throw new Error(json.error);
+                forgetPreviews();
+                lpPhotos = json.photos;
+                if (lpPhotos.length) showPhotos(0); else editPhotos();
+            } catch (err) {
+                console.error(err);
+                const ERRORS = {
+                    image_too_big: 'A photo is over 20 MB. Remove it and try again.',
+                    invalid_image: 'One of the files isn’t a photo the portal can take (JPG, PNG, WebP, GIF or HEIC).',
+                    missing_name: 'Name every photo before saving.',
+                    photos_changed: 'These photos were changed somewhere else. Refresh the page and try again.',
+                };
+                lpMessage(ERRORS[err.message] || 'The photos couldn’t be saved. Please try again.', 'error');
+            } finally {
+                lpBusy = false;
+                lp('save').classList.remove('is-loading');
+                if (!lp('editor').hidden) renderPhotoList();
+            }
+        });
 
         function initReveal() {
             const items = document.querySelectorAll('.reveal');
