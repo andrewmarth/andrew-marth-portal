@@ -15,6 +15,10 @@ What `marthsign.patch` changes:
   Back and Sign Out are messages to the portal). A download button in place of the Actions menu.
 - **Signatures:** always the default, the signer's name typed; no draw-or-type pop-up. The portal asks for consent
   (the same e-signature consent text) before the signing screen can be used.
+- **Fields on the signing screen look as they will when signed** (`universal/field-renderer/marthsign-field-look.ts`,
+  shared with the PDF): signatures and initials in their frame ("Sign Here" / "INI" until signed); name and date
+  fields are just their text, filled in already, never clicked or counted (the server records them when the signer
+  completes); text fields take no more characters than their width fits (the send page sets the limit).
 - **Signed PDFs:** a rounded frame around each signed signature and initials field, with "Signed by:" notched into
   its top border and, on signatures only, the envelope ID (`envelope_abc…` without the prefix, in capitals) notched
   into its bottom border. Every other field is plain text. The frame is the portal's olive. Signed ink is blue

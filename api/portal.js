@@ -3133,7 +3133,10 @@ async function adminSendForSignature_(account, body) {
       const page = Math.round(Number(f.page));
       const x = num(f.x, 0, 100), y = num(f.y, 0, 100), w = num(f.w, 1, 100), h = num(f.h, 1, 100);
       if (!(doc >= 0 && doc < files.length) || !(page >= 1) || x === null || y === null || w === null || h === null) return null;
-      return { type, identifier: doc, page, positionX: x, positionY: y, width: w, height: h };
+      // A text field holds as many characters as its width fits (the send page works it out; the signer sees a counter)
+      const chars = Math.round(Number(f.chars));
+      const fieldMeta = type === 'TEXT' && chars >= 1 && chars <= 500 ? { fieldMeta: { type: 'text', characterLimit: chars } } : {};
+      return { type, identifier: doc, page, positionX: x, positionY: y, width: w, height: h, ...fieldMeta };
     });
     if (!fields.length || fields.some(f => !f)) return { ok: false, error: 'bad_fields' };
     if (!fields.some(f => f.type === 'SIGNATURE' || f.type === 'INITIALS')) return { ok: false, error: 'needs_signature' };

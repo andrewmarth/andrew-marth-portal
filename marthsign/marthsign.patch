@@ -1,3 +1,17 @@
+diff --git a/apps/remix/app/components/dialogs/sign-field-text-dialog.tsx b/apps/remix/app/components/dialogs/sign-field-text-dialog.tsx
+index d651282..505ffd9 100644
+--- a/apps/remix/app/components/dialogs/sign-field-text-dialog.tsx
++++ b/apps/remix/app/components/dialogs/sign-field-text-dialog.tsx
+@@ -66,6 +66,9 @@ export const SignFieldTextDialog = createCallable<SignFieldTextDialogProps, stri
+                             fieldState.error,
+                         })}
+                         {...field}
++                        // MarthSign: typing stops at the field's limit (as much as fits its width), single line
++                        maxLength={fieldMeta?.characterLimit || undefined}
++                        rows={fieldMeta?.characterLimit ? 2 : undefined}
+                       />
+                     </FormControl>
+                     <FormMessage />
 diff --git a/apps/remix/app/components/embed/marthsign-hero.tsx b/apps/remix/app/components/embed/marthsign-hero.tsx
 new file mode 100644
 index 0000000..08992b5
@@ -274,6 +288,49 @@ index f2339df..454eefb 100644
                  <a
                    href="https://documenso.com"
                    target="_blank"
+diff --git a/apps/remix/app/components/general/document-signing/envelope-signing-provider.tsx b/apps/remix/app/components/general/document-signing/envelope-signing-provider.tsx
+index 631123b..586f239 100644
+--- a/apps/remix/app/components/general/document-signing/envelope-signing-provider.tsx
++++ b/apps/remix/app/components/general/document-signing/envelope-signing-provider.tsx
+@@ -88,16 +88,21 @@ const prefillDateFields = (data: EnvelopeForSigningResponse): EnvelopeForSigning
+     .setZone(timezone ?? DEFAULT_DOCUMENT_TIME_ZONE)
+     .toFormat(dateFormat ?? DEFAULT_DOCUMENT_DATE_FORMAT);
+ 
++  // MarthSign: name fields too, with the signer's name; they're never clicked or counted (the server fills them in
++  // when the signer completes, as it does dates)
+   const prefillField = <T extends { type: FieldType; inserted: boolean; customText: string; fieldMeta: unknown }>(
+     field: T,
++    name: string,
+   ): T => {
+-    if (field.type !== FieldType.DATE || field.inserted) {
++    const isName = field.type === FieldType.NAME && Boolean(name);
++
++    if ((field.type !== FieldType.DATE && !isName) || field.inserted) {
+       return field;
+     }
+ 
+     return {
+       ...field,
+-      customText: formattedDate,
++      customText: isName ? name : formattedDate,
+       inserted: true,
+       fieldMeta: {
+         ...(typeof field.fieldMeta === 'object' ? field.fieldMeta : {}),
+@@ -112,12 +117,12 @@ const prefillDateFields = (data: EnvelopeForSigningResponse): EnvelopeForSigning
+       ...data.envelope,
+       recipients: data.envelope.recipients.map((recipient) => ({
+         ...recipient,
+-        fields: recipient.fields.map(prefillField),
++        fields: recipient.fields.map((field) => prefillField(field, recipient.name)),
+       })),
+     },
+     recipient: {
+       ...data.recipient,
+-      fields: data.recipient.fields.map(prefillField),
++      fields: data.recipient.fields.map((field) => prefillField(field, data.recipient.name)),
+     },
+   };
+ };
 diff --git a/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx b/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx
 index b188646..d9019f5 100644
 --- a/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx
@@ -9042,129 +9099,82 @@ index 49758b3..56d2611 100644
      const needsAuditLog = settings.includeAuditLog;
  
      const newDocumentData: Array<{ oldDocumentDataId: string; newDocumentDataId: string }> = [];
-diff --git a/packages/lib/server-only/pdf/envelope-id-frame.ts b/packages/lib/server-only/pdf/envelope-id-frame.ts
-new file mode 100644
-index 0000000..934cac9
---- /dev/null
-+++ b/packages/lib/server-only/pdf/envelope-id-frame.ts
-@@ -0,0 +1,91 @@
-+import Konva from 'konva';
+diff --git a/packages/lib/server-only/document/complete-document-with-token.ts b/packages/lib/server-only/document/complete-document-with-token.ts
+index bd2e55a..6c5531a 100644
+--- a/packages/lib/server-only/document/complete-document-with-token.ts
++++ b/packages/lib/server-only/document/complete-document-with-token.ts
+@@ -311,6 +311,46 @@ export const completeDocumentWithToken = async ({
+     });
+   }
+ 
++  // MarthSign: name fields are filled in here with the signer's name (the signing screen shows them already filled,
++  // so they're never clicked)
++  const uninsertedNameFields = fields.filter((field) => field.type === FieldType.NAME && !field.inserted);
 +
-+/**
-+ * Andrew Marth Real Estate: a rounded frame around each signed signature and initials field, with "Signed by:"
-+ * notched into its top border and, on signatures only, the envelope ID notched into its bottom border (like DocuSign's). Drawn into the
-+ * export overlay, so it's part of the PDF before it's sealed.
-+ */
-+type FramedField = {
-+  type: string;
-+  inserted: boolean;
-+  envelopeId: string;
-+  positionX: unknown;
-+  positionY: unknown;
-+  width: unknown;
-+  height: unknown;
-+};
-+
-+// The portal theme's green (--olive)
-+const FRAME_COLOR = '#4e513e';
-+const FONT_FAMILY = 'Inter';
-+
-+// "envelope_kdhsmrtuvwxyzabc" -> "KDHSMRTUVWXYZABC" (the ID's letters are all lowercase, so it reads back exactly)
-+export const envelopeIdLabel = (envelopeId: string) => envelopeId.replace(/^envelope_/, '').toUpperCase();
-+
-+export const addEnvelopeIdFrames = (layer: Konva.Layer, fields: FramedField[], pageWidth: number, pageHeight: number) => {
-+  for (const field of fields) {
-+    if (!field.inserted || (field.type !== 'SIGNATURE' && field.type !== 'INITIALS')) {
-+      continue;
-+    }
-+
-+    const fieldX = pageWidth * (Number(field.positionX) / 100);
-+    const fieldW = pageWidth * (Number(field.width) / 100);
-+    const y = pageHeight * (Number(field.positionY) / 100);
-+    const h = pageHeight * (Number(field.height) / 100);
-+    const radius = Math.min(6, h / 4, fieldW / 4);
-+    const pad = radius + 2;
-+
-+    // The labels share one size: up to 7pt, smaller to fit a short or narrow field, but never under 5pt (a field too
-+    // narrow for its labels gets a frame wider than itself, centered on it, so they stay readable)
-+    const top = 'Signed by:';
-+    const bottom = field.type === 'SIGNATURE' ? envelopeIdLabel(field.envelopeId) : '';
-+    const probe = new Konva.Text({ text: bottom.length > top.length ? bottom : top, fontSize: 10, fontFamily: FONT_FAMILY });
-+    const perPoint = probe.width() / 10;
-+    probe.destroy();
-+    const fontSize = Math.max(5, Math.min(7, h * 0.22, (fieldW - 2 * pad - 4) / perPoint));
-+    const w = Math.max(fieldW, perPoint * fontSize + 2 * pad + 4);
-+    const x = fieldX - (w - fieldW) / 2;
-+
-+    const label = (text: string, labelY: number) =>
-+      new Konva.Text({ text, x: x + pad + 2, y: labelY - fontSize / 2, fontSize, fontFamily: FONT_FAMILY, fill: FRAME_COLOR });
-+    const topLabel = label(top, y);
-+    const bottomLabel = label(bottom, y + h);
-+
-+    // The notches: each border line stops 2pt before its label and picks up 2pt after it
-+    const topGap = [x + pad, x + pad + topLabel.width() + 4];
-+    const bottomGap = bottom ? [x + pad, x + pad + bottomLabel.width() + 4] : [x + pad, x + pad];
-+
-+    const frame = new Konva.Shape({
-+      stroke: FRAME_COLOR,
-+      strokeWidth: 1,
-+      sceneFunc: (ctx, shape) => {
-+        ctx.beginPath();
-+        ctx.moveTo(topGap[1], y);
-+        ctx.lineTo(x + w - radius, y);
-+        ctx.arcTo(x + w, y, x + w, y + radius, radius);
-+        ctx.lineTo(x + w, y + h - radius);
-+        ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
-+        ctx.lineTo(bottomGap[1], y + h);
-+        ctx.moveTo(bottomGap[0], y + h);
-+        ctx.lineTo(x + radius, y + h);
-+        ctx.arcTo(x, y + h, x, y + h - radius, radius);
-+        ctx.lineTo(x, y + radius);
-+        ctx.arcTo(x, y, x + radius, y, radius);
-+        ctx.lineTo(topGap[0], y);
-+        ctx.strokeShape(shape);
-+      },
++  if (envelope.internalVersion === 2 && uninsertedNameFields.length > 0 && recipientName) {
++    await prisma.field.updateMany({
++      where: { id: { in: uninsertedNameFields.map((field) => field.id) } },
++      data: { customText: recipientName, inserted: true },
 +    });
 +
-+    // White behind each label, so a line on the page under it (like the signature line) doesn't run through it
-+    const backing = (text: Konva.Text) =>
-+      new Konva.Rect({ x: text.x() - 2, y: text.y(), width: text.width() + 4, height: text.height(), fill: '#ffffff' });
++    await prisma.documentAuditLog.createMany({
++      data: uninsertedNameFields.map((field) =>
++        createDocumentAuditLogData({
++          type: DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_INSERTED,
++          envelopeId: envelope.id,
++          user: {
++            email: recipientEmail,
++            name: recipientName,
++          },
++          requestMetadata,
++          data: {
++            recipientEmail: recipientEmail,
++            recipientId: recipient.id,
++            recipientName: recipientName,
++            recipientRole: recipient.role,
++            fieldId: field.secondaryId,
++            field: {
++              type: FieldType.NAME,
++              data: recipientName,
++            },
++          },
++        }),
++      ),
++    });
 +
-+    layer.add(frame, backing(topLabel), topLabel);
-+
-+    if (bottom) {
-+      layer.add(backing(bottomLabel), bottomLabel);
-+    } else {
-+      bottomLabel.destroy();
-+    }
++    fields = fields.map((field) =>
++      field.type === FieldType.NAME && !field.inserted ? { ...field, customText: recipientName, inserted: true } : field,
++    );
 +  }
-+};
++
+   if (fieldsContainUnsignedRequiredField(fields)) {
+     throw new AppError(AppErrorCode.RECIPIENT_HAS_UNSIGNED_FIELDS, {
+       message: `Recipient ${recipient.id} has unsigned fields`,
 diff --git a/packages/lib/server-only/pdf/export-field-style.ts b/packages/lib/server-only/pdf/export-field-style.ts
 new file mode 100644
-index 0000000..daf7b48
+index 0000000..1c775db
 --- /dev/null
 +++ b/packages/lib/server-only/pdf/export-field-style.ts
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,55 @@
 +import fs from 'node:fs';
 +import path from 'node:path';
 +
 +import { Canvas, FontLibrary } from '@documenso/skia-canvas';
 +import Konva from 'konva';
 +
-+/**
-+ * Andrew Marth Real Estate: how signed fields look in the finished PDF. Every field's ink is blue; name, email,
-+ * date, text and number fields are Arial bold italic, while signatures and initials keep their usual fonts (and a
-+ * drawn signature is re-inked blue).
-+ */
-+export const INK_COLOR = '#00208e';
++import { INK_COLOR } from '../../universal/field-renderer/marthsign-field-look';
 +
-+const TEXT_FIELD_TYPES = ['NAME', 'EMAIL', 'DATE', 'TEXT', 'NUMBER'];
++/**
++ * MarthSign: the parts of the signed-field look only the server can do (the rest is in
++ * universal/field-renderer/marthsign-field-look.ts, shared with the signing screen): Arial for the PDF's text
++ * fields, and a drawn signature re-inked blue.
++ */
 +
 +// Arial itself, from Microsoft's core fonts package (installed by the Docker image)
 +const ARIAL_DIR = '/usr/share/fonts/arial';
 +const ARIAL_FILES = ['arial', 'arialbd', 'ariali', 'arialbi'].map((name) => path.join(ARIAL_DIR, `${name}.ttf`));
 +
-+const ensureArial = () => {
++export const ensureArial = () => {
 +  if (!FontLibrary.has('Arial') && ARIAL_FILES.every((file) => fs.existsSync(file))) {
 +    // eslint-disable-next-line react-hooks/rules-of-hooks
 +    FontLibrary.use({ Arial: ARIAL_FILES });
@@ -9192,51 +9202,34 @@ index 0000000..daf7b48
 +  node.image(canvas as unknown as HTMLCanvasElement);
 +};
 +
-+export const styleExportedField = (fieldGroup: Konva.Group | undefined, fieldType: string) => {
-+  if (!fieldGroup) {
++export const reinkSignatureImages = (fieldGroup: Konva.Group | undefined, fieldType: string) => {
++  if (!fieldGroup || fieldType !== 'SIGNATURE') {
 +    return;
 +  }
 +
-+  const isTextField = TEXT_FIELD_TYPES.includes(fieldType);
-+
-+  if (isTextField) {
-+    ensureArial();
-+  }
-+
-+  for (const node of fieldGroup.find('Text')) {
-+    const text = node as Konva.Text;
-+
-+    text.fill(INK_COLOR);
-+
-+    if (isTextField) {
-+      text.fontFamily('Arial, "Noto Sans", sans-serif');
-+      text.fontStyle('italic bold');
-+      // (no variant: Konva would add "normal" after "bold", and the canvas then drops the italic)
-+      text.fontVariant('');
-+    }
-+  }
-+
-+  if (fieldType === 'SIGNATURE') {
-+    for (const node of fieldGroup.find('Image')) {
-+      reinkImage(node as Konva.Image);
-+    }
++  for (const node of fieldGroup.find('Image')) {
++    reinkImage(node as Konva.Image);
 +  }
 +};
 diff --git a/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts b/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
-index ee337c1..a403d97 100644
+index ee337c1..2f71f0f 100644
 --- a/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
 +++ b/packages/lib/server-only/pdf/insert-field-in-pdf-v2.ts
-@@ -6,6 +6,8 @@ import type { Canvas } from '@documenso/skia-canvas';
+@@ -6,6 +6,7 @@ import type { Canvas } from '@documenso/skia-canvas';
  import Konva from 'konva';
  
  import { renderField } from '../../universal/field-renderer/render-field';
-+import { addEnvelopeIdFrames } from './envelope-id-frame';
-+import { styleExportedField } from './export-field-style';
++import { ensureArial, reinkSignatureImages } from './export-field-style';
  import { ensureFontLibrary } from './helpers';
  
  type InsertFieldInPDFV2Options = {
-@@ -22,7 +24,7 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
+@@ -20,9 +21,12 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
+   let stage: Konva.Stage | null = new Konva.Stage({ width: pageWidth, height: pageHeight });
+   let layer: Konva.Layer | null = new Konva.Layer();
  
++  // MarthSign: Arial for the text fields, before any text is measured
++  ensureArial();
++
    // Render the fields onto the layer.
    for (const field of fields) {
 -    renderField({
@@ -9244,21 +9237,16 @@ index ee337c1..a403d97 100644
        scale: 1,
        field: {
          renderId: field.id.toString(),
-@@ -38,8 +40,14 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
+@@ -38,6 +42,9 @@ export const insertFieldInPDFV2 = async ({ pageWidth, pageHeight, fields }: Inse
        pageHeight,
        mode: 'export',
      });
 +
-+    // Andrew Marth Real Estate: blue ink, and Arial bold italic for text fields
-+    styleExportedField((rendered as { fieldGroup?: Konva.Group } | undefined)?.fieldGroup, field.type);
++    // MarthSign: a drawn signature in blue ink (the rest of the look comes with renderField)
++    reinkSignatureImages((rendered as { fieldGroup?: Konva.Group } | undefined)?.fieldGroup, field.type);
    }
  
-+  // Andrew Marth Real Estate: the envelope ID frame around each signature and initials
-+  addEnvelopeIdFrames(layer, fields, pageWidth, pageHeight);
-+
    stage.add(layer);
- 
-   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 diff --git a/packages/lib/server-only/pdf/render-audit-logs.ts b/packages/lib/server-only/pdf/render-audit-logs.ts
 index 427ed8b..1e192f7 100644
 --- a/packages/lib/server-only/pdf/render-audit-logs.ts
@@ -9331,8 +9319,202 @@ index d37d023..3ecd793 100644
      lineCap: 'round',
    });
  
+diff --git a/packages/lib/universal/field-renderer/marthsign-field-look.ts b/packages/lib/universal/field-renderer/marthsign-field-look.ts
+new file mode 100644
+index 0000000..5e16aa8
+--- /dev/null
++++ b/packages/lib/universal/field-renderer/marthsign-field-look.ts
+@@ -0,0 +1,144 @@
++import Konva from 'konva';
++
++/**
++ * MarthSign: how fields look on the signing screen and in the signed PDF (the same in both):
++ * - blue ink on everything the signer puts in; name, email, date, text and number fields are Arial bold italic
++ * - a rounded frame around each signature and initials field, with "Signed by:" notched into its top border and,
++ *   on signatures only, the envelope ID notched into its bottom border (like DocuSign's). The frame is the box:
++ *   the field's own box isn't drawn for them, nor for name and date fields, which are just their text.
++ */
++export const INK_COLOR = '#00208e';
++
++const FRAME_COLOR = '#4e513e';
++const LABEL_FONT = 'Inter';
++const TEXT_FIELD_TYPES = ['NAME', 'EMAIL', 'DATE', 'TEXT', 'NUMBER'];
++const UNBOXED_FIELD_TYPES = ['SIGNATURE', 'INITIALS', 'NAME', 'DATE'];
++
++// "envelope_kdhsmrtuvwxyzabc" -> "KDHSMRTUVWXYZABC" (the ID's letters are all lowercase, so it reads back exactly)
++export const envelopeIdLabel = (envelopeId: string) => envelopeId.replace(/^envelope_/, '').toUpperCase();
++
++const styleText = (fieldGroup: Konva.Group, fieldType: string) => {
++  const isTextField = TEXT_FIELD_TYPES.includes(fieldType);
++
++  for (const node of fieldGroup.find('Text')) {
++    const text = node as Konva.Text;
++
++    text.fill(INK_COLOR);
++
++    if (isTextField) {
++      text.fontFamily('Arial, "Noto Sans", sans-serif');
++      text.fontStyle('italic bold');
++      // (no variant: Konva would add "normal" after "bold", and the PDF's canvas then drops the italic)
++      text.fontVariant('');
++    }
++  }
++};
++
++// The frame, in the field's own coordinates (0, 0 is its top-left corner)
++const addFrame = (fieldGroup: Konva.Group, fieldType: string, envelopeId: string, fieldW: number, h: number) => {
++  const radius = Math.min(6, h / 4, fieldW / 4);
++  const pad = radius + 2;
++
++  // Both labels share one size: up to 7pt, smaller to fit a short or narrow field, but never under 5pt (4pt on
++  // initials, which are only two letters wide). A field still too narrow gets a frame wider than itself, centered.
++  const top = 'Signed by:';
++  const bottom = fieldType === 'SIGNATURE' && envelopeId ? envelopeIdLabel(envelopeId) : '';
++  const probe = new Konva.Text({ text: bottom.length > top.length ? bottom : top, fontSize: 10, fontFamily: LABEL_FONT });
++  const perPoint = probe.width() / 10;
++  probe.destroy();
++  const fontSize = Math.max(fieldType === 'INITIALS' ? 4 : 5, Math.min(7, h * 0.22, (fieldW - 2 * pad - 4) / perPoint));
++  const w = Math.max(fieldW, perPoint * fontSize + 2 * pad + 4);
++  const x = -(w - fieldW) / 2;
++
++  const label = (text: string, labelY: number) =>
++    new Konva.Text({
++      name: 'ms-frame',
++      listening: false,
++      text,
++      x: x + pad + 2,
++      y: labelY - fontSize / 2,
++      fontSize,
++      fontFamily: LABEL_FONT,
++      fill: FRAME_COLOR,
++    });
++  const topLabel = label(top, 0);
++  const bottomLabel = bottom ? label(bottom, h) : null;
++
++  // The notches: each border line stops 2pt before its label and picks up 2pt after it
++  const topGap = [x + pad, x + pad + topLabel.width() + 4];
++  const bottomGap = bottomLabel ? [x + pad, x + pad + bottomLabel.width() + 4] : [x + pad, x + pad];
++
++  const frame = new Konva.Shape({
++    name: 'ms-frame',
++    listening: false,
++    stroke: FRAME_COLOR,
++    strokeWidth: 1,
++    strokeScaleEnabled: false,
++    sceneFunc: (ctx, shape) => {
++      ctx.beginPath();
++      ctx.moveTo(topGap[1], 0);
++      ctx.lineTo(x + w - radius, 0);
++      ctx.arcTo(x + w, 0, x + w, radius, radius);
++      ctx.lineTo(x + w, h - radius);
++      ctx.arcTo(x + w, h, x + w - radius, h, radius);
++      ctx.lineTo(bottomGap[1], h);
++      ctx.moveTo(bottomGap[0], h);
++      ctx.lineTo(x + radius, h);
++      ctx.arcTo(x, h, x, h - radius, radius);
++      ctx.lineTo(x, radius);
++      ctx.arcTo(x, 0, x + radius, 0, radius);
++      ctx.lineTo(topGap[0], 0);
++      ctx.strokeShape(shape);
++    },
++  });
++
++  // White behind each label, so a line on the page under it (like the signature line) doesn't run through it
++  const backing = (text: Konva.Text) =>
++    new Konva.Rect({
++      name: 'ms-frame',
++      listening: false,
++      x: text.x() - 2,
++      y: text.y(),
++      width: text.width() + 4,
++      height: text.height(),
++      fill: '#ffffff',
++    });
++
++  fieldGroup.add(frame, backing(topLabel), topLabel);
++
++  if (bottomLabel) {
++    fieldGroup.add(backing(bottomLabel), bottomLabel);
++  }
++};
++
++export const applyMarthSignLook = (options: {
++  fieldGroup: Konva.Group | undefined;
++  fieldType: string;
++  inserted: boolean;
++  envelopeId: string;
++  fieldWidth: number;
++  fieldHeight: number;
++  mode: 'sign' | 'export';
++}) => {
++  const { fieldGroup, fieldType, inserted, envelopeId, fieldWidth, fieldHeight, mode } = options;
++
++  if (!fieldGroup) {
++    return;
++  }
++
++  fieldGroup.find('.ms-frame').forEach((node) => node.destroy());
++
++  styleText(fieldGroup, fieldType);
++
++  if (UNBOXED_FIELD_TYPES.includes(fieldType)) {
++    // The box stays (it's what's clicked) but isn't seen
++    fieldGroup.find('.field-rect').forEach((node) => {
++      (node as Konva.Rect).setAttrs({ strokeEnabled: false, fill: 'rgba(255, 255, 255, 0.01)' });
++    });
++  }
++
++  // On the signing screen every signature and initials field has its frame; in the PDF, the signed ones
++  if ((fieldType === 'SIGNATURE' || fieldType === 'INITIALS') && (mode === 'sign' || inserted)) {
++    addFrame(fieldGroup, fieldType, envelopeId, fieldWidth, fieldHeight);
++  }
++};
+diff --git a/packages/lib/universal/field-renderer/render-field.ts b/packages/lib/universal/field-renderer/render-field.ts
+index 46b82bb..1fb0b57 100644
+--- a/packages/lib/universal/field-renderer/render-field.ts
++++ b/packages/lib/universal/field-renderer/render-field.ts
+@@ -5,6 +5,8 @@ import { match } from 'ts-pattern';
+ 
+ import type { FieldCanvasStyleCache } from './field-canvas-style';
+ import { resolveFieldCanvasStyle } from './field-canvas-style';
++import { calculateFieldPosition } from './field-renderer';
++import { applyMarthSignLook } from './marthsign-field-look';
+ import type { FieldRenderMode, FieldToRender } from './field-renderer';
+ import { renderCheckboxFieldElement } from './render-checkbox-field';
+ import { renderDropdownFieldElement } from './render-dropdown-field';
+@@ -57,7 +59,7 @@ export const renderField = ({
+   };
+ 
+   // If the generic text field element array changes, update the `GenericTextFieldTypeMetas` type
+-  return match(field.type)
++  const rendered = match(field.type)
+     .with(FieldType.INITIALS, FieldType.NAME, FieldType.EMAIL, FieldType.DATE, FieldType.TEXT, FieldType.NUMBER, () =>
+       renderGenericTextFieldElement(field, options),
+     )
+@@ -69,4 +71,21 @@ export const renderField = ({
+       throw new Error('Free signature fields are not supported');
+     })
+     .exhaustive();
++
++  // MarthSign: the signing screen shows fields as they'll be in the signed PDF (marthsign-field-look.ts)
++  if (mode === 'sign' || mode === 'export') {
++    const { fieldWidth, fieldHeight } = calculateFieldPosition(field, pageWidth, pageHeight);
++
++    applyMarthSignLook({
++      fieldGroup: (rendered as { fieldGroup?: Konva.Group }).fieldGroup,
++      fieldType: field.type,
++      inserted: field.inserted,
++      envelopeId: String((field as { envelopeId?: unknown }).envelopeId ?? ''),
++      fieldWidth,
++      fieldHeight,
++      mode,
++    });
++  }
++
++  return rendered;
+ };
 diff --git a/packages/lib/universal/field-renderer/render-generic-text-field.ts b/packages/lib/universal/field-renderer/render-generic-text-field.ts
-index c4163fe..4918d86 100644
+index c4163fe..615794b 100644
 --- a/packages/lib/universal/field-renderer/render-generic-text-field.ts
 +++ b/packages/lib/universal/field-renderer/render-generic-text-field.ts
 @@ -1,6 +1,8 @@
@@ -9344,7 +9526,7 @@ index c4163fe..4918d86 100644
  import type { GenericTextFieldTypeMetas } from '../../types/field-meta';
  import {
    FIELD_DEFAULT_GENERIC_ALIGN,
-@@ -42,7 +44,10 @@ const upsertFieldText = (field: FieldToRender, options: RenderFieldElementOption
+@@ -42,13 +44,17 @@ const upsertFieldText = (field: FieldToRender, options: RenderFieldElementOption
    // Calculate text positioning based on alignment
    const textX = 0;
    const textY = 0;
@@ -9356,8 +9538,16 @@ index c4163fe..4918d86 100644
  
    // By default, render the field name or label centered.
    // isLabel tracks whether we're rendering the field type name (like "Text", "Date", "Email")
+   // or a user label — overflow should not apply to these, only to actual content.
+   let isLabel = true;
+-  let textToRender: string = fieldMeta?.label || fieldTypeName;
++  // (MarthSign: on the signing screen an initials field says "INI" until it's signed)
++  let textToRender: string = fieldMeta?.label || (field.type === 'INITIALS' && mode === 'sign' ? 'INI' : fieldTypeName);
+   let textAlign: 'left' | 'center' | 'right' = 'center';
+   let textVerticalAlign: 'top' | 'middle' | 'bottom' = FIELD_DEFAULT_GENERIC_VERTICAL_ALIGN;
+   let textLineHeight = FIELD_DEFAULT_LINE_HEIGHT;
 diff --git a/packages/lib/universal/field-renderer/render-signature-field.ts b/packages/lib/universal/field-renderer/render-signature-field.ts
-index eb3d94c..99b3e05 100644
+index eb3d94c..778380b 100644
 --- a/packages/lib/universal/field-renderer/render-signature-field.ts
 +++ b/packages/lib/universal/field-renderer/render-signature-field.ts
 @@ -114,11 +114,19 @@ const createSignatureImage = (signatureImageAsBase64: string, fieldWidth: number
@@ -9381,18 +9571,45 @@ index eb3d94c..99b3e05 100644
  
    const fieldText = new Konva.Text({
      id: `${field.renderId}-text`,
-@@ -182,6 +190,11 @@ const createFieldSignature = (field: FieldToRender, options: RenderFieldElementO
+@@ -157,7 +165,8 @@ const createFieldSignature = (field: FieldToRender, options: RenderFieldElementO
+ 
+   // Handle sign mode.
+   if (mode === 'sign' || mode === 'export') {
+-    textToRender = fieldTypeName;
++    // MarthSign: where the signature will go, until it's signed
++    textToRender = mode === 'sign' ? 'Sign Here' : fieldTypeName;
+ 
+     if (field.inserted && !signature) {
+       throw new AppError('MISSING_SIGNATURE');
+@@ -182,6 +191,11 @@ const createFieldSignature = (field: FieldToRender, options: RenderFieldElementO
    // Overflow should not apply to the label.
    const isLabel = !signature?.typedSignature;
  
 +  // MarthSign: a typed signature fills its box: as large as fits its width, up to 75% of its height
-+  if (!isLabel) {
++  if (!isLabel || mode === 'sign') {
 +    fontSize = fitTypedSignature(textToRender, fieldWidth, fieldHeight);
 +  }
 +
    const overflowLayout = calculateOverflowLayout({
      overflowMode: resolveFieldOverflowMode(fieldMeta),
      isLabel,
+diff --git a/packages/lib/utils/advanced-fields-helpers.ts b/packages/lib/utils/advanced-fields-helpers.ts
+index ae75098..d85edb5 100644
+--- a/packages/lib/utils/advanced-fields-helpers.ts
++++ b/packages/lib/utils/advanced-fields-helpers.ts
+@@ -16,6 +16,12 @@ export const ADVANCED_FIELD_TYPES_WITH_OPTIONAL_SETTING: FieldType[] = [
+  * Whether a field is required to be inserted.
+  */
+ export const isRequiredField = (field: Field) => {
++  // MarthSign: name and date fields fill themselves in (on screen, and by the server when the signer completes), so
++  // they're never part of what's left to do
++  if (field.type === FieldType.NAME || field.type === FieldType.DATE) {
++    return false;
++  }
++
+   // All fields without the optional metadata are assumed to be required.
+   if (!ADVANCED_FIELD_TYPES_WITH_OPTIONAL_SETTING.includes(field.type)) {
+     return true;
 diff --git a/packages/tailwind-config/index.cjs b/packages/tailwind-config/index.cjs
 index 2b7703f..31e4780 100644
 --- a/packages/tailwind-config/index.cjs

@@ -19,7 +19,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Familjen+Grotesk:wght@400..700&family=Caveat:wght@400..700&display=swap" rel="stylesheet">
 
     <style>
         /* --- Brand Palette (same as andrewmarth.com) --- */
@@ -579,13 +579,33 @@
         .page-num { position: absolute; top: 6px; right: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 42, 59, 0.6); color: var(--white); font-size: 0.75rem; font-weight: bold; pointer-events: none; }
         .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: min(0.78rem, 1.45cqw); line-height: 1; font-weight: bold; cursor: move; touch-action: none; }
         /* (fields are DocuSign-small, so the label shrinks with the page to fit inside them) */
-        .field span { max-width: 100%; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
         .field.is-selected { z-index: 2; box-shadow: 0 0 0 2px var(--white), 0 2px 8px rgba(14, 42, 59, 0.35); }
         /* The × sits on the field's top-right corner (outside it, so small fields don't cut it off), with a bigger tap area */
         .field-del { position: absolute; top: -11px; right: -11px; z-index: 1; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; padding: 0; border: 2px solid var(--white); border-radius: 50%; background: var(--navy); color: var(--white); font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; }
         .field-del::before { content: ''; position: absolute; inset: -9px; }
         .field.is-selected .field-del { display: inline-flex; }
         @media (hover: hover) { .field:hover .field-del { display: inline-flex; } }
+        /* Each field shows what it'll look like signed (as on the signing screen and in the PDF), inside its signer's
+           colored box. Sizes are in PDF points: --pt is one point at the page's shown size. */
+        .fp { position: absolute; inset: 0; display: flex; align-items: center; pointer-events: none; color: #00208e; }
+        .fp-text { min-width: 0; padding: 0 calc(6 * var(--pt)); font: italic bold calc(8 * var(--pt)) / 1 Arial, sans-serif; white-space: nowrap; overflow: hidden; }
+        /* Signatures and initials: the frame is the field's box (as in the PDF), and the signer's color an outline around it */
+        .field.is-framed { border-color: transparent !important; background: transparent !important; outline: 2px solid var(--signer); outline-offset: calc(4 * var(--pt)); }
+        .fp-frame { position: absolute; inset: -2px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--olive); border-radius: calc(4 * var(--pt)); background: var(--white); }
+        .fp-label { position: absolute; left: calc(5 * var(--pt)); padding: 0 calc(1.5 * var(--pt)); background: var(--white); color: var(--olive); font: calc(5 * var(--pt)) / 1 Inter, Arial, sans-serif; white-space: nowrap; }
+        .fp-top { top: 0; transform: translateY(-50%); }
+        .fp-id { bottom: 0; transform: translateY(50%); }
+        .fp-sign { margin-top: calc(-1 * var(--pt)); font: calc(15 * var(--pt)) / 1 Caveat, cursive; }
+        .fp-ini { font: calc(10 * var(--pt)) / 1 Arial, sans-serif; }
+        .field.is-initials .fp-label { left: calc(2.5 * var(--pt)); font-size: calc(4 * var(--pt)); }
+        /* Text fields: drag the right edge to resize (width only); + adds a line below for text that runs over */
+        .field-grow { position: absolute; top: -2px; bottom: -2px; right: -7px; z-index: 1; width: 12px; display: none; cursor: ew-resize; touch-action: none; }
+        .field-grow::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: max(10px, 70%); transform: translate(-50%, -50%); border-radius: 2px; background: var(--navy); }
+        .field-add-line { position: absolute; top: 50%; right: -38px; z-index: 1; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; padding: 0; transform: translateY(-50%); border: 2px solid var(--white); border-radius: 50%; background: var(--tan); color: var(--white); font-size: 16px; font-weight: bold; line-height: 1; cursor: pointer; }
+        .field-add-line::before { content: ''; position: absolute; inset: -9px; }
+        .field.is-text .field-del { right: auto; left: -11px; }
+        .field.is-selected :is(.field-grow, .field-add-line) { display: inline-flex; }
+        @media (hover: hover) { .field:hover :is(.field-grow, .field-add-line) { display: inline-flex; } }
         .send-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
         .send-row .btn { border: 2px solid var(--navy); font-family: inherit; font-size: 1.02rem; cursor: pointer; gap: 8px; }
         .send-row .btn:disabled { opacity: 0.6; cursor: wait; }
@@ -859,12 +879,12 @@
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const COLORS = ['#c0392b', '#2471a3', '#1e8449', '#b9770e', '#7d3c98', '#117a65', '#a04000', '#2e4053', '#b03a2e', '#5b2c6f'];
-        // Field types, with their standard size (percent of the page width / height; fields can't be resized). Sized
-        // like DocuSign's: on a letter page a signature is about 110 x 22 points, and name, date and text fields fit
-        // one line of 8pt text.
+        // Field types, with their standard size (percent of the page width / height). Sized like DocuSign's: on a letter
+        // page a signature is about 110 x 22 points, initials fit two letters, and name, date and text fields fit one
+        // line of 8pt text. Only text fields can be resized (in width).
         const TYPES = [
             { type: 'SIGNATURE', label: 'Signature', w: 18, h: 2.8 },
-            { type: 'INITIALS', label: 'Initials', w: 9, h: 2.8 },
+            { type: 'INITIALS', label: 'Initials', w: 6, h: 2.8 },
             { type: 'NAME', label: 'Name', w: 22, h: 2 },
             { type: 'DATE', label: 'Date', w: 12, h: 2 },
             { type: 'TEXT', label: 'Text', w: 22, h: 2 },
@@ -1155,6 +1175,9 @@
                 wrap.className = 'page';
                 wrap.dataset.doc = pdf.key;
                 wrap.dataset.page = n;
+                // The page's width in PDF points, and --pt, one point at the page's shown size (field previews are sized in it)
+                wrap.dataset.pt = viewport.width / 1.6;
+                wrap.style.setProperty('--pt', (100 / (viewport.width / 1.6)) + 'cqw');
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -1227,6 +1250,26 @@
         });
         const signerOf = id => signers.find(s => s.id === id) || { color: '#555', name: '' };
         const typeOf = type => TYPES.find(t => t.type === type);
+        // What a field will look like signed: signatures and initials in their "Signed by:" frame (signatures with a
+        // placeholder envelope ID), the rest as the signer's text in blue Arial bold italic
+        const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        function fieldPreview(f, s) {
+            if (f.type === 'SIGNATURE' || f.type === 'INITIALS') {
+                return '<div class="fp"><div class="fp-frame"><span class="fp-label fp-top">Signed by:</span>'
+                    + (f.type === 'SIGNATURE' ? '<span class="fp-sign">Sign Here</span><span class="fp-label fp-id">XXXXXXXXXXXXXXXX</span>' : '<span class="fp-ini">INI</span>')
+                    + '</div></div>';
+            }
+            const text = f.type === 'NAME' ? s.name : f.type === 'DATE' ? today : 'User input text here';
+            return '<div class="fp"><span class="fp-text">' + escapeHtml(text) + '</span></div>';
+        }
+        // How many characters a text field holds: its width in points, less its padding, at 4.8 points a character
+        // (a little over the average of 8pt Arial bold italic, so whatever is typed fits)
+        function textLimit(f) {
+            const page = document.querySelector('.page[data-doc="' + f.doc + '"][data-page="' + f.page + '"]');
+            const pagePt = page ? Number(page.dataset.pt) : 612;
+            return Math.max(1, Math.floor((f.w / 100 * pagePt - 12) / 4.8));
+        }
+        const fieldTitle = f => typeOf(f.type).label + ' · ' + signerOf(f.signerId).name + (f.type === 'TEXT' ? ' · up to ' + textLimit(f) + ' characters' : '');
         function drawFields() {
             document.querySelectorAll('.page .field').forEach(el => el.remove());
             fields.forEach(f => {
@@ -1234,11 +1277,13 @@
                 if (!page) return;
                 const s = signerOf(f.signerId);
                 const el = document.createElement('div');
-                el.className = 'field' + (f.key === selectedField ? ' is-selected' : '');
+                el.className = 'field' + ({ SIGNATURE: ' is-framed', INITIALS: ' is-framed is-initials', TEXT: ' is-text' }[f.type] || '') + (f.key === selectedField ? ' is-selected' : '');
+                el.title = fieldTitle(f);
                 el.dataset.key = f.key;
-                el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f';
-                el.innerHTML = '<span>' + typeOf(f.type).label + ' · ' + escapeHtml(s.name.split(' ')[0]) + '</span>'
-                    + '<button type="button" class="field-del" aria-label="Remove field">×</button>';
+                el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f;--signer:' + s.color;
+                el.innerHTML = fieldPreview(f, s)
+                    + '<button type="button" class="field-del" aria-label="Remove field">×</button>'
+                    + (f.type === 'TEXT' ? '<span class="field-grow" aria-hidden="true"></span><button type="button" class="field-add-line" aria-label="Add a line below">+</button>' : '');
                 page.append(el);
             });
             renderSignerCounts();
@@ -1254,6 +1299,14 @@
         // Click empty space on a page: drop a field there (centered on the click). Click a field's ×: remove it.
         // (Both on click, so removing a field can't also drop a new one where it was)
         $('#pages').addEventListener('click', e => {
+            const addLine = e.target.closest('.field-add-line');
+            if (addLine) {
+                const f = fields.find(x => String(x.key) === addLine.parentElement.dataset.key);
+                fields.push({ ...f, key: ++fieldKey, y: Math.min(100 - f.h, f.y + f.h) });
+                selectedField = fieldKey;
+                drawFields();
+                return;
+            }
             const del = e.target.closest('.field-del');
             if (del) {
                 fields = fields.filter(x => String(x.key) !== del.parentElement.dataset.key);
@@ -1273,20 +1326,27 @@
             setMessage('');
             drawFields();
         });
-        // Move (every field keeps its type's standard size). Touching a field selects it, which shows its ×.
+        // Move, or with a text field's right edge, resize its width. Touching a field selects it, which shows its ×.
         $('#pages').addEventListener('pointerdown', e => {
             const el = e.target.closest('.field');
-            if (!el || e.target.closest('.field-del')) return;
+            if (!el || e.target.closest('.field-del, .field-add-line')) return;
+            const resizing = Boolean(e.target.closest('.field-grow'));
             const f = fields.find(x => String(x.key) === el.dataset.key);
             selectedField = f.key;
             document.querySelectorAll('.page .field').forEach(x => x.classList.toggle('is-selected', x === el));
             e.preventDefault();
             const page = el.parentElement.getBoundingClientRect();
-            const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y };
+            const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y, fw: f.w };
             el.setPointerCapture(e.pointerId);
             const move = ev => {
                 const dx = (ev.clientX - start.x) / page.width * 100;
                 const dy = (ev.clientY - start.y) / page.height * 100;
+                if (resizing) {
+                    f.w = Math.min(100 - f.x, Math.max(5, start.fw + dx));
+                    el.style.width = f.w + '%';
+                    el.title = fieldTitle(f);
+                    return;
+                }
                 f.x = Math.min(100 - f.w, Math.max(0, start.fx + dx));
                 f.y = Math.min(100 - f.h, Math.max(0, start.fy + dy));
                 el.style.left = f.x + '%'; el.style.top = f.y + '%';
@@ -1419,6 +1479,7 @@
                         accountId: s.id,
                         fields: fields.filter(f => f.signerId === s.id).map(f => ({
                             type: f.type, doc: pdfs.findIndex(p => p.key === f.doc), page: f.page, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h),
+                            ...(f.type === 'TEXT' ? { chars: textLimit(f) } : {}),
                         })),
                     })),
                 });
