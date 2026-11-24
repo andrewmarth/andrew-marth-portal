@@ -18,9 +18,12 @@ What `marthsign.patch` changes:
 - **Signed PDFs:** a rounded frame around each signed signature and initials field, with "Signed by:" notched into
   its top border and, on signatures only, the envelope ID (`envelope_abc…` without the prefix, in capitals) notched
   into its bottom border. Every other field is plain text. The frame is the portal's olive. Signed ink is blue
-  (#00208e): signatures and initials keep their usual fonts; name, email, date, text and number fields are Arial bold
-  italic. Arial is Liberation Sans (same letter widths), installed by the patch's Dockerfile line and registered as
-  "Arial". It's drawn into the PDF when the document is sealed, so the seal stays valid.
+  (#00208e): signatures and initials keep their usual fonts; name, email, date, text and number fields are 8pt Arial
+  bold italic (DocuSign's size). Arial is Microsoft's own, from its free core fonts package, which the patch's
+  Dockerfile downloads and checks against a fixed SHA-256. A typed signature is sized to fill its box. It's all drawn
+  into the PDF when the document is sealed, so the seal stays valid.
+- Field sizes are set by the portal's send screen (`send.html`), DocuSign-sized: a signature is about 110 x 22 points
+  on a letter page.
 - It never adds the signing certificate to the signed PDF (there's no login to change the team's "Include the
   Signing Certificate" setting). The portal files the signed PDF and the certificate (from
   `/envelope/{id}/certificate/download`) as separate files in Drive.

@@ -1,6 +1,6 @@
 diff --git a/apps/remix/app/components/embed/marthsign-hero.tsx b/apps/remix/app/components/embed/marthsign-hero.tsx
 new file mode 100644
-index 0000000..099fbf8
+index 0000000..08992b5
 --- /dev/null
 +++ b/apps/remix/app/components/embed/marthsign-hero.tsx
 @@ -0,0 +1,57 @@
@@ -11,7 +11,7 @@ index 0000000..099fbf8
 + */
 +const askPortal = (action: 'marthsign-back' | 'marthsign-sign-out') => window.parent.postMessage({ action }, '*');
 +
-+export const MarthSignHero = ({ title }: { title: string }) => (
++export const MarthSignHero = () => (
 +  <header className="ms-hero">
 +    <video
 +      className="ms-hero-video"
@@ -56,7 +56,7 @@ index 0000000..099fbf8
 +
 +    <div className="ms-hero-content">
 +      <span className="ms-hero-eyebrow">Signature Needed</span>
-+      <h1>{title}</h1>
++      <h1>Sign Now</h1>
 +      <p className="ms-hero-sub">Review the document and sign where it’s marked.</p>
 +    </div>
 +  </header>
@@ -138,8 +138,56 @@ index ddae431..e21bdc8 100644
              signature disclosure
            </Link>
            .
+diff --git a/apps/remix/app/components/general/document-signing/document-signing-mobile-widget.tsx b/apps/remix/app/components/general/document-signing/document-signing-mobile-widget.tsx
+index 11b5e0c..95b93e1 100644
+--- a/apps/remix/app/components/general/document-signing/document-signing-mobile-widget.tsx
++++ b/apps/remix/app/components/general/document-signing/document-signing-mobile-widget.tsx
+@@ -38,20 +38,7 @@ export const DocumentSigningMobileWidget = () => {
+           <div className="flex items-center justify-between gap-4 p-4">
+             <div className="flex-1">
+               <div className="flex items-center gap-3">
+-                {recipient.role !== RecipientRole.VIEWER && (
+-                  <Button
+-                    variant="outline"
+-                    onClick={() => setIsExpanded(!isExpanded)}
+-                    className="flex h-8 w-8 items-center justify-center"
+-                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+-                  >
+-                    {isExpanded ? (
+-                      <LucideChevronDown className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+-                    ) : (
+-                      <LucideChevronUp className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+-                    )}
+-                  </Button>
+-                )}
++                {/* (MarthSign: no expand button: the card is just the title, fields left and Next Field) */}
+ 
+                 <div>
+                   <h2 className="font-semibold text-foreground text-lg">
+@@ -104,21 +91,6 @@ export const DocumentSigningMobileWidget = () => {
+             </div>
+           )}
+ 
+-          {/* Expandable Content */}
+-          {isExpanded && (
+-            <div className="slide-in-from-bottom-2 animate-in border-border border-t p-4 duration-200">
+-              <EnvelopeSignerForm />
+-
+-              {!hidePoweredBy && (
+-                <div className="mt-2 inline-block rounded bg-primary px-2 py-1 font-medium text-primary-foreground text-xs opacity-60 hover:opacity-100 lg:hidden">
+-                  <span>
+-                    <Trans>Powered by</Trans>
+-                  </span>
+-                  <BrandingLogo className="ml-2 inline-block h-[14px]" />
+-                </div>
+-              )}
+-            </div>
+-          )}
+         </div>
+       </div>
+     </div>
 diff --git a/apps/remix/app/components/general/document-signing/document-signing-page-view-v2.tsx b/apps/remix/app/components/general/document-signing/document-signing-page-view-v2.tsx
-index f2339df..deacaa1 100644
+index f2339df..454eefb 100644
 --- a/apps/remix/app/components/general/document-signing/document-signing-page-view-v2.tsx
 +++ b/apps/remix/app/components/general/document-signing/document-signing-page-view-v2.tsx
 @@ -29,6 +29,7 @@ import { SignFieldNumberDialog } from '~/components/dialogs/sign-field-number-di
@@ -160,12 +208,12 @@ index f2339df..deacaa1 100644
        <SignFieldEmailDialog.Root />
        <SignFieldTextDialog.Root />
        <SignFieldNumberDialog.Root />
-@@ -91,15 +93,20 @@ export const DocumentSigningPageViewV2 = () => {
+@@ -91,15 +93,21 @@ export const DocumentSigningPageViewV2 = () => {
        <SignFieldSignatureDialog.Root />
        <SignFieldCheckboxDialog.Root />
  
 -      <EnvelopeSignerHeader />
-+      {isEmbed && <MarthSignHero title={envelope.title} />}
++      {isEmbed && <MarthSignHero />}
 +
 +      <div className={cn(isEmbed && 'sticky top-0 z-40')}>
 +        <EnvelopeSignerHeader />
@@ -179,11 +227,12 @@ index f2339df..deacaa1 100644
            className={cn(
              'embed--DocumentWidgetContainer hidden flex-shrink-0 flex-col border-border border-r bg-background transition-[width] duration-300 lg:flex',
              isSidebarCollapsed ? 'w-12' : 'w-80',
-+            isEmbed && 'sticky top-16 h-[calc(100vh-4rem)] self-start',
++            // MarthSign: no sidebar in the portal; the card at the bottom is the whole signing panel, on every screen
++            isEmbed && '!hidden',
            )}
          >
            {isSidebarCollapsed && (
-@@ -164,7 +171,8 @@ export const DocumentSigningPageViewV2 = () => {
+@@ -164,7 +172,8 @@ export const DocumentSigningPageViewV2 = () => {
              <Separator className="my-6" />
  
              {/* Quick Actions. */}
@@ -193,7 +242,7 @@ index f2339df..deacaa1 100644
                <div className="embed--Actions space-y-3 px-4">
                  <h4 className="font-semibold text-foreground text-sm">
                    <Trans>Actions</Trans>
-@@ -238,7 +246,7 @@ export const DocumentSigningPageViewV2 = () => {
+@@ -238,7 +247,7 @@ export const DocumentSigningPageViewV2 = () => {
            </div>
          </div>
  
@@ -202,7 +251,7 @@ index f2339df..deacaa1 100644
            <div className="flex flex-col">
              {/* Horizontal envelope item selector */}
              {envelopeItems.length > 1 && (
-@@ -268,7 +276,7 @@ export const DocumentSigningPageViewV2 = () => {
+@@ -268,7 +277,7 @@ export const DocumentSigningPageViewV2 = () => {
                  <EnvelopePdfViewer
                    key={currentEnvelopeItem.id}
                    customPageRenderer={EnvelopeSignerPageRenderer}
@@ -211,6 +260,20 @@ index f2339df..deacaa1 100644
                    errorMessage={PDF_VIEWER_ERROR_MESSAGES.signing}
                  />
                ) : (
+@@ -280,11 +289,11 @@ export const DocumentSigningPageViewV2 = () => {
+               )}
+ 
+               {/* Mobile widget - Additional padding to allow users to scroll */}
+-              <div className="block pb-28 lg:hidden">
++              <div className={cn('block pb-28', !isEmbed && 'lg:hidden')}>
+                 <DocumentSigningMobileWidget />
+               </div>
+ 
+-              {!hidePoweredBy && (
++              {!hidePoweredBy && !isEmbed && (
+                 <a
+                   href="https://documenso.com"
+                   target="_blank"
 diff --git a/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx b/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx
 index b188646..d9019f5 100644
 --- a/apps/remix/app/components/general/envelope-signing/envelope-signer-form.tsx
@@ -245,22 +308,28 @@ index b188646..d9019f5 100644
      </fieldset>
    );
 diff --git a/apps/remix/app/components/general/envelope-signing/envelope-signer-header.tsx b/apps/remix/app/components/general/envelope-signing/envelope-signer-header.tsx
-index d4cddf1..0a4d786 100644
+index d4cddf1..a823389 100644
 --- a/apps/remix/app/components/general/envelope-signing/envelope-signer-header.tsx
 +++ b/apps/remix/app/components/general/envelope-signing/envelope-signer-header.tsx
-@@ -74,18 +74,38 @@ export const EnvelopeSignerHeader = () => {
-           <Plural one="1 Field Remaining" other="# Fields Remaining" value={recipientFieldsRemaining.length} />
-         </p>
- 
-+        <DownloadButton />
-+
-         <EnvelopeSignerCompleteDialog />
+@@ -68,24 +68,34 @@ export const EnvelopeSignerHeader = () => {
+         </div>
        </div>
  
+-      {/* Right side - Desktop content */}
+-      <div className="hidden items-center space-x-2 lg:flex">
+-        <p className="mr-2 flex-shrink-0 text-muted-foreground text-sm">
+-          <Plural one="1 Field Remaining" other="# Fields Remaining" value={recipientFieldsRemaining.length} />
+-        </p>
+-
+-        <EnvelopeSignerCompleteDialog />
+-      </div>
+-
 -      {/* Mobile Actions button */}
-+      {/* MarthSign: downloading is the only action, so a download button in place of the Actions menu */}
-       <div className="flex-shrink-0 lg:hidden">
+-      <div className="flex-shrink-0 lg:hidden">
 -        <MobileDropdownMenu />
++      {/* MarthSign: just a download button (the only action), on every screen. Fields left and Next Field are on
++          the card at the bottom. */}
++      <div className="flex flex-shrink-0 items-center">
 +        <DownloadButton />
        </div>
      </nav>
@@ -278,7 +347,7 @@ index d4cddf1..0a4d786 100644
 +      envelopeItems={envelope.envelopeItems}
 +      token={recipient.token}
 +      trigger={
-+        <Button variant="outline" size="sm" className="h-9 w-9 p-0" aria-label="Download PDF" title="Download PDF">
++        <Button variant="outline" size="sm" className="h-9 w-9 flex-shrink-0 p-0" aria-label="Download PDF" title="Download PDF">
 +          <DownloadCloudIcon className="h-4 w-4" />
 +        </Button>
 +      }
@@ -4191,15 +4260,16 @@ z2^##4Z->j@vRJ89DwPE&47c?7_ZZV}i~4chN~KaMPVQYXOVAh`eZBRpQmIr{<bOBn
 V%E|vP@<IRr002ovPDHLkV1n#J8IJ$}
 
 diff --git a/docker/Dockerfile b/docker/Dockerfile
-index 22cad2e..8702c14 100644
+index 22cad2e..18feea2 100644
 --- a/docker/Dockerfile
 +++ b/docker/Dockerfile
-@@ -5,6 +5,8 @@ FROM node:24-alpine3.23 AS base
+@@ -5,6 +5,9 @@ FROM node:24-alpine3.23 AS base
  
  RUN apk add --no-cache openssl
  RUN apk add --no-cache font-freefont
-+# Andrew Marth Real Estate: Liberation Sans, drawn as "Arial" in signed text fields
-+RUN apk add --no-cache font-liberation
++# MarthSign: Arial, for signed text fields. From Microsoft's free core fonts package (the one Linux distributions'
++# installers use), checked against its known SHA-256 before it's unpacked.
++RUN apk add --no-cache --virtual .arial curl cabextract   && curl -fsSL -o /tmp/arial32.exe https://downloads.sourceforge.net/corefonts/arial32.exe   && echo "85297a4d146e9c87ac6f74822734bdee5f4b2a722d7eaa584b7f2cbf76f478f6  /tmp/arial32.exe" | sha256sum -c -   && mkdir -p /usr/share/fonts/arial   && cabextract -q -L -d /usr/share/fonts/arial /tmp/arial32.exe   && find /usr/share/fonts/arial -type f ! -name "*.ttf" -delete   && test -f /usr/share/fonts/arial/arialbi.ttf   && rm /tmp/arial32.exe && apk del .arial
  
  
  ###########################
@@ -9071,10 +9141,10 @@ index 0000000..934cac9
 +};
 diff --git a/packages/lib/server-only/pdf/export-field-style.ts b/packages/lib/server-only/pdf/export-field-style.ts
 new file mode 100644
-index 0000000..d07c9ad
+index 0000000..daf7b48
 --- /dev/null
 +++ b/packages/lib/server-only/pdf/export-field-style.ts
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,77 @@
 +import fs from 'node:fs';
 +import path from 'node:path';
 +
@@ -9090,10 +9160,9 @@ index 0000000..d07c9ad
 +
 +const TEXT_FIELD_TYPES = ['NAME', 'EMAIL', 'DATE', 'TEXT', 'NUMBER'];
 +
-+// Arial itself isn't free to ship: Liberation Sans (the Docker image's font-liberation package) has Arial's exact
-+// letter widths, so it's registered under the name "Arial"
-+const LIBERATION_DIR = '/usr/share/fonts/liberation';
-+const ARIAL_FILES = ['Regular', 'Bold', 'Italic', 'BoldItalic'].map((style) => path.join(LIBERATION_DIR, `LiberationSans-${style}.ttf`));
++// Arial itself, from Microsoft's core fonts package (installed by the Docker image)
++const ARIAL_DIR = '/usr/share/fonts/arial';
++const ARIAL_FILES = ['arial', 'arialbd', 'ariali', 'arialbi'].map((name) => path.join(ARIAL_DIR, `${name}.ttf`));
 +
 +const ensureArial = () => {
 +  if (!FontLibrary.has('Arial') && ARIAL_FILES.every((file) => fs.existsSync(file))) {
@@ -9262,6 +9331,68 @@ index d37d023..3ecd793 100644
      lineCap: 'round',
    });
  
+diff --git a/packages/lib/universal/field-renderer/render-generic-text-field.ts b/packages/lib/universal/field-renderer/render-generic-text-field.ts
+index c4163fe..4918d86 100644
+--- a/packages/lib/universal/field-renderer/render-generic-text-field.ts
++++ b/packages/lib/universal/field-renderer/render-generic-text-field.ts
+@@ -1,6 +1,8 @@
+ import Konva from 'konva';
+ 
+ import { DEFAULT_STANDARD_FONT_SIZE } from '../../constants/pdf';
++
++const MARTHSIGN_TEXT_FONT_SIZE = 8;
+ import type { GenericTextFieldTypeMetas } from '../../types/field-meta';
+ import {
+   FIELD_DEFAULT_GENERIC_ALIGN,
+@@ -42,7 +44,10 @@ const upsertFieldText = (field: FieldToRender, options: RenderFieldElementOption
+   // Calculate text positioning based on alignment
+   const textX = 0;
+   const textY = 0;
+-  const textFontSize = fieldMeta?.fontSize || DEFAULT_STANDARD_FONT_SIZE;
++  // MarthSign: name, email, date, text and number fields are 8pt, the size DocuSign fills them in at (whatever size the
++  // field was given); initials keep theirs
++  const textFontSize =
++    field.type === 'INITIALS' ? fieldMeta?.fontSize || DEFAULT_STANDARD_FONT_SIZE : MARTHSIGN_TEXT_FONT_SIZE;
+ 
+   // By default, render the field name or label centered.
+   // isLabel tracks whether we're rendering the field type name (like "Text", "Date", "Email")
+diff --git a/packages/lib/universal/field-renderer/render-signature-field.ts b/packages/lib/universal/field-renderer/render-signature-field.ts
+index eb3d94c..99b3e05 100644
+--- a/packages/lib/universal/field-renderer/render-signature-field.ts
++++ b/packages/lib/universal/field-renderer/render-signature-field.ts
+@@ -114,11 +114,19 @@ const createSignatureImage = (signatureImageAsBase64: string, fieldWidth: number
+   });
+ };
+ 
++const fitTypedSignature = (text: string, fieldWidth: number, fieldHeight: number) => {
++  const probe = new Konva.Text({ text, fontSize: 100, fontFamily: getSignatureFontFamily(text) });
++  const widthPerPoint = probe.width() / 100;
++  probe.destroy();
++
++  return Math.max(6, Math.min(fieldHeight * 0.75, (fieldWidth * 0.94) / (widthPerPoint || 1)));
++};
++
+ const createFieldSignature = (field: FieldToRender, options: RenderFieldElementOptions): FieldSignature => {
+   const { pageWidth, pageHeight, mode = 'edit', translations } = options;
+ 
+   const { fieldX, fieldY, fieldWidth, fieldHeight } = calculateFieldPosition(field, pageWidth, pageHeight);
+-  const fontSize = field.fieldMeta?.fontSize || DEFAULT_SIGNATURE_TEXT_FONT_SIZE;
++  let fontSize = field.fieldMeta?.fontSize || DEFAULT_SIGNATURE_TEXT_FONT_SIZE;
+ 
+   const fieldText = new Konva.Text({
+     id: `${field.renderId}-text`,
+@@ -182,6 +190,11 @@ const createFieldSignature = (field: FieldToRender, options: RenderFieldElementO
+   // Overflow should not apply to the label.
+   const isLabel = !signature?.typedSignature;
+ 
++  // MarthSign: a typed signature fills its box: as large as fits its width, up to 75% of its height
++  if (!isLabel) {
++    fontSize = fitTypedSignature(textToRender, fieldWidth, fieldHeight);
++  }
++
+   const overflowLayout = calculateOverflowLayout({
+     overflowMode: resolveFieldOverflowMode(fieldMeta),
+     isLabel,
 diff --git a/packages/tailwind-config/index.cjs b/packages/tailwind-config/index.cjs
 index 2b7703f..31e4780 100644
 --- a/packages/tailwind-config/index.cjs
@@ -9308,6 +9439,34 @@ index 2b7703f..31e4780 100644
          },
          dawn: {
            DEFAULT: '#aaa89f',
+diff --git a/packages/ui/components/field/envelope-field-tooltip.tsx b/packages/ui/components/field/envelope-field-tooltip.tsx
+index c40d3a8..9634667 100644
+--- a/packages/ui/components/field/envelope-field-tooltip.tsx
++++ b/packages/ui/components/field/envelope-field-tooltip.tsx
+@@ -13,7 +13,8 @@ const tooltipVariants = cva('font-semibold', {
+   variants: {
+     color: {
+       default: 'border-2 fill-white',
+-      warning: 'border-0 bg-orange-300 fill-orange-300 text-orange-900',
++      // MarthSign: the portal's gold
++      warning: 'border-0 bg-[#c09050] fill-[#c09050] text-[#e9e2d8]',
+     },
+   },
+   defaultVariants: {
+diff --git a/packages/ui/components/field/field-tooltip.tsx b/packages/ui/components/field/field-tooltip.tsx
+index 2587a09..1a6475b 100644
+--- a/packages/ui/components/field/field-tooltip.tsx
++++ b/packages/ui/components/field/field-tooltip.tsx
+@@ -12,7 +12,8 @@ const tooltipVariants = cva('font-semibold', {
+   variants: {
+     color: {
+       default: 'border-2 fill-white',
+-      warning: 'border-0 bg-orange-300 fill-orange-300 text-orange-900',
++      // MarthSign: the portal's gold
++      warning: 'border-0 bg-[#c09050] fill-[#c09050] text-[#e9e2d8]',
+     },
+   },
+   defaultVariants: {
 diff --git a/packages/ui/primitives/alert.tsx b/packages/ui/primitives/alert.tsx
 index f3e11b7..0038aab 100644
 --- a/packages/ui/primitives/alert.tsx

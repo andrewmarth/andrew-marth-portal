@@ -574,10 +574,11 @@
         .doc-heading svg { flex: 0 0 auto; width: 20px; height: 20px; }
         .doc-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .pages:not(.is-multi) .doc-heading { display: none; }
-        .page { position: relative; width: 100%; max-width: 820px; box-shadow: 0 2px 10px rgba(14, 42, 59, 0.18); background: var(--white); cursor: crosshair; user-select: none; }
+        .page { position: relative; container-type: inline-size; width: 100%; max-width: 820px; box-shadow: 0 2px 10px rgba(14, 42, 59, 0.18); background: var(--white); cursor: crosshair; user-select: none; }
         .page canvas { display: block; width: 100%; height: auto; }
         .page-num { position: absolute; top: 6px; right: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 42, 59, 0.6); color: var(--white); font-size: 0.75rem; font-weight: bold; pointer-events: none; }
-        .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: 0.78rem; font-weight: bold; cursor: move; touch-action: none; }
+        .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: min(0.78rem, 1.45cqw); line-height: 1; font-weight: bold; cursor: move; touch-action: none; }
+        /* (fields are DocuSign-small, so the label shrinks with the page to fit inside them) */
         .field span { max-width: 100%; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
         .field.is-selected { z-index: 2; box-shadow: 0 0 0 2px var(--white), 0 2px 8px rgba(14, 42, 59, 0.35); }
         /* The × sits on the field's top-right corner (outside it, so small fields don't cut it off), with a bigger tap area */
@@ -858,13 +859,15 @@
         const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
         const COLORS = ['#c0392b', '#2471a3', '#1e8449', '#b9770e', '#7d3c98', '#117a65', '#a04000', '#2e4053', '#b03a2e', '#5b2c6f'];
-        // Field types, with their standard size (percent of the page width / height; fields can't be resized)
+        // Field types, with their standard size (percent of the page width / height; fields can't be resized). Sized
+        // like DocuSign's: on a letter page a signature is about 110 x 22 points, and name, date and text fields fit
+        // one line of 8pt text.
         const TYPES = [
-            { type: 'SIGNATURE', label: 'Signature', w: 24, h: 5.5 },
-            { type: 'INITIALS', label: 'Initials', w: 11, h: 4.5 },
-            { type: 'NAME', label: 'Name', w: 22, h: 3.5 },
-            { type: 'DATE', label: 'Date', w: 14, h: 3.5 },
-            { type: 'TEXT', label: 'Text', w: 22, h: 3.5 },
+            { type: 'SIGNATURE', label: 'Signature', w: 18, h: 2.8 },
+            { type: 'INITIALS', label: 'Initials', w: 9, h: 2.8 },
+            { type: 'NAME', label: 'Name', w: 22, h: 2 },
+            { type: 'DATE', label: 'Date', w: 12, h: 2 },
+            { type: 'TEXT', label: 'Text', w: 22, h: 2 },
         ];
         let currentUser = null;
         let clients = [];

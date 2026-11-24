@@ -524,6 +524,7 @@
         body.is-signing > header, body.is-signing > main, body.is-signing > footer { display: none; }
         /* Consent: can't be closed, only agreed to */
         .consent-text { font-size: 0.95rem; opacity: 0.85; margin: 10px 0 6px 0; }
+        #consent:focus { outline: none; }
         .consent-text a { color: var(--rust); }
         @keyframes spin { to { transform: rotate(360deg); } }
         .done-card { text-align: center; }
@@ -565,7 +566,7 @@
         </div>
         <div class="hero-content">
             <span class="hero-eyebrow">Signature Needed</span>
-            <h1 id="doc-title">Sign Document</h1>
+            <h1>Sign Now</h1>
             <p class="hero-sub">Review the document and sign where it’s marked.</p>
         </div>
     </header>
@@ -573,7 +574,8 @@
     <div class="sign-frame-wrap" id="frame-wrap" hidden></div>
 
     <!-- Shown each time a document opens for signing; signing waits until it's agreed to -->
-    <dialog class="edit-dialog" id="consent" aria-labelledby="consent-title">
+    <!-- tabindex: so the pop-up itself can take focus when it opens (see openConsent) -->
+    <dialog class="edit-dialog" id="consent" aria-labelledby="consent-title" tabindex="-1">
         <div class="dialog-inner">
             <div class="dialog-head"><h2 id="consent-title">Electronic Signature</h2></div>
             <p class="consent-text">
@@ -633,7 +635,6 @@
         // finishes. Resolves once it's ready, so the loading screen stays up until then.
         let frameReady = () => {};
         function showSigning(task) {
-            $('#doc-title').textContent = task.title || 'Sign Document';
             const frame = document.createElement('iframe');
             frame.className = 'sign-frame';
             frame.title = 'Sign ' + (task.title || 'document');
@@ -649,7 +650,9 @@
         const consent = $('#consent');
         let consented = false;
         consent.addEventListener('cancel', e => e.preventDefault());
-        consent.addEventListener('close', () => { if (!consented) consent.showModal(); });
+        // Focus goes to the pop-up itself; left to the browser it lands on the disclosure link and draws a box around it
+        const openConsent = () => { consent.showModal(); consent.focus(); };
+        consent.addEventListener('close', () => { if (!consented) openConsent(); });
         $('#consent-agree').addEventListener('click', () => { consented = true; consent.close(); });
 
         window.addEventListener('message', async e => {
@@ -732,7 +735,7 @@
                 Promise.race([load(user), timeLimit]).then(() => {
                     document.body.classList.remove('is-checking');
                     initReveal();
-                    if (document.body.classList.contains('is-signing')) consent.showModal();
+                    if (document.body.classList.contains('is-signing')) openConsent();
                 });
             });
             const signOutBtn = document.getElementById('sign-out');
