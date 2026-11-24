@@ -580,11 +580,6 @@
         .field { position: absolute; display: flex; align-items: center; justify-content: center; border: 2px solid; border-radius: 6px; font-size: min(0.78rem, 1.45cqw); line-height: 1; font-weight: bold; cursor: move; touch-action: none; }
         /* (fields are DocuSign-small, so the label shrinks with the page to fit inside them) */
         .field.is-selected { z-index: 2; box-shadow: 0 0 0 2px var(--white), 0 2px 8px rgba(14, 42, 59, 0.35); }
-        /* The × sits on the field's top-right corner (outside it, so small fields don't cut it off), with a bigger tap area */
-        .field-del { position: absolute; top: -11px; right: -11px; z-index: 1; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; padding: 0; border: 2px solid var(--white); border-radius: 50%; background: var(--navy); color: var(--white); font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; }
-        .field-del::before { content: ''; position: absolute; inset: -9px; }
-        .field.is-selected .field-del { display: inline-flex; }
-        @media (hover: hover) { .field:hover .field-del { display: inline-flex; } }
         /* Each field shows what it'll look like signed (as on the signing screen and in the PDF), inside its signer's
            colored box. Sizes are in PDF points: --pt is one point at the page's shown size. */
         .fp { position: absolute; inset: 0; display: flex; align-items: center; pointer-events: none; color: #00208e; }
@@ -602,20 +597,21 @@
         .field.is-optional { border-style: dashed; outline-style: dashed; }
         /* A text box's lines, numbered once it has more than one */
         .field-num { position: absolute; top: 50%; left: -22px; transform: translateY(-50%); font-size: 12px; font-weight: bold; line-height: 1; color: var(--signer); pointer-events: none; }
-        /* Required or not: the menu a signature, initials or checkbox field opens when it's tapped */
+        /* The menu a field opens when it's tapped: Required (signatures, initials, checkboxes), Add a line (text), Remove */
         .field-menu { position: absolute; z-index: 5; width: max-content; max-width: 240px; padding: 10px 14px; border: 2px solid var(--navy); border-radius: 14px; background: var(--white); box-shadow: 3px 3px 0 var(--navy); color: var(--brown); font-size: 0.9rem; cursor: default; }
         .field-menu label { display: flex; align-items: center; gap: 8px; font-weight: bold; cursor: pointer; }
         .field-menu input { width: 18px; height: 18px; margin: 0; accent-color: var(--olive); cursor: pointer; }
         .field-menu .fm-note { display: block; margin-top: 4px; font-size: 0.8rem; opacity: 0.75; }
+        .field-menu .fm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .field-menu .fm-note + .fm-actions { margin-top: 10px; }
+        .field-menu .fm-btn { min-height: 32px; padding: 4px 14px; border: 2px solid var(--navy); border-radius: 999px; background: var(--white); color: var(--navy); font-family: inherit; font-size: 0.85rem; font-weight: bold; cursor: pointer; }
+        .field-menu .fm-remove { border-color: #a33a2a; color: #a33a2a; }
         .field.is-initials .fp-label { left: calc(2.5 * var(--pt)); font-size: calc(4 * var(--pt)); }
-        /* Text fields: drag the right edge to resize (width only); + adds a line below for text that runs over */
+        /* Text fields: drag the right edge to resize (width only); the menu's Add a line adds one below for text that runs over */
         .field-grow { position: absolute; top: -2px; bottom: -2px; right: -7px; z-index: 1; width: 12px; display: none; cursor: ew-resize; touch-action: none; }
         .field-grow::after { content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: max(10px, 70%); transform: translate(-50%, -50%); border-radius: 2px; background: var(--navy); }
-        .field-add-line { position: absolute; top: 50%; right: -38px; z-index: 1; width: 22px; height: 22px; display: none; align-items: center; justify-content: center; padding: 0; transform: translateY(-50%); border: 2px solid var(--white); border-radius: 50%; background: var(--tan); color: var(--white); font-size: 16px; font-weight: bold; line-height: 1; cursor: pointer; }
-        .field-add-line::before { content: ''; position: absolute; inset: -9px; }
-        .field.is-text .field-del { right: auto; left: -11px; }
-        .field.is-selected :is(.field-grow, .field-add-line) { display: inline-flex; }
-        @media (hover: hover) { .field:hover :is(.field-grow, .field-add-line) { display: inline-flex; } }
+        .field.is-selected .field-grow { display: inline-flex; }
+        @media (hover: hover) { .field:hover .field-grow { display: inline-flex; } }
         .send-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
         .send-row .btn { border: 2px solid var(--navy); font-family: inherit; font-size: 1.02rem; cursor: pointer; gap: 8px; }
         .send-row .btn:disabled { opacity: 0.6; cursor: wait; }
@@ -843,7 +839,7 @@
             <div class="placer-bar" id="placer-bar">
                 <div class="bar-row" id="signer-chips"><span class="bar-label">Signer</span></div>
                 <div class="bar-row" id="type-chips"><span class="bar-label">Field</span></div>
-                <p class="placer-hint">Click a page to drop the field. Drag to move, × to remove.</p>
+                <p class="placer-hint">Click a page to drop the field. Drag to move; tap a field for its options.</p>
             </div>
             <div class="pages" id="pages"></div>
             <div class="step-nav">
@@ -910,7 +906,7 @@
         let activeSigner = null;
         let activeType = 'SIGNATURE';
         let fieldKey = 0;
-        let selectedField = null;  // the field showing its × (the last one placed or touched)
+        let selectedField = null;  // the highlighted field (the last one placed or touched)
         let pdfKey = 0;
         const MAX_PDFS = 5;
         const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
@@ -1191,6 +1187,7 @@
                 // The page's width in PDF points, and --pt, one point at the page's shown size (field previews are sized in it)
                 wrap.dataset.pt = viewport.width / 1.6;
                 wrap.style.setProperty('--pt', (100 / (viewport.width / 1.6)) + 'cqw');
+                wrap.style.setProperty('--page-h', (100 * viewport.height / viewport.width) + 'cqw');
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -1285,7 +1282,7 @@
         }
         const fieldTitle = f => typeOf(f.type).label + ' · ' + signerOf(f.signerId).name
             + (f.type === 'TEXT' ? ' · up to ' + textLimit(f) + ' characters' : '') + (f.required === false ? ' · optional' : '');
-        // A text box's lines (the + adds one): the fields with its group, in order. A line's number is its place here.
+        // A text box's lines (the menu's Add a line adds one): the fields with its group, in order. A line's number is its place here.
         const linesOf = f => fields.filter(x => x.type === 'TEXT' && x.group === f.group).sort((a, b) => a.line - b.line);
         function drawFields() {
             document.querySelectorAll('.page .field').forEach(el => el.remove());
@@ -1299,12 +1296,12 @@
                 const lines = f.type === 'TEXT' ? linesOf(f) : [];
                 el.title = fieldTitle(f);
                 el.dataset.key = f.key;
-                el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f;--signer:' + s.color;
+                // (corners a quarter of the field's height, so small fields aren't pills)
+                el.style.cssText = 'left:' + f.x + '%;top:' + f.y + '%;width:' + f.w + '%;height:' + f.h + '%;border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '1f;--signer:' + s.color
+                    + ';border-radius:calc(var(--page-h) * ' + (f.h / 400) + ')';
                 el.innerHTML = fieldPreview(f, s)
-                    + '<button type="button" class="field-del" aria-label="Remove field">×</button>'
                     + (f.type === 'TEXT' ? '<span class="field-grow" aria-hidden="true"></span>' : '')
-                    + (lines.length > 1 ? '<span class="field-num" aria-hidden="true">' + (lines.indexOf(f) + 1) + '</span>' : '')
-                    + (lines.length && lines[lines.length - 1] === f ? '<button type="button" class="field-add-line" aria-label="Add a line below">+</button>' : '');
+                    + (lines.length > 1 ? '<span class="field-num" aria-hidden="true">' + (lines.indexOf(f) + 1) + '</span>' : '');
                 page.append(el);
             });
             renderSignerCounts();
@@ -1317,27 +1314,8 @@
                 li.querySelector('.signer-count').textContent = count + (count === 1 ? ' field' : ' fields');
             });
         }
-        // Click empty space on a page: drop a field there (centered on the click). Click a field's ×: remove it.
-        // (Both on click, so removing a field can't also drop a new one where it was)
+        // Click empty space on a page: drop a field there (centered on the click)
         $('#pages').addEventListener('click', e => {
-            const addLine = e.target.closest('.field-add-line');
-            if (addLine) {
-                const f = fields.find(x => String(x.key) === addLine.parentElement.dataset.key);
-                const last = linesOf(f).pop();
-                if (last.y + 2 * last.h > 100) { setMessage('There’s no room for another line below on this page.'); return; }
-                fields.push({ ...last, key: ++fieldKey, line: last.line + 1, y: last.y + last.h });
-                selectedField = fieldKey;
-                setMessage('');
-                drawFields();
-                return;
-            }
-            const del = e.target.closest('.field-del');
-            if (del) {
-                fields = fields.filter(x => String(x.key) !== del.parentElement.dataset.key);
-                selectedField = null;
-                drawFields();
-                return;
-            }
             if (e.target.closest('.field, .field-menu')) return;
             const page = e.target.closest('.page');
             if (!page || !activeSigner) return;
@@ -1355,7 +1333,7 @@
             setMessage('');
             drawFields();
         });
-        // The Required menu, under its field (one at a time; a press anywhere else closes it)
+        // A field's menu, under it (one at a time; a press anywhere else closes it)
         function openFieldMenu(f) {
             closeFieldMenu();
             const page = document.querySelector('.page[data-doc="' + f.doc + '"][data-page="' + f.page + '"]');
@@ -1366,21 +1344,43 @@
             menu.style.top = 'calc(' + (f.y + f.h) + '% + 10px)';
             const what = { SIGNATURE: 'sign here', INITIALS: 'initial here', CHECKBOX: 'check this box' }[f.type];
             const note = () => f.required === false ? 'The signer can leave this blank.' : 'The signer must ' + what + ' before finishing.';
-            menu.innerHTML = '<label><input type="checkbox"' + (f.required === false ? '' : ' checked') + '> Required</label><span class="fm-note"></span>';
-            menu.querySelector('.fm-note').textContent = note();
-            menu.querySelector('input').addEventListener('change', e => {
-                f.required = e.target.checked;
+            menu.innerHTML = (what ? '<label><input type="checkbox"' + (f.required === false ? '' : ' checked') + '> Required</label><span class="fm-note"></span>' : '')
+                + '<div class="fm-actions">'
+                + (f.type === 'TEXT' ? '<button type="button" class="fm-btn fm-add-line">Add a line</button>' : '')
+                + '<button type="button" class="fm-btn fm-remove">Remove</button></div>';
+            if (what) {
                 menu.querySelector('.fm-note').textContent = note();
+                menu.querySelector('input').addEventListener('change', e => {
+                    f.required = e.target.checked;
+                    menu.querySelector('.fm-note').textContent = note();
+                    drawFields();
+                });
+            }
+            // Add a line below the box's last line (and open the new line's menu, to add another)
+            menu.querySelector('.fm-add-line')?.addEventListener('click', () => {
+                const last = linesOf(f).pop();
+                if (last.y + 2 * last.h > 100) { setMessage('There’s no room for another line below on this page.'); return; }
+                const line = { ...last, key: ++fieldKey, line: last.line + 1, y: last.y + last.h };
+                fields.push(line);
+                selectedField = line.key;
+                setMessage('');
+                drawFields();
+                openFieldMenu(line);
+            });
+            menu.querySelector('.fm-remove').addEventListener('click', () => {
+                fields = fields.filter(x => x !== f);
+                selectedField = null;
+                closeFieldMenu();
                 drawFields();
             });
             page.append(menu);
         }
         const closeFieldMenu = () => document.querySelectorAll('.field-menu').forEach(m => m.remove());
         document.addEventListener('pointerdown', e => { if (!e.target.closest('.field-menu')) closeFieldMenu(); });
-        // Move, or with a text field's right edge, resize its width. Touching a field selects it, which shows its ×.
+        // Move, or with a text field's right edge, resize its width. Tapping a field (without moving it) opens its menu.
         $('#pages').addEventListener('pointerdown', e => {
             const el = e.target.closest('.field');
-            if (!el || e.target.closest('.field-del, .field-add-line')) return;
+            if (!el) return;
             const resizing = Boolean(e.target.closest('.field-grow'));
             const f = fields.find(x => String(x.key) === el.dataset.key);
             selectedField = f.key;
@@ -1405,7 +1405,7 @@
             const up = ev => {
                 el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
                 const tapped = ev.type === 'pointerup' && Math.abs(ev.clientX - start.x) < 4 && Math.abs(ev.clientY - start.y) < 4;
-                if (tapped && !resizing && CAN_BE_OPTIONAL.includes(f.type)) openFieldMenu(f);
+                if (tapped && !resizing) openFieldMenu(f);
             };
             el.addEventListener('pointermove', move);
             el.addEventListener('pointerup', up);
