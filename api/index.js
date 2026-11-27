@@ -23,7 +23,7 @@ async function fromScheduler(req) {
 }
 
 // Pages that may call the API from a browser (anything else gets no CORS header, so browsers block the reply)
-const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://portal.andrewmarth.com,https://roadhouseservers.com,http://127.0.0.1:5175,http://localhost:5175').split(',');
+const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://portal.andrewmarth.com,https://roadhouseservers.com,https://az-ho.me,https://www.az-ho.me,http://127.0.0.1:5175,http://localhost:5175').split(',');
 
 functions.http('portalApi', async (req, res) => {
   const origin = req.get('origin');

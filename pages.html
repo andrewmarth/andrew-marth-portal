@@ -902,16 +902,16 @@
         }
         .picker-count { padding: 6px 14px 4px 14px; font-size: 0.78rem; font-weight: bold; opacity: 0.6; text-align: right; }
 
-        :is(#loan-card, #home-card, #listing-card) .field + .field { margin-top: 22px; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field + .field { margin-top: 22px; }
         /* Settings: each value on its own row with an edit (pencil) button */
-        :is(#loan-card, #home-card, #listing-card) .field.editable { margin-top: 0; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
-        :is(#loan-card, #home-card, #listing-card) .settings-section .field.editable:last-child { border-bottom: none; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable { margin-top: 0; padding: 12px 2px; border-bottom: 1px solid rgba(78, 81, 62, 0.15); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .settings-section .field.editable:last-child { border-bottom: none; }
         .view-row { display: flex; align-items: center; gap: 14px; }
         .view-row .vk { font-weight: bold; flex: 0 1 auto; }
         .view-row .vv { flex: 1; min-width: 0; text-align: right; overflow-wrap: anywhere; }
         .view-row .vv.is-empty { font-style: italic; opacity: 0.55; }
         .edited-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(192, 144, 80, 0.2); color: var(--rust); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed { box-shadow: inset 4px 0 0 var(--gold); padding-left: 16px; background: linear-gradient(90deg, rgba(192, 144, 80, 0.08), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-changed { box-shadow: inset 4px 0 0 var(--gold); padding-left: 16px; background: linear-gradient(90deg, rgba(192, 144, 80, 0.08), transparent 60%); }
         .field.editable.is-changed .edited-tag { display: inline-block; }
         .field.editable.is-changed .view-row .vv { color: var(--rust); font-weight: bold; }
         .field.editable:not(.is-editing) > .field-label,
@@ -949,7 +949,7 @@
         .settings-section .money-section-title { margin-bottom: 4px; }
         .settings-grid { display: grid; grid-template-columns: 1fr; gap: 0; margin-top: 0; }
         .settings-section > .money-section-title + .settings-grid { margin-top: 0; }
-        :is(#loan-card, #home-card, #listing-card) .settings-grid .field + .field { margin-top: 0; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .settings-grid .field + .field { margin-top: 0; }
         .settings-grid .span-2 { grid-column: 1 / -1; }
         .input-wrap { position: relative; }
         .set-input {
@@ -1126,15 +1126,15 @@
         .problem-card .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         /* Settings card (and the admin-only cards): brown with soft gold and rust glows (same as the home page's My Buyers card) */
-        :is(#loan-card, #home-card, #listing-card), #math-card, #buyer-card, #photos-card, #delete-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before,
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
-        :is(#loan-card, #home-card, #listing-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
-        :is(#loan-card, #home-card, #listing-card) > *, #math-card > *, #buyer-card > *, #photos-card > *, #delete-card > * { position: relative; z-index: 1; }
-        :is(#loan-card, #home-card, #listing-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow, #photos-card .card-eyebrow, #delete-card .card-eyebrow { color: var(--gold); }
-        :is(#loan-card, #home-card, #listing-card) h2, #math-card h2, #buyer-card h2, #photos-card h2, #delete-card h2 { color: var(--cream); }
-        :is(#loan-card, #home-card, #listing-card) .money-section-title, #math-card .money-section-title, #buyer-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card), #math-card, #buyer-card, #photos-card, #delete-card { position: relative; overflow: hidden; overflow: clip; background: var(--brown); color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before,
+        :is(#loan-card, #home-card, #listing-card, #photos-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card)::before, #math-card::before, #buyer-card::before, #photos-card::before, #delete-card::before { width: 420px; height: 420px; top: -220px; right: -120px; background: radial-gradient(circle, rgba(192, 144, 80, 0.35), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card)::after, #math-card::after, #buyer-card::after, #photos-card::after, #delete-card::after { width: 360px; height: 360px; bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(154, 93, 64, 0.4), transparent 70%); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) > *, #math-card > *, #buyer-card > *, #photos-card > *, #delete-card > * { position: relative; z-index: 1; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .card-eyebrow, #math-card .card-eyebrow, #buyer-card .card-eyebrow, #photos-card .card-eyebrow, #delete-card .card-eyebrow { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) h2, #math-card h2, #buyer-card h2, #photos-card h2, #delete-card h2 { color: var(--cream); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .money-section-title, #math-card .money-section-title, #buyer-card .money-section-title { color: var(--gold); border-bottom-color: rgba(233, 226, 216, 0.35); }
         /* Seller Net's Buyer Side, on the same brown: lighter green and red, and the buyer's cash in a darker panel */
         #buyer-card .money-list li { border-bottom-color: rgba(233, 226, 216, 0.15); }
         /* Delete This Page: a red button (on the card and in its confirmation) */
@@ -1177,6 +1177,11 @@
         .btn.lp-cancel { background: transparent; border-color: rgba(233, 226, 216, 0.45); }
         #photos-card .access-message.is-error { color: #f2b8a8; }
         #photos-card [hidden] { display: none; }
+        .ls-pages-help { margin: 6px 0 12px 2px; }
+        .ls-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+        .ls-links li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 10px 14px; border: 1px solid rgba(233, 226, 216, 0.3); border-radius: 12px; }
+        .ls-links a { color: var(--gold); font-weight: bold; overflow-wrap: anywhere; }
+        .ls-links span { font-size: 0.85rem; opacity: 0.75; }
         @media (max-width: 600px) {
             .lp-row { grid-template-columns: 72px minmax(0, 1fr); }
             .lp-moves { grid-column: 1 / -1; justify-content: flex-end; }
@@ -1215,10 +1220,10 @@
         #math-card .math-group-v { margin-left: auto; font-size: 0.92rem; letter-spacing: 0; text-transform: none; color: var(--cream); font-variant-numeric: tabular-nums; white-space: nowrap; }
         #math-card .math-group > .math-intro { margin: 10px 0 4px 0; }
         @media (hover: hover) { #math-card .math-group > summary:hover { color: var(--cream); } }
-        :is(#loan-card, #home-card, #listing-card) .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-changed .view-row .vv { color: var(--gold); }
-        :is(#loan-card, #home-card, #listing-card) .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable { border-bottom-color: rgba(233, 226, 216, 0.15); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-changed { background: linear-gradient(90deg, rgba(192, 144, 80, 0.18), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-changed .view-row .vv { color: var(--gold); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .edited-tag { background: rgba(192, 144, 80, 0.25); color: var(--gold); }
         /* Missing (Seller Net): the same look as Edited, in red */
         .missing-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(224, 96, 79, 0.25); color: #f2b8a8; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
         .field.editable.is-missing .missing-tag { display: inline-block; }
@@ -1226,13 +1231,13 @@
         .client-tag { display: none; flex: 0 0 auto; padding: 2px 9px; border-radius: 999px; background: rgba(233, 226, 216, 0.18); color: var(--cream); font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
         .field.editable.is-client-locked .client-tag { display: inline-flex; }
         .field.editable.is-client-locked > .view-row .edit-btn { opacity: 0.35; cursor: not-allowed; }
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-missing { box-shadow: inset 4px 0 0 #e0604f; padding-left: 16px; background: linear-gradient(90deg, rgba(224, 96, 79, 0.18), transparent 60%); }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-missing .view-row .vv { color: #f2b8a8; font-weight: bold; }
         /* The open editor stays light, so its inputs read the same as before */
-        /* (the :is(#loan-card, #home-card, #listing-card) row padding would otherwise win over the editor's own padding) */
-        :is(#loan-card, #home-card, #listing-card) .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
-        :is(#loan-card, #home-card, #listing-card) .access-message.is-error { color: #f2b8a8; }
-        :is(#loan-card, #home-card, #listing-card) .access-message.is-success { color: var(--gold); }
+        /* (the :is(#loan-card, #home-card, #listing-card, #photos-card) row padding would otherwise win over the editor's own padding) */
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .field.editable.is-editing { color: var(--brown); background: #fbf9f6; padding: 18px 18px; margin: 8px -6px; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .access-message.is-error { color: #f2b8a8; }
+        :is(#loan-card, #home-card, #listing-card, #photos-card) .access-message.is-success { color: var(--gold); }
         button.btn { font-family: inherit; font-size: 1rem; cursor: pointer; gap: 8px; }
         button.btn:disabled { opacity: 0.55; cursor: default; transform: none; }
         .btn .btn-spinner { display: none; width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(233, 226, 216, 0.35); border-top-color: var(--cream); animation: spin 0.8s linear infinite; }
@@ -1524,12 +1529,40 @@
             <div id="buyer-card-list"></div>
         </section>
 
-        <!-- Seller Net, admins only, while the home is Prelisting, Listed or Under Contract: its listing photos (in Drive,
-             linked to the address, so the same on every version), as a carousel, or a list to name, order and add them -->
+        <!-- Seller Net, admins only, while the home is Prelisting, Listed or Under Contract: Listing Settings, the same on
+             every version. General Settings (List Price, saved like the other settings cards) and the home's az-ho.me
+             listing pages; then its listing photos (in Drive, linked to the address), as a carousel, or a list to name,
+             order and add them. -->
         <section class="main-card reveal" id="photos-card" hidden>
             <span class="card-eyebrow">Admin Only</span>
-            <h2>Listing Photos</h2>
-            <p class="card-intro">The same on every version of this net sheet. Saved in this order to Google Drive.</p>
+            <h2>Listing Settings</h2>
+            <p class="card-intro">The same on every version of this net sheet. The listing pages show these and the Global Settings.</p>
+            <div class="settings-section">
+                <h3 class="money-section-title">General Settings</h3>
+                <div class="settings-grid" id="ls-general-fields"></div>
+                <div class="access-actions">
+                    <p class="access-message" id="ls-message" role="status"></p>
+                    <button type="button" class="btn" id="ls-save" disabled>
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h3 class="money-section-title">Listing Pages</h3>
+                <p class="field-help ls-pages-help" id="ls-pages-help"></p>
+                <ul class="ls-links" id="ls-links" hidden></ul>
+                <div class="access-actions" id="ls-create-row" hidden>
+                    <p class="access-message" id="ls-create-message" role="status"></p>
+                    <button type="button" class="btn" id="ls-create">
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        Create Listing Pages
+                    </button>
+                </div>
+            </div>
+            <div class="settings-section">
+            <h3 class="money-section-title">Listing Photos</h3>
+            <p class="field-help ls-pages-help">Saved in this order to Google Drive.</p>
             <p id="lp-loading" role="status">Loading photos…</p>
             <div id="lp-view" hidden>
                 <div class="lp-carousel">
@@ -1559,6 +1592,7 @@
                         <span id="lp-save-text">Upload Photos</span>
                     </button>
                 </div>
+            </div>
             </div>
         </section>
 
@@ -4009,9 +4043,9 @@
         }
         function setupAccessPickers() {
             const accounts = data.accounts || [];
-            // Settings and (Seller Net) Global Settings and Property Status each have a Save button; each saves every edit
-            const saveBtns = ['access-save', 'home-save', 'listing-save'].map(id => document.getElementById(id));
-            const messages = ['access-message', 'home-message', 'listing-message'].map(id => document.getElementById(id));
+            // Settings and (Seller Net) Global Settings, Property Status and Listing Settings each have a Save button; each saves every edit
+            const saveBtns = ['access-save', 'home-save', 'listing-save', 'ls-save'].map(id => document.getElementById(id));
+            const messages = ['access-message', 'home-message', 'listing-message', 'ls-message'].map(id => document.getElementById(id));
             const setMessage = (msg, kind) => messages.forEach(m => { m.textContent = msg; m.className = 'access-message' + (msg ? ' is-' + kind : ''); });
             const setSaveDisabled = off => saveBtns.forEach(b => { b.disabled = off; });
 
@@ -5362,6 +5396,8 @@
             // Listing Status has its own card
             choiceField(document.getElementById('listing-fields'), 'Listing Status', 'LISTING STATUS',
                 ['Nurturing', 'Prelisting', 'Listed', 'Under Contract', 'Closed'].map(v => ({ value: v, main: v, icon: 'home' })));
+            // Listing Settings' General Settings (a Global Setting: blank until it's set)
+            moneyField(document.getElementById('ls-general-fields'), 'List Price', 'LIST PRICE', { help: 'Shown on the listing pages. Blank shows “Price coming soon.”' });
             const home = document.getElementById('property-fields');
             choiceField(home, 'Property Type', 'PROPERTY TYPE', ['Single Family', 'Townhome', 'Condo', 'Manufactured'].map(v => ({ value: v, main: v, icon: 'home' })));
             wholeField(home, 'Year Built', 'YEAR BUILT', { key: 'YEAR BUILT' });
@@ -5484,6 +5520,7 @@
             validateSettings();
             makeEditable(homeCard);
             makeEditable(listingCard);
+            makeEditable(document.getElementById('ls-general-fields'));
             makeEditable(loanCard);
         }
 
@@ -6086,7 +6123,49 @@
             photosCard.hidden = !show;
             const key = ['STREET ADDRESS', 'CITY', 'ZIP'].map(c => text(col(data.page, c)).toLowerCase()).join('|');
             if (show && key !== lpKey && !lpBusy) { lpKey = key; loadPhotos(); }
+            if (show) showListingPages();
         }
+
+        // Listing Pages: the home's two az-ho.me pages once they're made (Create Listing Pages, while Prelisting)
+        function showListingPages() {
+            const slug = text(col(data.page, 'LISTING SLUG'));
+            const prelisting = text(col(data.page, 'LISTING STATUS')) === 'Prelisting';
+            const links = document.getElementById('ls-links');
+            links.hidden = !slug;
+            links.innerHTML = slug ? [[slug.toUpperCase(), 'Branded: you as the listing agent'], [slug, 'Unbranded: no agent shown']]
+                .map(([path, what]) => '<li><a href="https://az-ho.me/' + path + '" target="_blank" rel="noopener">az-ho.me/' + path + '</a><span>' + what + '</span></li>').join('') : '';
+            document.getElementById('ls-create-row').hidden = Boolean(slug) || !prelisting;
+            document.getElementById('ls-pages-help').textContent = slug ? 'They show these settings and the Global Settings as soon as they’re saved.'
+                : prelisting ? 'Makes two pages on az-ho.me for this home: one branded with you as the listing agent, and one unbranded.'
+                : 'Listing pages can be made while the home is Prelisting.';
+        }
+        document.getElementById('ls-create').addEventListener('click', async e => {
+            const btn = e.currentTarget;
+            const msg = document.getElementById('ls-create-message');
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            msg.textContent = '';
+            msg.className = 'access-message';
+            try {
+                const json = await api({ action: 'createListingPages', pageId });
+                if (!json.ok) throw new Error(json.error);
+                data.page['LISTING SLUG'] = json.slug;
+                showListingPages();
+            } catch (err) {
+                console.error(err);
+                const ERRORS = {
+                    slug_taken: 'Another home already has listing pages at this address’s name.',
+                    missing_address: 'The street address needs a street number and name first.',
+                    not_prelisting: 'Save the Listing Status as Prelisting first.',
+                    github_not_set_up: 'The listing site isn’t connected to the portal yet.',
+                };
+                msg.textContent = ERRORS[err.message] || 'The listing pages couldn’t be made. Please try again.';
+                msg.className = 'access-message is-error';
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            }
+        });
         async function loadPhotos() {
             lp('view').hidden = true;
             lp('editor').hidden = true;

@@ -4,6 +4,7 @@
 import { rows, row as getRow, columns, update, add, remove, withLock, forgetRows } from './lib/store.js';
 import { verifyPhone, folderFiles, driveImage, createDriveFile, updateDriveFile, geocode } from './lib/google.js';
 import { db } from './lib/store.js';
+import { putGithubFile } from './lib/github.js';
 import { lookupPropertyFacts, phoenixStamp } from './lib/property-facts.js';
 import { roadhouseShows, saveRoadhouseShows, completeRoadhouseStep, undoRoadhouseStep } from './lib/roadhouse-shows.js';
 import { roadhouseSchedule, saveRoadhouseShowtime, saveRoadhouseSchedule, roadhouseAssignments, completeRoadhouseAssignment, undoRoadhouseAssignment } from './lib/roadhouse-schedule.js';
@@ -58,7 +59,7 @@ const HOA_DUES_INTERVALS = ['Monthly', 'Quarterly', 'Bi-Annually', 'Annually'];
 //   date: m/d/yyyy   payer: Buyer or Seller   text: any short text   [list]: one of those values
 //   cents: a number that may have up to 2 decimals (like 2.5 baths)
 const PAGE_SETTING_FIELDS = {
-  'PURCHASE PRICE': 'money', 'SELLER CREDIT': 'rate', 'PROPERTY TYPE': ['Single Family', 'Townhome', 'Condo', 'Manufactured'],
+  'PURCHASE PRICE': 'money', 'LIST PRICE': 'money', 'SELLER CREDIT': 'rate', 'PROPERTY TYPE': ['Single Family', 'Townhome', 'Condo', 'Manufactured'],
   'SQFT': 'int', 'BEDS': 'int', 'BATHS': 'cents', 'YEAR BUILT': 'int', 'HAS POOL': 'bool', 'YEARLY TAXES': 'money',
   'CENSUS DESIGNATION': ['Low', 'Moderate', 'Middle', 'Upper'], 'OFFER ACCEPTANCE DATE': 'date', 'ESCROW DURATION': 'int',
   'EARNEST MONEY DEPOSIT': 'money', 'GIFT FUNDS': 'money',
@@ -487,6 +488,9 @@ export async function handle(body, query) {
       if (checkId.length !== 10) return { ok: false, error: 'invalid_phone' };
       return { ok: true, exists: Boolean(await findAccount_(checkId)) };
     }
+    // az-ho.me listing pages (public, no sign-in): a listed home's details and photos
+    if (body.action === 'listing') return await publicListing_(body);
+    if (body.action === 'listingImage') return await publicListingImage_(body);
     const phone = await verifyPhone(body.idToken);
     if (!phone) return { ok: false, error: 'unauthorized' };
 
@@ -602,6 +606,8 @@ export async function handle(body, query) {
     if (body.action === 'uploadListingPhoto') return await uploadListingPhoto_(account, body);
     if (body.action === 'saveListingPhotos') return await saveListingPhotos_(account, body);
     if (body.action === 'listingPhotoImage') return await listingPhotoImage_(account, body);
+    // pages.html: the Listing Settings card's Create Listing Pages button (the home's two az-ho.me pages)
+    if (body.action === 'createListingPages') return await createListingPages_(account, body);
     // settings.html: the admin Title Companies card (each company's filed escrow and title fees)
     if (body.action === 'titleCompanies') return await titleCompanies_(account);
     // settings.html: the admin Lenders card (each lender, its linked lender accounts and its loan products)
@@ -956,7 +962,7 @@ async function updatePageAccess_(id, account, body) {
 // Versions of a Seller Net page are the pages with the same PAGE TYPE, the same home (addressKey_) and the same
 // sellers. Global Settings (the home, the seller's loan and HOA, and the sellers) are kept the same on all of them;
 // everything else (Version Settings) belongs to one version.
-const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'SEWER SYSTEM', 'LISTING STATUS', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
+const SELLER_NET_GLOBAL_FIELDS = () => ['SELLER TYPE', 'LLC NAME', 'TRUST NAME', 'FOREIGN SELLER', 'SELLER NON PROFIT', 'HAS SEPTIC', 'SEWER SYSTEM', 'LISTING STATUS', 'LIST PRICE', 'PROPERTY TYPE', 'YEAR BUILT', 'BEDS', 'BATHS', 'SQFT', 'YEARLY TAXES',
   'ORIGINAL LOAN AMOUNT', 'ORIGINAL LOAN DATE', 'LOAN TERM MONTHS', 'LOAN TYPE', 'DAILY INTEREST BASIS', 'CLIENT ANSWERED'].concat(CLIENT_INPUT_FIELDS);
 
 // The page's sellers (everyone on it who isn't a collaborator), sorted, as one string
@@ -2527,6 +2533,112 @@ async function listingPhotoImage_(account, body) {
   const at = await listingPhotosPage_(account, body);
   if (at.error) return { ok: false, error: at.error };
   const photo = (await listingPhotoRows_(at.key)).find(r => r._id === String(body.id || ''));
+  if (!photo) return { ok: false, error: 'not_found' };
+  return wholesaleImage_(photo['DRIVE FILE ID'], Math.min(1600, Math.max(200, Number(body.width) || 1200)));
+}
+
+// --- az-ho.me listing pages ---
+// A Seller Net home gets two pages on az-ho.me (GitHub Pages, from the LISTING_REPO repo): /123MAIN5, branded with
+// Andrew as the listing agent, and /123main5, unbranded. Each is a small stub marked with its seller page that loads the
+// site's listing.js, which asks publicListing_ for the home's Global Settings and Listing Settings (never a version's
+// own settings) and photos. The slug is saved on every version of the home as LISTING SLUG.
+const LISTING_SITE = 'https://az-ho.me';
+const LISTING_REPO = process.env.LISTING_REPO || 'andrewmarth/az-ho.me';
+const LISTING_STATUSES = ['Prelisting', 'Listed', 'Under Contract'];
+const STREET_SUFFIXES = new Set(('st street rd road ave av avenue dr drive ln lane way blvd boulevard ct court pl place cir circle pkwy parkway ' +
+  'ter terrace trl trail loop hwy highway sq square pt point xing crossing aly alley walk cv cove pike plz plaza expy fwy freeway').split(' '));
+const STREET_DIRECTIONS = new Set('n s e w ne nw se sw north south east west northeast northwest southeast southwest'.split(' '));
+
+// "123 N Main St #5" → "123main5": the street number, the street name without its direction or suffix, and the unit
+// (after #, Unit, Apt or Suite). '' when there's no number or name.
+export function listingSlug_(street) {
+  let s = String(street || '').toLowerCase();
+  let unit = '';
+  const u = s.match(/\s*(?:#|\b(?:unit|apt|apartment|ste|suite)\b\.?)\s*#?\s*([a-z0-9-]+)\s*$/);
+  if (u) { unit = u[1].replace(/[^a-z0-9]/g, ''); s = s.slice(0, u.index); }
+  const words = s.replace(/[^a-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const number = /^\d+[a-z]?$/.test(words[0] || '') ? words.shift() : '';
+  while (words.length > 1 && (STREET_SUFFIXES.has(words[words.length - 1]) || STREET_DIRECTIONS.has(words[words.length - 1]))) words.pop();
+  while (words.length > 1 && STREET_DIRECTIONS.has(words[0])) words.shift();
+  return number && words.length ? number + words.join('') + unit : '';
+}
+const isSellerNet_ = p => String(p['PAGE TYPE'] || '').trim().toLowerCase() === 'seller net';
+const listingSlugOf_ = p => String(p['LISTING SLUG'] || '').trim().toLowerCase();
+
+const escHtml_ = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function listingStub_(page, slug, branded) {
+  const address = [page['STREET ADDRESS'], page['CITY']].map(v => String(v || '').trim()).filter(Boolean).join(', ') + ', AZ ' + String(page['ZIP'] || '').trim();
+  return `<!doctype html>
+<!-- az-ho.me listing page, made by the portal's Create Listing Pages button. Linked to seller page ${escHtml_(page['PAGE ID'])}:
+     listing.js fills it in from that home's Global Settings and Listing Settings. -->
+<html lang="en" data-slug="${slug}" data-brand="${branded ? 'branded' : 'unbranded'}" data-seller-page="${escHtml_(page['PAGE ID'])}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="seller-page" content="${escHtml_(page['PAGE ID'])}">
+    <title>${escHtml_(address)}</title>
+    <meta property="og:title" content="${escHtml_(address)}">
+    <link rel="stylesheet" href="/listing.css">
+    <script src="/listing.js" defer></script>
+</head>
+<body></body>
+</html>
+`;
+}
+
+// Admins, while the home is Prelisting: writes its two pages to the repo and saves the slug. body: { pageId }
+// → { ok, slug, links: [branded URL, unbranded URL] }
+async function createListingPages_(account, body) {
+  const at = await listingPhotosPage_(account, body);
+  if (at.error) return { ok: false, error: at.error };
+  if (String(at.page['LISTING STATUS'] || '').trim() !== 'Prelisting') return { ok: false, error: 'not_prelisting' };
+  const slug = listingSlug_(at.page['STREET ADDRESS']);
+  if (!slug) return { ok: false, error: 'missing_address' };
+  const pages = (await rows('pages')).filter(isSellerNet_);
+  // shortcut: two homes with the same slug (123 Main St in Mesa and in Phoenix) can't both have pages; add the city if it happens
+  if (pages.some(p => listingSlugOf_(p) === slug && addressKey_(p) !== at.key && !isTrashed_(p))) return { ok: false, error: 'slug_taken' };
+  if (!process.env.GITHUB_TOKEN) return { ok: false, error: 'github_not_set_up' };
+  const street = String(at.page['STREET ADDRESS'] || '').trim();
+  await putGithubFile(LISTING_REPO, slug.toUpperCase() + '.html', listingStub_(at.page, slug, true), 'Branded listing page: ' + street);
+  await putGithubFile(LISTING_REPO, slug + '.html', listingStub_(at.page, slug, false), 'Unbranded listing page: ' + street);
+  for (const p of pages.filter(p => addressKey_(p) === at.key && listingSlugOf_(p) !== slug)) await update('pages', p._id, { 'LISTING SLUG': slug });
+  return { ok: true, slug, links: [LISTING_SITE + '/' + slug.toUpperCase(), LISTING_SITE + '/' + slug] };
+}
+
+// The home a listing page is for: a Seller Net version with that slug, while it's Prelisting, Listed or Under Contract
+async function listingPage_(slug) {
+  const wanted = String(slug || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
+  if (!wanted) return null;
+  // shortcut: reads every page per view, fine for a few listings' traffic; index LISTING SLUG if views grow
+  return (await rows('pages')).find(p => isSellerNet_(p) && !isTrashed_(p) && listingSlugOf_(p) === wanted
+    && LISTING_STATUSES.includes(String(p['LISTING STATUS'] || '').trim())) || null;
+}
+
+// body: { slug } → { ok, listing: { status, street, city, zip, price, propertyType, beds, baths, sqft, yearBuilt,
+// yearlyTaxes, sewer, hoa: [{ name, dues, interval }], photos: [{ id, name }] } }. Only what a listing shows: never the
+// sellers, their loan, or anything from a version's own settings.
+async function publicListing_(body) {
+  const page = await listingPage_(body.slug);
+  if (!page) return { ok: false, error: 'not_found' };
+  const v = c => String(page[c] ?? '').trim();
+  const hoa = [];
+  if (/^true$/i.test(v('HAS HOA'))) {
+    if (v('HOA PRIMARY MONTHLY DUES')) hoa.push({ name: 'HOA', dues: v('HOA PRIMARY MONTHLY DUES'), interval: v('HOA PRIMARY DUES INTERVAL') || 'Monthly' });
+    if (/^true$/i.test(v('HAS MASTER ASSOCIATION')) && v('HOA MASTER MONTHLY DUES')) hoa.push({ name: 'Master Association', dues: v('HOA MASTER MONTHLY DUES'), interval: v('HOA MASTER DUES INTERVAL') || 'Monthly' });
+  }
+  return { ok: true, listing: {
+    status: v('LISTING STATUS'), street: v('STREET ADDRESS'), city: v('CITY'), zip: v('ZIP'), price: v('LIST PRICE'),
+    propertyType: v('PROPERTY TYPE'), beds: v('BEDS'), baths: v('BATHS'), sqft: v('SQFT'), yearBuilt: v('YEAR BUILT'),
+    yearlyTaxes: v('YEARLY TAXES'), sewer: v('SEWER SYSTEM') || (/^true$/i.test(v('HAS SEPTIC')) ? 'Septic' : ''), hoa,
+    photos: (await listingPhotoRows_(addressKey_(page))).map(r => ({ id: r._id, name: r['PHOTO NAME'] })),
+  } };
+}
+
+// One of a listed home's photos, resized. body: { slug, id, width }
+async function publicListingImage_(body) {
+  const page = await listingPage_(body.slug);
+  if (!page) return { ok: false, error: 'not_found' };
+  const photo = (await listingPhotoRows_(addressKey_(page))).find(r => r._id === String(body.id || ''));
   if (!photo) return { ok: false, error: 'not_found' };
   return wholesaleImage_(photo['DRIVE FILE ID'], Math.min(1600, Math.max(200, Number(body.width) || 1200)));
 }
