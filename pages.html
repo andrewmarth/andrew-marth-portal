@@ -1182,6 +1182,7 @@
         .ls-links li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 10px 14px; border: 1px solid rgba(233, 226, 216, 0.3); border-radius: 12px; }
         .ls-links a { color: var(--gold); font-weight: bold; overflow-wrap: anywhere; }
         .ls-links span { font-size: 0.85rem; opacity: 0.75; }
+        .ls-links .ls-pending { overflow-wrap: anywhere; opacity: 0.6; }
         @media (max-width: 600px) {
             .lp-row { grid-template-columns: 72px minmax(0, 1fr); }
             .lp-moves { grid-column: 1 / -1; justify-content: flex-end; }
@@ -6127,13 +6128,31 @@
         }
 
         // Listing Pages: the home's two az-ho.me pages once they're made (Create Listing Pages, while Prelisting)
+        let lsRun = 0;   // bumps on every redraw, so an older live check stops
         function showListingPages() {
             const slug = text(col(data.page, 'LISTING SLUG'));
             const prelisting = text(col(data.page, 'LISTING STATUS')) === 'Prelisting';
             const links = document.getElementById('ls-links');
             links.hidden = !slug;
-            links.innerHTML = slug ? [[slug.toUpperCase(), 'Branded: you as the listing agent'], [slug, 'Unbranded: no agent shown']]
-                .map(([path, what]) => '<li><a href="https://az-ho.me/' + path + '" target="_blank" rel="noopener">az-ho.me/' + path + '</a><span>' + what + '</span></li>').join('') : '';
+            const pages = slug ? [[slug.toUpperCase(), 'Branded: you as the listing agent'], [slug, 'Unbranded: no agent shown']] : [];
+            const live = {};
+            const draw = () => { links.innerHTML = pages.map(([path, what]) => '<li>' + (live[path]
+                ? '<a href="https://az-ho.me/' + path + '" target="_blank" rel="noopener">az-ho.me/' + path + '</a>'
+                : '<strong class="ls-pending">az-ho.me/' + path + ' · Pending</strong>') + '<span>' + what + '</span></li>').join(''); };
+            draw();
+            // GitHub Pages takes a minute or two to publish new pages: check each one every 5 seconds until it loads
+            // (the ?live= query skips GitHub's cached 404)
+            const run = ++lsRun;
+            (async () => {
+                while (run === lsRun && pages.some(([path]) => !live[path])) {
+                    for (const [path] of pages) {
+                        if (!live[path]) live[path] = await fetch('https://az-ho.me/' + path + '?live=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then(r => r.ok, () => false);
+                    }
+                    if (run !== lsRun) return;
+                    draw();
+                    if (pages.some(([path]) => !live[path])) await new Promise(r => setTimeout(r, 5000));
+                }
+            })();
             document.getElementById('ls-create-row').hidden = Boolean(slug) || !prelisting;
             document.getElementById('ls-pages-help').textContent = slug ? 'They show these settings and the Global Settings as soon as they’re saved.'
                 : prelisting ? 'Makes two pages on az-ho.me for this home: one branded with you as the listing agent, and one unbranded.'
